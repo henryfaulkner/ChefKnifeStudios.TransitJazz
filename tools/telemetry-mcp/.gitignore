@@ -1,0 +1,7 @@
+# Built bridge binaries
+telemetry-mcp
+telemetry-mcp.exe
+
+# Built test stub binaries
+testdata/stub-query-tool/*.exe
+testdata/stub-query-tool/stub-query-tool
