@@ -1,3 +1,4 @@
+using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.Geospatial;
@@ -12,10 +13,13 @@ namespace ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
 public class Worker(
     IHttpClientFactory httpClientFactory,
     ILogger<Worker> logger,
-    ITransitHubPublisher transitHubPublisher) : BackgroundService
+    ITransitHubPublisher transitHubPublisher,
+    IEventNotificationService eventNotifications,
+    LogEventWorker logEventWorker,
+    ILoggingService loggingService) : BackgroundService
 {
     readonly ConcurrentDictionary<string, VehiclePositionBatchEvent.VehiclePositionRecord> _lastUpdateCache = new();
-    readonly ConcurrentDictionary<string, VehicleState> _vehicleStates = new();
+    readonly ConcurrentDictionary<string, VehicleState> _vehicleStateCache = new();
     ulong? _lastFeedHeaderTimestamp;
     readonly string _gtfsRtUrl = "https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb";
     readonly string _batchOutputDir = Path.Combine(AppContext.BaseDirectory, "event-batches");
@@ -132,6 +136,9 @@ public class Worker(
             var index = _routeIndex;
             if (index == null) return;
 
+            var cycleId = Guid.NewGuid().ToString("N");
+            var cycleStart = DateTime.UtcNow;
+
             var batch = new List<RouteNearestPointBatchEvent.RouteNearestPointRecord>();
             var debugBatch = new List<BatchDebugRecord>();
             int movedCount = 0, unchangedCount = 0, stationaryCount = 0, staleCount = 0, skippedNoRouteId = 0, skippedUnknownRoute = 0;
@@ -163,7 +170,7 @@ public class Worker(
 
                     const int SnapWindowSize = 30;
 
-                    var snap = _vehicleStates.TryGetValue(vehicleId, out var priorForSnap) && priorForSnap.RouteId == routeId
+                    var snap = _vehicleStateCache.TryGetValue(vehicleId, out var priorForSnap) && priorForSnap.RouteId == routeId
                         ? RouteSnapper.FindNearestInWindow(lat, lon, routePoints, priorForSnap.SnapIndex, SnapWindowSize)
                         : RouteSnapper.FindNearest(lat, lon, routePoints);
                     if (snap == null) continue;
@@ -176,7 +183,7 @@ public class Worker(
                     var currentVehicleTimestamp = entity.Vehicle.Timestamp;
                     bool isStale = false;
 
-                    if (_vehicleStates.TryGetValue(vehicleId, out var prior))
+                    if (_vehicleStateCache.TryGetValue(vehicleId, out var prior))
                     {
                         if (prior.LastUpdated > now)
                         {
@@ -185,7 +192,7 @@ public class Worker(
 
                         // Staleness check: the upstream GTFS-RT feed delivered the same
                         // per-vehicle sample as last poll. Emit a passthrough record so
-                        // the client keeps extrapolating, but do not update _vehicleStates —
+                        // the client keeps extrapolating, but do not update _vehicleStateCache —
                         // we want the *next* fresh sample to compute its prior-delta against
                         // the last truly-new observation, not against this stale one.
                         isStale = currentVehicleTimestamp.HasValue
@@ -227,6 +234,13 @@ public class Worker(
                             unchangedCount++;
                         }
 
+                        var posDeltaKm = HaversineCalculator.DistanceKm(prior.NearestLat, prior.NearestLon, nearest.Lat, nearest.Lon);
+                        var timeDeltaSec = (now - prior.LastUpdated).TotalSeconds;
+                        double? currentSpeed = entity.Vehicle.Position.Speed.HasValue ? (double)entity.Vehicle.Position.Speed.Value : null;
+                        double? currentBearing = entity.Vehicle.Position.Bearing.HasValue ? (double)entity.Vehicle.Position.Bearing.Value : null;
+                        double? priorSpeed = prior.SpeedMetersPerSec.HasValue ? (double)prior.SpeedMetersPerSec.Value : null;
+                        double? priorBearing = prior.Bearing.HasValue ? (double)prior.Bearing.Value : null;
+
                         debugRecord = new BatchDebugRecord(
                             VehicleId: vehicleId,
                             RouteId: nearest.RouteId,
@@ -246,12 +260,33 @@ public class Worker(
                             PriorRouteId: prior.RouteId,
                             PriorObservationUtc: prior.LastUpdated,
                             ObservationUtc: now,
-                            DeltaFromPriorSnapKm: HaversineCalculator.DistanceKm(prior.NearestLat, prior.NearestLon, nearest.Lat, nearest.Lon),
+                            DeltaFromPriorSnapKm: posDeltaKm,
                             DeltaFromPriorRawKm: HaversineCalculator.DistanceKm(prior.LastRawLat, prior.LastRawLon, lat, lon),
-                            SecondsSincePriorObservation: (now - prior.LastUpdated).TotalSeconds,
+                            SecondsSincePriorObservation: timeDeltaSec,
                             SpeedMetersPerSec: entity.Vehicle.Position.Speed,
                             Bearing: entity.Vehicle.Position.Bearing
                         );
+
+                        // US3: post lerp delta for vehicles with a prior observation
+                        if (!isStale)
+                        {
+                            eventNotifications.PostEvent(this, new LerpEventArgs
+                            {
+                                CycleId = cycleId,
+                                ObservationUtc = now,
+                                VehicleId = vehicleId,
+                                PriorRouteId = prior.RouteId,
+                                PriorSnappedLat = prior.NearestLat,
+                                PriorSnappedLon = prior.NearestLon,
+                                PriorObservationUtc = prior.LastUpdated,
+                                PriorSpeedMps = priorSpeed,
+                                PriorBearingDeg = priorBearing,
+                                PosDeltaKm = posDeltaKm,
+                                SpeedDelta = currentSpeed.HasValue && priorSpeed.HasValue ? currentSpeed.Value - priorSpeed.Value : null,
+                                BearingDelta = currentBearing.HasValue && priorBearing.HasValue ? currentBearing.Value - priorBearing.Value : null,
+                                TimeDeltaSec = timeDeltaSec
+                            });
+                        }
                     }
                     else
                     {
@@ -300,11 +335,31 @@ public class Worker(
 
                     debugBatch.Add(debugRecord);
 
-                    // Skip _vehicleStates update for stale samples so the next fresh
+                    // US2: post snap telemetry for every vehicle observation
+                    eventNotifications.PostEvent(this, new SnapEventArgs
+                    {
+                        CycleId = cycleId,
+                        ObservationUtc = now,
+                        VehicleId = vehicleId,
+                        RouteId = nearest.RouteId,
+                        SnapOutcome = outcome,
+                        RawLat = lat,
+                        RawLon = lon,
+                        SnappedLat = nearest.Lat,
+                        SnappedLon = nearest.Lon,
+                        SnapDistanceKm = snapValue.DistanceKm,
+                        SnapIndex = snapValue.Index,
+                        RoutePointCount = routePoints.Length,
+                        SpeedMps = entity.Vehicle.Position.Speed.HasValue ? (double)entity.Vehicle.Position.Speed.Value : null,
+                        BearingDeg = entity.Vehicle.Position.Bearing.HasValue ? (double)entity.Vehicle.Position.Bearing.Value : null,
+                        IsStale = isStale
+                    });
+
+                    // Skip _vehicleStateCache update for stale samples so the next fresh
                     // observation deltas against the last real data, not against a duplicate.
                     if (!isStale)
                     {
-                        _vehicleStates[vehicleId] = new VehicleState(
+                        _vehicleStateCache[vehicleId] = new VehicleState(
                             nearest.Lat,
                             nearest.Lon,
                             now,
@@ -328,9 +383,42 @@ public class Worker(
             var feedIsDuplicate = feedTs.HasValue && _lastFeedHeaderTimestamp.HasValue && feedTs.Value == _lastFeedHeaderTimestamp.Value;
             _lastFeedHeaderTimestamp = feedTs;
 
+            var cycleEnd = DateTime.UtcNow;
+
             logger.LogInformation(
                 "Spatial reconciliation: {Moved} moved, {Unchanged} unchanged, {Stationary} stationary, {Stale} stale, {SkippedNoRouteId} skippedNoRouteId, {SkippedUnknownRoute} skippedUnknownRoute. FeedHeaderTs={FeedHeaderTs} DuplicateFeed={DuplicateFeed}",
                 movedCount, unchangedCount, stationaryCount, staleCount, skippedNoRouteId, skippedUnknownRoute, feedTs, feedIsDuplicate);
+
+            // US1: post cycle telemetry — includes sidecar self-health (FR-012)
+            var droppedRecords = logEventWorker.DroppedRecords;
+            var persistFailures = loggingService.PersistFailures;
+            var bufferOccupancy = logEventWorker.BufferOccupancy;
+
+            logger.LogInformation(
+                "Sidecar self-health: BufferOccupancy={Occupancy}, DroppedRecords={Dropped}, PersistFailures={Failures}",
+                bufferOccupancy, droppedRecords, persistFailures);
+
+            eventNotifications.PostEvent(this, new CycleEventArgs
+            {
+                CycleId = cycleId,
+                CycleStartUtc = cycleStart,
+                CycleEndUtc = cycleEnd,
+                CycleExecutionSeconds = (cycleEnd - cycleStart).TotalSeconds,
+                BusesProcessed = movedCount + unchangedCount + stationaryCount + staleCount,
+                BusesMoved = movedCount,
+                BusesUnchanged = unchangedCount,
+                BusesStationary = stationaryCount,
+                BusesStale = staleCount,
+                BusesSkippedNoRouteId = skippedNoRouteId,
+                BusesSkippedUnknownRoute = skippedUnknownRoute,
+                FeedHeaderTs = feedTs.HasValue ? (long)feedTs.Value : null,
+                DuplicateFeed = feedIsDuplicate,
+                LastUpdateCacheSize = _lastUpdateCache.Count,
+                VehicleStateCacheSize = _vehicleStateCache.Count,
+                SidecarBufferOccupancy = bufferOccupancy,
+                SidecarDroppedRecords = droppedRecords,
+                SidecarPersistFailures = persistFailures
+            });
 
             if (batch.Count > 0)
             {
@@ -366,11 +454,11 @@ public class Worker(
                 int pruned = 0;
                 var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(20);
 
-                foreach (var kvp in _vehicleStates)
+                foreach (var kvp in _vehicleStateCache)
                 {
                     if (kvp.Value.LastUpdated < cutoff)
                     {
-                        if (_vehicleStates.TryRemove(kvp.Key, out _))
+                        if (_vehicleStateCache.TryRemove(kvp.Key, out _))
                         {
                             pruned++;
                         }
@@ -378,7 +466,7 @@ public class Worker(
                 }
 
                 logger.LogInformation("Pruned {PrunedCount} stale vehicle states, {RemainingCount} remaining.",
-                    pruned, _vehicleStates.Count);
+                    pruned, _vehicleStateCache.Count);
             }
             catch (Exception ex)
             {
