@@ -8,10 +8,10 @@ import (
 )
 
 type Config struct {
-	ToolPath         string
-	DatasetURI       string
-	TimeoutSeconds   time.Duration
-	MaxOutputBytes   int
+	ToolPath       string
+	StorageURI     string
+	TimeoutSeconds time.Duration
+	MaxOutputBytes int
 }
 
 func Load() (*Config, error) {
@@ -20,14 +20,17 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("TELEMETRY_TOOL_PATH environment variable is required")
 	}
 
-	datasetURI := os.Getenv("TELEMETRY_DATASET_URI")
-	if datasetURI == "" {
-		return nil, fmt.Errorf("TELEMETRY_DATASET_URI environment variable is required")
+	// StorageURI is the container base (e.g. azure://telemetry); the per-query source
+	// glob {StorageURI}/{dataset}/dt={date}/*.parquet is assembled in the runner.
+	// The legacy TELEMETRY_DATASET_URI is intentionally ignored.
+	storageURI := os.Getenv("TELEMETRY_STORAGE_URI")
+	if storageURI == "" {
+		return nil, fmt.Errorf("TELEMETRY_STORAGE_URI environment variable is required")
 	}
 
 	timeoutStr := os.Getenv("TELEMETRY_TIMEOUT_SECONDS")
 	if timeoutStr == "" {
-		timeoutStr = "10"
+		timeoutStr = "30"
 	}
 	timeout, err := strconv.Atoi(timeoutStr)
 	if err != nil {
@@ -45,7 +48,7 @@ func Load() (*Config, error) {
 
 	return &Config{
 		ToolPath:       toolPath,
-		DatasetURI:     datasetURI,
+		StorageURI:     storageURI,
 		TimeoutSeconds: time.Duration(timeout) * time.Second,
 		MaxOutputBytes: maxOutput,
 	}, nil

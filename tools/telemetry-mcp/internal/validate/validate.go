@@ -2,7 +2,9 @@ package validate
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -10,26 +12,89 @@ const (
 	MaxFilterLength = 256
 )
 
+// validDatasets is the literal set of dataset names this bridge serves. A dataset
+// outside this set is rejected before any filter is parsed (FR-001).
+var validDatasets = map[string]bool{
+	"snap":  true,
+	"lerp":  true,
+	"cycle": true,
+}
+
+// dateRegex enforces a strict, zero-padded calendar date. It is structurally
+// incapable of carrying path separators, globs, or SQL (FR-009).
+var dateRegex = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// valueKind classifies the literal a column may be compared against.
+type valueKind int
+
+const (
+	kindNumeric valueKind = iota
+	kindString
+	kindTimestamp
+	kindBool
+)
+
+// datasetColumns maps each dataset to its column -> value-kind contract. These
+// mirror specs/014-transit-datasets/data-model.md exactly (frozen feature-013
+// snake_case contract). A column belongs to exactly one value kind within a
+// dataset; all numeric parquet types (DOUBLE/INT32/INT64 + nullable variants)
+// collapse to kindNumeric.
+var datasetColumns = map[string]map[string]valueKind{
+	"snap": {
+		"cycle_id":          kindString,
+		"observation_utc":   kindTimestamp,
+		"vehicle_id":        kindString,
+		"route_id":          kindString,
+		"snap_outcome":      kindString,
+		"raw_lat":           kindNumeric,
+		"raw_lon":           kindNumeric,
+		"snapped_lat":       kindNumeric,
+		"snapped_lon":       kindNumeric,
+		"snap_distance_km":  kindNumeric,
+		"snap_index":        kindNumeric,
+		"route_point_count": kindNumeric,
+		"speed_mps":         kindNumeric,
+		"bearing_deg":       kindNumeric,
+		"is_stale":          kindBool,
+	},
+	"lerp": {
+		"cycle_id":              kindString,
+		"observation_utc":       kindTimestamp,
+		"vehicle_id":            kindString,
+		"prior_route_id":        kindString,
+		"prior_snapped_lat":     kindNumeric,
+		"prior_snapped_lon":     kindNumeric,
+		"prior_observation_utc": kindTimestamp,
+		"prior_speed_mps":       kindNumeric,
+		"prior_bearing_deg":     kindNumeric,
+		"pos_delta_km":          kindNumeric,
+		"speed_delta":           kindNumeric,
+		"bearing_delta":         kindNumeric,
+		"time_delta_sec":        kindNumeric,
+	},
+	"cycle": {
+		"cycle_id":                    kindString,
+		"cycle_start_utc":             kindTimestamp,
+		"cycle_end_utc":               kindTimestamp,
+		"cycle_execution_seconds":     kindNumeric,
+		"buses_processed":             kindNumeric,
+		"buses_moved":                 kindNumeric,
+		"buses_unchanged":             kindNumeric,
+		"buses_stationary":            kindNumeric,
+		"buses_stale":                 kindNumeric,
+		"buses_skipped_no_route_id":   kindNumeric,
+		"buses_skipped_unknown_route": kindNumeric,
+		"feed_header_ts":              kindNumeric,
+		"duplicate_feed":              kindBool,
+		"last_update_cache_size":      kindNumeric,
+		"vehicle_state_cache_size":    kindNumeric,
+		"sidecar_buffer_occupancy":    kindNumeric,
+		"sidecar_dropped_records":     kindNumeric,
+		"sidecar_persist_failures":    kindNumeric,
+	},
+}
+
 var (
-	allowedColumns = map[string]bool{
-		"sepal.length": true,
-		"sepal.width":  true,
-		"petal.length": true,
-		"petal.width":  true,
-		"variety":      true,
-	}
-
-	numericColumns = map[string]bool{
-		"sepal.length": true,
-		"sepal.width":  true,
-		"petal.length": true,
-		"petal.width":  true,
-	}
-
-	stringColumns = map[string]bool{
-		"variety": true,
-	}
-
 	forbiddenKeywords = map[string]bool{
 		"WHERE":   true,
 		"SELECT":  true,
@@ -59,12 +124,41 @@ var (
 )
 
 type Token struct {
-	Type  string // "column", "number", "string", "op", "and", "or", "lparen", "rparen"
+	Type  string // "column", "number", "string", "bool", "op", "and", "or", "lparen", "rparen"
 	Value string
 }
 
-// Filter validates and canonicalizes a filter condition
-func Filter(input string) (string, error) {
+// ValidateDataset rejects any dataset name not in the literal set {snap,lerp,cycle}.
+// It must be called before the filter is parsed so an unknown dataset never reaches
+// SQL (FR-001).
+func ValidateDataset(dataset string) error {
+	if !validDatasets[dataset] {
+		return fmt.Errorf("unknown dataset %q: must be one of snap, lerp, cycle", dataset)
+	}
+	return nil
+}
+
+// ValidateDate enforces a strict YYYY-MM-DD format and a real calendar date,
+// returning the validated date unchanged. The value is structurally incapable of
+// redirecting the data source (FR-009).
+func ValidateDate(date string) (string, error) {
+	if !dateRegex.MatchString(date) {
+		return "", fmt.Errorf("invalid date %q: must match YYYY-MM-DD", date)
+	}
+	if _, err := time.Parse("2006-01-02", date); err != nil {
+		return "", fmt.Errorf("invalid date %q: not a real calendar date", date)
+	}
+	return date, nil
+}
+
+// Filter validates and canonicalizes a filter condition over the named dataset's
+// columns. The dataset must already have passed ValidateDataset.
+func Filter(dataset, input string) (string, error) {
+	columns, ok := datasetColumns[dataset]
+	if !ok {
+		return "", fmt.Errorf("unknown dataset %q: must be one of snap, lerp, cycle", dataset)
+	}
+
 	if input == "" {
 		return "", fmt.Errorf("filter is required")
 	}
@@ -128,13 +222,13 @@ func Filter(input string) (string, error) {
 	}
 
 	// Tokenize - this will do detailed validation of each token including remaining forbidden chars
-	tokens, err := tokenize(trimmed)
+	tokens, err := tokenize(trimmed, columns)
 	if err != nil {
 		return "", err
 	}
 
 	// Parse
-	parser := &parser{tokens: tokens, pos: 0}
+	parser := &parser{tokens: tokens, pos: 0, columns: columns}
 	canonical, err := parser.parsePredicate()
 	if err != nil {
 		return "", err
@@ -148,8 +242,9 @@ func Filter(input string) (string, error) {
 }
 
 type parser struct {
-	tokens []*Token
-	pos    int
+	tokens  []*Token
+	pos     int
+	columns map[string]valueKind
 }
 
 func (p *parser) parsePredicate() (string, error) {
@@ -227,28 +322,35 @@ func (p *parser) parseComparison() (string, error) {
 	}
 
 	literal := p.peek()
-	if literal.Type != "number" && literal.Type != "string" {
-		return "", fmt.Errorf("expected number or string literal, got %s", literal.Type)
+	if literal.Type != "number" && literal.Type != "string" && literal.Type != "bool" {
+		return "", fmt.Errorf("expected number, string, or bool literal, got %s", literal.Type)
 	}
 
-	// Type check: numeric columns must have numeric literals, string columns must have string literals
-	if numericColumns[column] && literal.Type != "number" {
-		return "", fmt.Errorf("column %s expects numeric value, got string", column)
-	}
-	if stringColumns[column] && literal.Type != "string" {
-		return "", fmt.Errorf("column %s expects string value, got number", column)
+	// Type check: the literal kind must match the column's value kind.
+	kind := p.columns[column]
+	switch kind {
+	case kindNumeric:
+		if literal.Type != "number" {
+			return "", fmt.Errorf("column %s expects numeric value, got %s", column, literal.Type)
+		}
+	case kindString:
+		if literal.Type != "string" {
+			return "", fmt.Errorf("column %s expects string value, got %s", column, literal.Type)
+		}
+	case kindTimestamp:
+		if literal.Type != "string" {
+			return "", fmt.Errorf("column %s expects a date string literal, got %s", column, literal.Type)
+		}
+	case kindBool:
+		if literal.Type != "bool" {
+			return "", fmt.Errorf("column %s expects bool literal true/false, got %s", column, literal.Type)
+		}
 	}
 
 	p.consume()
 
-	// Double-quote column names containing dots so DuckDB treats them as
-	// flat identifiers, not struct-field access (e.g. "petal.length").
-	quotedColumn := column
-	if strings.Contains(column, ".") {
-		quotedColumn = `"` + column + `"`
-	}
-
-	return quotedColumn + " " + op + " " + literal.Value, nil
+	// Transit columns are bare snake_case identifiers; no quoting is needed.
+	return column + " " + op + " " + literal.Value, nil
 }
 
 func (p *parser) peek() *Token {
@@ -264,7 +366,7 @@ func (p *parser) consume() *Token {
 	return token
 }
 
-func tokenize(input string) ([]*Token, error) {
+func tokenize(input string, columns map[string]valueKind) ([]*Token, error) {
 	var tokens []*Token
 	i := 0
 
@@ -329,7 +431,7 @@ func tokenize(input string) ([]*Token, error) {
 			continue
 		}
 
-		// Identifiers (column names or AND/OR)
+		// Identifiers (column names, AND/OR, or bool literals)
 		if isIdentifierStart(rune(input[i])) {
 			ident, endPos := parseIdentifier(input, i)
 			upper := strings.ToUpper(ident)
@@ -337,10 +439,14 @@ func tokenize(input string) ([]*Token, error) {
 				tokens = append(tokens, &Token{Type: "and", Value: "AND"})
 			} else if upper == "OR" {
 				tokens = append(tokens, &Token{Type: "or", Value: "OR"})
-			} else if allowedColumns[ident] {
+			} else if upper == "TRUE" {
+				tokens = append(tokens, &Token{Type: "bool", Value: "true"})
+			} else if upper == "FALSE" {
+				tokens = append(tokens, &Token{Type: "bool", Value: "false"})
+			} else if _, ok := columns[ident]; ok {
 				tokens = append(tokens, &Token{Type: "column", Value: ident})
 			} else {
-				return nil, fmt.Errorf("unknown column or invalid identifier: %s", ident)
+				return nil, fmt.Errorf("unknown column: %s", ident)
 			}
 			i = endPos
 			continue
@@ -391,12 +497,14 @@ func parseStringLiteral(input string, start int) (string, int, error) {
 }
 
 func isStringCharValid(ch rune) bool {
-	// Only alphanumeric, space, dash, and underscore are allowed in string literals
+	// Only alphanumeric, space, dash, and underscore are allowed in string literals.
+	// Note: ':' and 'T' are NOT allowed, so timestamp comparisons are date-granularity
+	// only (e.g. '2026-06-04'); full ISO timestamp literals are a deliberate non-goal.
 	return (ch >= 'a' && ch <= 'z') ||
 		(ch >= 'A' && ch <= 'Z') ||
 		(ch >= '0' && ch <= '9') ||
 		ch == ' ' || ch == '-' || ch == '_'
-	// All other characters (including @, #, etc.) are forbidden
+	// All other characters (including @, #, :, etc.) are forbidden
 }
 
 func parseNumber(input string, start int) (string, int, error) {
@@ -441,5 +549,8 @@ func isIdentifierStart(ch rune) bool {
 }
 
 func isIdentifierChar(ch rune) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '.'
+	// '.' is deliberately NOT an identifier char: it kills dotted-path identifiers
+	// (e.g. snap.outcome, petal.length) so they are rejected as unknown columns
+	// rather than parsed as struct-field access.
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
 }

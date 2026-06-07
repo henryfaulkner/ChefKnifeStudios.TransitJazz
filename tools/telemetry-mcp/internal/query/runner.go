@@ -10,10 +10,15 @@ import (
 	"telemetry-mcp/internal/config"
 )
 
-// Run executes a validated filter against the telemetry dataset using the underlying tool
-func Run(ctx context.Context, cfg *config.Config, validatedFilter string) (string, error) {
-	// Build the full SQL query: the data source is a constant, only the filter varies
-	fullQuery := fmt.Sprintf("SELECT * FROM '%s' WHERE %s", cfg.DatasetURI, validatedFilter)
+// Run executes a validated filter against the named dataset/day partition using the
+// underlying tool. The data source is assembled from a constant template filled only
+// with the already-validated dataset and date, so operator input can never redirect it.
+func Run(ctx context.Context, cfg *config.Config, dataset, date, validatedFilter string) (string, error) {
+	// Build the read source from the fixed template: {StorageURI}/{dataset}/dt={date}/*.parquet
+	sourceGlob := fmt.Sprintf("%s/%s/dt=%s/*.parquet", cfg.StorageURI, dataset, date)
+
+	// Build the full SQL query: the data source is fixed, only the filter varies
+	fullQuery := fmt.Sprintf("SELECT * FROM '%s' WHERE %s", sourceGlob, validatedFilter)
 
 	// Create the command with the configured timeout context
 	cmdCtx, cancel := context.WithTimeout(ctx, cfg.TimeoutSeconds)
