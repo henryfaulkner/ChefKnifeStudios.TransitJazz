@@ -17,18 +17,21 @@ func main() {
 	// Simple stub: just echo a mock table
 	fmt.Println("Fetching and analyzing telemetry data from Azure Blob Storage...")
 
-	// Check if the query looks reasonable (contains iris or expected table)
-	if !strings.Contains(strings.ToLower(query), "iris") &&
-		!strings.Contains(strings.ToLower(query), "petal") &&
-		!strings.Contains(strings.ToLower(query), "sepal") {
-		fmt.Fprintln(os.Stderr, "Query validation error: dataset reference missing")
+	// Check that the query references the transit telemetry layout and one of the
+	// three known datasets (mirrors the constant source template the bridge assembles).
+	lower := strings.ToLower(query)
+	if !strings.Contains(lower, "telemetry/") ||
+		(!strings.Contains(lower, "snap") &&
+			!strings.Contains(lower, "lerp") &&
+			!strings.Contains(lower, "cycle")) {
+		fmt.Fprintln(os.Stderr, "Query validation error: telemetry dataset reference missing")
 		os.Exit(1)
 	}
 
-	// Return a mock result table
-	fmt.Println(`+----------+----------+----------+----------+----------+`)
-	fmt.Println(`| count    | species  |`)
-	fmt.Println(`+----------+----------+`)
-	fmt.Println(`| 42       | setosa   |`)
-	fmt.Println(`+----------+----------+`)
+	// Return a transit-shaped mock result table.
+	fmt.Println(`+----------+------------+------------------+`)
+	fmt.Println(`| cycle_id | vehicle_id | observation_utc  |`)
+	fmt.Println(`+----------+------------+------------------+`)
+	fmt.Println(`| c-001    | v001       | 2026-06-04       |`)
+	fmt.Println(`+----------+------------+------------------+`)
 }
