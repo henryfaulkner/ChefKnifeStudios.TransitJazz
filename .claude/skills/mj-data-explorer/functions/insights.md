@@ -44,6 +44,32 @@ aggregation:
   (run each as a separate filter and compare row counts).
 - `is_stale = true` — staleness prevalence.
 
+### Route / vehicle ID drift (`cycle`)
+Each cycle row carries `active_route_ids` and `active_vehicle_ids` — comma-separated
+CSV strings of the distinct IDs seen in that cycle (only those that were actually
+processed, not skipped). Use these to answer:
+
+- **Which routes ran today?** Query a cycle row (e.g. `cycle_execution_seconds > 0`),
+  read `active_route_ids`, and split the CSV. Compare against the API's known routes
+  (`GET /gtfs/routes/shapes`) to find any unexpectedly absent or present routes.
+- **Did route IDs change over time?** Query the same filter across two dates and
+  compare the CSV contents. A route appearing or disappearing signals a GTFS feed
+  update or a real service change.
+- **How many buses were on a route?** Because `active_vehicle_ids` is per-cycle,
+  count how many vehicle IDs appear in a representative cycle for the peak hour you
+  care about. Comparing that across days reveals fleet drift.
+- **Did a vehicle jump routes?** Cross-reference a specific vehicle in `active_vehicle_ids`
+  on one day (filter a cycle with `active_vehicle_ids = '<vehicle_id>'` won't work —
+  the column is CSV, not atomic) with snap rows (`vehicle_id = 'v001'`) to see which
+  routes it appeared on.
+
+> **Note on filtering**: `active_route_ids` and `active_vehicle_ids` are CSV strings,
+> so equality filters like `active_route_ids = '110'` only match a cycle where that
+> ID is the *only* active route. For multi-value membership you need to pull cycle rows
+> and inspect the CSVs in conversation. A useful approach: query
+> `buses_processed > 0` to get cycles with activity, then read and parse the CSV from
+> the results.
+
 ### Per-route / per-vehicle focus
 - Pick a `route_id` (snap) or `vehicle_id` (snap/lerp) the user cares about and
   characterize its day: distances, outcomes, movement.

@@ -1,4 +1,4 @@
-<!-- last verified: 2026-06-07 -->
+<!-- last verified: 2026-06-08 -->
 
 # Telemetry Schema Reference
 
@@ -92,6 +92,8 @@ and sidecar internals. Start here for "is everything healthy" questions.
 | `buses_skipped_unknown_route` | numeric | no | Vehicles skipped for an unrecognized route (GTFS mapping gap). |
 | `feed_header_ts` | numeric | yes | Source feed header timestamp (epoch seconds, INT64). |
 | `duplicate_feed` | bool | no | True if this cycle ingested a feed identical to the prior one (no new data). |
+| `active_route_ids` | string | no | Comma-separated sorted distinct route display IDs seen in this cycle (skipped routes excluded). Empty string if all were skipped. |
+| `active_vehicle_ids` | string | no | Comma-separated sorted distinct vehicle display IDs processed in this cycle (skipped vehicles excluded). Empty string if all were skipped. |
 | `last_update_cache_size` | numeric | no | Size of the last-update cache. |
 | `vehicle_state_cache_size` | numeric | no | Size of the vehicle-state cache. |
 | `sidecar_buffer_occupancy` | numeric | no | How full the logging sidecar's bounded channel is. Rising = backpressure. |
@@ -110,3 +112,5 @@ and sidecar internals. Start here for "is everything healthy" questions.
 - **"Is a specific bus moving as expected?"** → `lerp`: `pos_delta_km`,
   `time_delta_sec`, filtered by `vehicle_id`.
 - **"Are we ingesting fresh feeds?"** → `cycle`: `duplicate_feed`, `buses_stale`.
+- **"Which routes/buses appeared today?"** → `cycle`: `active_route_ids`, `active_vehicle_ids` (CSV columns — filter by `cycle_id` to get a snapshot, compare across days to spot changes).
+- **"Did route or bus IDs drift?"** → compare `active_route_ids` / `active_vehicle_ids` across days to see routes appear/disappear or buses reassigned.

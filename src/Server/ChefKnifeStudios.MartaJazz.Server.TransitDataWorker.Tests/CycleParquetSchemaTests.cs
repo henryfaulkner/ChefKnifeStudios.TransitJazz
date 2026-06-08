@@ -31,6 +31,8 @@ public class CycleParquetSchemaTests
                 BusesSkippedUnknownRoute = 3,
                 FeedHeaderTs = 1234567890L,
                 DuplicateFeed = false,
+                ActiveRouteIds = "110,120,12",
+                ActiveVehicleIds = "1001,1002,1003",
                 LastUpdateCacheSize = 200,
                 VehicleStateCacheSize = 150,
                 SidecarBufferOccupancy = 7,
@@ -52,6 +54,8 @@ public class CycleParquetSchemaTests
                 BusesSkippedUnknownRoute = 0,
                 FeedHeaderTs = null,
                 DuplicateFeed = true,
+                ActiveRouteIds = "110",
+                ActiveVehicleIds = "1001",
                 LastUpdateCacheSize = 100,
                 VehicleStateCacheSize = 75,
                 SidecarBufferOccupancy = 0,
@@ -81,11 +85,13 @@ public class CycleParquetSchemaTests
             await writerRg.WriteColumnAsync(new DataColumn(f[10], rows.Select(r => r.BusesSkippedUnknownRoute).ToArray()));
             await writerRg.WriteColumnAsync(new DataColumn(f[11], rows.Select(r => r.FeedHeaderTs).ToArray()));
             await writerRg.WriteColumnAsync(new DataColumn(f[12], rows.Select(r => r.DuplicateFeed).ToArray()));
-            await writerRg.WriteColumnAsync(new DataColumn(f[13], rows.Select(r => r.LastUpdateCacheSize).ToArray()));
-            await writerRg.WriteColumnAsync(new DataColumn(f[14], rows.Select(r => r.VehicleStateCacheSize).ToArray()));
-            await writerRg.WriteColumnAsync(new DataColumn(f[15], rows.Select(r => r.SidecarBufferOccupancy).ToArray()));
-            await writerRg.WriteColumnAsync(new DataColumn(f[16], rows.Select(r => r.SidecarDroppedRecords).ToArray()));
-            await writerRg.WriteColumnAsync(new DataColumn(f[17], rows.Select(r => r.SidecarPersistFailures).ToArray()));
+            await writerRg.WriteColumnAsync(new DataColumn(f[13], rows.Select(r => r.ActiveRouteIds).ToArray()));
+            await writerRg.WriteColumnAsync(new DataColumn(f[14], rows.Select(r => r.ActiveVehicleIds).ToArray()));
+            await writerRg.WriteColumnAsync(new DataColumn(f[15], rows.Select(r => r.LastUpdateCacheSize).ToArray()));
+            await writerRg.WriteColumnAsync(new DataColumn(f[16], rows.Select(r => r.VehicleStateCacheSize).ToArray()));
+            await writerRg.WriteColumnAsync(new DataColumn(f[17], rows.Select(r => r.SidecarBufferOccupancy).ToArray()));
+            await writerRg.WriteColumnAsync(new DataColumn(f[18], rows.Select(r => r.SidecarDroppedRecords).ToArray()));
+            await writerRg.WriteColumnAsync(new DataColumn(f[19], rows.Select(r => r.SidecarPersistFailures).ToArray()));
         }
 
         // ── Read ──────────────────────────────────────────────────────────
@@ -100,6 +106,7 @@ public class CycleParquetSchemaTests
             TelemetryColumns.BusesStationary, TelemetryColumns.BusesStale,
             TelemetryColumns.BusesSkippedNoRouteId, TelemetryColumns.BusesSkippedUnknownRoute,
             TelemetryColumns.FeedHeaderTs, TelemetryColumns.DuplicateFeed,
+            TelemetryColumns.ActiveRouteIds, TelemetryColumns.ActiveVehicleIds,
             TelemetryColumns.LastUpdateCacheSize, TelemetryColumns.VehicleStateCacheSize,
             TelemetryColumns.SidecarBufferOccupancy, TelemetryColumns.SidecarDroppedRecords,
             TelemetryColumns.SidecarPersistFailures
@@ -123,6 +130,16 @@ public class CycleParquetSchemaTests
         Assert.NotNull(feedHeaderTs);
         Assert.Equal(1234567890L, feedHeaderTs[0]);
         Assert.Null(feedHeaderTs[1]);
+
+        var activeRouteIds = (await rg.ReadColumnAsync(readSchema.DataFields[13])).Data as string[];
+        Assert.NotNull(activeRouteIds);
+        Assert.Equal("110,120,12", activeRouteIds[0]);
+        Assert.Equal("110", activeRouteIds[1]);
+
+        var activeVehicleIds = (await rg.ReadColumnAsync(readSchema.DataFields[14])).Data as string[];
+        Assert.NotNull(activeVehicleIds);
+        Assert.Equal("1001,1002,1003", activeVehicleIds[0]);
+        Assert.Equal("1001", activeVehicleIds[1]);
     }
 
     static ParquetSchema BuildCycleSchema() => new(
@@ -139,6 +156,8 @@ public class CycleParquetSchemaTests
         new DataField<int>(TelemetryColumns.BusesSkippedUnknownRoute),
         new DataField<long?>(TelemetryColumns.FeedHeaderTs),
         new DataField<bool>(TelemetryColumns.DuplicateFeed),
+        new DataField<string>(TelemetryColumns.ActiveRouteIds),
+        new DataField<string>(TelemetryColumns.ActiveVehicleIds),
         new DataField<int>(TelemetryColumns.LastUpdateCacheSize),
         new DataField<int>(TelemetryColumns.VehicleStateCacheSize),
         new DataField<int>(TelemetryColumns.SidecarBufferOccupancy),

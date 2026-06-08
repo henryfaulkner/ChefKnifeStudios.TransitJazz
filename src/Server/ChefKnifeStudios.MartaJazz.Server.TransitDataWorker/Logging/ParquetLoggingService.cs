@@ -198,6 +198,8 @@ public sealed class ParquetLoggingService : ILoggingService
                 new DataField<int>(TelemetryColumns.BusesSkippedUnknownRoute),
                 new DataField<long?>(TelemetryColumns.FeedHeaderTs),
                 new DataField<bool>(TelemetryColumns.DuplicateFeed),
+                new DataField<string>(TelemetryColumns.ActiveRouteIds),
+                new DataField<string>(TelemetryColumns.ActiveVehicleIds),
                 new DataField<int>(TelemetryColumns.LastUpdateCacheSize),
                 new DataField<int>(TelemetryColumns.VehicleStateCacheSize),
                 new DataField<int>(TelemetryColumns.SidecarBufferOccupancy),
@@ -224,11 +226,13 @@ public sealed class ParquetLoggingService : ILoggingService
                 await rg.WriteColumnAsync(new DataColumn(f[10], rows.Select(r => r.BusesSkippedUnknownRoute).ToArray()));
                 await rg.WriteColumnAsync(new DataColumn(f[11], rows.Select(r => r.FeedHeaderTs).ToArray()));
                 await rg.WriteColumnAsync(new DataColumn(f[12], rows.Select(r => r.DuplicateFeed).ToArray()));
-                await rg.WriteColumnAsync(new DataColumn(f[13], rows.Select(r => r.LastUpdateCacheSize).ToArray()));
-                await rg.WriteColumnAsync(new DataColumn(f[14], rows.Select(r => r.VehicleStateCacheSize).ToArray()));
-                await rg.WriteColumnAsync(new DataColumn(f[15], rows.Select(r => r.SidecarBufferOccupancy).ToArray()));
-                await rg.WriteColumnAsync(new DataColumn(f[16], rows.Select(r => r.SidecarDroppedRecords).ToArray()));
-                await rg.WriteColumnAsync(new DataColumn(f[17], rows.Select(r => r.SidecarPersistFailures).ToArray()));
+                await rg.WriteColumnAsync(new DataColumn(f[13], rows.Select(r => r.ActiveRouteIds).ToArray()));
+                await rg.WriteColumnAsync(new DataColumn(f[14], rows.Select(r => r.ActiveVehicleIds).ToArray()));
+                await rg.WriteColumnAsync(new DataColumn(f[15], rows.Select(r => r.LastUpdateCacheSize).ToArray()));
+                await rg.WriteColumnAsync(new DataColumn(f[16], rows.Select(r => r.VehicleStateCacheSize).ToArray()));
+                await rg.WriteColumnAsync(new DataColumn(f[17], rows.Select(r => r.SidecarBufferOccupancy).ToArray()));
+                await rg.WriteColumnAsync(new DataColumn(f[18], rows.Select(r => r.SidecarDroppedRecords).ToArray()));
+                await rg.WriteColumnAsync(new DataColumn(f[19], rows.Select(r => r.SidecarPersistFailures).ToArray()));
             }
 
             await UploadAsync("cycle", ms, rows.Count, ct);

@@ -86,6 +86,8 @@ var datasetColumns = map[string]map[string]valueKind{
 		"buses_skipped_unknown_route": kindNumeric,
 		"feed_header_ts":              kindNumeric,
 		"duplicate_feed":              kindBool,
+		"active_route_ids":            kindString,
+		"active_vehicle_ids":          kindString,
 		"last_update_cache_size":      kindNumeric,
 		"vehicle_state_cache_size":    kindNumeric,
 		"sidecar_buffer_occupancy":    kindNumeric,

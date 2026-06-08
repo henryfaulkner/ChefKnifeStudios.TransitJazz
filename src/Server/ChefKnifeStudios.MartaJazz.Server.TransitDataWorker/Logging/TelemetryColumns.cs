@@ -53,6 +53,8 @@ public static class TelemetryColumns
     public const string DuplicateFeed = "duplicate_feed";
     public const string LastUpdateCacheSize = "last_update_cache_size";
     public const string VehicleStateCacheSize = "vehicle_state_cache_size";
+    public const string ActiveRouteIds = "active_route_ids";
+    public const string ActiveVehicleIds = "active_vehicle_ids";
     public const string SidecarBufferOccupancy = "sidecar_buffer_occupancy";
     public const string SidecarDroppedRecords = "sidecar_dropped_records";
     public const string SidecarPersistFailures = "sidecar_persist_failures";

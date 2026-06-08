@@ -142,6 +142,8 @@ public class Worker(
             var batch = new List<RouteNearestPointBatchEvent.RouteNearestPointRecord>();
             var debugBatch = new List<BatchDebugRecord>();
             int movedCount = 0, unchangedCount = 0, stationaryCount = 0, staleCount = 0, skippedNoRouteId = 0, skippedUnknownRoute = 0;
+            var activeRouteIdSet = new HashSet<string>();
+            var activeVehicleIdSet = new HashSet<string>();
 
             foreach (var entity in feed.Entities)
             {
@@ -163,6 +165,9 @@ public class Worker(
                         skippedUnknownRoute++;
                         continue;
                     }
+
+                    activeRouteIdSet.Add(routeId);
+                    activeVehicleIdSet.Add(vehicleId);
 
                     double lat = (double)entity.Vehicle.Position.Latitude;
                     double lon = (double)entity.Vehicle.Position.Longitude;
@@ -413,6 +418,8 @@ public class Worker(
                 BusesSkippedUnknownRoute = skippedUnknownRoute,
                 FeedHeaderTs = feedTs.HasValue ? (long)feedTs.Value : null,
                 DuplicateFeed = feedIsDuplicate,
+                ActiveRouteIds = string.Join(",", activeRouteIdSet.Order()),
+                ActiveVehicleIds = string.Join(",", activeVehicleIdSet.Order()),
                 LastUpdateCacheSize = _lastUpdateCache.Count,
                 VehicleStateCacheSize = _vehicleStateCache.Count,
                 SidecarBufferOccupancy = bufferOccupancy,

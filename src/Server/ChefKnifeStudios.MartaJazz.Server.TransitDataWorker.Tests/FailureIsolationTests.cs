@@ -37,6 +37,7 @@ public class FailureIsolationTests
             BusesStationary = 0, BusesStale = 0,
             BusesSkippedNoRouteId = 0, BusesSkippedUnknownRoute = 0,
             DuplicateFeed = false,
+            ActiveRouteIds = "", ActiveVehicleIds = "",
             LastUpdateCacheSize = 0, VehicleStateCacheSize = 0,
             SidecarBufferOccupancy = 0, SidecarDroppedRecords = 0,
             SidecarPersistFailures = 0

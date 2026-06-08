@@ -26,6 +26,11 @@ public sealed class CycleEventArgs : LogEventArgs
     public required int LastUpdateCacheSize { get; init; }
     public required int VehicleStateCacheSize { get; init; }
 
+    /// <summary>Comma-separated distinct route display IDs seen in this cycle (skipped routes excluded).</summary>
+    public required string ActiveRouteIds { get; init; }
+    /// <summary>Comma-separated distinct vehicle display IDs processed in this cycle (skipped vehicles excluded).</summary>
+    public required string ActiveVehicleIds { get; init; }
+
     // ── Sidecar self-health ────────────────────────────────────────────────
     public required int SidecarBufferOccupancy { get; init; }
     public required long SidecarDroppedRecords { get; init; }
