@@ -187,7 +187,7 @@ module serverApp 'modules/containerApp.bicep' = {
     environmentId: cae.outputs.id
     managedIdentityId: serverIdentity.outputs.id
     containerRegistryLoginServer: '${containerRegistryName}.azurecr.io'
-    image: '${containerRegistryName}.azurecr.io/chefknifestudios.pokerattack.server.webapi:main-chefknifestudios-pokerattack-server-20260125.1'
+    image: '${containerRegistryName}.azurecr.io/chefknifestudios.martajazz.server.webapi:latest'
     cpu: '0.5'
     memory: '1Gi'
     minReplicas: 1
@@ -198,6 +198,10 @@ module serverApp 'modules/containerApp.bicep' = {
       'https://www.${apexDomain}'
     ]
     envVars: [
+      {
+        name: 'ASPNETCORE_URLS'
+        value: 'http://+:8080'
+      }
       {
         name: 'WebApi__BaseUrl'
         value: 'http://localhost:8080'
