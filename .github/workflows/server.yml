@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main, features/010-github-actions-cicd]
+    branches: [main]
 
 env:
   REGISTRY: chefknife.azurecr.io
@@ -55,7 +55,4 @@ jobs:
         with:
           azcliversion: latest
           inlineScript: |
-            az containerapp update \
-              --name ${{ env.CONTAINER_APP_NAME }} \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
+            az containerapp update --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}

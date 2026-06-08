@@ -59,6 +59,11 @@ var tags = {
 var staticWebAppName = '${namePrefix}-swa'
 var staticWebAppResourceId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Web/staticSites/${staticWebAppName}'
 
+// Storage account names: 3-24 chars, lowercase alphanumeric only, globally unique.
+// Derive a stable suffix from the resource group id so dev/prod get distinct names.
+var telemetryStorageAccountName = take('mjtel${environment}${uniqueString(subscription().subscriptionId, resourceGroupName)}', 24)
+var telemetryContainerName = 'parquet'
+
 // -----------------------------------------------------------------------------
 // Resource Group
 // -----------------------------------------------------------------------------
@@ -160,6 +165,22 @@ module acrRoleAssignment 'modules/acrRoleAssignment.bicep' = {
 }
 
 // -----------------------------------------------------------------------------
+// Telemetry storage (logging sidecar — feature 013): account + container + blob RBAC
+// -----------------------------------------------------------------------------
+
+module telemetryStorage 'modules/telemetryStorage.bicep' = {
+  name: 'telemetry-storage-deploy'
+  scope: rg
+  params: {
+    storageAccountName: telemetryStorageAccountName
+    location: location
+    tags: tags
+    containerName: telemetryContainerName
+    principalId: serverIdentity.outputs.principalId
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Container Apps Environment
 // -----------------------------------------------------------------------------
 
@@ -206,6 +227,25 @@ module serverApp 'modules/containerApp.bicep' = {
         name: 'WebApi__BaseUrl'
         value: 'http://localhost:8080'
       }
+      // Let DefaultAzureCredential select the user-assigned MI (the app has only
+      // this one, but setting AZURE_CLIENT_ID makes credential resolution explicit).
+      {
+        name: 'AZURE_CLIENT_ID'
+        value: serverIdentity.outputs.clientId
+      }
+      // Logging sidecar (feature 013) — blob target for the telemetry parquet writer.
+      {
+        name: 'Logging__Telemetry__BlobServiceUri'
+        value: telemetryStorage.outputs.blobServiceUri
+      }
+      {
+        name: 'Logging__Telemetry__Container'
+        value: telemetryContainerName
+      }
+      {
+        name: 'Logging__Telemetry__Enabled'
+        value: 'true'
+      }
     ]
   }
   dependsOn: [
@@ -222,3 +262,5 @@ output staticWebAppDefaultHostname string = swa.outputs.defaultHostname
 output dnsZoneNameServers array = dnsZone.outputs.nameServers
 output serverContainerAppFqdn string = serverApp.outputs.fqdn
 output serverManagedIdentityPrincipalId string = serverIdentity.outputs.principalId
+output telemetryStorageAccountName string = telemetryStorage.outputs.accountName
+output telemetryBlobServiceUri string = telemetryStorage.outputs.blobServiceUri

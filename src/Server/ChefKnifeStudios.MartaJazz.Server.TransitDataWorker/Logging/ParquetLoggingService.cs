@@ -24,6 +24,7 @@ public sealed class ParquetLoggingService : ILoggingService
     readonly ConcurrentBag<CycleEventArgs> _cycleBuffer = new();
 
     long _persistFailures;
+    int _containerEnsured; // 0 = not yet ensured, 1 = ensured (Interlocked guard)
 
     public long DroppedRecords => 0;
     public long PersistFailures => Interlocked.Read(ref _persistFailures);
@@ -43,6 +44,15 @@ public sealed class ParquetLoggingService : ILoggingService
                 serviceClient = new BlobServiceClient(new Uri(_options.BlobServiceUri), new DefaultAzureCredential());
 
             _container = serviceClient?.GetBlobContainerClient(_options.Container);
+
+            if (_container == null)
+            {
+                // Misconfiguration: the sidecar is Enabled but has no blob target.
+                // Warn loudly — this is the silent failure mode that produces zero blobs.
+                _logger.LogWarning(
+                    "Logging sidecar is Enabled but no blob target is configured " +
+                    "(set Logging:Telemetry:BlobServiceUri or :ConnectionString). Telemetry will NOT be uploaded.");
+            }
         }
     }
 
@@ -233,6 +243,13 @@ public sealed class ParquetLoggingService : ILoggingService
 
         if (_container != null)
         {
+            // Create the container on first use so a missing container doesn't throw
+            // ContainerNotFound (which would otherwise be swallowed as a persist failure).
+            if (Interlocked.CompareExchange(ref _containerEnsured, 1, 0) == 0)
+            {
+                await _container.CreateIfNotExistsAsync(cancellationToken: ct);
+            }
+
             var blobClient = _container.GetBlobClient(blobPath);
             await blobClient.UploadAsync(ms, overwrite: false, ct);
             _logger.LogInformation("Flushed {Count} {Dataset} rows to {BlobPath}", rowCount, dataset, blobPath);
