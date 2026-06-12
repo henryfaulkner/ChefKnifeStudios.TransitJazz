@@ -14,6 +14,10 @@
         background-color: red;
         border-radius: 120px;
         padding: 2px;
+
+        &.route-filters__route-filter-disabled {
+            background-color: lightgrey;
+        }
     }
 
     &:hover {
@@ -31,8 +35,4 @@
 
 .route-filters__route-filter-label {
     color: white;
-}
-
-.route-filters__route-filter-disabled {
-    background-color: lightgrey;
 }

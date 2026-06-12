@@ -18,13 +18,15 @@ public interface IRouteFilterViewModel : IViewModel
 {
     IEnumerable<RouteItem> RouteItems { get; }
     Task LoadAsync(CancellationToken ct = default);
-    void SelectRoute(string routeId);
+    void SelectRoute(RouteItem routeItem);
+    void ClearSelection();
     public bool HasSelection { get; }
 }
 
 public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 {
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
     public IEnumerable<RouteItem> _routeItems = [
         new () { RouteId = "001", IsSelected = false, },
         new () { RouteId = "002", IsSelected = false, },
@@ -55,13 +57,21 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
         // Log error if the RouteFilter fails to load
     }
 
-    public void SelectRoute(string routeId)
+    public void SelectRoute(RouteItem routeItem)
     {
-        _toastService.ShowSuccess($"Route {routeId} selected!"); // TODO remove
-        foreach (var routeItem in RouteItems)
-        {
-            routeItem.IsSelected = routeItem.RouteId == routeId;  
-        }
+        _toastService.ShowSuccess($"Route {routeItem.RouteId} selected!"); // TODO remove
+        // Assign through the generated RouteItems property — mutating items
+        // in place bypasses the setter, so PropertyChanged never fires.
+        RouteItems = RouteItems
+            .Select(x => new RouteItem { RouteId = x.RouteId, IsSelected = x.RouteId == routeItem.RouteId, })
+            .ToList();
+    }
+
+    public void ClearSelection()
+    {
+        RouteItems = RouteItems
+            .Select(x => new RouteItem { RouteId = x.RouteId, IsSelected = false, })
+            .ToList();
     }
 
     public bool HasSelection => RouteItems.Any(x => x.IsSelected);
