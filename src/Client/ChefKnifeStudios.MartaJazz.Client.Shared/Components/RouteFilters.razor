@@ -1,0 +1,17 @@
+﻿<div class="route-filters">
+    @foreach (var routeItem in RouteFilterViewModel.RouteItems)
+    {
+        <div 
+            class="route-filters__route-filter"
+            @onmouseover="(args) => HandleMouseOver(args, routeItem)"
+            @onmouseout="(args) => HandleMouseOut(args, routeItem)"
+        >
+            <div class="route-filters__route-filter-circle @(RouteFilterViewModel.HasSelection ? string.Empty : "route-filters__route-filter-disabled")">
+                <span class="route-filters__route-filter-label">
+                    @routeItem.RouteId
+                </span>
+            </div>
+        </div>
+    }
+</div>
+
