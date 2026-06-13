@@ -48,30 +48,6 @@ public partial class Map : ComponentBase
         }
     }
 
-    public async Task ShowRouteShapeAsync(string geoJson)
-    {
-        try
-        {
-            await JsRuntime.InvokeVoidAsync("ChefMap.showRouteShape", ElementId, geoJson);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-        }
-    }
-
-    public async Task ClearRouteShapeAsync()
-    {
-        try
-        {
-            await JsRuntime.InvokeVoidAsync("ChefMap.clearRouteShape", ElementId);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-        }
-    }
-
     public async Task AddRouteShapeFeatureAsync(string routeId, double[][] coordinates, string? color)
     {
         try
@@ -115,16 +91,16 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Console.WriteLine($"[Map] FocusRoute failed for routeId={routeId}: {ex}"); }
     }
 
-    public async Task SetBasemapStyleAsync(bool isStreets)
-    {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.setBasemapStyle", ElementId, isStreets); }
-        catch (Exception ex) { Console.WriteLine($"[Map] SetBasemapStyle failed: {ex}"); }
-    }
-
     public async Task SetCheckpointVisibilityAsync(bool visible)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.setCheckpointVisibility", ElementId, visible); }
         catch (Exception ex) { Console.WriteLine($"[Map] SetCheckpointVisibility failed: {ex}"); }
+    }
+
+    public async Task SetVehiclesVisibleAsync(bool visible)
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setVehiclesVisible", ElementId, visible); }
+        catch (Exception ex) { Console.WriteLine($"[Map] SetVehiclesVisible failed: {ex}"); }
     }
 
     public async Task ClearRouteFocusAsync()

@@ -10,10 +10,6 @@ public partial class Settings : ObservableObject
     private bool _isAudioEnabled = true;
 
     [ObservableProperty]
-    [property: Description("SettingStreetsBasemap")]
-    private bool _isStreetsBasemap = true;
-
-    [ObservableProperty]
     [property: Description("SettingCheckpointsVisible")]
     private bool _areCheckpointsVisible = true;
 }

@@ -48,7 +48,6 @@ public partial class SettingsBlade : IDisposable
             IEventArgs? effectEvent = propertyName switch
             {
                 nameof(Settings.IsAudioEnabled) => new AudioSettingChangedEventArgs { IsAudioEnabled = value },
-                nameof(Settings.IsStreetsBasemap) => new GisSettingChangedEventArgs { IsStreetsBasemap = value },
                 nameof(Settings.AreCheckpointsVisible) => new CheckpointVisibilityChangedEventArgs { AreCheckpointsVisible = value },
                 _ => null
             };

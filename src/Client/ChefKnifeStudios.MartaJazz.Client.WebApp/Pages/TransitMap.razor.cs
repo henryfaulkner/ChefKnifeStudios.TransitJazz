@@ -84,7 +84,11 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         if (_mapReady && _routesLoaded && !_routesRendered && _map is not null)
         {
             _routesRendered = true;
+            await _map.SetCheckpointVisibilityAsync(false);
             await RenderRoutesAsync();
+            var settings = SettingsService.GetSettings();
+            await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
+            await _map.SetVehiclesVisibleAsync(true);
         }
     }
 
@@ -110,16 +114,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         if (e is AudioSettingChangedEventArgs audio)
         {
             _audioEnabled = audio.IsAudioEnabled;
-            return;
-        }
-
-        if (e is GisSettingChangedEventArgs gis)
-        {
-            InvokeAsync(async () =>
-            {
-                if (_map is not null)
-                    await _map.SetBasemapStyleAsync(gis.IsStreetsBasemap);
-            });
             return;
         }
 
@@ -159,12 +153,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         _map = map;
         _mapReady = true;
-
-        var settings = SettingsService.GetSettings();
-        if (!settings.IsStreetsBasemap)
-            await map.SetBasemapStyleAsync(false);
-        if (!settings.AreCheckpointsVisible)
-            await map.SetCheckpointVisibilityAsync(false);
 
         await InvokeAsync(StateHasChanged);
 
