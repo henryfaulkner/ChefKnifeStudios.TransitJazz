@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/014-transit-datasets/plan.md
+feature plan at specs/015-route-filter-ui/plan.md
 
 014-transit-datasets retargets the tools/telemetry-mcp/ MCP bridge (Go,
 mcp-go over stdio) off the iris demo dataset and onto the three frozen

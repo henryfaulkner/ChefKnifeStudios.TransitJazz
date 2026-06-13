@@ -210,6 +210,56 @@ window.ChefMap = {
         }
     },
 
+    _preFocusColors: {},
+
+    focusRoute: function (containerDivId, routeId) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+
+        let style = map.getStyle();
+        if (!style) return;
+
+        let targetLayerId = 'route-layer-' + routeId;
+
+        (style.layers || []).forEach(function (layer) {
+            if (!layer.id || !layer.id.startsWith('route-layer-')) return;
+            let id = layer.id;
+
+            // Stash original color on first focus pass
+            if (ChefMap._preFocusColors[id] === undefined) {
+                ChefMap._preFocusColors[id] = map.getPaintProperty(id, 'line-color');
+            }
+
+            if (!map.getLayer(id)) return;
+
+            if (id === targetLayerId) {
+                map.setPaintProperty(id, 'line-opacity', 0.95);
+                map.setPaintProperty(id, 'line-color', ChefMap._preFocusColors[id]);
+            } else {
+                map.setPaintProperty(id, 'line-opacity', 0.15);
+                map.setPaintProperty(id, 'line-color', '#374151');
+            }
+        });
+    },
+
+    clearRouteFocus: function (containerDivId) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+
+        let style = map.getStyle();
+        if (!style) return;
+
+        (style.layers || []).forEach(function (layer) {
+            if (!layer.id || !layer.id.startsWith('route-layer-')) return;
+            let id = layer.id;
+            if (!map.getLayer(id)) return;
+            map.setPaintProperty(id, 'line-opacity', 0.85);
+            map.setPaintProperty(id, 'line-color', ChefMap._preFocusColors[id] !== undefined ? ChefMap._preFocusColors[id] : map.getPaintProperty(id, 'line-color'));
+        });
+
+        ChefMap._preFocusColors = {};
+    },
+
     addRouteShapeFeature: function (containerDivId, routeId, coordinates, color) {
         let map = ChefMap.maps[containerDivId];
         if (!map) {

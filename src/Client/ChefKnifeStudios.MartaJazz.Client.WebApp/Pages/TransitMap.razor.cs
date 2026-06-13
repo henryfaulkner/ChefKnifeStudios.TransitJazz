@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,6 +26,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] ITriggerPointGenerator TriggerPointGenerator { get; set; } = null!;
     [Inject] ICheckpointTrackerJsInterop CheckpointTracker { get; set; } = null!;
     [Inject] ITransitSynthJsInterop TransitSynth { get; set; } = null!;
+    [Inject] IRouteFilterViewModel RouteFilterViewModel { get; set; } = null!;
 
     Map? _map;
     bool _mapReady;
@@ -50,6 +52,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     protected override async Task OnInitializedAsync()
     {
         _dotNetRef = DotNetObjectReference.Create((object)this);
+
+        RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
 
         try
         {
@@ -103,9 +107,23 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
         NotificationService.NotificationReceived -= HandleVehicleBatchAsync;
         await CheckpointTracker.ClearAsync();
         _dotNetRef?.Dispose();
+    }
+
+    void OnRouteFilterPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection)))
+            return;
+
+        if (!_mapReady || _map is null) return;
+
+        if (RouteFilterViewModel.SelectedRouteId is { } id)
+            InvokeAsync(() => _map.FocusRouteAsync(id));
+        else
+            InvokeAsync(() => _map.ClearRouteFocusAsync());
     }
 
     async Task OnMapReadyAsync(Map map)
