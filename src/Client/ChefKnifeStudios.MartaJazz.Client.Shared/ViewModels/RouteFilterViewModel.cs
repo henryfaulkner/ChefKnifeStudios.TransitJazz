@@ -1,11 +1,13 @@
 ﻿using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels;
+using ChefKnifeStudios.MartaJazz.Shared.Events;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace ChefKnifeStudios.MartaJazz.Client.Shared.Components;
 
@@ -23,6 +25,7 @@ public interface IRouteFilterViewModel : IViewModel, IDisposable
     void ClearSelection();
     public bool HasSelection { get; }
     public string? SelectedRouteId { get; }
+    public int ActiveBusCount { get; }
 }
 
 public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
@@ -30,6 +33,9 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     IEnumerable<RouteItem> _routeItems = [];
+
+    [ObservableProperty]
+    int _activeBusCount;
 
     readonly ILogger<RouteFilterViewModel> _logger;
     readonly IToastService _toastService;
@@ -49,6 +55,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
         // now, then rebuild when RoutesLoaded flips so the filters appear once loading
         // completes (mirrors RouteFilters' own PropertyChanged subscription).
         _applicationViewModel.PropertyChanged += OnApplicationViewModelPropertyChanged;
+        _applicationViewModel.NotificationReceived += OnNotificationReceived;
         BuildRouteItems();
     }
 
@@ -56,6 +63,19 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     {
         if (e.PropertyName == nameof(IApplicationViewModel.RoutesLoaded))
             BuildRouteItems();
+    }
+
+    Task OnNotificationReceived(List<EventEnvelope> batch)
+    {
+        var count = batch
+            .Select(e => e.Payload)
+            .OfType<VehiclePositionBatchEvent>()
+            .Sum(e => e.BatchRecords.Count());
+
+        if (count > 0)
+            ActiveBusCount = count;
+
+        return Task.CompletedTask;
     }
 
     void BuildRouteItems()
@@ -97,5 +117,6 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     public void Dispose()
     {
         _applicationViewModel.PropertyChanged -= OnApplicationViewModelPropertyChanged;
+        _applicationViewModel.NotificationReceived -= OnNotificationReceived;
     }
 }

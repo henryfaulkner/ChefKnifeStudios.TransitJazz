@@ -69,9 +69,11 @@ export function isUnlocked() {
 }
 
 export async function triggerNote(routeId, vehicleId) {
-    if (!_unlocked) return;
     try {
         const T = await getTone();
+        if (T.context.state !== 'running') {
+            await T.start();
+        }
         const inst = await instrumentFor(routeId);
         const midiNote = pitchFor(vehicleId);
         const freq = T.Frequency(midiNote, 'midi').toFrequency();

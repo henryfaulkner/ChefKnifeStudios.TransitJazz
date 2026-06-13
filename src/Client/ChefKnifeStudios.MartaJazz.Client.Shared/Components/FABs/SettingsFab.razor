@@ -1,0 +1,35 @@
+@using ChefKnifeStudios.MartaJazz.Client.Core.Services
+@using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs
+@implements IDisposable
+@inject IEventNotificationService EventNotificationService
+
+<div class="settings-fab-container">
+    <MatFAB Icon="settings" @onclick="HandleFabClicked" />
+</div>
+
+@code {
+    bool _isOpen;
+
+    protected override void OnInitialized()
+    {
+        EventNotificationService.EventReceived += HandleEventReceived;
+    }
+
+    void HandleFabClicked()
+    {
+        var type = _isOpen ? BladeEventArgs.Types.Close : BladeEventArgs.Types.Settings;
+        EventNotificationService.PostEvent(this, new BladeEventArgs { Type = type });
+    }
+
+    void HandleEventReceived(object sender, IEventArgs e)
+    {
+        if (e is not BladeEventArgs blade) return;
+        _isOpen = blade.Type == BladeEventArgs.Types.Settings;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        EventNotificationService.EventReceived -= HandleEventReceived;
+    }
+}

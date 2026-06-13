@@ -24,6 +24,7 @@ window.ChefMap = {
                 id: 'vehicles-layer',
                 type: 'circle',
                 source: 'vehicles',
+                layout: { 'visibility': 'none' },
                 paint: {
                     'circle-radius': 6,
                     'circle-color': '#22c55e',
@@ -125,49 +126,6 @@ window.ChefMap = {
         }
     },
 
-    showRouteShape: function (containerDivId, geoJson) {
-        let map = ChefMap.maps[containerDivId];
-        if (!map) return;
-
-        try {
-            let feature = typeof geoJson === 'string' ? JSON.parse(geoJson) : geoJson;
-            let source = map.getSource('route-shape-legacy');
-            if (!source) {
-                map.addSource('route-shape-legacy', { type: 'geojson', data: feature });
-                map.addLayer({
-                    id: 'route-shape-legacy-layer',
-                    type: 'line',
-                    source: 'route-shape-legacy',
-                    paint: { 'line-color': '#0078D4', 'line-width': 4 }
-                });
-            } else {
-                source.setData(feature);
-            }
-        } catch (err) {
-            console.warn('[ChefMap] showRouteShape: failed to parse GeoJSON', err);
-        }
-    },
-
-    clearRouteShape: function (containerDivId) {
-        let map = ChefMap.maps[containerDivId];
-        if (!map) return;
-
-        let style = map.getStyle();
-        if (!style) return;
-
-        (style.layers || []).forEach(function (layer) {
-            if (layer.id && (layer.id.startsWith('route-layer-') || layer.id === 'route-shape-legacy-layer')) {
-                if (map.getLayer(layer.id)) map.removeLayer(layer.id);
-            }
-        });
-
-        Object.keys(style.sources || {}).forEach(function (sourceId) {
-            if (sourceId.startsWith('route-') || sourceId === 'route-shape-legacy') {
-                if (map.getSource(sourceId)) map.removeSource(sourceId);
-            }
-        });
-    },
-
     // Debug: render trigger-point dots for all configured routes.
     // Accumulates points across calls (one call per route); idempotent per routeId.
     _triggerPointFeatures: {},  // routeId → Feature[]
@@ -197,6 +155,7 @@ window.ChefMap = {
                 id: 'trigger-points-layer',
                 type: 'circle',
                 source: 'trigger-points',
+                layout: { 'visibility': 'none' },
                 paint: {
                     'circle-radius': 4,
                     'circle-color': '#facc15',       // yellow — visible against route lines
@@ -258,6 +217,20 @@ window.ChefMap = {
         });
 
         ChefMap._preFocusColors = {};
+    },
+
+    setCheckpointVisibility: function (containerDivId, visible) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+        if (!map.getLayer('trigger-points-layer')) return;
+        map.setLayoutProperty('trigger-points-layer', 'visibility', visible ? 'visible' : 'none');
+    },
+
+    setVehiclesVisible: function (containerDivId, visible) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+        if (!map.getLayer('vehicles-layer')) return;
+        map.setLayoutProperty('vehicles-layer', 'visibility', visible ? 'visible' : 'none');
     },
 
     addRouteShapeFeature: function (containerDivId, routeId, coordinates, color) {

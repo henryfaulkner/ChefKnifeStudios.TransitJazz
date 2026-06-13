@@ -1,3 +1,12 @@
+.route-filters__header {
+    margin-bottom: 4px;
+}
+
+.route-filters__bus-count {
+    font-size: 0.75rem;
+    color: #888;
+}
+
 .route-filters {
     display: grid;
     grid-template-columns: repeat(6, 1fr);

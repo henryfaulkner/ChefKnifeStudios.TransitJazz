@@ -22,16 +22,4 @@ public record CameraOptions
         }
     }
 
-    public void ChangeZoom(bool zoomIn)
-    {
-        var zoom = zoomIn ? _zoom + 1 : _zoom - 1;
-        zoom = zoom switch
-        {
-            < MIN_ZOOM => MIN_ZOOM,
-            > MAX_ZOOM => MAX_ZOOM,
-            _ => zoom
-        };
-
-        _zoom = zoom;
-    }
 }

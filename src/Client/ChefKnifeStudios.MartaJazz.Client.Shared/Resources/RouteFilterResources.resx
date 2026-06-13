@@ -47,12 +47,6 @@
   <data name="NotFoundMessage" xml:space="preserve">
     <value>Sorry, there's nothing at this address.</value>
   </data>
-  <data name="ZoomInAlt" xml:space="preserve">
-    <value>Zoom In</value>
-  </data>
-  <data name="ZoomOutAlt" xml:space="preserve">
-    <value>Zoom Out</value>
-  </data>
   <data name="ToastSuccessTitle" xml:space="preserve">
     <value>SUCCESS</value>
   </data>
@@ -61,5 +55,14 @@
   </data>
   <data name="ToastErrorTitle" xml:space="preserve">
     <value>ERROR</value>
+  </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="SettingAudioEnabled" xml:space="preserve">
+    <value>Audio</value>
+  </data>
+  <data name="SettingCheckpointsVisible" xml:space="preserve">
+    <value>Checkpoints</value>
   </data>
 </root>

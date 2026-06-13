@@ -4,10 +4,14 @@
 @using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Constants
 @using ChefKnifeStudios.MartaJazz.Client.Core.Services
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Components.Blades
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Components.FABs
 
 <MatThemeProvider Theme="@_currentTheme">
     @Body
     <MatToastContainer />
+    <SettingsBlade />
+    <SettingsFab />
 </MatThemeProvider>
 
 @code {

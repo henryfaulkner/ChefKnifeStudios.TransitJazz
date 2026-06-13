@@ -77,6 +77,9 @@ builder.Services.AddMatToaster(new MatToastConfiguration
 
 builder.Services.AddBlazoredLocalStorage();
 
+builder.Services.AddTransient<ISettingsService, SettingsService>();
+builder.Services.AddSingleton<IOutsideClickJsInterop, OutsideClickJsInterop>();
+
 builder.Services.AddLocalization();
 
 builder.Logging.SetMinimumLevel(LogLevel.Debug);

@@ -20,32 +20,6 @@ public partial class Map : ComponentBase
         }
     }
 
-    public async Task ChangeMapZoomAsync(bool zoomIn)
-    {
-        try
-        {
-            CameraOptions.ChangeZoom(zoomIn);
-            await JsRuntime.InvokeVoidAsync("ChefMap.setMapZoom", ElementId, CameraOptions.Zoom);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-        }
-    }
-
-    public async Task SetMapZoomAsync(int zoom)
-    {
-        try
-        {
-            CameraOptions.Zoom = zoom;
-            await JsRuntime.InvokeVoidAsync("ChefMap.setMapZoom", ElementId, zoom);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-        }
-    }
-
     public async Task CenterVehiclePinAsync(int vehicleId)
     {
         try
@@ -71,30 +45,6 @@ public partial class Map : ComponentBase
             {
                 Console.WriteLine(ex.ToString());
             }
-        }
-    }
-
-    public async Task ShowRouteShapeAsync(string geoJson)
-    {
-        try
-        {
-            await JsRuntime.InvokeVoidAsync("ChefMap.showRouteShape", ElementId, geoJson);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-        }
-    }
-
-    public async Task ClearRouteShapeAsync()
-    {
-        try
-        {
-            await JsRuntime.InvokeVoidAsync("ChefMap.clearRouteShape", ElementId);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
         }
     }
 
@@ -139,6 +89,18 @@ public partial class Map : ComponentBase
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.focusRoute", ElementId, routeId); }
         catch (Exception ex) { Console.WriteLine($"[Map] FocusRoute failed for routeId={routeId}: {ex}"); }
+    }
+
+    public async Task SetCheckpointVisibilityAsync(bool visible)
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setCheckpointVisibility", ElementId, visible); }
+        catch (Exception ex) { Console.WriteLine($"[Map] SetCheckpointVisibility failed: {ex}"); }
+    }
+
+    public async Task SetVehiclesVisibleAsync(bool visible)
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setVehiclesVisible", ElementId, visible); }
+        catch (Exception ex) { Console.WriteLine($"[Map] SetVehiclesVisible failed: {ex}"); }
     }
 
     public async Task ClearRouteFocusAsync()

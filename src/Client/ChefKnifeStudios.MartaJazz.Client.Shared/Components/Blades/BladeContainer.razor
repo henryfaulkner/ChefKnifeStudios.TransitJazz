@@ -1,0 +1,9 @@
+@namespace ChefKnifeStudios.MartaJazz.Client.Shared.Components.Blades
+@implements IAsyncDisposable
+
+<div id="@_elementId" class="blade-container @(_isOpen ? "open" : "")">
+    <MatIconButton Icon="close" Class="cross" @onclick="HandleClosePressed" />
+    <div class="content-container">
+        @ContentFragment
+    </div>
+</div>

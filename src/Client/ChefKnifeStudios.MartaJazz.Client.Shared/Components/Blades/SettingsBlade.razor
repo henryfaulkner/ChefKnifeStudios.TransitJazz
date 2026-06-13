@@ -1,0 +1,30 @@
+@namespace ChefKnifeStudios.MartaJazz.Client.Shared.Components.Blades
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Models
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using Microsoft.Extensions.Localization
+@using System.ComponentModel
+@using System.Reflection
+@inject IStringLocalizer<RouteFilterResources> Localizer
+@implements IDisposable
+
+<BladeContainer @ref="_bladeContainer">
+    <ContentFragment>
+        <p class="settings-title">@Localizer["SettingsTitle"]</p>
+        <div class="settings-list">
+            @foreach (var prop in typeof(Settings).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var propName = prop.Name;
+                var descAttr = prop.GetCustomAttribute<DescriptionAttribute>();
+                var resourceKey = descAttr?.Description ?? propName;
+                var label = Localizer[resourceKey].Value ?? resourceKey;
+                var currentValue = prop.GetValue(_settings) as bool? ?? false;
+
+                <MatCheckbox TValue="bool"
+                             Value="@currentValue"
+                             ValueChanged="@((bool val) => HandleSettingPressed(propName, val))">
+                    @label
+                </MatCheckbox>
+            }
+        </div>
+    </ContentFragment>
+</BladeContainer>
