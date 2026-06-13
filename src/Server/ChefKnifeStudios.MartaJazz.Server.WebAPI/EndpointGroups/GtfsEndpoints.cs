@@ -103,6 +103,40 @@ public static class GtfsEndpoints
         .Produces<IEnumerable<RouteShapeFeature>>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status503ServiceUnavailable);
 
+        group.MapGet(ApiEndpoints.Gtfs.GetAllRoutes, async (
+            [FromServices] IKeyValueRepository<string> repo,
+            [FromServices] ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
+
+            var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);
+            if (!readyResult.IsSuccess)
+            {
+                logger.LogWarning("GtfsEndpoints: GTFS Static data not yet loaded.");
+                return Results.StatusCode(503);
+            }
+
+            var allShapesResult = await repo.GetAllAsync(ct);
+            if (!allShapesResult.IsSuccess)
+            {
+                logger.LogWarning("GtfsEndpoints: Failed to retrieve all route shapes.");
+                return Results.StatusCode(503);
+            }
+
+            var featureProperties = allShapesResult.Value
+                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey)
+                .Select(kvp => JsonSerializer.Deserialize<RouteShapeFeature>(kvp.Value, Shared.JsonOptions.Get()))
+                .Select(x => x.Properties)
+                .Where(f => f is not null)
+                .ToList();
+
+            return Results.Ok(featureProperties);
+        })
+        .WithName(nameof(ApiEndpoints.Gtfs.GetAllRoutes))
+        .Produces<IEnumerable<RouteShapeProperties>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status503ServiceUnavailable);
+
         return builder;
     }
 }

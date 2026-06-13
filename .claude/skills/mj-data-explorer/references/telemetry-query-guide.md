@@ -1,4 +1,4 @@
-<!-- last verified: 2026-06-07 -->
+<!-- last verified: 2026-06-11 -->
 
 # Telemetry Query Guide
 
@@ -23,6 +23,13 @@ It returns the matching rows from exactly one day's partition
 - You filter rows; you reason over the returned rows yourself.
 - Output is byte-bounded, so a broad filter on a busy day may be truncated — prefer
   a selective filter and, if needed, narrow further and re-query.
+
+> **Anticipate truncation, especially on `cycle`.** A broad probe like `cycle` /
+> `buses_processed > 0` can blow the token budget instantly — `cycle` rows carry the
+> very wide `active_route_ids` / `active_vehicle_ids` CSV columns, so even a single
+> day's ~30 cycles can exceed the limit (~57K chars). Assume `cycle` is large: lead
+> with the tightest filter that answers the question, or expect the result to spill to
+> a file and go straight to the file-read pattern below.
 
 ## Filter grammar (the allow-list)
 
@@ -80,6 +87,83 @@ Hard rules (a violation is rejected outright, not coerced):
 | `snap` | `raw_lat = 'abc'` | numeric column wants a number |
 | `snap` | `vehicle_id = 123` | string column wants a quoted string |
 | `cycle` | `SELECT * FROM cycle` | forbidden keyword |
+
+## Output format & parsing
+
+The tool returns a **DuckDB ASCII box-drawing table**, not JSON. It looks like:
+
+```
+┌──────────┬─────────────────┬─ … ─┐
+│ CYCLE ID │ BUSES PROCESSED │ …   │
+├──────────┼─────────────────┼─ … ─┤
+│ 680cc1b6 │ 197             │ …   │
+   …
+└──────────┴─────────────────┴─ … ─┘
+2026-06-11 (N rows)
+```
+
+Consequences (all learned the hard way — don't rediscover them):
+
+- **`jq` returns nothing and fails silently.** There is no JSON. Do not pipe results
+  to `jq` or assume object structure.
+- **Large results spill to a UTF-8 file.** When output exceeds the token limit the
+  tool saves it to a `tool-results/…txt` file and gives you the path. Read that file —
+  but **only with explicit UTF-8 decoding**. `Get-Content` and the Bash tool both
+  mangle the box-drawing chars (`│ ┌ ├`) into Latin-1 garbage (`00E2 201A 00BD`…),
+  which breaks every split. The pattern that works:
+
+  ```powershell
+  $lines = [System.IO.File]::ReadAllLines($path, [System.Text.Encoding]::UTF8)
+  ```
+
+- **Prefer PowerShell over the Bash tool for spilled files.** Bash `head` / `awk` /
+  `cut` / `jq` returned empty output on these files; PowerShell with explicit UTF-8
+  reads them reliably.
+- **Parse by splitting on `│` (U+2502) and validate the cell count.** Map columns by
+  matching the header cell text, then expect a fixed cell count per row and **skip any
+  row that doesn't match** — the last data row and DuckDB's trailing `N rows` footer
+  do not split cleanly.
+
+  ```powershell
+  $sep = [char]0x2502
+  $header = $lines[1] -split $sep                  # line 0 is the top border
+  # find a column's index by its header text, e.g. "ACTIVE ROUTE IDS"
+  $col = 0..($header.Count-1) | Where-Object { $header[$_].Trim() -eq "ACTIVE ROUTE IDS" }
+  foreach ($row in $lines) {
+    $cells = $row -split $sep
+    if ($cells.Count -ne $header.Count) { continue }   # border / footer / wrapped row
+    $value = $cells[$col].Trim()
+    # … reason over $value …
+  }
+  ```
+
+  The `cycle` table has **23 columns**; `snap` and `lerp` have their own fixed counts
+  (derive once from the header, then reuse).
+
+### Recipe: count distinct values from a CSV column
+
+Because the tool can't aggregate, the core move is **read rows, then reason in script**.
+The `cycle` columns `active_route_ids` / `active_vehicle_ids` are comma-separated sorted
+distinct lists — to answer "how many routes/buses are being processed", split one cell
+on commas and count:
+
+```powershell
+$sep = [char]0x2502
+$lines = [System.IO.File]::ReadAllLines($path, [System.Text.Encoding]::UTF8)
+$header = $lines[1] -split $sep
+$ri = 0..($header.Count-1) | Where-Object { $header[$_].Trim() -eq "ACTIVE ROUTE IDS" }
+foreach ($row in $lines) {
+  $cells = $row -split $sep
+  if ($cells.Count -ne $header.Count) { continue }
+  $routes = $cells[$ri].Trim()
+  $count  = if ($routes -eq "") { 0 } else { ($routes -split ",").Count }
+  "{0}  routes={1}" -f $cells[1].Trim().Substring(0,8), $count
+}
+```
+
+Comparing the per-cycle count across the day's cycles also tells you whether the number
+is **stable** or churning (routes flicker in/out as vehicles report), which is usually
+the real answer the user wants — not just a single snapshot.
 
 ## Date handling
 

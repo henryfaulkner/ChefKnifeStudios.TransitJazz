@@ -1,0 +1,39 @@
+.route-filters {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+}
+
+.route-filters__route-filter {
+    padding: 1px 2px;
+    cursor: pointer;
+    display: flex;
+    align-self: center;
+    justify-self: center;
+
+    > .route-filters__route-filter-circle {
+        background-color: var(--route-filter-color, red);
+        border-radius: 120px;
+        padding: 2px;
+
+        &.route-filters__route-filter-disabled {
+            background-color: lightgrey;
+        }
+    }
+
+    &:hover {
+        > .route-filters__route-filter-circle {
+            scale: 1.1;
+        }
+    }
+}
+
+.route-filters__route-filter-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 55px;
+}
+
+.route-filters__route-filter-label {
+    color: white;
+}

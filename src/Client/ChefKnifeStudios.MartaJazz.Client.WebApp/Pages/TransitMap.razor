@@ -2,18 +2,37 @@
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Components
 
 <div class="transit-map-container" @onclick="OnPageClickedAsync">
-    <div class="connection-status connection-status--@_connectionCssClass">
-        @_connectionLabel
-    </div>
     @if (!_audioUnlocked)
     {
         <div class="audio-hint" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:1000;background:rgba(0,0,0,0.65);color:#fff;padding:8px 16px;border-radius:6px;pointer-events:none;font-size:14px;">
             Click anywhere to enable audio
         </div>
     }
+    <MatAccordion Class="transit-map__accordion">
+        <MatExpansionPanel>
+            <MatExpansionPanelSummary>
+                <MatExpansionPanelHeader>ROUTES</MatExpansionPanelHeader>
+                <MatExpansionPanelSubHeader></MatExpansionPanelSubHeader>
+            </MatExpansionPanelSummary>
+            <MatExpansionPanelDetails>
+                <RouteFilters />
+            </MatExpansionPanelDetails>
+        </MatExpansionPanel>
+    </MatAccordion>
     <Map CameraOptions="DefaultCameraOptions"
         OnMapReady="OnMapReadyAsync"
         OnMapBodyClicked="OnMapBodyClickedAsync"
         OnBusMarkerClicked="OnVehicleMarkerClickedAsync"
     />
 </div>
+
+<style>
+    .transit-map__accordion {
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 425px;
+        z-index: 10;
+    }
+</style>
