@@ -5,6 +5,7 @@ using ChefKnifeStudios.MartaJazz.Client.Core.Services.EndpointsServices;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Components;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
+using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.MartaJazz.Client.WebApp;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Enums;
@@ -45,9 +46,11 @@ var featureFlags = appSettings?.FeatureFlags ?? new Dictionary<FeatureFlags, boo
 builder.Services.AddSingleton<IFeatureFlagService>(_ => new FeatureFlagService(featureFlags));
 
 builder.Services.AddSingleton<IEventNotificationService, EventNotificationService>();
-builder.Services.AddScoped<ISignalRNotificationService, SignalRNotificationService>();
+builder.Services.AddSingleton<ISignalRNotificationService, SignalRNotificationService>();
 
-builder.Services.AddTransient<IGtfsEndpointsService, GtfsEndpointsService>();
+builder.Services.AddSingleton<IGtfsEndpointsService, GtfsEndpointsService>();
+
+builder.Services.AddSingleton<IApplicationViewModel, ApplicationViewModel>();
 
 builder.Services.AddSingleton<IAudioPlayerJsInterop, AudioPlayerJsInterop>();
 

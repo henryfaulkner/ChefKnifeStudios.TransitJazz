@@ -1,3 +1,6 @@
+@using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels
+@inject IApplicationViewModel ApplicationViewModel
+
 <Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
         <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
@@ -10,3 +13,14 @@
         </LayoutView>
     </NotFound>
 </Router>
+
+@code {
+    // Kick off app-lifetime singleton processes as early as possible, from inside the
+    // Blazor DI scope (resolving these from the root provider in Program.cs throws,
+    // because their graph reaches WASM scoped services). Fire-and-forget so the router
+    // renders immediately; ApplicationViewModel.InitializeAsync is idempotent.
+    protected override void OnInitialized()
+    {
+        _ = ApplicationViewModel.InitializeAsync();
+    }
+}
