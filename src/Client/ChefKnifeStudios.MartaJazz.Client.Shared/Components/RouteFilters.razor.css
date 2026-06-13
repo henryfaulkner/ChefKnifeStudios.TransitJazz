@@ -11,7 +11,7 @@
     justify-self: center;
 
     > .route-filters__route-filter-circle {
-        background-color: red;
+        background-color: var(--route-filter-color, red);
         border-radius: 120px;
         padding: 2px;
 
