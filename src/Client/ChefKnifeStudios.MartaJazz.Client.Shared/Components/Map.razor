@@ -1,10 +1,14 @@
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<RouteFilterResources> Loc
+
 <div>
     <div class="map-tools bg-primary">
         <button class="btn btn-sm btn-secondary" type="button" @onclick="@(() => ChangeMapZoomAsync(true))">
-            <img alt="Zoom In" src="images/zoom-in.svg" />
+            <img alt="@Loc["ZoomInAlt"]" src="images/zoom-in.svg" />
         </button>
         <button class="btn btn-sm btn-secondary" type="button" @onclick="@(() => ChangeMapZoomAsync(false))">
-            <img alt="Zoom Out" src="images/zoom-out.svg" />
+            <img alt="@Loc["ZoomOutAlt"]" src="images/zoom-out.svg" />
         </button>
     </div>
 

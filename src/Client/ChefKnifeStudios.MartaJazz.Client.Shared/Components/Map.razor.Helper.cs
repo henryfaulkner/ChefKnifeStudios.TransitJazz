@@ -135,6 +135,18 @@ public partial class Map : ComponentBase
         }
     }
 
+    public async Task FocusRouteAsync(string routeId)
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.focusRoute", ElementId, routeId); }
+        catch (Exception ex) { Console.WriteLine($"[Map] FocusRoute failed for routeId={routeId}: {ex}"); }
+    }
+
+    public async Task ClearRouteFocusAsync()
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.clearRouteFocus", ElementId); }
+        catch (Exception ex) { Console.WriteLine($"[Map] ClearRouteFocus failed: {ex}"); }
+    }
+
     public async Task ProcessNearestPointBatchAsync(object[] records)
     {
         try

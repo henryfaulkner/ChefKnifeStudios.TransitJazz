@@ -22,6 +22,7 @@ public interface IRouteFilterViewModel : IViewModel, IDisposable
     void SelectRoute(RouteItem routeItem);
     void ClearSelection();
     public bool HasSelection { get; }
+    public string? SelectedRouteId { get; }
 }
 
 public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
@@ -90,6 +91,8 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     }
 
     public bool HasSelection => RouteItems.Any(x => x.IsSelected);
+
+    public string? SelectedRouteId => RouteItems.FirstOrDefault(x => x.IsSelected)?.RouteId;
 
     public void Dispose()
     {

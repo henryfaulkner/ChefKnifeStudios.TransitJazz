@@ -1,5 +1,8 @@
 @using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using Microsoft.Extensions.Localization
 @inject IApplicationViewModel ApplicationViewModel
+@inject IStringLocalizer<RouteFilterResources> Loc
 
 <Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
@@ -7,9 +10,9 @@
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
     <NotFound>
-        <PageTitle>Not found</PageTitle>
+        <PageTitle>@Loc["NotFoundTitle"]</PageTitle>
         <LayoutView Layout="@typeof(MainLayout)">
-            <p role="alert">Sorry, there's nothing at this address.</p>
+            <p role="alert">@Loc["NotFoundMessage"]</p>
         </LayoutView>
     </NotFound>
 </Router>
