@@ -1,4 +1,7 @@
-﻿<div class="route-filters">
+﻿<div class="route-filters__header">
+    <span class="route-filters__bus-count">@RouteFilterViewModel.ActiveBusCount buses active</span>
+</div>
+<div class="route-filters">
     @foreach (var routeItem in RouteFilterViewModel.RouteItems)
     {
         <div 
