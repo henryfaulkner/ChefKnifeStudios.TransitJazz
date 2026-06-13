@@ -115,6 +115,18 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Console.WriteLine($"[Map] FocusRoute failed for routeId={routeId}: {ex}"); }
     }
 
+    public async Task SetBasemapStyleAsync(bool isStreets)
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setBasemapStyle", ElementId, isStreets); }
+        catch (Exception ex) { Console.WriteLine($"[Map] SetBasemapStyle failed: {ex}"); }
+    }
+
+    public async Task SetCheckpointVisibilityAsync(bool visible)
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setCheckpointVisibility", ElementId, visible); }
+        catch (Exception ex) { Console.WriteLine($"[Map] SetCheckpointVisibility failed: {ex}"); }
+    }
+
     public async Task ClearRouteFocusAsync()
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.clearRouteFocus", ElementId); }

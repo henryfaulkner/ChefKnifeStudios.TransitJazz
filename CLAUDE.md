@@ -1,7 +1,33 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/015-route-filter-ui/plan.md
+feature plan at specs/016-settings-blade/plan.md
+
+016-settings-blade implements the constitution-mandated settings panel
+(Principle XII): a gear MatFAB bottom-right opens a right-side slide-out
+drawer ("blade") — slide-in 100ms, instant dismissal on ✕ / outside-click /
+gear re-click (Principle XI). Structure follows docs/SETTINGS_BLADE_DESIGN_
+DOCUMENT.md verbatim in pattern: a generic BladeContainer shell +
+SettingsBlade that REFLECTS over a boolean Settings model (ObservableObject,
+[property: Description] = a resx KEY) rendering one MatCheckbox per bool, and
+a SettingsService persisting one JSON blob to local storage (sync Blazored,
+key "Setting", lazy-seed defaults). Shipped settings are 3 BOOLEANS — Audio
+(mute/unmute), GIS (streets basemap ↔ blank dark canvas), Checkpoint
+visibility — so pure reflection holds; Language selector + Dark-Mode are
+DEFERRED (XII partial, tracked; mirrors 015's deferred Spanish). Reuses the
+EXISTING IEventNotificationService singleton bus (handler is synchronous
+void; guard `if (e is not BladeEventArgs) return;`) for FAB→blade open/close
+AND per-setting effect events (AudioSettingChanged/GisSettingChanged/
+CheckpointVisibilityChanged) consumed by TransitMap → synth mute / ChefMap.
+setBasemapStyle (data GeoJSON layers re-added after style.load, NEVER
+re-fetched — Principle VII) / ChefMap.setCheckpointVisibility. One genuinely
+new interop: outside-click.js + IOutsideClickJsInterop (lazy-RCL-module idiom
+like TransitSynthJsInterop). _elementId uses cached Guid.NewGuid() (the doc's
+recommended fix, not its empty-GUID quirk). All blade copy via
+IStringLocalizer<RouteFilterResources>. Frontend-only; no server/worker/
+shared changes. Namespace root is ChefKnifeStudios.MartaJazz under src/Client/.
+See specs/016-settings-blade/ for plan, research, data-model, contracts
+(settings-events, settings-service, outside-click-interop), and quickstart.
 
 014-transit-datasets retargets the tools/telemetry-mcp/ MCP bridge (Go,
 mcp-go over stdio) off the iris demo dataset and onto the three frozen

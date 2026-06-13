@@ -1,6 +1,7 @@
 using ChefKnifeStudios.MartaJazz.Client.Core.Services;
 using ChefKnifeStudios.MartaJazz.Client.Core.Services.EndpointsServices;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Components;
+using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
@@ -27,6 +28,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] ICheckpointTrackerJsInterop CheckpointTracker { get; set; } = null!;
     [Inject] ITransitSynthJsInterop TransitSynth { get; set; } = null!;
     [Inject] IRouteFilterViewModel RouteFilterViewModel { get; set; } = null!;
+    [Inject] IEventNotificationService EventNotificationService { get; set; } = null!;
+    [Inject] ISettingsService SettingsService { get; set; } = null!;
 
     Map? _map;
     bool _mapReady;
@@ -35,7 +38,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     string _connectionLabel = "Connecting…";
     string _connectionCssClass = "connecting";
 
-    bool _audioUnlocked;
+    bool _audioEnabled = true;
     DotNetObjectReference<object>? _dotNetRef;
 
     // vehicleId → routeId, updated on every VehiclePositionUpdatedEvent
@@ -53,7 +56,11 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         _dotNetRef = DotNetObjectReference.Create((object)this);
 
+        var settings = SettingsService.GetSettings();
+        _audioEnabled = settings.IsAudioEnabled;
+
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
+        EventNotificationService.EventReceived += HandleSettingsEventReceived;
 
         try
         {
@@ -81,17 +88,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
     }
 
-    async Task OnPageClickedAsync()
-    {
-        if (_audioUnlocked) return;
-        await TransitSynth.UnlockAsync();
-        _audioUnlocked = true;
-        StateHasChanged();
-    }
-
     [JSInvokable]
     public async Task OnCrossingsAsync(CrossingEventDto[] crossings)
     {
+        if (!_audioEnabled) return;
         foreach (var crossing in crossings)
         {
             try
@@ -105,9 +105,38 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
     }
 
+    void HandleSettingsEventReceived(object sender, IEventArgs e)
+    {
+        if (e is AudioSettingChangedEventArgs audio)
+        {
+            _audioEnabled = audio.IsAudioEnabled;
+            return;
+        }
+
+        if (e is GisSettingChangedEventArgs gis)
+        {
+            InvokeAsync(async () =>
+            {
+                if (_map is not null)
+                    await _map.SetBasemapStyleAsync(gis.IsStreetsBasemap);
+            });
+            return;
+        }
+
+        if (e is CheckpointVisibilityChangedEventArgs checkpoint)
+        {
+            InvokeAsync(async () =>
+            {
+                if (_map is not null)
+                    await _map.SetCheckpointVisibilityAsync(checkpoint.AreCheckpointsVisible);
+            });
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
+        EventNotificationService.EventReceived -= HandleSettingsEventReceived;
         NotificationService.NotificationReceived -= HandleVehicleBatchAsync;
         await CheckpointTracker.ClearAsync();
         _dotNetRef?.Dispose();
@@ -130,6 +159,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         _map = map;
         _mapReady = true;
+
+        var settings = SettingsService.GetSettings();
+        if (!settings.IsStreetsBasemap)
+            await map.SetBasemapStyleAsync(false);
+        if (!settings.AreCheckpointsVisible)
+            await map.SetCheckpointVisibilityAsync(false);
+
         await InvokeAsync(StateHasChanged);
 
         if (_pendingBatch is not null)

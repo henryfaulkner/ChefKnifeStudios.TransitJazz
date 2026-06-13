@@ -12,6 +12,8 @@ window.ChefMap = {
         });
 
         ChefMap.maps[containerDivId] = map;
+        ChefMap._streetsStyleUrl[containerDivId] = settings.styleUrl;
+        ChefMap._cachedLayers[containerDivId] = { routes: [] };
 
         map.on('load', function () {
             // Vehicles GeoJSON source + circle layer — must exist before the animator calls getSource('vehicles')
@@ -213,6 +215,7 @@ window.ChefMap = {
     _preFocusColors: {},
 
     focusRoute: function (containerDivId, routeId) {
+        ChefMap._focusedRouteId[containerDivId] = routeId;
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
 
@@ -243,6 +246,7 @@ window.ChefMap = {
     },
 
     clearRouteFocus: function (containerDivId) {
+        ChefMap._focusedRouteId[containerDivId] = null;
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
 
@@ -258,6 +262,97 @@ window.ChefMap = {
         });
 
         ChefMap._preFocusColors = {};
+    },
+
+    // Cached domain layer state for re-application after basemap style swap (Principle VII)
+    _cachedLayers: {},   // containerDivId → { routes: [...], triggerPoints: [...], vehicles: bool }
+    _focusedRouteId: {}, // containerDivId → routeId | null
+    _streetsStyleUrl: {},// containerDivId → string (stored on first map creation)
+
+    setBasemapStyle: function (containerDivId, isStreets) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) {
+            console.warn('[ChefMap] setBasemapStyle: no map for', containerDivId);
+            return;
+        }
+
+        let targetStyle;
+        if (isStreets) {
+            targetStyle = ChefMap._streetsStyleUrl[containerDivId] || map.getStyle().sprite?.replace('/sprites/v4/sprite', '') || '';
+        } else {
+            targetStyle = {
+                version: 8,
+                name: 'blank-dark',
+                sources: {},
+                layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#1a1c1e' } }]
+            };
+        }
+
+        map.once('styledata', function () {
+            ChefMap._reapplyDomainLayers(containerDivId);
+        });
+
+        map.setStyle(targetStyle);
+    },
+
+    _reapplyDomainLayers: function (containerDivId) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+
+        let cached = ChefMap._cachedLayers[containerDivId];
+        if (!cached) return;
+
+        // Re-add vehicles source + layer
+        if (!map.getSource('vehicles')) {
+            map.addSource('vehicles', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+            map.addLayer({
+                id: 'vehicles-layer',
+                type: 'circle',
+                source: 'vehicles',
+                paint: { 'circle-radius': 6, 'circle-color': '#22c55e', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' }
+            });
+        }
+
+        // Re-add trigger-points source + layer
+        let allTriggerFeatures = Object.values(ChefMap._triggerPointFeatures).flat();
+        if (allTriggerFeatures.length > 0) {
+            if (!map.getSource('trigger-points')) {
+                map.addSource('trigger-points', { type: 'geojson', data: { type: 'FeatureCollection', features: allTriggerFeatures } });
+                map.addLayer({
+                    id: 'trigger-points-layer',
+                    type: 'circle',
+                    source: 'trigger-points',
+                    paint: { 'circle-radius': 4, 'circle-color': '#facc15', 'circle-opacity': 0.85, 'circle-stroke-width': 1, 'circle-stroke-color': '#78350f' }
+                }, 'vehicles-layer');
+            }
+        }
+
+        // Re-add route shape layers (cached from addRouteShapeFeature calls)
+        (cached.routes || []).forEach(function (r) {
+            if (!map.getSource(r.sourceId)) {
+                map.addSource(r.sourceId, { type: 'geojson', data: r.geojson });
+                map.addLayer({
+                    id: r.layerId,
+                    type: 'line',
+                    source: r.sourceId,
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 'line-color': r.color, 'line-width': 4, 'line-opacity': 0.85 }
+                }, 'vehicles-layer');
+            }
+        });
+
+        // Re-apply focus state if any
+        let focusedRoute = ChefMap._focusedRouteId[containerDivId];
+        if (focusedRoute) {
+            ChefMap.focusRoute(containerDivId, focusedRoute);
+        }
+    },
+
+    setCheckpointVisibility: function (containerDivId, visible) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+        if (!map.getLayer('trigger-points-layer')) return;
+        map.setLayoutProperty('trigger-points-layer', 'visibility', visible ? 'visible' : 'none');
     },
 
     addRouteShapeFeature: function (containerDivId, routeId, coordinates, color) {
@@ -286,6 +381,14 @@ window.ChefMap = {
             geometry: { type: 'LineString', coordinates: coordinates },
             properties: { routeId: routeId, color: lineColor }
         };
+
+        // Cache for style-swap re-application (Principle VII)
+        let cached = ChefMap._cachedLayers[containerDivId];
+        if (cached) {
+            let idx = cached.routes.findIndex(r => r.sourceId === sourceId);
+            if (idx >= 0) cached.routes[idx] = { sourceId, layerId, geojson, color: lineColor };
+            else cached.routes.push({ sourceId, layerId, geojson, color: lineColor });
+        }
 
         let source = map.getSource(sourceId);
         if (source) {

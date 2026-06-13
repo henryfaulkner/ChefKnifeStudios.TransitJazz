@@ -56,4 +56,16 @@
   <data name="ToastErrorTitle" xml:space="preserve">
     <value>ERROR</value>
   </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="SettingAudioEnabled" xml:space="preserve">
+    <value>Audio</value>
+  </data>
+  <data name="SettingStreetsBasemap" xml:space="preserve">
+    <value>Street map</value>
+  </data>
+  <data name="SettingCheckpointsVisible" xml:space="preserve">
+    <value>Checkpoints</value>
+  </data>
 </root>
