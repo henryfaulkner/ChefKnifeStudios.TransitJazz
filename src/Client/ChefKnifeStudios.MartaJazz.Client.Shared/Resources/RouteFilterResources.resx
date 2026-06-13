@@ -35,4 +35,31 @@
   <data name="RouteBlurbBarAriaLabel" xml:space="preserve">
     <value>Route information</value>
   </data>
+  <data name="AudioHint" xml:space="preserve">
+    <value>Click anywhere to enable audio</value>
+  </data>
+  <data name="RoutesLabel" xml:space="preserve">
+    <value>ROUTES</value>
+  </data>
+  <data name="NotFoundTitle" xml:space="preserve">
+    <value>Not found</value>
+  </data>
+  <data name="NotFoundMessage" xml:space="preserve">
+    <value>Sorry, there's nothing at this address.</value>
+  </data>
+  <data name="ZoomInAlt" xml:space="preserve">
+    <value>Zoom In</value>
+  </data>
+  <data name="ZoomOutAlt" xml:space="preserve">
+    <value>Zoom Out</value>
+  </data>
+  <data name="ToastSuccessTitle" xml:space="preserve">
+    <value>SUCCESS</value>
+  </data>
+  <data name="ToastWarningTitle" xml:space="preserve">
+    <value>WARNING</value>
+  </data>
+  <data name="ToastErrorTitle" xml:space="preserve">
+    <value>ERROR</value>
+  </data>
 </root>
