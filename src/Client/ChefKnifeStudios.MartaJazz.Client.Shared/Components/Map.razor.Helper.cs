@@ -20,32 +20,6 @@ public partial class Map : ComponentBase
         }
     }
 
-    public async Task ChangeMapZoomAsync(bool zoomIn)
-    {
-        try
-        {
-            CameraOptions.ChangeZoom(zoomIn);
-            await JsRuntime.InvokeVoidAsync("ChefMap.setMapZoom", ElementId, CameraOptions.Zoom);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-        }
-    }
-
-    public async Task SetMapZoomAsync(int zoom)
-    {
-        try
-        {
-            CameraOptions.Zoom = zoom;
-            await JsRuntime.InvokeVoidAsync("ChefMap.setMapZoom", ElementId, zoom);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-        }
-    }
-
     public async Task CenterVehiclePinAsync(int vehicleId)
     {
         try
