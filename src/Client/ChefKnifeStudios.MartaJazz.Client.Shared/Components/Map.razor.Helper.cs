@@ -109,6 +109,20 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Console.WriteLine($"[Map] ClearRouteFocus failed: {ex}"); }
     }
 
+    public async Task<string?> SetBasemapStyleAsync(string styleUrl)
+    {
+        try
+        {
+            var result = await JsRuntime.InvokeAsync<System.Text.Json.JsonElement>("ChefMap.setMapStyle", ElementId, styleUrl);
+            return result.TryGetProperty("checkpointVisible", out var v) ? v.GetString() : null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Map] SetBasemapStyle failed: {ex}");
+            return null;
+        }
+    }
+
     public async Task ProcessNearestPointBatchAsync(object[] records)
     {
         try

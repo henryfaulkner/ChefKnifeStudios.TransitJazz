@@ -1,4 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
+using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
 using Microsoft.JSInterop;
@@ -14,6 +15,7 @@ public partial class Map : ComponentBase
 
     [Inject] public IJSRuntime JsRuntime { get; set; } = null!;
     [Inject] public IConfiguration Configuration { get; set; } = null!;
+    [Inject] public ISettingsService SettingsService { get; set; } = null!;
 
     [Parameter]
     public CameraOptions CameraOptions { get; set; }
@@ -57,7 +59,12 @@ public partial class Map : ComponentBase
         var language = CultureInfo.DefaultThreadCurrentCulture?.Name ?? "en-US";
 
         var apiKey = Configuration.GetValue<string>("MapTiler:ApiKey") ?? string.Empty;
-        var styleUrl = Configuration.GetValue<string>("MapTiler:StyleUrl") ?? string.Empty;
+
+        var settings = SettingsService.GetSettings();
+        var styleKey = settings.IsStreetMapEnabled ? "MapTiler:StyleUrls:LightOn" : "MapTiler:StyleUrls:LightOff";
+        var styleUrl = Configuration.GetValue<string>(styleKey)
+                       ?? Configuration.GetValue<string>("MapTiler:StyleUrl")
+                       ?? string.Empty;
 
         return Task.FromResult<object>(new
         {

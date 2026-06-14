@@ -12,4 +12,8 @@ public partial class Settings : ObservableObject
     [ObservableProperty]
     [property: Description("SettingCheckpointsVisible")]
     private bool _areCheckpointsVisible = true;
+
+    [ObservableProperty]
+    [property: Description("SettingStreetMap")]
+    private bool _isStreetMapEnabled = false;
 }

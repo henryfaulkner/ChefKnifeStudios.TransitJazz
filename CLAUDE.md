@@ -1,7 +1,35 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/016-settings-blade/plan.md
+feature plan at specs/018-neighborhood-routes/plan.md
+
+017-map-style-toggle adds ONE boolean to the existing 016 Settings Blade —
+IsStreetMapEnabled (default false), [Description("SettingStreetMap")] — that
+hot-switches the MapTiler basemap between LightOff (new app default, off) and
+LightOn (on) with NO reload, via MapLibre map.setStyle(url). The two URLs come
+from the existing MapTiler:StyleUrls config object (LightOn/LightOff/DarkOn/
+DarkOff already in appsettings.Development.json; the StyleUrls block must be
+ADDED to production appsettings.json — Dark variants unused here). Because
+setStyle REPLACES the whole style (wiping custom sources/layers), the rewritten
+ChefMap.setMapStyle (was a no-op stub) CAPTURES the vehicles / trigger-points /
+route-* GeoJSON sources+layers — preserving each layer's current visibility —
+then re-adds them on a one-shot map.once('style.load'), NEVER re-fetching
+(Principle VII). Decoupling reuses the existing IEventNotificationService bus:
+SettingsBlade.HandleSettingPressed posts a new GisSettingChangedEventArgs
+{ IsStreetMapEnabled } (shape mirrors AudioSettingChangedEventArgs), consumed in
+TransitMap.HandleSettingsEventReceived which resolves StyleUrls:LightOn/LightOff
+from IConfiguration (fallback flat StyleUrl, then no-op so the map never blanks —
+FR-013) and calls a new Map.SetBasemapStyleAsync(url) interop wrapper. Initial
+load honors the persisted setting: Map.GetMapSettings (the JSInvokable
+getMapSettings) injects ISettingsService and picks the LightOn/LightOff URL so
+the map paints the saved style from first render (FR-009). Label via
+IStringLocalizer<RouteFilterResources> (resx key SettingStreetMap; EN only, .es
+deferred per 015/016). This completes the GIS/basemap toggle Principle XII
+mandates but 016 cut before merge (commit 9726df0 "remove Street map setting").
+Frontend-only; no server/worker/shared changes; the blade's pure-reflection
+render is unchanged (still boolean-only). See specs/017-map-style-toggle/ for
+plan, research, data-model, contracts (map-style-events, map-style-interop,
+style-config), and quickstart.
 
 016-settings-blade implements the constitution-mandated settings panel
 (Principle XII): a gear MatFAB bottom-right opens a right-side slide-out

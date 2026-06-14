@@ -7,17 +7,17 @@
     color: #f3f4f6;
     z-index: 20;
     padding: 12px 20px;
-    animation: blurb-slide-in 100ms ease-out both;
+    /*animation: blurb-slide-in 100ms ease-out both;*/
 }
 
 @keyframes blurb-slide-in {
     from {
         opacity: 0;
-        transform: translateY(8px);
+        /*transform: translateY(8px);*/
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        /*transform: translateY(0);*/
     }
 }
 

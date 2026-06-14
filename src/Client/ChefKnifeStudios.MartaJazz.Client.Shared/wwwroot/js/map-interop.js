@@ -77,8 +77,52 @@ window.ChefMap = {
         console.info('[ChefMap] toggleTraffic: traffic layer not implemented for POC (no-op)');
     },
 
-    setMapStyle: function (containerDivId, styleName) {
-        console.info('[ChefMap] setMapStyle: style switching not implemented for POC (no-op)');
+    setMapStyle: function (containerDivId, styleUrl) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return Promise.resolve();
+
+        // Snapshot current vehicles data and checkpoint visibility before the style wipes everything.
+        let vehiclesData = { type: 'FeatureCollection', features: [] };
+        let checkpointVisible = 'none';
+        try {
+            let vSrc = map.getSource('vehicles');
+            if (vSrc) vehiclesData = vSrc._data || vehiclesData;
+            checkpointVisible = map.getLayoutProperty('trigger-points-layer', 'visibility') || 'none';
+        } catch (e) { }
+
+        map.setStyle(styleUrl);
+
+        // Return a Promise that resolves after style.load so the C# caller can await it,
+        // then re-render routes from its own cache (no re-fetch).
+        return new Promise(function (resolve) {
+            map.once('style.load', function () {
+                // Re-add the vehicles source and layer (empty shell; animator will update it).
+                try {
+                    if (!map.getSource('vehicles')) {
+                        map.addSource('vehicles', { type: 'geojson', data: vehiclesData });
+                    }
+                    if (!map.getLayer('vehicles-layer')) {
+                        map.addLayer({
+                            id: 'vehicles-layer',
+                            type: 'circle',
+                            source: 'vehicles',
+                            layout: { 'visibility': 'none' },
+                            paint: {
+                                'circle-radius': 6,
+                                'circle-color': '#22c55e',
+                                'circle-stroke-width': 1,
+                                'circle-stroke-color': '#fff'
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.warn('[ChefMap] setMapStyle: could not restore vehicles layer: ' + e);
+                }
+
+                // Signal C# to re-render routes from cache; colors will reapply via debounce in addRouteShapeFeature.
+                resolve({ checkpointVisible: checkpointVisible });
+            });
+        });
     },
 
     centerVehiclePin: function (containerDivId, vehicleId) {
@@ -169,7 +213,26 @@ window.ChefMap = {
         }
     },
 
-    _preFocusColors: {},
+    _routeColors: {},      // routeLayerId → data color, set at addRouteShapeFeature time
+    _routeColorsByRouteId: {},  // routeId → data color, for vehicle dot coloring
+    _applyRouteColorsTimer: null,
+
+    _applyVehicleRouteColors: function (containerDivId) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map || !map.getLayer('vehicles-layer')) return;
+
+        let entries = Object.entries(ChefMap._routeColorsByRouteId);
+        if (entries.length === 0) return;
+
+        // Build a MapLibre match expression: ['match', ['get', 'routeId'], id, color, ..., fallback]
+        let matchExpr = ['match', ['get', 'routeId']];
+        entries.forEach(function (pair) {
+            matchExpr.push(pair[0], pair[1]);
+        });
+        matchExpr.push('#6b7280');  // fallback for unknown routeId
+
+        map.setPaintProperty('vehicles-layer', 'circle-color', matchExpr);
+    },
 
     focusRoute: function (containerDivId, routeId) {
         let map = ChefMap.maps[containerDivId];
@@ -183,20 +246,14 @@ window.ChefMap = {
         (style.layers || []).forEach(function (layer) {
             if (!layer.id || !layer.id.startsWith('route-layer-')) return;
             let id = layer.id;
-
-            // Stash original color on first focus pass
-            if (ChefMap._preFocusColors[id] === undefined) {
-                ChefMap._preFocusColors[id] = map.getPaintProperty(id, 'line-color');
-            }
-
             if (!map.getLayer(id)) return;
 
             if (id === targetLayerId) {
                 map.setPaintProperty(id, 'line-opacity', 0.95);
-                map.setPaintProperty(id, 'line-color', ChefMap._preFocusColors[id]);
+                map.setPaintProperty(id, 'line-color', ChefMap._routeColors[id] || '#22c55e');
             } else {
-                map.setPaintProperty(id, 'line-opacity', 0.15);
-                map.setPaintProperty(id, 'line-color', '#374151');
+                map.setPaintProperty(id, 'line-opacity', 0.3);
+                map.setPaintProperty(id, 'line-color', '#d1d5db');
             }
         });
     },
@@ -212,11 +269,9 @@ window.ChefMap = {
             if (!layer.id || !layer.id.startsWith('route-layer-')) return;
             let id = layer.id;
             if (!map.getLayer(id)) return;
-            map.setPaintProperty(id, 'line-opacity', 0.85);
-            map.setPaintProperty(id, 'line-color', ChefMap._preFocusColors[id] !== undefined ? ChefMap._preFocusColors[id] : map.getPaintProperty(id, 'line-color'));
+            map.setPaintProperty(id, 'line-opacity', 0.7);
+            map.setPaintProperty(id, 'line-color', '#6b7280');
         });
-
-        ChefMap._preFocusColors = {};
     },
 
     setCheckpointVisibility: function (containerDivId, visible) {
@@ -260,6 +315,16 @@ window.ChefMap = {
             properties: { routeId: routeId, color: lineColor }
         };
 
+        // Store colors for route line focus/unfocus and vehicle dot coloring.
+        ChefMap._routeColors[layerId] = lineColor;
+        ChefMap._routeColorsByRouteId[routeId] = lineColor;
+
+        // Debounce the vehicle color update — routes load one at a time, apply once after they settle.
+        clearTimeout(ChefMap._applyRouteColorsTimer);
+        ChefMap._applyRouteColorsTimer = setTimeout(function () {
+            ChefMap._applyVehicleRouteColors(containerDivId);
+        }, 200);
+
         let source = map.getSource(sourceId);
         if (source) {
             console.debug('[ChefMap] addRouteShapeFeature: updating existing source for routeId=' + routeId);
@@ -272,7 +337,7 @@ window.ChefMap = {
                 type: 'line',
                 source: sourceId,
                 layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': lineColor, 'line-width': 4, 'line-opacity': 0.85 }
+                paint: { 'line-color': '#6b7280', 'line-width': 4, 'line-opacity': 0.7 }
             }, 'vehicles-layer');
             console.debug('[ChefMap] addRouteShapeFeature: layer added for routeId=' + routeId);
         }

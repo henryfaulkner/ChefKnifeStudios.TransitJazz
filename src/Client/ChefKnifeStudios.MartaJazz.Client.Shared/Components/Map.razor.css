@@ -1,6 +1,6 @@
 .map {
     width: 100%;
-    height: calc(100vh - 2rem);
+    height: 100dvh;
 }
 
 ::deep .map-copyright {

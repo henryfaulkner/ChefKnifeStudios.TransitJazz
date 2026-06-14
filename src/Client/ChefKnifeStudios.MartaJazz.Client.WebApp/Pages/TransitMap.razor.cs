@@ -8,6 +8,7 @@ using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using System;
@@ -22,6 +23,7 @@ namespace ChefKnifeStudios.MartaJazz.Client.WebApp.Pages;
 public partial class TransitMap : ComponentBase, IAsyncDisposable
 {
     [Inject] ISignalRNotificationService NotificationService { get; set; } = null!;
+    [Inject] IConfiguration Configuration { get; set; } = null!;
     [Inject] ILogger<TransitMap> Logger { get; set; } = null!;
     [Inject] IGtfsEndpointsService GtfsEndpointsService { get; set; } = null!;
     [Inject] ITriggerPointGenerator TriggerPointGenerator { get; set; } = null!;
@@ -123,6 +125,29 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             {
                 if (_map is not null)
                     await _map.SetCheckpointVisibilityAsync(checkpoint.AreCheckpointsVisible);
+            });
+            return;
+        }
+
+        if (e is GisSettingChangedEventArgs gis)
+        {
+            InvokeAsync(async () =>
+            {
+                if (_map is null) return;
+                var key = gis.IsStreetMapEnabled ? "MapTiler:StyleUrls:LightOn" : "MapTiler:StyleUrls:LightOff";
+                var url = Configuration.GetValue<string>(key)
+                          ?? Configuration.GetValue<string>("MapTiler:StyleUrl")
+                          ?? string.Empty;
+                if (string.IsNullOrEmpty(url)) return;
+
+                // Await style.load completion, then re-render routes from cache (no re-fetch).
+                var result = await _map.SetBasemapStyleAsync(url);
+                await RenderRoutesAsync();
+
+                // Restore checkpoint visibility to match the current setting.
+                var settings = SettingsService.GetSettings();
+                await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
+                await _map.SetVehiclesVisibleAsync(true);
             });
         }
     }
