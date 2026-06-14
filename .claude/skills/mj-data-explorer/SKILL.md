@@ -42,6 +42,7 @@ Then route based on their answer (you do not need an exact keyword match — rea
 | Maintaining the skill: "I added/changed a telemetry schema", "sync the schemas", "the columns/datasets changed", docs are out of date | [functions/sync-schemas.md](functions/sync-schemas.md) |
 | Asking how the data/query works, what columns exist, what a field means | answer from [references/telemetry-schema.md](references/telemetry-schema.md) (no function needed) |
 | Cross-referencing a `route_id` against live GTFS data, "does route X exist", "why are routes missing", checking if GTFS is loaded | call the API — see [references/mj-api-schema.md](references/mj-api-schema.md) and [references/mj-api-query-guide.md](references/mj-api-query-guide.md) |
+| Asking about neighborhoods — which routes serve a neighborhood, which neighborhoods a route passes through, transit-commute rankings, demographic comparisons, "does route X go through Y?" | read the committed lean file — see [references/neighborhood-routes-context.md](references/neighborhood-routes-context.md) |
 
 If intent is ambiguous, ask one clarifying free-text question before routing.
 
@@ -71,6 +72,10 @@ If intent is ambiguous, ask one clarifying free-text question before routing.
 - **references/mj-api-query-guide.md** — when and how to call the API from within
   the explorer: cross-referencing route IDs, verifying GTFS load status, PowerShell
   invocation patterns.
+- **references/neighborhood-routes-context.md** — how and when to read the committed
+  lean and full neighborhood-route files for neighborhood ↔ route Q&A and demographic
+  lookups. Consult the full file only per-objectId on explicit request; never
+  speculatively.
 
 ## Ground rules
 

@@ -1,0 +1,5154 @@
+{
+  "generatedAt": "2026-06-14T14:07:49Z",
+  "sourceGeoJson": "Official_Neighborhoods_with_Current_Demographic_Data_(2024).geojson",
+  "neighborhoods": [
+    {
+      "objectId": 175,
+      "name": "Adair Park",
+      "npu": "V",
+      "sqMiles": 0.45,
+      "population": 2,
+      "medianHouseholdIncome": 72531,
+      "transitCommutePercent": 2.8,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 51.5,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "27020",
+          "routeShortName": "68"
+        },
+        {
+          "routeId": "26944",
+          "routeShortName": "95"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26931",
+          "routeShortName": "71"
+        }
+      ]
+    },
+    {
+      "objectId": 35,
+      "name": "Adams Park",
+      "npu": "R",
+      "sqMiles": 0.98,
+      "population": 2,
+      "medianHouseholdIncome": 73502,
+      "transitCommutePercent": 1.6,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 60.0,
+      "routes": [
+        {
+          "routeId": "26938",
+          "routeShortName": "83"
+        },
+        {
+          "routeId": "26937",
+          "routeShortName": "81"
+        },
+        {
+          "routeId": "26931",
+          "routeShortName": "71"
+        }
+      ]
+    },
+    {
+      "objectId": 105,
+      "name": "Adamsville",
+      "npu": "H",
+      "sqMiles": 0.91,
+      "population": 2,
+      "medianHouseholdIncome": 39223,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 2.0,
+      "workFromHomePercent": 32.4,
+      "routes": [
+        {
+          "routeId": "26932",
+          "routeShortName": "73"
+        },
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 205,
+      "name": "Almond Park",
+      "npu": "G",
+      "sqMiles": 0.53,
+      "population": 2,
+      "medianHouseholdIncome": 29007,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 11.4,
+      "workFromHomePercent": 71.0,
+      "routes": [
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 211,
+      "name": "Amal Heights",
+      "npu": "Y",
+      "sqMiles": 0.06,
+      "population": 2,
+      "medianHouseholdIncome": 25281,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 66.5,
+      "routes": [
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        }
+      ]
+    },
+    {
+      "objectId": 227,
+      "name": "Ansley Park",
+      "npu": "E",
+      "sqMiles": 0.61,
+      "population": 2,
+      "medianHouseholdIncome": 136792,
+      "transitCommutePercent": 4.2,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 46.3,
+      "routes": []
+    },
+    {
+      "objectId": 16,
+      "name": "Arden/Habersham",
+      "npu": "C",
+      "sqMiles": 0.18,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 31.2,
+      "workFromHomePercent": 39.6,
+      "routes": []
+    },
+    {
+      "objectId": 229,
+      "name": "Ardmore",
+      "npu": "E",
+      "sqMiles": 0.13,
+      "population": 2,
+      "medianHouseholdIncome": 116550,
+      "transitCommutePercent": 0.3,
+      "carAlonePercent": 2.4,
+      "workFromHomePercent": 79.6,
+      "routes": []
+    },
+    {
+      "objectId": 75,
+      "name": "Argonne Forest",
+      "npu": "C",
+      "sqMiles": 0.27,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 80.3,
+      "routes": []
+    },
+    {
+      "objectId": 150,
+      "name": "Arlington Estates",
+      "npu": "P",
+      "sqMiles": 0.34,
+      "population": 2,
+      "medianHouseholdIncome": 67581,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 50.2,
+      "routes": [
+        {
+          "routeId": "26936",
+          "routeShortName": "80"
+        }
+      ]
+    },
+    {
+      "objectId": 43,
+      "name": "Ashley Courts",
+      "npu": "P",
+      "sqMiles": 0.06,
+      "population": 2,
+      "medianHouseholdIncome": 0,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 0.0,
+      "routes": []
+    },
+    {
+      "objectId": 170,
+      "name": "Ashview Heights",
+      "npu": "T",
+      "sqMiles": 0.27,
+      "population": 2,
+      "medianHouseholdIncome": 38873,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 12.5,
+      "workFromHomePercent": 28.6,
+      "routes": [
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 120,
+      "name": "Atkins Park",
+      "npu": "F",
+      "sqMiles": 0.05,
+      "population": 2,
+      "medianHouseholdIncome": 58073,
+      "transitCommutePercent": 2.1,
+      "carAlonePercent": 2.5,
+      "workFromHomePercent": 67.8,
+      "routes": []
+    },
+    {
+      "objectId": 135,
+      "name": "Atlanta Industrial Park",
+      "npu": "G",
+      "sqMiles": 0.66,
+      "population": 2,
+      "medianHouseholdIncome": 48562,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 62.5,
+      "routes": []
+    },
+    {
+      "objectId": 171,
+      "name": "Atlanta University Center",
+      "npu": "T",
+      "sqMiles": 0.52,
+      "population": 2,
+      "medianHouseholdIncome": 14440,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 28.8,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 143,
+      "name": "Atlantic Station",
+      "npu": "E",
+      "sqMiles": 0.25,
+      "population": 2,
+      "medianHouseholdIncome": 100245,
+      "transitCommutePercent": 5.7,
+      "carAlonePercent": 1.3,
+      "workFromHomePercent": 51.4,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 166,
+      "name": "Audobon Forest",
+      "npu": "I",
+      "sqMiles": 0.78,
+      "population": 2,
+      "medianHouseholdIncome": 89869,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 82.6,
+      "routes": [
+        {
+          "routeId": "26931",
+          "routeShortName": "71"
+        }
+      ]
+    },
+    {
+      "objectId": 165,
+      "name": "Audobon Forest West",
+      "npu": "I",
+      "sqMiles": 0.21,
+      "population": 2,
+      "medianHouseholdIncome": 97579,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 84.4,
+      "routes": []
+    },
+    {
+      "objectId": 59,
+      "name": "Baker Hills",
+      "npu": "H",
+      "sqMiles": 0.29,
+      "population": 2,
+      "medianHouseholdIncome": 67970,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.5,
+      "workFromHomePercent": 77.2,
+      "routes": []
+    },
+    {
+      "objectId": 161,
+      "name": "Baker Hills at Campbellton",
+      "npu": "R",
+      "sqMiles": 0.23,
+      "population": 2,
+      "medianHouseholdIncome": 28059,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 44.8,
+      "routes": [
+        {
+          "routeId": "26938",
+          "routeShortName": "83"
+        }
+      ]
+    },
+    {
+      "objectId": 141,
+      "name": "Bakers Ferry",
+      "npu": "H",
+      "sqMiles": 0.25,
+      "population": 2,
+      "medianHouseholdIncome": 21740,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 15.5,
+      "workFromHomePercent": 58.9,
+      "routes": []
+    },
+    {
+      "objectId": 57,
+      "name": "Bankhead Courts",
+      "npu": "H",
+      "sqMiles": 0.08,
+      "population": 2,
+      "medianHouseholdIncome": 0,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 0.0,
+      "routes": []
+    },
+    {
+      "objectId": 136,
+      "name": "Bankhead/Bolton",
+      "npu": "H",
+      "sqMiles": 0.88,
+      "population": 2,
+      "medianHouseholdIncome": 14746,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 100.0,
+      "routes": [
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        }
+      ]
+    },
+    {
+      "objectId": 81,
+      "name": "Beecher Hills",
+      "npu": "I",
+      "sqMiles": 0.44,
+      "population": 2,
+      "medianHouseholdIncome": 44768,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 76.7,
+      "routes": [
+        {
+          "routeId": "27020",
+          "routeShortName": "68"
+        }
+      ]
+    },
+    {
+      "objectId": 44,
+      "name": "Ben Hill",
+      "npu": "P",
+      "sqMiles": 1.07,
+      "population": 2,
+      "medianHouseholdIncome": 89868,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.6,
+      "workFromHomePercent": 66.4,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 191,
+      "name": "Ben Hill Acres",
+      "npu": "P",
+      "sqMiles": 0.15,
+      "population": 2,
+      "medianHouseholdIncome": 57803,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 57.8,
+      "routes": []
+    },
+    {
+      "objectId": 194,
+      "name": "Ben Hill Forest",
+      "npu": "P",
+      "sqMiles": 0.15,
+      "population": 2,
+      "medianHouseholdIncome": 47065,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 58.0,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 193,
+      "name": "Ben Hill Pines",
+      "npu": "P",
+      "sqMiles": 0.07,
+      "population": 2,
+      "medianHouseholdIncome": 46819,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 57.3,
+      "routes": [
+        {
+          "routeId": "26938",
+          "routeShortName": "83"
+        },
+        {
+          "routeId": "26936",
+          "routeShortName": "80"
+        }
+      ]
+    },
+    {
+      "objectId": 251,
+      "name": "Ben Hill Terrace",
+      "npu": "P",
+      "sqMiles": 0.33,
+      "population": 2,
+      "medianHouseholdIncome": 63497,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 76.6,
+      "routes": [
+        {
+          "routeId": "26936",
+          "routeShortName": "80"
+        }
+      ]
+    },
+    {
+      "objectId": 26,
+      "name": "Benteen Park",
+      "npu": "W",
+      "sqMiles": 0.28,
+      "population": 2,
+      "medianHouseholdIncome": 53873,
+      "transitCommutePercent": 0.5,
+      "carAlonePercent": 0.3,
+      "workFromHomePercent": 52.9,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        }
+      ]
+    },
+    {
+      "objectId": 45,
+      "name": "Berkeley Park",
+      "npu": "D",
+      "sqMiles": 0.47,
+      "population": 2,
+      "medianHouseholdIncome": 118121,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 60.9,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 183,
+      "name": "Betmar LaVilla",
+      "npu": "Y",
+      "sqMiles": 0.11,
+      "population": 2,
+      "medianHouseholdIncome": 67771,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 13.6,
+      "workFromHomePercent": 53.5,
+      "routes": [
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        }
+      ]
+    },
+    {
+      "objectId": 127,
+      "name": "Blair Villa/Poole Creek",
+      "npu": "Z",
+      "sqMiles": 1.32,
+      "population": 2,
+      "medianHouseholdIncome": 29510,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 60.6,
+      "routes": [
+        {
+          "routeId": "26974",
+          "routeShortName": "193"
+        },
+        {
+          "routeId": "26935",
+          "routeShortName": "79"
+        },
+        {
+          "routeId": "26972",
+          "routeShortName": "191"
+        },
+        {
+          "routeId": "26975",
+          "routeShortName": "194"
+        },
+        {
+          "routeId": "26965",
+          "routeShortName": "178"
+        }
+      ]
+    },
+    {
+      "objectId": 49,
+      "name": "Blandtown",
+      "npu": "D",
+      "sqMiles": 0.77,
+      "population": 2,
+      "medianHouseholdIncome": 121528,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 4.1,
+      "workFromHomePercent": 46.2,
+      "routes": [
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        },
+        {
+          "routeId": "27015",
+          "routeShortName": "52"
+        }
+      ]
+    },
+    {
+      "objectId": 48,
+      "name": "Bolton",
+      "npu": "D",
+      "sqMiles": 1.51,
+      "population": 2,
+      "medianHouseholdIncome": 145897,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.5,
+      "workFromHomePercent": 59.7,
+      "routes": [
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "27015",
+          "routeShortName": "52"
+        }
+      ]
+    },
+    {
+      "objectId": 203,
+      "name": "Bolton Hills",
+      "npu": "G",
+      "sqMiles": 0.07,
+      "population": 2,
+      "medianHouseholdIncome": 60759,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 55.6,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 162,
+      "name": "Bonnybrook Estates",
+      "npu": "R",
+      "sqMiles": 0.12,
+      "population": 2,
+      "medianHouseholdIncome": 36062,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 9.7,
+      "workFromHomePercent": 58.9,
+      "routes": []
+    },
+    {
+      "objectId": 109,
+      "name": "Boulder Park",
+      "npu": "H",
+      "sqMiles": 0.6,
+      "population": 2,
+      "medianHouseholdIncome": 45221,
+      "transitCommutePercent": 0.5,
+      "carAlonePercent": 8.1,
+      "workFromHomePercent": 66.1,
+      "routes": []
+    },
+    {
+      "objectId": 27,
+      "name": "Boulevard Heights",
+      "npu": "W",
+      "sqMiles": 0.22,
+      "population": 2,
+      "medianHouseholdIncome": 96043,
+      "transitCommutePercent": 2.9,
+      "carAlonePercent": 1.6,
+      "workFromHomePercent": 52.7,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        }
+      ]
+    },
+    {
+      "objectId": 252,
+      "name": "Brandon",
+      "npu": "C",
+      "sqMiles": 0.64,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 55.8,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 38,
+      "name": "Brentwood",
+      "npu": "P",
+      "sqMiles": 0.07,
+      "population": 2,
+      "medianHouseholdIncome": 62985,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 58.3,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 249,
+      "name": "Briar Glen",
+      "npu": "P",
+      "sqMiles": 0.1,
+      "population": 2,
+      "medianHouseholdIncome": 56209,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 90.2,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 138,
+      "name": "Brookhaven",
+      "npu": "B",
+      "sqMiles": 1.0,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 57.9,
+      "routes": [
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 55,
+      "name": "Brookview Heights",
+      "npu": "G",
+      "sqMiles": 0.54,
+      "population": 2,
+      "medianHouseholdIncome": 47796,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 62.3,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        }
+      ]
+    },
+    {
+      "objectId": 228,
+      "name": "Brookwood",
+      "npu": "E",
+      "sqMiles": 0.16,
+      "population": 2,
+      "medianHouseholdIncome": 95292,
+      "transitCommutePercent": 0.1,
+      "carAlonePercent": 0.3,
+      "workFromHomePercent": 70.0,
+      "routes": [
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 97,
+      "name": "Brookwood Hills",
+      "npu": "E",
+      "sqMiles": 0.31,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 4.6,
+      "workFromHomePercent": 60.9,
+      "routes": [
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 206,
+      "name": "Browns Mill Park",
+      "npu": "Z",
+      "sqMiles": 1.03,
+      "population": 2,
+      "medianHouseholdIncome": 36672,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 67.6,
+      "routes": [
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        },
+        {
+          "routeId": "26972",
+          "routeShortName": "191"
+        },
+        {
+          "routeId": "26975",
+          "routeShortName": "194"
+        },
+        {
+          "routeId": "26934",
+          "routeShortName": "78"
+        }
+      ]
+    },
+    {
+      "objectId": 64,
+      "name": "Buckhead Forest",
+      "npu": "B",
+      "sqMiles": 0.31,
+      "population": 2,
+      "medianHouseholdIncome": 124762,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.2,
+      "workFromHomePercent": 71.4,
+      "routes": [
+        {
+          "routeId": "26907",
+          "routeShortName": "5"
+        },
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 149,
+      "name": "Buckhead Heights",
+      "npu": "B",
+      "sqMiles": 0.07,
+      "population": 2,
+      "medianHouseholdIncome": 112662,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.7,
+      "workFromHomePercent": 59.0,
+      "routes": [
+        {
+          "routeId": "26914",
+          "routeShortName": "17"
+        }
+      ]
+    },
+    {
+      "objectId": 118,
+      "name": "Buckhead Village",
+      "npu": "B",
+      "sqMiles": 0.2,
+      "population": 2,
+      "medianHouseholdIncome": 95772,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 48.8,
+      "routes": [
+        {
+          "routeId": "26907",
+          "routeShortName": "5"
+        },
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 248,
+      "name": "Bush Mountain",
+      "npu": "S",
+      "sqMiles": 0.08,
+      "population": 2,
+      "medianHouseholdIncome": 44861,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 62.2,
+      "routes": []
+    },
+    {
+      "objectId": 40,
+      "name": "Butner/Tell",
+      "npu": "P",
+      "sqMiles": 0.22,
+      "population": 2,
+      "medianHouseholdIncome": 54181,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 65.8,
+      "routes": []
+    },
+    {
+      "objectId": 22,
+      "name": "Cabbagetown",
+      "npu": "N",
+      "sqMiles": 0.18,
+      "population": 2,
+      "medianHouseholdIncome": 120877,
+      "transitCommutePercent": 0.4,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 42.5,
+      "routes": [
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26986",
+          "routeShortName": "GREEN"
+        }
+      ]
+    },
+    {
+      "objectId": 33,
+      "name": "Campbellton Road",
+      "npu": "R",
+      "sqMiles": 0.44,
+      "population": 2,
+      "medianHouseholdIncome": 23872,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.7,
+      "workFromHomePercent": 41.5,
+      "routes": [
+        {
+          "routeId": "26963",
+          "routeShortName": "162"
+        },
+        {
+          "routeId": "26938",
+          "routeShortName": "83"
+        },
+        {
+          "routeId": "26937",
+          "routeShortName": "81"
+        }
+      ]
+    },
+    {
+      "objectId": 255,
+      "name": "Candler Park",
+      "npu": "N",
+      "sqMiles": 0.65,
+      "population": 2,
+      "medianHouseholdIncome": 191067,
+      "transitCommutePercent": 1.7,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 59.7,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26904",
+          "routeShortName": "2"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        }
+      ]
+    },
+    {
+      "objectId": 177,
+      "name": "Capitol Gateway",
+      "npu": "V",
+      "sqMiles": 0.13,
+      "population": 2,
+      "medianHouseholdIncome": 20000,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 80.8,
+      "routes": [
+        {
+          "routeId": "27457",
+          "routeShortName": "A"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        },
+        {
+          "routeId": "26917",
+          "routeShortName": "22"
+        },
+        {
+          "routeId": "26916",
+          "routeShortName": "21"
+        }
+      ]
+    },
+    {
+      "objectId": 180,
+      "name": "Capitol View",
+      "npu": "X",
+      "sqMiles": 0.58,
+      "population": 2,
+      "medianHouseholdIncome": 62767,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.3,
+      "workFromHomePercent": 65.0,
+      "routes": [
+        {
+          "routeId": "26935",
+          "routeShortName": "79"
+        },
+        {
+          "routeId": "26944",
+          "routeShortName": "95"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        }
+      ]
+    },
+    {
+      "objectId": 210,
+      "name": "Capitol View Manor",
+      "npu": "X",
+      "sqMiles": 0.23,
+      "population": 2,
+      "medianHouseholdIncome": 165029,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 56.1,
+      "routes": [
+        {
+          "routeId": "26944",
+          "routeShortName": "95"
+        }
+      ]
+    },
+    {
+      "objectId": 144,
+      "name": "Carey Park",
+      "npu": "G",
+      "sqMiles": 0.52,
+      "population": 2,
+      "medianHouseholdIncome": 18020,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 3.3,
+      "workFromHomePercent": 63.0,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 137,
+      "name": "Carroll Heights",
+      "npu": "H",
+      "sqMiles": 0.42,
+      "population": 2,
+      "medianHouseholdIncome": 26391,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 68.3,
+      "routes": []
+    },
+    {
+      "objectId": 204,
+      "name": "Carver Hills",
+      "npu": "G",
+      "sqMiles": 0.32,
+      "population": 2,
+      "medianHouseholdIncome": 36969,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 48.5,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 31,
+      "name": "Cascade Avenue/Road",
+      "npu": "S",
+      "sqMiles": 1.05,
+      "population": 2,
+      "medianHouseholdIncome": 42568,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 69.7,
+      "routes": [
+        {
+          "routeId": "27020",
+          "routeShortName": "68"
+        },
+        {
+          "routeId": "26931",
+          "routeShortName": "71"
+        }
+      ]
+    },
+    {
+      "objectId": 155,
+      "name": "Cascade Green",
+      "npu": "P",
+      "sqMiles": 0.08,
+      "population": 2,
+      "medianHouseholdIncome": 66829,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 10.9,
+      "workFromHomePercent": 54.1,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 167,
+      "name": "Cascade Heights",
+      "npu": "I",
+      "sqMiles": 1.03,
+      "population": 2,
+      "medianHouseholdIncome": 78843,
+      "transitCommutePercent": 0.6,
+      "carAlonePercent": 0.4,
+      "workFromHomePercent": 62.4,
+      "routes": [
+        {
+          "routeId": "26931",
+          "routeShortName": "71"
+        },
+        {
+          "routeId": "26929",
+          "routeShortName": "66"
+        }
+      ]
+    },
+    {
+      "objectId": 92,
+      "name": "Castleberry Hill",
+      "npu": "M",
+      "sqMiles": 0.28,
+      "population": 2,
+      "medianHouseholdIncome": 80321,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 4.6,
+      "workFromHomePercent": 48.7,
+      "routes": [
+        {
+          "routeId": "26915",
+          "routeShortName": "20"
+        },
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 74,
+      "name": "Castlewood",
+      "npu": "C",
+      "sqMiles": 0.33,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 55.9,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 56,
+      "name": "Center Hill",
+      "npu": "J",
+      "sqMiles": 1.1,
+      "population": 2,
+      "medianHouseholdIncome": 37259,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 5.0,
+      "workFromHomePercent": 76.9,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        }
+      ]
+    },
+    {
+      "objectId": 217,
+      "name": "Chalet Woods",
+      "npu": "I",
+      "sqMiles": 0.12,
+      "population": 2,
+      "medianHouseholdIncome": 96088,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 59.6,
+      "routes": [
+        {
+          "routeId": "26930",
+          "routeShortName": "67"
+        }
+      ]
+    },
+    {
+      "objectId": 19,
+      "name": "Channing Valley",
+      "npu": "C",
+      "sqMiles": 0.11,
+      "population": 2,
+      "medianHouseholdIncome": 89228,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 73.7,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 152,
+      "name": "Chastain Park",
+      "npu": "A",
+      "sqMiles": 1.68,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 60.5,
+      "routes": []
+    },
+    {
+      "objectId": 139,
+      "name": "Chattahoochee",
+      "npu": "G",
+      "sqMiles": 0.32,
+      "population": 2,
+      "medianHouseholdIncome": 0,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 0.0,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        }
+      ]
+    },
+    {
+      "objectId": 30,
+      "name": "Chosewood Park",
+      "npu": "Y",
+      "sqMiles": 0.88,
+      "population": 2,
+      "medianHouseholdIncome": 68666,
+      "transitCommutePercent": 1.4,
+      "carAlonePercent": 8.5,
+      "workFromHomePercent": 47.1,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        }
+      ]
+    },
+    {
+      "objectId": 215,
+      "name": "Collier Heights",
+      "npu": "I",
+      "sqMiles": 1.95,
+      "population": 2,
+      "medianHouseholdIncome": 39878,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 3.3,
+      "workFromHomePercent": 60.3,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        }
+      ]
+    },
+    {
+      "objectId": 20,
+      "name": "Collier Hills",
+      "npu": "C",
+      "sqMiles": 0.24,
+      "population": 2,
+      "medianHouseholdIncome": 164469,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 72.7,
+      "routes": []
+    },
+    {
+      "objectId": 80,
+      "name": "Collier Hills North",
+      "npu": "C",
+      "sqMiles": 0.11,
+      "population": 2,
+      "medianHouseholdIncome": 86538,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.7,
+      "workFromHomePercent": 71.1,
+      "routes": []
+    },
+    {
+      "objectId": 21,
+      "name": "Colonial Homes",
+      "npu": "C",
+      "sqMiles": 0.04,
+      "population": 2,
+      "medianHouseholdIncome": 111083,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 7.8,
+      "workFromHomePercent": 54.2,
+      "routes": []
+    },
+    {
+      "objectId": 131,
+      "name": "Continental Colony",
+      "npu": "R",
+      "sqMiles": 0.14,
+      "population": 2,
+      "medianHouseholdIncome": 36063,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 8.5,
+      "workFromHomePercent": 57.3,
+      "routes": []
+    },
+    {
+      "objectId": 73,
+      "name": "Cross Creek",
+      "npu": "C",
+      "sqMiles": 0.28,
+      "population": 2,
+      "medianHouseholdIncome": 82451,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 67.6,
+      "routes": [
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 257,
+      "name": "Custer/McDonough/Guice",
+      "npu": "W",
+      "sqMiles": 0.45,
+      "population": 2,
+      "medianHouseholdIncome": 103329,
+      "transitCommutePercent": 0.2,
+      "carAlonePercent": 1.2,
+      "workFromHomePercent": 47.1,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26906",
+          "routeShortName": "4"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        }
+      ]
+    },
+    {
+      "objectId": 195,
+      "name": "Deerwood",
+      "npu": "P",
+      "sqMiles": 0.18,
+      "population": 2,
+      "medianHouseholdIncome": 67568,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 47.1,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 102,
+      "name": "Dixie Hills",
+      "npu": "J",
+      "sqMiles": 0.73,
+      "population": 2,
+      "medianHouseholdIncome": 41324,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 2.5,
+      "workFromHomePercent": 70.6,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        }
+      ]
+    },
+    {
+      "objectId": 223,
+      "name": "Downtown",
+      "npu": "M",
+      "sqMiles": 1.96,
+      "population": 2,
+      "medianHouseholdIncome": 67231,
+      "transitCommutePercent": 0.2,
+      "carAlonePercent": 2.1,
+      "workFromHomePercent": 43.7,
+      "routes": [
+        {
+          "routeId": "26915",
+          "routeShortName": "20"
+        },
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        },
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "27457",
+          "routeShortName": "A"
+        },
+        {
+          "routeId": "26904",
+          "routeShortName": "2"
+        },
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        },
+        {
+          "routeId": "26982",
+          "routeShortName": "ATLSC"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26917",
+          "routeShortName": "22"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26986",
+          "routeShortName": "GREEN"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        },
+        {
+          "routeId": "26916",
+          "routeShortName": "21"
+        }
+      ]
+    },
+    {
+      "objectId": 259,
+      "name": "Druid Hills",
+      "npu": "N",
+      "sqMiles": 0.53,
+      "population": 2,
+      "medianHouseholdIncome": 166195,
+      "transitCommutePercent": 0.5,
+      "carAlonePercent": 1.0,
+      "workFromHomePercent": 56.2,
+      "routes": []
+    },
+    {
+      "objectId": 113,
+      "name": "East Ardley Road",
+      "npu": "I",
+      "sqMiles": 0.1,
+      "population": 2,
+      "medianHouseholdIncome": 101681,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 3.4,
+      "workFromHomePercent": 60.7,
+      "routes": [
+        {
+          "routeId": "26929",
+          "routeShortName": "66"
+        }
+      ]
+    },
+    {
+      "objectId": 260,
+      "name": "East Atlanta",
+      "npu": "W",
+      "sqMiles": 1.46,
+      "population": 2,
+      "medianHouseholdIncome": 109558,
+      "transitCommutePercent": 0.3,
+      "carAlonePercent": 1.0,
+      "workFromHomePercent": 59.5,
+      "routes": [
+        {
+          "routeId": "26915",
+          "routeShortName": "20"
+        },
+        {
+          "routeId": "26906",
+          "routeShortName": "4"
+        },
+        {
+          "routeId": "26920",
+          "routeShortName": "32"
+        },
+        {
+          "routeId": "26917",
+          "routeShortName": "22"
+        },
+        {
+          "routeId": "26933",
+          "routeShortName": "74"
+        },
+        {
+          "routeId": "26916",
+          "routeShortName": "21"
+        }
+      ]
+    },
+    {
+      "objectId": 240,
+      "name": "East Chastain Park",
+      "npu": "B",
+      "sqMiles": 0.55,
+      "population": 2,
+      "medianHouseholdIncome": 128118,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 73.6,
+      "routes": [
+        {
+          "routeId": "26907",
+          "routeShortName": "5"
+        }
+      ]
+    },
+    {
+      "objectId": 164,
+      "name": "East Lake",
+      "npu": "O",
+      "sqMiles": 1.22,
+      "population": 2,
+      "medianHouseholdIncome": 135251,
+      "transitCommutePercent": 1.9,
+      "carAlonePercent": 0.1,
+      "workFromHomePercent": 56.8,
+      "routes": [
+        {
+          "routeId": "26921",
+          "routeShortName": "34"
+        },
+        {
+          "routeId": "26917",
+          "routeShortName": "22"
+        },
+        {
+          "routeId": "26913",
+          "routeShortName": "15"
+        },
+        {
+          "routeId": "26916",
+          "routeShortName": "21"
+        }
+      ]
+    },
+    {
+      "objectId": 256,
+      "name": "Edgewood",
+      "npu": "O",
+      "sqMiles": 0.87,
+      "population": 2,
+      "medianHouseholdIncome": 108926,
+      "transitCommutePercent": 1.8,
+      "carAlonePercent": 1.3,
+      "workFromHomePercent": 56.3,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26906",
+          "routeShortName": "4"
+        },
+        {
+          "routeId": "26920",
+          "routeShortName": "32"
+        },
+        {
+          "routeId": "26933",
+          "routeShortName": "74"
+        }
+      ]
+    },
+    {
+      "objectId": 158,
+      "name": "Edmund Park",
+      "npu": "F",
+      "sqMiles": 0.03,
+      "population": 2,
+      "medianHouseholdIncome": 132007,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 69.0,
+      "routes": [
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 41,
+      "name": "Elmco Estates",
+      "npu": "P",
+      "sqMiles": 0.21,
+      "population": 2,
+      "medianHouseholdIncome": 53289,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 65.0,
+      "routes": [
+        {
+          "routeId": "26936",
+          "routeShortName": "80"
+        }
+      ]
+    },
+    {
+      "objectId": 115,
+      "name": "Emory",
+      "npu": "F",
+      "sqMiles": 0.0,
+      "population": 2,
+      "medianHouseholdIncome": 51933,
+      "transitCommutePercent": 0.3,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 41.4,
+      "routes": [
+        {
+          "routeId": "26913",
+          "routeShortName": "15"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 174,
+      "name": "English Avenue",
+      "npu": "L",
+      "sqMiles": 0.81,
+      "population": 2,
+      "medianHouseholdIncome": 58389,
+      "transitCommutePercent": 1.5,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 61.3,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26904",
+          "routeShortName": "2"
+        }
+      ]
+    },
+    {
+      "objectId": 140,
+      "name": "English Park",
+      "npu": "G",
+      "sqMiles": 0.17,
+      "population": 2,
+      "medianHouseholdIncome": 47903,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 61.7,
+      "routes": []
+    },
+    {
+      "objectId": 250,
+      "name": "Fairburn",
+      "npu": "P",
+      "sqMiles": 0.18,
+      "population": 2,
+      "medianHouseholdIncome": 54938,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 66.1,
+      "routes": [
+        {
+          "routeId": "26936",
+          "routeShortName": "80"
+        }
+      ]
+    },
+    {
+      "objectId": 104,
+      "name": "Fairburn Heights",
+      "npu": "H",
+      "sqMiles": 0.56,
+      "population": 2,
+      "medianHouseholdIncome": 35659,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 3.0,
+      "workFromHomePercent": 53.6,
+      "routes": [
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26932",
+          "routeShortName": "73"
+        }
+      ]
+    },
+    {
+      "objectId": 231,
+      "name": "Fairburn Mays",
+      "npu": "H",
+      "sqMiles": 0.63,
+      "population": 2,
+      "medianHouseholdIncome": 41753,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.4,
+      "workFromHomePercent": 62.9,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 106,
+      "name": "Fairburn Road/Wisteria Lane",
+      "npu": "H",
+      "sqMiles": 0.13,
+      "population": 2,
+      "medianHouseholdIncome": 78168,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 40.0,
+      "routes": []
+    },
+    {
+      "objectId": 232,
+      "name": "Fairburn Tell",
+      "npu": "P",
+      "sqMiles": 0.27,
+      "population": 2,
+      "medianHouseholdIncome": 80356,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 87.5,
+      "routes": []
+    },
+    {
+      "objectId": 197,
+      "name": "Fairway Acres",
+      "npu": "P",
+      "sqMiles": 0.19,
+      "population": 2,
+      "medianHouseholdIncome": 68116,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 50.2,
+      "routes": []
+    },
+    {
+      "objectId": 14,
+      "name": "Fernleaf",
+      "npu": "C",
+      "sqMiles": 0.09,
+      "population": 2,
+      "medianHouseholdIncome": 178086,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 30.2,
+      "workFromHomePercent": 58.7,
+      "routes": []
+    },
+    {
+      "objectId": 218,
+      "name": "Florida Heights",
+      "npu": "I",
+      "sqMiles": 0.39,
+      "population": 2,
+      "medianHouseholdIncome": 36440,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 57.4,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        }
+      ]
+    },
+    {
+      "objectId": 185,
+      "name": "Fort McPherson",
+      "npu": "S",
+      "sqMiles": 0.81,
+      "population": 2,
+      "medianHouseholdIncome": 12462,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 81.4,
+      "routes": [
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        },
+        {
+          "routeId": "26972",
+          "routeShortName": "191"
+        },
+        {
+          "routeId": "26975",
+          "routeShortName": "194"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26963",
+          "routeShortName": "162"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26938",
+          "routeShortName": "83"
+        },
+        {
+          "routeId": "26945",
+          "routeShortName": "96"
+        },
+        {
+          "routeId": "26965",
+          "routeShortName": "178"
+        }
+      ]
+    },
+    {
+      "objectId": 188,
+      "name": "Fort Valley",
+      "npu": "R",
+      "sqMiles": 0.04,
+      "population": 2,
+      "medianHouseholdIncome": 31212,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 32.4,
+      "routes": [
+        {
+          "routeId": "26963",
+          "routeShortName": "162"
+        },
+        {
+          "routeId": "26937",
+          "routeShortName": "81"
+        }
+      ]
+    },
+    {
+      "objectId": 66,
+      "name": "Garden Hills",
+      "npu": "B",
+      "sqMiles": 0.75,
+      "population": 2,
+      "medianHouseholdIncome": 106895,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.0,
+      "workFromHomePercent": 67.8,
+      "routes": [
+        {
+          "routeId": "26907",
+          "routeShortName": "5"
+        },
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 224,
+      "name": "Georgia Tech",
+      "npu": "E",
+      "sqMiles": 0.56,
+      "population": 2,
+      "medianHouseholdIncome": 156924,
+      "transitCommutePercent": 1.1,
+      "carAlonePercent": 0.4,
+      "workFromHomePercent": 15.8,
+      "routes": [
+        {
+          "routeId": "26904",
+          "routeShortName": "2"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 157,
+      "name": "Glenrose Heights",
+      "npu": "Z",
+      "sqMiles": 1.39,
+      "population": 2,
+      "medianHouseholdIncome": 49404,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 3.5,
+      "workFromHomePercent": 73.7,
+      "routes": [
+        {
+          "routeId": "26972",
+          "routeShortName": "191"
+        },
+        {
+          "routeId": "26975",
+          "routeShortName": "194"
+        },
+        {
+          "routeId": "26965",
+          "routeShortName": "178"
+        },
+        {
+          "routeId": "26934",
+          "routeShortName": "78"
+        }
+      ]
+    },
+    {
+      "objectId": 178,
+      "name": "Grant Park",
+      "npu": "W",
+      "sqMiles": 1.73,
+      "population": 2,
+      "medianHouseholdIncome": 132376,
+      "transitCommutePercent": 1.4,
+      "carAlonePercent": 1.7,
+      "workFromHomePercent": 51.4,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26915",
+          "routeShortName": "20"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        },
+        {
+          "routeId": "26917",
+          "routeShortName": "22"
+        },
+        {
+          "routeId": "26916",
+          "routeShortName": "21"
+        }
+      ]
+    },
+    {
+      "objectId": 219,
+      "name": "Green Acres Valley",
+      "npu": "I",
+      "sqMiles": 0.08,
+      "population": 2,
+      "medianHouseholdIncome": 80645,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 15.4,
+      "workFromHomePercent": 55.1,
+      "routes": []
+    },
+    {
+      "objectId": 220,
+      "name": "Green Forest Acres",
+      "npu": "I",
+      "sqMiles": 0.16,
+      "population": 2,
+      "medianHouseholdIncome": 89048,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 7.0,
+      "workFromHomePercent": 59.1,
+      "routes": [
+        {
+          "routeId": "26929",
+          "routeShortName": "66"
+        }
+      ]
+    },
+    {
+      "objectId": 132,
+      "name": "Greenbriar",
+      "npu": "R",
+      "sqMiles": 1.02,
+      "population": 2,
+      "medianHouseholdIncome": 39656,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.8,
+      "workFromHomePercent": 52.7,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        },
+        {
+          "routeId": "26938",
+          "routeShortName": "83"
+        },
+        {
+          "routeId": "26929",
+          "routeShortName": "66"
+        },
+        {
+          "routeId": "26936",
+          "routeShortName": "80"
+        }
+      ]
+    },
+    {
+      "objectId": 198,
+      "name": "Greenbriar Village",
+      "npu": "P",
+      "sqMiles": 0.06,
+      "population": 2,
+      "medianHouseholdIncome": 44613,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 77.3,
+      "routes": []
+    },
+    {
+      "objectId": 103,
+      "name": "Grove Park",
+      "npu": "J",
+      "sqMiles": 2.1,
+      "population": 2,
+      "medianHouseholdIncome": 35604,
+      "transitCommutePercent": 0.4,
+      "carAlonePercent": 4.8,
+      "workFromHomePercent": 58.2,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "27015",
+          "routeShortName": "52"
+        },
+        {
+          "routeId": "26986",
+          "routeShortName": "GREEN"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 179,
+      "name": "Hammond Park",
+      "npu": "X",
+      "sqMiles": 0.61,
+      "population": 2,
+      "medianHouseholdIncome": 31779,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 12.5,
+      "workFromHomePercent": 53.7,
+      "routes": [
+        {
+          "routeId": "26935",
+          "routeShortName": "79"
+        },
+        {
+          "routeId": "26944",
+          "routeShortName": "95"
+        },
+        {
+          "routeId": "26945",
+          "routeShortName": "96"
+        },
+        {
+          "routeId": "26965",
+          "routeShortName": "178"
+        },
+        {
+          "routeId": "26934",
+          "routeShortName": "78"
+        }
+      ]
+    },
+    {
+      "objectId": 230,
+      "name": "Hanover West",
+      "npu": "C",
+      "sqMiles": 0.16,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 83.3,
+      "routes": []
+    },
+    {
+      "objectId": 111,
+      "name": "Harland Terrace",
+      "npu": "I",
+      "sqMiles": 0.46,
+      "population": 2,
+      "medianHouseholdIncome": 28440,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 51.3,
+      "routes": [
+        {
+          "routeId": "26930",
+          "routeShortName": "67"
+        },
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26932",
+          "routeShortName": "73"
+        },
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26929",
+          "routeShortName": "66"
+        }
+      ]
+    },
+    {
+      "objectId": 83,
+      "name": "Harris Chiles",
+      "npu": "T",
+      "sqMiles": 0.14,
+      "population": 2,
+      "medianHouseholdIncome": 17817,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 24.4,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 100,
+      "name": "Harvel Homes Community",
+      "npu": "J",
+      "sqMiles": 0.02,
+      "population": 2,
+      "medianHouseholdIncome": 56884,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 70.0,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        }
+      ]
+    },
+    {
+      "objectId": 190,
+      "name": "Heritage Valley",
+      "npu": "P",
+      "sqMiles": 0.38,
+      "population": 2,
+      "medianHouseholdIncome": 67332,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 10.7,
+      "workFromHomePercent": 53.9,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 181,
+      "name": "High Point",
+      "npu": "Y",
+      "sqMiles": 0.1,
+      "population": 2,
+      "medianHouseholdIncome": 56096,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 21.9,
+      "routes": [
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        }
+      ]
+    },
+    {
+      "objectId": 202,
+      "name": "Hills Park",
+      "npu": "D",
+      "sqMiles": 1.51,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.7,
+      "workFromHomePercent": 61.3,
+      "routes": [
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "27015",
+          "routeShortName": "52"
+        }
+      ]
+    },
+    {
+      "objectId": 173,
+      "name": "Historic Westin Heights/Bankhead",
+      "npu": "K",
+      "sqMiles": 0.65,
+      "population": 2,
+      "medianHouseholdIncome": 29816,
+      "transitCommutePercent": 3.4,
+      "carAlonePercent": 2.6,
+      "workFromHomePercent": 63.1,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "27015",
+          "routeShortName": "52"
+        },
+        {
+          "routeId": "26986",
+          "routeShortName": "GREEN"
+        }
+      ]
+    },
+    {
+      "objectId": 225,
+      "name": "Home Park",
+      "npu": "E",
+      "sqMiles": 0.5,
+      "population": 2,
+      "medianHouseholdIncome": 58208,
+      "transitCommutePercent": 2.4,
+      "carAlonePercent": 2.7,
+      "workFromHomePercent": 37.6,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 146,
+      "name": "Horseshoe Community",
+      "npu": "I",
+      "sqMiles": 0.05,
+      "population": 2,
+      "medianHouseholdIncome": 86037,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 65.5,
+      "routes": [
+        {
+          "routeId": "26931",
+          "routeShortName": "71"
+        }
+      ]
+    },
+    {
+      "objectId": 172,
+      "name": "Hunter Hills",
+      "npu": "K",
+      "sqMiles": 0.5,
+      "population": 2,
+      "medianHouseholdIncome": 52721,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 6.5,
+      "workFromHomePercent": 42.8,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        }
+      ]
+    },
+    {
+      "objectId": 159,
+      "name": "Huntington",
+      "npu": "P",
+      "sqMiles": 0.05,
+      "population": 2,
+      "medianHouseholdIncome": 70312,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 55.6,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 254,
+      "name": "Inman Park",
+      "npu": "N",
+      "sqMiles": 0.6,
+      "population": 2,
+      "medianHouseholdIncome": 149042,
+      "transitCommutePercent": 3.5,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 51.5,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26904",
+          "routeShortName": "2"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        }
+      ]
+    },
+    {
+      "objectId": 216,
+      "name": "Ivan Hill",
+      "npu": "I",
+      "sqMiles": 0.1,
+      "population": 2,
+      "medianHouseholdIncome": 0,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 0.0,
+      "routes": []
+    },
+    {
+      "objectId": 182,
+      "name": "Joyland",
+      "npu": "Y",
+      "sqMiles": 0.13,
+      "population": 2,
+      "medianHouseholdIncome": 25546,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 66.0,
+      "routes": [
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        }
+      ]
+    },
+    {
+      "objectId": 247,
+      "name": "Just Us",
+      "npu": "T",
+      "sqMiles": 0.03,
+      "population": 2,
+      "medianHouseholdIncome": 60825,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 21.4,
+      "workFromHomePercent": 21.4,
+      "routes": [
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        }
+      ]
+    },
+    {
+      "objectId": 200,
+      "name": "Kings Forest",
+      "npu": "P",
+      "sqMiles": 0.65,
+      "population": 2,
+      "medianHouseholdIncome": 58132,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 58.7,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        },
+        {
+          "routeId": "26936",
+          "routeShortName": "80"
+        }
+      ]
+    },
+    {
+      "objectId": 69,
+      "name": "Kingswood",
+      "npu": "A",
+      "sqMiles": 0.63,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 3.9,
+      "workFromHomePercent": 64.0,
+      "routes": []
+    },
+    {
+      "objectId": 238,
+      "name": "Kirkwood",
+      "npu": "O",
+      "sqMiles": 1.52,
+      "population": 2,
+      "medianHouseholdIncome": 123730,
+      "transitCommutePercent": 2.1,
+      "carAlonePercent": 0.7,
+      "workFromHomePercent": 59.1,
+      "routes": [
+        {
+          "routeId": "26921",
+          "routeShortName": "34"
+        },
+        {
+          "routeId": "26916",
+          "routeShortName": "21"
+        }
+      ]
+    },
+    {
+      "objectId": 87,
+      "name": "Knight Park/Howell Station",
+      "npu": "K",
+      "sqMiles": 0.55,
+      "population": 2,
+      "medianHouseholdIncome": 130744,
+      "transitCommutePercent": 4.6,
+      "carAlonePercent": 1.8,
+      "workFromHomePercent": 60.0,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "27015",
+          "routeShortName": "52"
+        }
+      ]
+    },
+    {
+      "objectId": 237,
+      "name": "Lake Claire",
+      "npu": "N",
+      "sqMiles": 0.49,
+      "population": 2,
+      "medianHouseholdIncome": 177494,
+      "transitCommutePercent": 1.6,
+      "carAlonePercent": 0.6,
+      "workFromHomePercent": 54.2,
+      "routes": [
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        }
+      ]
+    },
+    {
+      "objectId": 39,
+      "name": "Lake Estates",
+      "npu": "P",
+      "sqMiles": 0.07,
+      "population": 2,
+      "medianHouseholdIncome": 69619,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 81.8,
+      "routes": []
+    },
+    {
+      "objectId": 129,
+      "name": "Lakewood",
+      "npu": "Z",
+      "sqMiles": 0.54,
+      "population": 2,
+      "medianHouseholdIncome": 58579,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 7.3,
+      "workFromHomePercent": 41.9,
+      "routes": [
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        }
+      ]
+    },
+    {
+      "objectId": 213,
+      "name": "Lakewood Heights",
+      "npu": "Y",
+      "sqMiles": 1.38,
+      "population": 2,
+      "medianHouseholdIncome": 56678,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 5.2,
+      "workFromHomePercent": 49.6,
+      "routes": [
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        },
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        },
+        {
+          "routeId": "26972",
+          "routeShortName": "191"
+        },
+        {
+          "routeId": "26975",
+          "routeShortName": "194"
+        },
+        {
+          "routeId": "26965",
+          "routeShortName": "178"
+        }
+      ]
+    },
+    {
+      "objectId": 189,
+      "name": "Laurens Valley",
+      "npu": "R",
+      "sqMiles": 0.19,
+      "population": 2,
+      "medianHouseholdIncome": 61470,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.8,
+      "workFromHomePercent": 45.0,
+      "routes": [
+        {
+          "routeId": "26929",
+          "routeShortName": "66"
+        }
+      ]
+    },
+    {
+      "objectId": 29,
+      "name": "Leila Valley",
+      "npu": "Z",
+      "sqMiles": 0.49,
+      "population": 2,
+      "medianHouseholdIncome": 43482,
+      "transitCommutePercent": 1.6,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 72.9,
+      "routes": [
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        },
+        {
+          "routeId": "26906",
+          "routeShortName": "4"
+        }
+      ]
+    },
+    {
+      "objectId": 62,
+      "name": "Lenox",
+      "npu": "B",
+      "sqMiles": 0.24,
+      "population": 2,
+      "medianHouseholdIncome": 109911,
+      "transitCommutePercent": 0.6,
+      "carAlonePercent": 1.9,
+      "workFromHomePercent": 55.7,
+      "routes": [
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        },
+        {
+          "routeId": "26914",
+          "routeShortName": "17"
+        }
+      ]
+    },
+    {
+      "objectId": 50,
+      "name": "Lincoln Homes",
+      "npu": "G",
+      "sqMiles": 0.26,
+      "population": 2,
+      "medianHouseholdIncome": 38834,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 86.7,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 116,
+      "name": "Lindbergh/Morosgo",
+      "npu": "B",
+      "sqMiles": 0.6,
+      "population": 2,
+      "medianHouseholdIncome": 83824,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.7,
+      "workFromHomePercent": 56.2,
+      "routes": [
+        {
+          "routeId": "26922",
+          "routeShortName": "39"
+        },
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26907",
+          "routeShortName": "5"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26913",
+          "routeShortName": "15"
+        }
+      ]
+    },
+    {
+      "objectId": 119,
+      "name": "Lindridge/Martin Manor",
+      "npu": "F",
+      "sqMiles": 0.71,
+      "population": 2,
+      "medianHouseholdIncome": 85277,
+      "transitCommutePercent": 0.9,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 69.8,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26913",
+          "routeShortName": "15"
+        }
+      ]
+    },
+    {
+      "objectId": 96,
+      "name": "Loring Heights",
+      "npu": "E",
+      "sqMiles": 0.43,
+      "population": 2,
+      "medianHouseholdIncome": 104600,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 66.6,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 221,
+      "name": "Magnum Manor",
+      "npu": "I",
+      "sqMiles": 0.23,
+      "population": 2,
+      "medianHouseholdIncome": 102017,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 2.0,
+      "workFromHomePercent": 61.4,
+      "routes": [
+        {
+          "routeId": "26931",
+          "routeShortName": "71"
+        },
+        {
+          "routeId": "26929",
+          "routeShortName": "66"
+        }
+      ]
+    },
+    {
+      "objectId": 71,
+      "name": "Margaret Mitchell",
+      "npu": "A",
+      "sqMiles": 0.84,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 82.0,
+      "routes": []
+    },
+    {
+      "objectId": 94,
+      "name": "Marietta Street Artery",
+      "npu": "E",
+      "sqMiles": 0.37,
+      "population": 2,
+      "medianHouseholdIncome": 75171,
+      "transitCommutePercent": 2.8,
+      "carAlonePercent": 0.7,
+      "workFromHomePercent": 42.1,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26904",
+          "routeShortName": "2"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 99,
+      "name": "Mays",
+      "npu": "H",
+      "sqMiles": 0.4,
+      "population": 2,
+      "medianHouseholdIncome": 77291,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 71.3,
+      "routes": []
+    },
+    {
+      "objectId": 244,
+      "name": "Meadowbrook Forest",
+      "npu": "P",
+      "sqMiles": 0.11,
+      "population": 2,
+      "medianHouseholdIncome": 0,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 0.0,
+      "routes": []
+    },
+    {
+      "objectId": 176,
+      "name": "Mechanicsville",
+      "npu": "V",
+      "sqMiles": 0.72,
+      "population": 2,
+      "medianHouseholdIncome": 25944,
+      "transitCommutePercent": 1.7,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 51.4,
+      "routes": [
+        {
+          "routeId": "26915",
+          "routeShortName": "20"
+        },
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        },
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 36,
+      "name": "Mellwood",
+      "npu": "P",
+      "sqMiles": 0.04,
+      "population": 2,
+      "medianHouseholdIncome": 46825,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 57.8,
+      "routes": []
+    },
+    {
+      "objectId": 78,
+      "name": "Memorial Park",
+      "npu": "C",
+      "sqMiles": 0.14,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 64.0,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 226,
+      "name": "Midtown",
+      "npu": "E",
+      "sqMiles": 1.64,
+      "population": 2,
+      "medianHouseholdIncome": 114100,
+      "transitCommutePercent": 1.9,
+      "carAlonePercent": 1.6,
+      "workFromHomePercent": 45.4,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26904",
+          "routeShortName": "2"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        },
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 151,
+      "name": "Midwest Cascade",
+      "npu": "Q",
+      "sqMiles": 0.93,
+      "population": 2,
+      "medianHouseholdIncome": 78550,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.2,
+      "workFromHomePercent": 64.3,
+      "routes": []
+    },
+    {
+      "objectId": 54,
+      "name": "Monroe Heights",
+      "npu": "G",
+      "sqMiles": 0.39,
+      "population": 2,
+      "medianHouseholdIncome": 45208,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 62.0,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        }
+      ]
+    },
+    {
+      "objectId": 163,
+      "name": "Morningside/Lenox Park",
+      "npu": "F",
+      "sqMiles": 2.26,
+      "population": 2,
+      "medianHouseholdIncome": 168382,
+      "transitCommutePercent": 1.8,
+      "carAlonePercent": 0.2,
+      "workFromHomePercent": 65.0,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 85,
+      "name": "Mozley Park",
+      "npu": "K",
+      "sqMiles": 0.43,
+      "population": 2,
+      "medianHouseholdIncome": 63810,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.0,
+      "workFromHomePercent": 64.0,
+      "routes": [
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 243,
+      "name": "Mt. Gilead Woods",
+      "npu": "P",
+      "sqMiles": 0.06,
+      "population": 2,
+      "medianHouseholdIncome": 54639,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 89.4,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 153,
+      "name": "Mt. Paran Parkway",
+      "npu": "A",
+      "sqMiles": 0.14,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 91.4,
+      "routes": []
+    },
+    {
+      "objectId": 239,
+      "name": "Mt. Paran/Northside",
+      "npu": "A",
+      "sqMiles": 2.14,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.2,
+      "workFromHomePercent": 78.5,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 245,
+      "name": "Niskey Cove",
+      "npu": "P",
+      "sqMiles": 0.08,
+      "population": 2,
+      "medianHouseholdIncome": 0,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 0.0,
+      "routes": []
+    },
+    {
+      "objectId": 199,
+      "name": "Niskey Lake",
+      "npu": "P",
+      "sqMiles": 0.42,
+      "population": 2,
+      "medianHouseholdIncome": 39642,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 85.6,
+      "routes": []
+    },
+    {
+      "objectId": 236,
+      "name": "North Buckhead",
+      "npu": "B",
+      "sqMiles": 2.67,
+      "population": 2,
+      "medianHouseholdIncome": 137348,
+      "transitCommutePercent": 0.3,
+      "carAlonePercent": 0.6,
+      "workFromHomePercent": 62.8,
+      "routes": [
+        {
+          "routeId": "26907",
+          "routeShortName": "5"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 125,
+      "name": "Norwood Manor",
+      "npu": "Z",
+      "sqMiles": 0.52,
+      "population": 2,
+      "medianHouseholdIncome": 35901,
+      "transitCommutePercent": 1.2,
+      "carAlonePercent": 1.0,
+      "workFromHomePercent": 66.6,
+      "routes": [
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        },
+        {
+          "routeId": "26906",
+          "routeShortName": "4"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        }
+      ]
+    },
+    {
+      "objectId": 246,
+      "name": "Oakcliff",
+      "npu": "H",
+      "sqMiles": 0.1,
+      "population": 2,
+      "medianHouseholdIncome": 40762,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 20.8,
+      "routes": []
+    },
+    {
+      "objectId": 142,
+      "name": "Oakland",
+      "npu": "W",
+      "sqMiles": 0.05,
+      "population": 2,
+      "medianHouseholdIncome": 39746,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 34.8,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        },
+        {
+          "routeId": "26917",
+          "routeShortName": "22"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26986",
+          "routeShortName": "GREEN"
+        },
+        {
+          "routeId": "26916",
+          "routeShortName": "21"
+        }
+      ]
+    },
+    {
+      "objectId": 32,
+      "name": "Oakland City",
+      "npu": "S",
+      "sqMiles": 0.98,
+      "population": 2,
+      "medianHouseholdIncome": 38012,
+      "transitCommutePercent": 1.4,
+      "carAlonePercent": 4.7,
+      "workFromHomePercent": 41.2,
+      "routes": [
+        {
+          "routeId": "26935",
+          "routeShortName": "79"
+        },
+        {
+          "routeId": "27020",
+          "routeShortName": "68"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26963",
+          "routeShortName": "162"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26938",
+          "routeShortName": "83"
+        },
+        {
+          "routeId": "26937",
+          "routeShortName": "81"
+        }
+      ]
+    },
+    {
+      "objectId": 154,
+      "name": "Old Fairburn Village",
+      "npu": "P",
+      "sqMiles": 0.03,
+      "population": 2,
+      "medianHouseholdIncome": 50000,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 75.0,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 222,
+      "name": "Old Fourth Ward",
+      "npu": "M",
+      "sqMiles": 1.22,
+      "population": 2,
+      "medianHouseholdIncome": 102328,
+      "transitCommutePercent": 1.7,
+      "carAlonePercent": 3.7,
+      "workFromHomePercent": 54.1,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26904",
+          "routeShortName": "2"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26986",
+          "routeShortName": "GREEN"
+        }
+      ]
+    },
+    {
+      "objectId": 98,
+      "name": "Old Gordon",
+      "npu": "H",
+      "sqMiles": 0.12,
+      "population": 2,
+      "medianHouseholdIncome": 79911,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 79.6,
+      "workFromHomePercent": 11.7,
+      "routes": [
+        {
+          "routeId": "26932",
+          "routeShortName": "73"
+        }
+      ]
+    },
+    {
+      "objectId": 61,
+      "name": "Orchard Knob",
+      "npu": "Z",
+      "sqMiles": 0.46,
+      "population": 2,
+      "medianHouseholdIncome": 39172,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 53.6,
+      "routes": [
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        },
+        {
+          "routeId": "26965",
+          "routeShortName": "178"
+        }
+      ]
+    },
+    {
+      "objectId": 24,
+      "name": "Ormewood Park",
+      "npu": "W",
+      "sqMiles": 0.79,
+      "population": 2,
+      "medianHouseholdIncome": 161042,
+      "transitCommutePercent": 0.7,
+      "carAlonePercent": 0.4,
+      "workFromHomePercent": 50.2,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26915",
+          "routeShortName": "20"
+        },
+        {
+          "routeId": "26906",
+          "routeShortName": "4"
+        },
+        {
+          "routeId": "26920",
+          "routeShortName": "32"
+        },
+        {
+          "routeId": "26917",
+          "routeShortName": "22"
+        },
+        {
+          "routeId": "26933",
+          "routeShortName": "74"
+        },
+        {
+          "routeId": "26916",
+          "routeShortName": "21"
+        }
+      ]
+    },
+    {
+      "objectId": 134,
+      "name": "Paces",
+      "npu": "A",
+      "sqMiles": 3.01,
+      "population": 2,
+      "medianHouseholdIncome": 175209,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.4,
+      "workFromHomePercent": 73.5,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 77,
+      "name": "Peachtree Battle Alliance",
+      "npu": "C",
+      "sqMiles": 0.72,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 3.2,
+      "workFromHomePercent": 56.5,
+      "routes": []
+    },
+    {
+      "objectId": 242,
+      "name": "Peachtree Heights East",
+      "npu": "B",
+      "sqMiles": 0.21,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 7.5,
+      "workFromHomePercent": 66.8,
+      "routes": [
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 65,
+      "name": "Peachtree Heights West",
+      "npu": "B",
+      "sqMiles": 0.91,
+      "population": 2,
+      "medianHouseholdIncome": 111440,
+      "transitCommutePercent": 0.6,
+      "carAlonePercent": 3.8,
+      "workFromHomePercent": 74.8,
+      "routes": [
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 67,
+      "name": "Peachtree Hills",
+      "npu": "B",
+      "sqMiles": 0.52,
+      "population": 2,
+      "medianHouseholdIncome": 150335,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.5,
+      "workFromHomePercent": 65.8,
+      "routes": [
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 63,
+      "name": "Peachtree Park",
+      "npu": "B",
+      "sqMiles": 0.49,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 4.8,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 55.6,
+      "routes": [
+        {
+          "routeId": "26907",
+          "routeShortName": "5"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 101,
+      "name": "Penelope Neighbors",
+      "npu": "J",
+      "sqMiles": 0.2,
+      "population": 2,
+      "medianHouseholdIncome": 34585,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 4.8,
+      "workFromHomePercent": 70.2,
+      "routes": [
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 90,
+      "name": "Peoplestown",
+      "npu": "V",
+      "sqMiles": 0.53,
+      "population": 2,
+      "medianHouseholdIncome": 31931,
+      "transitCommutePercent": 1.2,
+      "carAlonePercent": 2.2,
+      "workFromHomePercent": 56.6,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        },
+        {
+          "routeId": "27457",
+          "routeShortName": "A"
+        },
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        }
+      ]
+    },
+    {
+      "objectId": 156,
+      "name": "Perkerson",
+      "npu": "X",
+      "sqMiles": 0.95,
+      "population": 2,
+      "medianHouseholdIncome": 26987,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 9.2,
+      "workFromHomePercent": 46.2,
+      "routes": [
+        {
+          "routeId": "26935",
+          "routeShortName": "79"
+        },
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        },
+        {
+          "routeId": "26944",
+          "routeShortName": "95"
+        },
+        {
+          "routeId": "26945",
+          "routeShortName": "96"
+        },
+        {
+          "routeId": "26965",
+          "routeShortName": "178"
+        },
+        {
+          "routeId": "26934",
+          "routeShortName": "78"
+        }
+      ]
+    },
+    {
+      "objectId": 112,
+      "name": "Peyton Forest",
+      "npu": "I",
+      "sqMiles": 0.45,
+      "population": 2,
+      "medianHouseholdIncome": 60400,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 65.1,
+      "routes": [
+        {
+          "routeId": "26930",
+          "routeShortName": "67"
+        }
+      ]
+    },
+    {
+      "objectId": 160,
+      "name": "Peyton Heights",
+      "npu": "I",
+      "sqMiles": 0.19,
+      "population": 2,
+      "medianHouseholdIncome": 98120,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 84.2,
+      "routes": []
+    },
+    {
+      "objectId": 121,
+      "name": "Piedmont Heights",
+      "npu": "F",
+      "sqMiles": 0.49,
+      "population": 2,
+      "medianHouseholdIncome": 117562,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 72.1,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        }
+      ]
+    },
+    {
+      "objectId": 133,
+      "name": "Pine Hills",
+      "npu": "B",
+      "sqMiles": 1.12,
+      "population": 2,
+      "medianHouseholdIncome": 95313,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.8,
+      "workFromHomePercent": 64.3,
+      "routes": [
+        {
+          "routeId": "26922",
+          "routeShortName": "39"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26914",
+          "routeShortName": "17"
+        }
+      ]
+    },
+    {
+      "objectId": 89,
+      "name": "Pittsburgh",
+      "npu": "V",
+      "sqMiles": 0.8,
+      "population": 2,
+      "medianHouseholdIncome": 42692,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 16.3,
+      "workFromHomePercent": 55.6,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        },
+        {
+          "routeId": "26944",
+          "routeShortName": "95"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        }
+      ]
+    },
+    {
+      "objectId": 124,
+      "name": "Pleasant Hill",
+      "npu": "A",
+      "sqMiles": 0.39,
+      "population": 2,
+      "medianHouseholdIncome": 121701,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 70.8,
+      "routes": []
+    },
+    {
+      "objectId": 208,
+      "name": "Polar Rock",
+      "npu": "Z",
+      "sqMiles": 0.47,
+      "population": 2,
+      "medianHouseholdIncome": 41180,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.4,
+      "workFromHomePercent": 45.5,
+      "routes": [
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        },
+        {
+          "routeId": "26972",
+          "routeShortName": "191"
+        },
+        {
+          "routeId": "26975",
+          "routeShortName": "194"
+        },
+        {
+          "routeId": "26965",
+          "routeShortName": "178"
+        }
+      ]
+    },
+    {
+      "objectId": 187,
+      "name": "Pomona Park",
+      "npu": "R",
+      "sqMiles": 0.07,
+      "population": 2,
+      "medianHouseholdIncome": 27120,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 31.6,
+      "routes": [
+        {
+          "routeId": "26938",
+          "routeShortName": "83"
+        }
+      ]
+    },
+    {
+      "objectId": 253,
+      "name": "Poncey-Highland",
+      "npu": "N",
+      "sqMiles": 0.38,
+      "population": 2,
+      "medianHouseholdIncome": 115929,
+      "transitCommutePercent": 1.0,
+      "carAlonePercent": 0.7,
+      "workFromHomePercent": 53.8,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26904",
+          "routeShortName": "2"
+        }
+      ]
+    },
+    {
+      "objectId": 233,
+      "name": "Princeton Lakes",
+      "npu": "P",
+      "sqMiles": 0.75,
+      "population": 2,
+      "medianHouseholdIncome": 80948,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 2.6,
+      "workFromHomePercent": 73.0,
+      "routes": [
+        {
+          "routeId": "26939",
+          "routeShortName": "84"
+        },
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        }
+      ]
+    },
+    {
+      "objectId": 68,
+      "name": "Randall Mill",
+      "npu": "A",
+      "sqMiles": 0.34,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 3.6,
+      "workFromHomePercent": 63.8,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 28,
+      "name": "Rebel Valley Forest",
+      "npu": "Z",
+      "sqMiles": 0.18,
+      "population": 2,
+      "medianHouseholdIncome": 51897,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 72.1,
+      "routes": []
+    },
+    {
+      "objectId": 145,
+      "name": "Regency Trace",
+      "npu": "Q",
+      "sqMiles": 0.11,
+      "population": 2,
+      "medianHouseholdIncome": 43198,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 77.1,
+      "routes": []
+    },
+    {
+      "objectId": 23,
+      "name": "Reynoldstown",
+      "npu": "N",
+      "sqMiles": 0.62,
+      "population": 2,
+      "medianHouseholdIncome": 130156,
+      "transitCommutePercent": 0.9,
+      "carAlonePercent": 0.5,
+      "workFromHomePercent": 52.7,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26906",
+          "routeShortName": "4"
+        },
+        {
+          "routeId": "26920",
+          "routeShortName": "32"
+        },
+        {
+          "routeId": "26917",
+          "routeShortName": "22"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26933",
+          "routeShortName": "74"
+        },
+        {
+          "routeId": "26916",
+          "routeShortName": "21"
+        }
+      ]
+    },
+    {
+      "objectId": 107,
+      "name": "Ridgecrest Forest",
+      "npu": "H",
+      "sqMiles": 0.12,
+      "population": 2,
+      "medianHouseholdIncome": 56448,
+      "transitCommutePercent": 1.3,
+      "carAlonePercent": 16.1,
+      "workFromHomePercent": 62.4,
+      "routes": []
+    },
+    {
+      "objectId": 130,
+      "name": "Ridgedale Park",
+      "npu": "B",
+      "sqMiles": 0.18,
+      "population": 2,
+      "medianHouseholdIncome": 138970,
+      "transitCommutePercent": 2.6,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 50.6,
+      "routes": [
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        },
+        {
+          "routeId": "26914",
+          "routeShortName": "17"
+        }
+      ]
+    },
+    {
+      "objectId": 13,
+      "name": "Ridgewood Heights",
+      "npu": "C",
+      "sqMiles": 0.21,
+      "population": 2,
+      "medianHouseholdIncome": 177192,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 30.2,
+      "workFromHomePercent": 58.7,
+      "routes": []
+    },
+    {
+      "objectId": 47,
+      "name": "Riverside",
+      "npu": "D",
+      "sqMiles": 0.78,
+      "population": 2,
+      "medianHouseholdIncome": 158424,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 3.0,
+      "workFromHomePercent": 68.8,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 53,
+      "name": "Rockdale",
+      "npu": "G",
+      "sqMiles": 0.56,
+      "population": 2,
+      "medianHouseholdIncome": 41325,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 11.2,
+      "workFromHomePercent": 72.9,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        }
+      ]
+    },
+    {
+      "objectId": 128,
+      "name": "Rosedale Heights",
+      "npu": "Z",
+      "sqMiles": 0.31,
+      "population": 2,
+      "medianHouseholdIncome": 38185,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 54.3,
+      "routes": [
+        {
+          "routeId": "26934",
+          "routeShortName": "78"
+        }
+      ]
+    },
+    {
+      "objectId": 192,
+      "name": "Rue Royal",
+      "npu": "P",
+      "sqMiles": 0.04,
+      "population": 2,
+      "medianHouseholdIncome": 43924,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 57.1,
+      "routes": [
+        {
+          "routeId": "26936",
+          "routeShortName": "80"
+        }
+      ]
+    },
+    {
+      "objectId": 42,
+      "name": "Sandlewood Estates",
+      "npu": "P",
+      "sqMiles": 0.09,
+      "population": 2,
+      "medianHouseholdIncome": 73881,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 85.7,
+      "routes": []
+    },
+    {
+      "objectId": 51,
+      "name": "Scotts Crossing",
+      "npu": "G",
+      "sqMiles": 0.49,
+      "population": 2,
+      "medianHouseholdIncome": 40981,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 60.2,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 95,
+      "name": "Sherwood Forest",
+      "npu": "E",
+      "sqMiles": 0.21,
+      "population": 2,
+      "medianHouseholdIncome": 195256,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 48.1,
+      "routes": []
+    },
+    {
+      "objectId": 214,
+      "name": "South Atlanta",
+      "npu": "Y",
+      "sqMiles": 0.46,
+      "population": 2,
+      "medianHouseholdIncome": 50278,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 4.6,
+      "workFromHomePercent": 56.3,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        }
+      ]
+    },
+    {
+      "objectId": 148,
+      "name": "South Oakes at Cascade",
+      "npu": "P",
+      "sqMiles": 0.04,
+      "population": 2,
+      "medianHouseholdIncome": 0,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 0.0,
+      "routes": []
+    },
+    {
+      "objectId": 126,
+      "name": "South River Gardens",
+      "npu": "Z",
+      "sqMiles": 2.82,
+      "population": 2,
+      "medianHouseholdIncome": 55672,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 64.4,
+      "routes": [
+        {
+          "routeId": "26928",
+          "routeShortName": "55"
+        }
+      ]
+    },
+    {
+      "objectId": 117,
+      "name": "South Tuxedo Park",
+      "npu": "B",
+      "sqMiles": 0.38,
+      "population": 2,
+      "medianHouseholdIncome": 69066,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 76.0,
+      "routes": [
+        {
+          "routeId": "26918",
+          "routeShortName": "23"
+        }
+      ]
+    },
+    {
+      "objectId": 34,
+      "name": "Southwest",
+      "npu": "R",
+      "sqMiles": 1.97,
+      "population": 2,
+      "medianHouseholdIncome": 61140,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.3,
+      "workFromHomePercent": 60.7,
+      "routes": [
+        {
+          "routeId": "26964",
+          "routeShortName": "165"
+        },
+        {
+          "routeId": "26938",
+          "routeShortName": "83"
+        },
+        {
+          "routeId": "26929",
+          "routeShortName": "66"
+        }
+      ]
+    },
+    {
+      "objectId": 18,
+      "name": "Springlake",
+      "npu": "C",
+      "sqMiles": 0.24,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 58.4,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 147,
+      "name": "State Facility",
+      "npu": "W",
+      "sqMiles": 0.18,
+      "population": 2,
+      "medianHouseholdIncome": 0,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 0.0,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        }
+      ]
+    },
+    {
+      "objectId": 91,
+      "name": "Summerhill",
+      "npu": "V",
+      "sqMiles": 0.54,
+      "population": 2,
+      "medianHouseholdIncome": 47890,
+      "transitCommutePercent": 1.0,
+      "carAlonePercent": 0.3,
+      "workFromHomePercent": 59.0,
+      "routes": [
+        {
+          "routeId": "26915",
+          "routeShortName": "20"
+        },
+        {
+          "routeId": "27457",
+          "routeShortName": "A"
+        }
+      ]
+    },
+    {
+      "objectId": 207,
+      "name": "Swallow Circle/Baywood",
+      "npu": "Z",
+      "sqMiles": 0.31,
+      "population": 2,
+      "medianHouseholdIncome": 43473,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 24.5,
+      "workFromHomePercent": 49.1,
+      "routes": []
+    },
+    {
+      "objectId": 93,
+      "name": "Sweet Auburn",
+      "npu": "M",
+      "sqMiles": 0.32,
+      "population": 2,
+      "medianHouseholdIncome": 33557,
+      "transitCommutePercent": 0.5,
+      "carAlonePercent": 9.3,
+      "workFromHomePercent": 54.7,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        },
+        {
+          "routeId": "26982",
+          "routeShortName": "ATLSC"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26917",
+          "routeShortName": "22"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26986",
+          "routeShortName": "GREEN"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 209,
+      "name": "Sylvan Hills",
+      "npu": "X",
+      "sqMiles": 1.65,
+      "population": 2,
+      "medianHouseholdIncome": 57243,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.3,
+      "workFromHomePercent": 61.0,
+      "routes": [
+        {
+          "routeId": "26935",
+          "routeShortName": "79"
+        },
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        },
+        {
+          "routeId": "26972",
+          "routeShortName": "191"
+        },
+        {
+          "routeId": "26975",
+          "routeShortName": "194"
+        },
+        {
+          "routeId": "26944",
+          "routeShortName": "95"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26945",
+          "routeShortName": "96"
+        },
+        {
+          "routeId": "26965",
+          "routeShortName": "178"
+        }
+      ]
+    },
+    {
+      "objectId": 37,
+      "name": "Tampa Park",
+      "npu": "P",
+      "sqMiles": 0.03,
+      "population": 2,
+      "medianHouseholdIncome": 0,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 0.0,
+      "routes": []
+    },
+    {
+      "objectId": 184,
+      "name": "The Villages at Carver",
+      "npu": "Y",
+      "sqMiles": 0.17,
+      "population": 2,
+      "medianHouseholdIncome": 23471,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 68.3,
+      "routes": [
+        {
+          "routeId": "26923",
+          "routeShortName": "42"
+        }
+      ]
+    },
+    {
+      "objectId": 84,
+      "name": "The Villages at Castleberry Hill",
+      "npu": "T",
+      "sqMiles": 0.09,
+      "population": 2,
+      "medianHouseholdIncome": 36866,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 4.4,
+      "workFromHomePercent": 40.4,
+      "routes": [
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 241,
+      "name": "The Villages at East Lake",
+      "npu": "O",
+      "sqMiles": 0.29,
+      "population": 2,
+      "medianHouseholdIncome": 27863,
+      "transitCommutePercent": 0.5,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 43.2,
+      "routes": [
+        {
+          "routeId": "26921",
+          "routeShortName": "34"
+        },
+        {
+          "routeId": "26917",
+          "routeShortName": "22"
+        },
+        {
+          "routeId": "26916",
+          "routeShortName": "21"
+        }
+      ]
+    },
+    {
+      "objectId": 258,
+      "name": "Thomasville Heights",
+      "npu": "Z",
+      "sqMiles": 0.64,
+      "population": 2,
+      "medianHouseholdIncome": 17897,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 4.3,
+      "workFromHomePercent": 38.8,
+      "routes": [
+        {
+          "routeId": "26906",
+          "routeShortName": "4"
+        },
+        {
+          "routeId": "26926",
+          "routeShortName": "49"
+        }
+      ]
+    },
+    {
+      "objectId": 70,
+      "name": "Tuxedo Park",
+      "npu": "A",
+      "sqMiles": 1.15,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 76.8,
+      "routes": [
+        {
+          "routeId": "26907",
+          "routeShortName": "5"
+        }
+      ]
+    },
+    {
+      "objectId": 46,
+      "name": "Underwood Hills",
+      "npu": "D",
+      "sqMiles": 1.12,
+      "population": 2,
+      "medianHouseholdIncome": 132379,
+      "transitCommutePercent": 0.4,
+      "carAlonePercent": 2.9,
+      "workFromHomePercent": 57.5,
+      "routes": [
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 186,
+      "name": "Venetian Hills",
+      "npu": "S",
+      "sqMiles": 0.96,
+      "population": 2,
+      "medianHouseholdIncome": 40288,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.7,
+      "workFromHomePercent": 61.4,
+      "routes": [
+        {
+          "routeId": "26963",
+          "routeShortName": "162"
+        },
+        {
+          "routeId": "26938",
+          "routeShortName": "83"
+        },
+        {
+          "routeId": "26937",
+          "routeShortName": "81"
+        },
+        {
+          "routeId": "26931",
+          "routeShortName": "71"
+        }
+      ]
+    },
+    {
+      "objectId": 88,
+      "name": "Vine City",
+      "npu": "L",
+      "sqMiles": 0.51,
+      "population": 2,
+      "medianHouseholdIncome": 37095,
+      "transitCommutePercent": 0.5,
+      "carAlonePercent": 6.5,
+      "workFromHomePercent": 49.1,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26986",
+          "routeShortName": "GREEN"
+        }
+      ]
+    },
+    {
+      "objectId": 235,
+      "name": "Virginia Highland",
+      "npu": "F",
+      "sqMiles": 1.05,
+      "population": 2,
+      "medianHouseholdIncome": 107404,
+      "transitCommutePercent": 1.5,
+      "carAlonePercent": 1.6,
+      "workFromHomePercent": 60.8,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26904",
+          "routeShortName": "2"
+        },
+        {
+          "routeId": "26910",
+          "routeShortName": "11"
+        }
+      ]
+    },
+    {
+      "objectId": 86,
+      "name": "Washington Park",
+      "npu": "K",
+      "sqMiles": 0.26,
+      "population": 2,
+      "medianHouseholdIncome": 51402,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 56.5,
+      "routes": [
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        },
+        {
+          "routeId": "26984",
+          "routeShortName": "BLUE"
+        },
+        {
+          "routeId": "26986",
+          "routeShortName": "GREEN"
+        }
+      ]
+    },
+    {
+      "objectId": 234,
+      "name": "Wesley Battle",
+      "npu": "C",
+      "sqMiles": 0.31,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 82.1,
+      "routes": []
+    },
+    {
+      "objectId": 169,
+      "name": "West End",
+      "npu": "T",
+      "sqMiles": 1.06,
+      "population": 2,
+      "medianHouseholdIncome": 52395,
+      "transitCommutePercent": 2.0,
+      "carAlonePercent": 1.7,
+      "workFromHomePercent": 55.5,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26903",
+          "routeShortName": "1"
+        },
+        {
+          "routeId": "27020",
+          "routeShortName": "68"
+        },
+        {
+          "routeId": "26944",
+          "routeShortName": "95"
+        },
+        {
+          "routeId": "26985",
+          "routeShortName": "GOLD"
+        },
+        {
+          "routeId": "26987",
+          "routeShortName": "RED"
+        },
+        {
+          "routeId": "26937",
+          "routeShortName": "81"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        },
+        {
+          "routeId": "26931",
+          "routeShortName": "71"
+        }
+      ]
+    },
+    {
+      "objectId": 52,
+      "name": "West Highlands",
+      "npu": "G",
+      "sqMiles": 0.79,
+      "population": 2,
+      "medianHouseholdIncome": 62321,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 4.4,
+      "workFromHomePercent": 65.2,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        }
+      ]
+    },
+    {
+      "objectId": 212,
+      "name": "West Lake",
+      "npu": "J",
+      "sqMiles": 0.29,
+      "population": 2,
+      "medianHouseholdIncome": 18292,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 62.7,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 114,
+      "name": "West Manor",
+      "npu": "I",
+      "sqMiles": 0.27,
+      "population": 2,
+      "medianHouseholdIncome": 78602,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 6.7,
+      "workFromHomePercent": 63.3,
+      "routes": [
+        {
+          "routeId": "26929",
+          "routeShortName": "66"
+        }
+      ]
+    },
+    {
+      "objectId": 123,
+      "name": "West Paces Ferry/Northside",
+      "npu": "A",
+      "sqMiles": 0.67,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 70.1,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 110,
+      "name": "Westhaven",
+      "npu": "I",
+      "sqMiles": 0.24,
+      "population": 2,
+      "medianHouseholdIncome": 57446,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 100.0,
+      "routes": [
+        {
+          "routeId": "26927",
+          "routeShortName": "51"
+        },
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26912",
+          "routeShortName": "14"
+        },
+        {
+          "routeId": "26905",
+          "routeShortName": "3"
+        }
+      ]
+    },
+    {
+      "objectId": 15,
+      "name": "Westminster/Milmar",
+      "npu": "C",
+      "sqMiles": 0.14,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 72.5,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 72,
+      "name": "Westover Plantation",
+      "npu": "C",
+      "sqMiles": 0.08,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 83.0,
+      "routes": []
+    },
+    {
+      "objectId": 168,
+      "name": "Westview",
+      "npu": "T",
+      "sqMiles": 0.63,
+      "population": 2,
+      "medianHouseholdIncome": 61858,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 5.6,
+      "workFromHomePercent": 63.1,
+      "routes": [
+        {
+          "routeId": "27020",
+          "routeShortName": "68"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        },
+        {
+          "routeId": "26931",
+          "routeShortName": "71"
+        }
+      ]
+    },
+    {
+      "objectId": 82,
+      "name": "Westwood Terrace",
+      "npu": "I",
+      "sqMiles": 0.22,
+      "population": 2,
+      "medianHouseholdIncome": 51767,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 48.4,
+      "routes": [
+        {
+          "routeId": "27020",
+          "routeShortName": "68"
+        }
+      ]
+    },
+    {
+      "objectId": 122,
+      "name": "Whitewater Creek",
+      "npu": "A",
+      "sqMiles": 0.38,
+      "population": 2,
+      "medianHouseholdIncome": 150000,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 1.1,
+      "workFromHomePercent": 67.2,
+      "routes": []
+    },
+    {
+      "objectId": 201,
+      "name": "Whittier Mill Village",
+      "npu": "D",
+      "sqMiles": 0.32,
+      "population": 2,
+      "medianHouseholdIncome": 153949,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 3.4,
+      "workFromHomePercent": 68.2,
+      "routes": [
+        {
+          "routeId": "26919",
+          "routeShortName": "26"
+        },
+        {
+          "routeId": "26909",
+          "routeShortName": "10"
+        }
+      ]
+    },
+    {
+      "objectId": 79,
+      "name": "Wildwood (NPU-C)",
+      "npu": "C",
+      "sqMiles": 0.37,
+      "population": 2,
+      "medianHouseholdIncome": 98433,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 75.4,
+      "routes": [
+        {
+          "routeId": "26911",
+          "routeShortName": "12"
+        }
+      ]
+    },
+    {
+      "objectId": 108,
+      "name": "Wildwood (NPU-H)",
+      "npu": "H",
+      "sqMiles": 0.28,
+      "population": 2,
+      "medianHouseholdIncome": 41999,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 69.7,
+      "routes": []
+    },
+    {
+      "objectId": 196,
+      "name": "Wildwood Forest",
+      "npu": "P",
+      "sqMiles": 0.1,
+      "population": 2,
+      "medianHouseholdIncome": 69409,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 50.5,
+      "routes": []
+    },
+    {
+      "objectId": 60,
+      "name": "Wilson Mill Meadows",
+      "npu": "H",
+      "sqMiles": 0.38,
+      "population": 2,
+      "medianHouseholdIncome": 76638,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 79.3,
+      "routes": []
+    },
+    {
+      "objectId": 58,
+      "name": "Wisteria Gardens",
+      "npu": "H",
+      "sqMiles": 0.17,
+      "population": 2,
+      "medianHouseholdIncome": 84833,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 40.4,
+      "routes": []
+    },
+    {
+      "objectId": 17,
+      "name": "Woodfield",
+      "npu": "C",
+      "sqMiles": 0.07,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 0.0,
+      "workFromHomePercent": 47.5,
+      "routes": []
+    },
+    {
+      "objectId": 25,
+      "name": "Woodland Hills",
+      "npu": "W",
+      "sqMiles": 0.15,
+      "population": 2,
+      "medianHouseholdIncome": 145052,
+      "transitCommutePercent": 0.4,
+      "carAlonePercent": 0.4,
+      "workFromHomePercent": 46.9,
+      "routes": [
+        {
+          "routeId": "26908",
+          "routeShortName": "7"
+        },
+        {
+          "routeId": "26906",
+          "routeShortName": "4"
+        }
+      ]
+    },
+    {
+      "objectId": 76,
+      "name": "Wyngate",
+      "npu": "C",
+      "sqMiles": 0.29,
+      "population": 2,
+      "medianHouseholdIncome": 200001,
+      "transitCommutePercent": 0.0,
+      "carAlonePercent": 25.4,
+      "workFromHomePercent": 40.9,
+      "routes": []
+    }
+  ]
+}
