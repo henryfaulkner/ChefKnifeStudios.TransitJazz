@@ -123,9 +123,6 @@
   <data name="RouteBlurbBarAriaLabel" xml:space="preserve">
     <value>Route information</value>
   </data>
-  <data name="AudioHint" xml:space="preserve">
-    <value>Click anywhere to enable audio</value>
-  </data>
   <data name="RoutesLabel" xml:space="preserve">
     <value>Routes</value>
   </data>
@@ -155,5 +152,8 @@
   </data>
   <data name="SettingStreetMap" xml:space="preserve">
     <value>Street map</value>
+  </data>
+  <data name="NumBusesRunning" xml:space="preserve">
+    <value>{0} buses running</value>
   </data>
 </root>

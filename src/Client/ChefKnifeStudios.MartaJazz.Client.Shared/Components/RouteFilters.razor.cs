@@ -33,13 +33,11 @@ public partial class RouteFilters : ComponentBase, IDisposable
 
     void HandleMouseOver(MouseEventArgs args, RouteItem routeItem)
     {
-        _logger.LogInformation("Mouse over route filter");
         RouteFilterViewModel.SelectRoute(routeItem);
     }
 
     void HandleMouseOut(MouseEventArgs args, RouteItem routeItem)
     {
-        _logger.LogInformation("Mouse out of route filter");
         RouteFilterViewModel.ClearSelection();
     }
 }

@@ -1,5 +1,9 @@
-﻿<div class="route-filters__header">
-    <span class="route-filters__bus-count">@RouteFilterViewModel.ActiveBusCount buses active</span>
+﻿@using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<RouteFilterResources> Loc
+
+<div class="route-filters__header">
+    <span class="route-filters__bus-count">@string.Format(Loc["NumBusesRunning"], RouteFilterViewModel.ActiveBusCount)</span>
 </div>
 <div class="route-filters">
     @foreach (var routeItem in RouteFilterViewModel.RouteItems)
