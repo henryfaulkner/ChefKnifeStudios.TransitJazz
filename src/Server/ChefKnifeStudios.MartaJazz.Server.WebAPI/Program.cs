@@ -82,6 +82,7 @@ builder.Services.AddSingleton<IFeatureFlagService>(sp =>
     return new FeatureFlagService(flags);
 });
 
+builder.Services.AddSingleton<ILastBatchCache, LastBatchCache>();
 builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
 builder.Services.AddHttpClient("RouteShapeApi", client =>
 {
@@ -127,7 +128,8 @@ app.MapHub<WorkerTransitHub>("/hubs/worker-transit")
     //.RequireAuthorization("TransitDataPublisher");
 
 app.MapTestEndpoints()
-    .MapGtfsEndpoints();
+    .MapGtfsEndpoints()
+    .MapTransitEndpoints();
 
 app.MapDefaultEndpoints();
 

@@ -13,4 +13,9 @@ public static class ApiEndpoints
         public const string GetAllRouteShapes = "/gtfs/routes/shapes";
         public const string GetAllRoutes = "/gtfs/routes";
     }
+
+    public static class Transit
+    {
+        public const string GetLastBatch = "/transit/last-batch";
+    }
 }
