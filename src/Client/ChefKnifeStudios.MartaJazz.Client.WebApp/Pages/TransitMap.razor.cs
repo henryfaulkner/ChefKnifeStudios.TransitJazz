@@ -36,10 +36,9 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
 
     const float MinWidth = 1100;
-    const float MinHeight = 600;
 
     IDisposable? _viewportSub;
-    bool _tooSmall;
+    bool _isMobile;
 
     Map? _map;
     bool _mapReady;
@@ -159,10 +158,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     void OnViewportChanged(Vector2 size)
     {
-        bool tooSmall = size.X < MinWidth || size.Y < MinHeight;
-        if (tooSmall == _tooSmall) return;
+        bool isMobile = size.X < MinWidth;
+        if (isMobile == _isMobile) return;
 
-        _tooSmall = tooSmall;
+        _isMobile = isMobile;
         // The callback arrives off a JS interop continuation — marshal back
         // to the renderer's sync context before touching component state.
         InvokeAsync(StateHasChanged);

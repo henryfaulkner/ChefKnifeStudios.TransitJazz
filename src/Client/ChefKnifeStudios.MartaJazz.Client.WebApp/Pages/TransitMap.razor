@@ -5,13 +5,13 @@
 @inject IStringLocalizer<RouteFilterResources> Loc
 
 <div class="transit-map-container">
-    <div class="transit-map__accordion @(_tooSmall ? "transit-map__accordion-mobile" : "")">
+    <div class="transit-map__accordion @(_isMobile ? "transit-map__accordion-mobile" : "")">
         <MatAccordion Class="">
             <MatExpansionPanel>
                 <MatExpansionPanelSummary>
                     <MatExpansionPanelHeader>@Loc["RoutesLabel"]</MatExpansionPanelHeader>
                     <MatExpansionPanelSubHeader>
-                        @if (_tooSmall)
+                        @if (_isMobile)
                         {
                             <BusesRunningLabel />
                         }
@@ -24,7 +24,7 @@
         </MatAccordion>
     </div>
 
-    @if (!_tooSmall)
+    @if (!_isMobile)
     {
         <div class="transit-map__top-text">
             <BusesRunningLabel />
