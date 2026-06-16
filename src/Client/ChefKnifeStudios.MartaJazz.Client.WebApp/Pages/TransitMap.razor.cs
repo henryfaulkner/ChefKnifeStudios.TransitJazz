@@ -15,6 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,13 +33,16 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] IRouteFilterViewModel RouteFilterViewModel { get; set; } = null!;
     [Inject] IEventNotificationService EventNotificationService { get; set; } = null!;
     [Inject] ISettingsService SettingsService { get; set; } = null!;
+    [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
+
+    const float MinWidth = 1100;
+
+    IDisposable? _viewportSub;
+    bool _isMobile;
 
     Map? _map;
     bool _mapReady;
     IEnumerable<EventEnvelope>? _pendingBatch;
-
-    string _connectionLabel = "Connecting…";
-    string _connectionCssClass = "connecting";
 
     bool _audioEnabled = true;
     DotNetObjectReference<object>? _dotNetRef;
@@ -64,11 +68,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived += HandleSettingsEventReceived;
 
+        // Subscribe FIRST so the immediate initial fire reaches us, then register.
+        _viewportSub = ViewportSize.AddViewportSizeChangeCallback(OnViewportChanged);
+        await ViewportSize.RegisterViewportSizeAsync();
+
         try
         {
             await NotificationService.InitAsync();
-            _connectionLabel = "Connected";
-            _connectionCssClass = "connected";
             NotificationService.NotificationReceived += HandleVehicleBatchAsync;
 
             await LoadRoutesAsync();
@@ -76,8 +82,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         catch (Exception ex)
         {
             Logger.LogError(ex, "TransitMap: Failed to connect to SignalR hub");
-            _connectionLabel = "Disconnected";
-            _connectionCssClass = "disconnected";
         }
     }
 
@@ -152,11 +156,23 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
     }
 
+    void OnViewportChanged(Vector2 size)
+    {
+        bool isMobile = size.X < MinWidth;
+        if (isMobile == _isMobile) return;
+
+        _isMobile = isMobile;
+        // The callback arrives off a JS interop continuation — marshal back
+        // to the renderer's sync context before touching component state.
+        InvokeAsync(StateHasChanged);
+    }
+
     public async ValueTask DisposeAsync()
     {
         RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived -= HandleSettingsEventReceived;
         NotificationService.NotificationReceived -= HandleVehicleBatchAsync;
+        _viewportSub?.Dispose();
         await CheckpointTracker.ClearAsync();
         _dotNetRef?.Dispose();
     }

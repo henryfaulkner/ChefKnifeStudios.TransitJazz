@@ -5,17 +5,32 @@
 @inject IStringLocalizer<RouteFilterResources> Loc
 
 <div class="transit-map-container">
-    <MatAccordion Class="transit-map__accordion">
-        <MatExpansionPanel>
-            <MatExpansionPanelSummary>
-                <MatExpansionPanelHeader>@Loc["RoutesLabel"]</MatExpansionPanelHeader>
-                <MatExpansionPanelSubHeader></MatExpansionPanelSubHeader>
-            </MatExpansionPanelSummary>
-            <MatExpansionPanelDetails>
-                <RouteFilters />
-            </MatExpansionPanelDetails>
-        </MatExpansionPanel>
-    </MatAccordion>
+    <div class="transit-map__accordion @(_isMobile ? "transit-map__accordion-mobile" : "")">
+        <MatAccordion Class="">
+            <MatExpansionPanel>
+                <MatExpansionPanelSummary>
+                    <MatExpansionPanelHeader>@Loc["RoutesLabel"]</MatExpansionPanelHeader>
+                    <MatExpansionPanelSubHeader>
+                        @if (_isMobile)
+                        {
+                            <BusesRunningLabel />
+                        }
+                    </MatExpansionPanelSubHeader>
+                </MatExpansionPanelSummary>
+                <MatExpansionPanelDetails>
+                    <RouteFilters />
+                </MatExpansionPanelDetails>
+            </MatExpansionPanel>
+        </MatAccordion>
+    </div>
+
+    @if (!_isMobile)
+    {
+        <div class="transit-map__top-text">
+            <BusesRunningLabel />
+        </div>
+    }
+
     <Map CameraOptions="DefaultCameraOptions"
         OnMapReady="OnMapReadyAsync"
         OnMapBodyClicked="OnMapBodyClickedAsync"
@@ -33,4 +48,18 @@
         width: 425px;
         z-index: 10;
     }
+
+    .transit-map__accordion-mobile {
+        width: 100%;
+    }
+
+    .transit-map__top-text {
+        position: absolute;
+        left: 50%;
+        top: 24px;
+        transform: translateX(-50%);
+        z-index: 10;
+        padding: 0.5rem 1rem;
+    }
 </style>
+
