@@ -37,9 +37,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _mapReady;
     IEnumerable<EventEnvelope>? _pendingBatch;
 
-    string _connectionLabel = "Connecting…";
-    string _connectionCssClass = "connecting";
-
     bool _audioEnabled = true;
     DotNetObjectReference<object>? _dotNetRef;
 
@@ -67,8 +64,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         try
         {
             await NotificationService.InitAsync();
-            _connectionLabel = "Connected";
-            _connectionCssClass = "connected";
             NotificationService.NotificationReceived += HandleVehicleBatchAsync;
 
             await LoadRoutesAsync();
@@ -76,8 +71,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         catch (Exception ex)
         {
             Logger.LogError(ex, "TransitMap: Failed to connect to SignalR hub");
-            _connectionLabel = "Disconnected";
-            _connectionCssClass = "disconnected";
         }
     }
 

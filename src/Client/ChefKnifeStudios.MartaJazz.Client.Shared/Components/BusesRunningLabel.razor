@@ -1,0 +1,30 @@
+﻿@using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using Microsoft.Extensions.Localization
+@inject IRouteFilterViewModel RouteFilterViewModel
+@inject IStringLocalizer<RouteFilterResources> Loc
+
+<div class="buses-running-label">
+    <span class="buses-running-label__icon"></span>
+    <span class="route-filters__bus-count">@string.Format(Loc["NumBusesRunning"], RouteFilterViewModel.ActiveBusCount)</span>
+</div>
+
+<style>
+    .buses-running-label {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .buses-running-label__icon {
+        display: block;
+        height: 12px;
+        width: 12px;
+        background-color: lightgreen;
+        border-radius: 64px;
+    }
+
+    .route-filters__bus-count {
+        text-wrap-mode: nowrap;
+    }
+</style>
