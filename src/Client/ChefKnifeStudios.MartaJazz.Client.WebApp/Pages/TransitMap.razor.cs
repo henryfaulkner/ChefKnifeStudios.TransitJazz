@@ -15,6 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,6 +33,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] IRouteFilterViewModel RouteFilterViewModel { get; set; } = null!;
     [Inject] IEventNotificationService EventNotificationService { get; set; } = null!;
     [Inject] ISettingsService SettingsService { get; set; } = null!;
+    [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
+
+    const float MinWidth = 1100;
+    const float MinHeight = 600;
+
+    IDisposable? _viewportSub;
+    bool _tooSmall;
 
     Map? _map;
     bool _mapReady;
@@ -60,6 +68,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived += HandleSettingsEventReceived;
+
+        // Subscribe FIRST so the immediate initial fire reaches us, then register.
+        _viewportSub = ViewportSize.AddViewportSizeChangeCallback(OnViewportChanged);
+        await ViewportSize.RegisterViewportSizeAsync();
 
         try
         {
@@ -145,11 +157,23 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
     }
 
+    void OnViewportChanged(Vector2 size)
+    {
+        bool tooSmall = size.X < MinWidth || size.Y < MinHeight;
+        if (tooSmall == _tooSmall) return;
+
+        _tooSmall = tooSmall;
+        // The callback arrives off a JS interop continuation — marshal back
+        // to the renderer's sync context before touching component state.
+        InvokeAsync(StateHasChanged);
+    }
+
     public async ValueTask DisposeAsync()
     {
         RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived -= HandleSettingsEventReceived;
         NotificationService.NotificationReceived -= HandleVehicleBatchAsync;
+        _viewportSub?.Dispose();
         await CheckpointTracker.ClearAsync();
         _dotNetRef?.Dispose();
     }

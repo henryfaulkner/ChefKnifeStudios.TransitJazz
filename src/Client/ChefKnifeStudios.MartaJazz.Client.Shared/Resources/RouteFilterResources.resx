@@ -154,6 +154,6 @@
     <value>Street map</value>
   </data>
   <data name="NumBusesRunning" xml:space="preserve">
-    <value>{0} buses running</value>
+    <value>buses running</value>
   </data>
 </root>

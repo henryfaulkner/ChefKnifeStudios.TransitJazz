@@ -5,26 +5,30 @@
 
 <div class="buses-running-label">
     <span class="buses-running-label__icon"></span>
-    <span class="route-filters__bus-count">@string.Format(Loc["NumBusesRunning"], RouteFilterViewModel.ActiveBusCount)</span>
+    <span class="route-filters__bus-count">@RouteFilterViewModel.ActiveBusCount</span>
+    <span class="route-filters__bus-label">@Loc["NumBusesRunning"]</span>
 </div>
 
 <style>
     .buses-running-label {
         display: flex;
-        gap: 8px;
+        gap: 4px;
         align-items: center;
         justify-content: center;
+        cursor: none;
     }
 
     .buses-running-label__icon {
         display: block;
         height: 12px;
         width: 12px;
-        background-color: lightgreen;
+        background-color: darkgreen;
         border-radius: 64px;
     }
 
-    .route-filters__bus-count {
+    .route-filters__bus-count, .route-filters__bus-label {
         text-wrap-mode: nowrap;
+        color: #171717;
+        font-size: 12px;
     }
 </style>
