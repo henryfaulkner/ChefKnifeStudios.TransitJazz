@@ -13,4 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ChefKnifeStudios.MartaJazz.Client.Shared\ChefKnifeStudios.MartaJazz.Client.Shared.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="wwwroot\favicon\" />
+  </ItemGroup>
 </Project>

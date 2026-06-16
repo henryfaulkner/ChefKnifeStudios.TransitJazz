@@ -50,6 +50,7 @@ builder.Services.AddSingleton<IEventNotificationService, EventNotificationServic
 builder.Services.AddSingleton<ISignalRNotificationService, SignalRNotificationService>();
 
 builder.Services.AddSingleton<IGtfsEndpointsService, GtfsEndpointsService>();
+builder.Services.AddSingleton<ITransitEndpointsService, TransitEndpointsService>();
 
 builder.Services.AddSingleton<IApplicationViewModel, ApplicationViewModel>();
 

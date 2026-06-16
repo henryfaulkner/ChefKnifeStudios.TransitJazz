@@ -34,6 +34,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] IEventNotificationService EventNotificationService { get; set; } = null!;
     [Inject] ISettingsService SettingsService { get; set; } = null!;
     [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
+    [Inject] ITransitEndpointsService TransitEndpointsService { get; set; } = null!;
 
     const float MinWidth = 1100;
 
@@ -78,6 +79,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             NotificationService.NotificationReceived += HandleVehicleBatchAsync;
 
             await LoadRoutesAsync();
+            await FetchInitialSnapshotAsync();
         }
         catch (Exception ex)
         {
@@ -375,6 +377,28 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     async Task OnMapBodyClickedAsync(Map map)
     {
         return;
+    }
+
+    async Task FetchInitialSnapshotAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await TransitEndpointsService.GetLastBatch(ct);
+            if (!res.IsSuccess)
+            {
+                Logger.LogWarning("TransitMap.FetchInitialSnapshotAsync: GetLastBatch failed — Status={Status}", res.Status);
+                return;
+            }
+
+            var batch = res.Value;
+            if (batch is null) return;
+
+            await HandleVehicleBatchAsync(batch);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "TransitMap.FetchInitialSnapshotAsync: failed to fetch initial snapshot — continuing without it");
+        }
     }
 
     async Task LoadRoutesAsync(CancellationToken ct = default)
