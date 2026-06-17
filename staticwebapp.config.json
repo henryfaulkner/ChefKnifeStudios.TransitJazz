@@ -1,0 +1,9 @@
+{
+  "routes": [
+    {
+      "route": "www.transitjazz.com/*",
+      "redirect": "www.martajazz.com",
+      "statusCode": 301
+    }
+  ]
+}
