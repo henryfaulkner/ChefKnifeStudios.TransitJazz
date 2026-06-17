@@ -4,6 +4,11 @@
       "route": "www.transitjazz.com/*",
       "redirect": "www.martajazz.com",
       "statusCode": 301
+    },
+    {
+      "route": "transitjazz.com/*",
+      "redirect": "www.martajazz.com",
+      "statusCode": 301
     }
   ]
 }
