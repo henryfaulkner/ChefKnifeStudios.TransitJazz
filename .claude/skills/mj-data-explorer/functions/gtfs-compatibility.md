@@ -9,6 +9,10 @@ data source or understand why an existing one is producing skips or mismatches.
 Use the `mj-gtfs` skill as your data-fetch tool. It handles all downloading and
 decoding — read it before fetching anything.
 
+> **Before fetching:** Use the pure-Python decode path in `mj-gtfs` (no pip required).
+> The `pip install gtfs-realtime-bindings` path is blocked in Claude Code auto-mode
+> by default and will waste a tool call if attempted first.
+
 ## What "compatible" means for the worker
 
 The worker's `ProcessSpatialReconciliationAsync` has two hard dependencies:
@@ -71,7 +75,7 @@ Evaluated: <date>
 ### Feed health
 GTFS-RT URL:        <url>
 Static GTFS URL:    <url>
-RT feed size:       <N> bytes  |  Header ts: <UTC or "—">
+RT feed size:       <N> bytes  |  Header ts: <UTC or "— (0 is normal for some feeds)">
 Static routes:      <N> routes / <N> with shapes / <N> total shape points
 
 ### Vehicle positions (GTFS-RT)
@@ -121,6 +125,8 @@ To add <agency> as a data source:
 | Missing `position.latitude` / `position.longitude` | INCOMPATIBLE | Feed does not carry vehicle positions |
 | >20% of vehicles missing `route_id` | PARTIALLY COMPATIBLE | Vehicles without route ID will be skipped; assess if acceptable |
 | Route IDs 0% match | INCOMPATIBLE (likely fixable) | Almost certainly a format mismatch; identify the transform |
+| `speed` absent on many vehicles | COMPATIBLE (degraded) | Normal; speed is optional — lerp telemetry will have sparse speed fields |
+| `header.timestamp = 0` | COMPATIBLE | Normal for some agencies; not a decode error |
 
 ## Wrap-up
 
