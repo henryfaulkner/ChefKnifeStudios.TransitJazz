@@ -156,4 +156,10 @@
   <data name="NumBusesRunning" xml:space="preserve">
     <value>buses running</value>
   </data>
+  <data name="SelectAllRoutes" xml:space="preserve">
+    <value>Select all</value>
+  </data>
+  <data name="ClearSelections" xml:space="preserve">
+    <value>Clear selections</value>
+  </data>
 </root>

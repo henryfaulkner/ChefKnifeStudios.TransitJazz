@@ -104,8 +104,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     public async Task OnCrossingsAsync(CrossingEventDto[] crossings)
     {
         if (!_audioEnabled) return;
+        var selected = RouteFilterViewModel.SelectedRouteIds;
         foreach (var crossing in crossings)
         {
+            if (selected.Count > 0 && !selected.Contains(crossing.RouteId)) continue;
             try
             {
                 await TransitSynth.TriggerNoteAsync(crossing.RouteId, crossing.VehicleId);
@@ -150,6 +152,9 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 var result = await _map.SetBasemapStyleAsync(url);
                 await RenderRoutesAsync();
 
+                // Re-apply focus (hover preview or persistent selection) after the basemap swap resets all layers.
+                ApplyMapFocus();
+
                 // Restore checkpoint visibility to match the current setting.
                 var settings = SettingsService.GetSettings();
                 await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
@@ -181,15 +186,37 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     void OnRouteFilterPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is not (nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection)))
+        if (e.PropertyName is not (nameof(IRouteFilterViewModel.RouteItems)
+                                or nameof(IRouteFilterViewModel.HasSelection)
+                                or nameof(IRouteFilterViewModel.HoveredRouteId)))
             return;
 
         if (!_mapReady || _map is null) return;
 
-        if (RouteFilterViewModel.SelectedRouteId is { } id)
-            InvokeAsync(() => _map.FocusRouteAsync(id));
-        else
+        ApplyMapFocus();
+    }
+
+    void ApplyMapFocus()
+    {
+        if (_map is null) return;
+
+        var selected = RouteFilterViewModel.SelectedRouteIds;
+        var hovered = RouteFilterViewModel.HoveredRouteId;
+
+        if (hovered is null && selected.Count == 0)
+        {
             InvokeAsync(() => _map.ClearRouteFocusAsync());
+            return;
+        }
+
+        // Emphasize the union of persistently selected routes and the hovered route.
+        var focusSet = hovered is null
+            ? selected
+            : selected.Contains(hovered)
+                ? selected
+                : selected.Concat([hovered]).ToList();
+
+        InvokeAsync(() => _map.FocusRoutesAsync(focusSet));
     }
 
     async Task OnMapReadyAsync(Map map)

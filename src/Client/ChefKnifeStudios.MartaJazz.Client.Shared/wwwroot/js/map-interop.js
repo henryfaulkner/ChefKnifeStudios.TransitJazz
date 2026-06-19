@@ -234,6 +234,28 @@ window.ChefMap = {
         map.setPaintProperty('vehicles-layer', 'circle-color', matchExpr);
     },
 
+    focusRoutes: function (containerDivId, routeIds) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+        let style = map.getStyle();
+        if (!style) return;
+
+        let selected = new Set(routeIds || []);
+        (style.layers || []).forEach(function (layer) {
+            if (!layer.id || !layer.id.startsWith('route-layer-')) return;
+            let id = layer.id;
+            if (!map.getLayer(id)) return;
+            let routeId = id.substring('route-layer-'.length);
+            if (selected.has(routeId)) {
+                map.setPaintProperty(id, 'line-opacity', 0.95);
+                map.setPaintProperty(id, 'line-color', ChefMap._routeColors[id] || '#22c55e');
+            } else {
+                map.setPaintProperty(id, 'line-opacity', 0.3);
+                map.setPaintProperty(id, 'line-color', '#d1d5db');
+            }
+        });
+    },
+
     focusRoute: function (containerDivId, routeId) {
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
