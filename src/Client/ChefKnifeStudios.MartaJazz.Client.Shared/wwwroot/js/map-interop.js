@@ -1,3 +1,11 @@
+let _checkpointPulseModule = null;
+async function _getCheckpointPulse() {
+    if (!_checkpointPulseModule) {
+        _checkpointPulseModule = await import('/_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/checkpoint-pulse.js');
+    }
+    return _checkpointPulseModule;
+}
+
 window.ChefMap = {
     maps: {},
 
@@ -76,6 +84,9 @@ window.ChefMap = {
                 }
             });
 
+            // Pre-create pulse layers so setCheckpointVisibility works before the first crossing.
+            _getCheckpointPulse().then(function (pulse) { pulse.ensureLayer(map); });
+
             let containerDiv = document.getElementById(containerDivId);
             if (containerDiv) {
                 console.debug('[ChefMap] map load complete, notifying Blazor (notifyMapReadyAsync) for ' + containerDivId);
@@ -100,21 +111,32 @@ window.ChefMap = {
         let map = ChefMap.maps[containerDivId];
         if (!map) return Promise.resolve();
 
-        // Snapshot current vehicles data and checkpoint visibility before the style wipes everything.
+        // Snapshot current vehicles data before the style wipes everything.
         let vehiclesData = { type: 'FeatureCollection', features: [] };
-        let checkpointVisible = 'none';
         try {
             let vSrc = map.getSource('vehicles');
             if (vSrc) vehiclesData = vSrc._data || vehiclesData;
-            checkpointVisible = map.getLayoutProperty('trigger-points-layer', 'visibility') || 'none';
         } catch (e) { }
 
-        map.setStyle(styleUrl);
+        // diff:false forces a FULL style reload. With MapLibre's default diff:true,
+        // swapping between two schema-compatible MapTiler styles applies an incremental
+        // diff that wipes our custom sources/layers but never fires 'style.load' — so the
+        // restore handler below (and the awaited Promise) would never run, leaving routes,
+        // vehicles, and checkpoints stripped after the swap. Full reload guarantees the event.
+        map.setStyle(styleUrl, { diff: false });
 
         // Return a Promise that resolves after style.load so the C# caller can await it,
-        // then re-render routes from its own cache (no re-fetch).
+        // then re-render routes from its own cache (no re-fetch). A timed fallback guarantees
+        // the C# await never deadlocks even if 'style.load' fails to fire (e.g. bad style URL).
         return new Promise(function (resolve) {
-            map.once('style.load', function () {
+            let restored = false;
+            let fallbackTimer = null;
+
+            function restore() {
+                if (restored) return;
+                restored = true;
+                if (fallbackTimer) clearTimeout(fallbackTimer);
+
                 // Re-add the vehicles source and layer (empty shell; animator will update it).
                 try {
                     if (!map.getSource('vehicles')) {
@@ -138,9 +160,44 @@ window.ChefMap = {
                     console.warn('[ChefMap] setMapStyle: could not restore vehicles layer: ' + e);
                 }
 
+                // Re-add all-checkpoints dot layer (trigger-points-layer is wiped by setStyle).
+                try {
+                    if (!map.getSource('trigger-points')) {
+                        let allFeatures = Object.values(ChefMap._triggerPointFeatures).flat();
+                        map.addSource('trigger-points', { type: 'geojson', data: { type: 'FeatureCollection', features: allFeatures } });
+                    }
+                    if (!map.getLayer('trigger-points-layer')) {
+                        map.addLayer({
+                            id: 'trigger-points-layer',
+                            type: 'circle',
+                            source: 'trigger-points',
+                            layout: { visibility: 'none' },
+                            paint: {
+                                'circle-radius': 4,
+                                'circle-color': ['coalesce', ['get', 'color'], '#facc15'],
+                                'circle-opacity': 0.85,
+                                'circle-stroke-width': 1,
+                                'circle-stroke-color': '#000000'
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.warn('[ChefMap] setMapStyle: could not restore trigger-points layer: ' + e);
+                }
+
+                // Re-add pulse overlay and clear any in-flight pulses (FR-012).
+                _getCheckpointPulse().then(function (pulse) {
+                    pulse.ensureLayer(map);
+                    pulse.reset(map);
+                });
+
                 // Signal C# to re-render routes from cache; colors will reapply via debounce in addRouteShapeFeature.
-                resolve({ checkpointVisible: checkpointVisible });
-            });
+                resolve({});
+            }
+
+            map.once('style.load', restore);
+            // Safety net: if style.load never fires, restore anyway so routes still re-render.
+            fallbackTimer = setTimeout(restore, 4000);
         });
     },
 
@@ -189,25 +246,25 @@ window.ChefMap = {
         }
     },
 
-    // Debug: render trigger-point dots for all configured routes.
-    // Accumulates points across calls (one call per route); idempotent per routeId.
-    _triggerPointFeatures: {},  // routeId → Feature[]
+    // Coordinate lookup for pulse targeting — routeId → Feature[].
+    // Also pushed to the 'trigger-points' source for the all-checkpoints overlay.
+    _triggerPointFeatures: {},
 
     addTriggerPointMarkers: function (containerDivId, routeId, triggerPoints, coords) {
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
 
-        // Build one Point feature per trigger point using the route's coord array
+        let routeColor = ChefMap._routeColorsByRouteId[routeId] || '#facc15';
+
         ChefMap._triggerPointFeatures[routeId] = triggerPoints.map(function (tp) {
             let coord = coords[tp.index] || coords[coords.length - 1];
             return {
                 type: 'Feature',
                 geometry: { type: 'Point', coordinates: coord },
-                properties: { routeId: routeId, triggerIndex: tp.index, alongDistanceM: tp.alongDistanceM }
+                properties: { routeId: routeId, triggerIndex: tp.index, alongDistanceM: tp.alongDistanceM, color: routeColor }
             };
         });
 
-        // Flatten all routes into one FeatureCollection and push to the shared source
         let allFeatures = Object.values(ChefMap._triggerPointFeatures).flat();
         let fc = { type: 'FeatureCollection', features: allFeatures };
 
@@ -218,18 +275,25 @@ window.ChefMap = {
                 id: 'trigger-points-layer',
                 type: 'circle',
                 source: 'trigger-points',
-                layout: { 'visibility': 'none' },
+                layout: { visibility: 'none' },
                 paint: {
                     'circle-radius': 4,
-                    'circle-color': '#facc15',       // yellow — visible against route lines
+                    'circle-color': ['coalesce', ['get', 'color'], '#facc15'],
                     'circle-opacity': 0.85,
                     'circle-stroke-width': 1,
-                    'circle-stroke-color': '#78350f'  // dark amber outline
+                    'circle-stroke-color': '#000000'
                 }
-            }, 'vehicles-layer');  // insert below vehicles so buses render on top
+            });
         } else {
             source.setData(fc);
         }
+    },
+
+    setAllCheckpointsVisibility: function (containerDivId, visible) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+        if (!map.getLayer('trigger-points-layer')) return;
+        map.setLayoutProperty('trigger-points-layer', 'visibility', visible ? 'visible' : 'none');
     },
 
     _routeColors: {},      // routeLayerId → data color, set at addRouteShapeFeature time
@@ -315,11 +379,43 @@ window.ChefMap = {
         });
     },
 
-    setCheckpointVisibility: function (containerDivId, visible) {
+    pulseCheckpoint: async function (containerDivId, routeId, triggerIndex) {
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
-        if (!map.getLayer('trigger-points-layer')) return;
-        map.setLayoutProperty('trigger-points-layer', 'visibility', visible ? 'visible' : 'none');
+
+        let features = ChefMap._triggerPointFeatures[routeId];
+        if (!features) {
+            console.warn('[ChefMap] pulseCheckpoint: no trigger features for routeId=' + routeId);
+            return;
+        }
+        let feature = features.find(function (f) { return f.properties.triggerIndex === triggerIndex; });
+        if (!feature) {
+            console.warn('[ChefMap] pulseCheckpoint: triggerIndex ' + triggerIndex + ' not found for routeId=' + routeId);
+            return;
+        }
+
+        let color = ChefMap._routeColorsByRouteId[routeId] || '#facc15';
+        let coords = feature.geometry.coordinates;
+
+        try {
+            let pulse = await _getCheckpointPulse();
+            pulse.ensureLayer(map);
+            pulse.start(map, routeId, triggerIndex, coords, color);
+        } catch (e) {
+            console.error('[ChefMap] pulseCheckpoint: error — ', e);
+        }
+    },
+
+    setCheckpointVisibility: async function (containerDivId, visible) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+
+        try {
+            let pulse = await _getCheckpointPulse();
+            pulse.setVisible(map, visible);
+        } catch (e) {
+            console.warn('[ChefMap] setCheckpointVisibility: pulse layer error — ' + e);
+        }
     },
 
     setVehiclesVisible: function (containerDivId, visible) {
@@ -378,7 +474,7 @@ window.ChefMap = {
                 type: 'line',
                 source: sourceId,
                 layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': '#6b7280', 'line-width': 4, 'line-opacity': 0.7 }
+                paint: { 'line-color': '#6b7280', 'line-width': 2, 'line-opacity': 0.7 }
             }, 'vehicles-layer');
             console.debug('[ChefMap] addRouteShapeFeature: layer added for routeId=' + routeId);
         }
