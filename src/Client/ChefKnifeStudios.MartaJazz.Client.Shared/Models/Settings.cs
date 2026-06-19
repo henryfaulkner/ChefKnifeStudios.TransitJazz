@@ -11,11 +11,11 @@ public partial class Settings : ObservableObject
 
     [ObservableProperty]
     [property: Description("SettingCheckpointsVisible")]
-    private bool _areCheckpointsVisible = false;
+    private bool _areCheckpointsVisible = true;
 
     [ObservableProperty]
     [property: Description("SettingStreetMap")]
-    private bool _isStreetMapEnabled = true;
+    private bool _isStreetMapEnabled = false;
 
     [ObservableProperty]
     [property: Description("SettingBusesVisible")]
