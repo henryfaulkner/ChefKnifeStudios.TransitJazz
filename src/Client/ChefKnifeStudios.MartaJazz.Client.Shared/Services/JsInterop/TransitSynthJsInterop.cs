@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
@@ -17,6 +18,16 @@ public class TransitSynthJsInterop : ITransitSynthJsInterop
         _logger = logger;
         _moduleTask = new(() => jsRuntime.InvokeAsync<IJSObjectReference>(
             "import", $"./_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/transit-synth.js?g={Guid.NewGuid().ToString().ToLower()}").AsTask());
+    }
+
+    public async Task PreloadAsync(IEnumerable<string> routeIds)
+    {
+        try
+        {
+            var module = await _moduleTask.Value;
+            await module.InvokeVoidAsync("preload", routeIds);
+        }
+        catch (Exception ex) { LogError(ex, nameof(PreloadAsync)); }
     }
 
     public async Task UnlockAsync()
@@ -43,12 +54,12 @@ public class TransitSynthJsInterop : ITransitSynthJsInterop
         }
     }
 
-    public async Task TriggerNoteAsync(string routeId, string vehicleId)
+    public async Task TriggerNoteAsync(string routeId, string vehicleId, int triggerIndex = 0, int totalTriggers = 1)
     {
         try
         {
             var module = await _moduleTask.Value;
-            await module.InvokeVoidAsync("triggerNote", routeId, vehicleId);
+            await module.InvokeVoidAsync("triggerNote", routeId, vehicleId, triggerIndex, totalTriggers);
         }
         catch (Exception ex) { LogError(ex, nameof(TriggerNoteAsync)); }
     }

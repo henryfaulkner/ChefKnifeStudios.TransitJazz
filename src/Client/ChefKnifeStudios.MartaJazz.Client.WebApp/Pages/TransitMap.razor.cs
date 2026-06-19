@@ -107,7 +107,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             if (selected.Count > 0 && !selected.Contains(crossing.RouteId)) continue;
             try
             {
-                await TransitSynth.TriggerNoteAsync(crossing.RouteId, crossing.VehicleId);
+                await TransitSynth.TriggerNoteAsync(crossing.RouteId, crossing.VehicleId, crossing.TriggerIndex, crossing.TotalTriggers);
             }
             catch (Exception ex)
             {
@@ -412,11 +412,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
         _routesLoaded = true;
         await InvokeAsync(StateHasChanged);
+
+        _ = TransitSynth.PreloadAsync(_routeShapeCache.Keys);
     }
 
     // Returns true for routes that should render and produce audio.
     // Restrict to a subset for focused testing; return true unconditionally for all routes.
     static bool IsAllowedRoute(string routeKey) => true;
 
-    public record CrossingEventDto(string VehicleId, string RouteId, int TriggerIndex);
+    public record CrossingEventDto(string VehicleId, string RouteId, int TriggerIndex, int TotalTriggers);
 }

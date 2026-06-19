@@ -128,7 +128,7 @@ export function onTick(positionEvents) {
             if (tp.alongDistanceM > state.lastTriggeredDistanceM && tp.alongDistanceM <= currDistM) {
                 // FR-007: cooldown suppression
                 if ((now - state.lastTriggerTimeMs) >= COOLDOWN_MS) {
-                    batch.push({ vehicleId, routeId, triggerIndex: tp.index });
+                    batch.push({ vehicleId, routeId, triggerIndex: tp.index, totalTriggers: triggers.length });
                     state.lastTriggerTimeMs = now;
                 }
             }
