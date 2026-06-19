@@ -118,12 +118,25 @@ window.ChefMap = {
             if (vSrc) vehiclesData = vSrc._data || vehiclesData;
         } catch (e) { }
 
-        map.setStyle(styleUrl);
+        // diff:false forces a FULL style reload. With MapLibre's default diff:true,
+        // swapping between two schema-compatible MapTiler styles applies an incremental
+        // diff that wipes our custom sources/layers but never fires 'style.load' — so the
+        // restore handler below (and the awaited Promise) would never run, leaving routes,
+        // vehicles, and checkpoints stripped after the swap. Full reload guarantees the event.
+        map.setStyle(styleUrl, { diff: false });
 
         // Return a Promise that resolves after style.load so the C# caller can await it,
-        // then re-render routes from its own cache (no re-fetch).
+        // then re-render routes from its own cache (no re-fetch). A timed fallback guarantees
+        // the C# await never deadlocks even if 'style.load' fails to fire (e.g. bad style URL).
         return new Promise(function (resolve) {
-            map.once('style.load', function () {
+            let restored = false;
+            let fallbackTimer = null;
+
+            function restore() {
+                if (restored) return;
+                restored = true;
+                if (fallbackTimer) clearTimeout(fallbackTimer);
+
                 // Re-add the vehicles source and layer (empty shell; animator will update it).
                 try {
                     if (!map.getSource('vehicles')) {
@@ -166,7 +179,7 @@ window.ChefMap = {
                                 'circle-stroke-width': 1,
                                 'circle-stroke-color': '#000000'
                             }
-                        }, 'vehicles-layer');
+                        });
                     }
                 } catch (e) {
                     console.warn('[ChefMap] setMapStyle: could not restore trigger-points layer: ' + e);
@@ -180,7 +193,11 @@ window.ChefMap = {
 
                 // Signal C# to re-render routes from cache; colors will reapply via debounce in addRouteShapeFeature.
                 resolve({});
-            });
+            }
+
+            map.once('style.load', restore);
+            // Safety net: if style.load never fires, restore anyway so routes still re-render.
+            fallbackTimer = setTimeout(restore, 4000);
         });
     },
 
@@ -266,7 +283,7 @@ window.ChefMap = {
                     'circle-stroke-width': 1,
                     'circle-stroke-color': '#000000'
                 }
-            }, 'vehicles-layer');
+            });
         } else {
             source.setData(fc);
         }
@@ -457,7 +474,7 @@ window.ChefMap = {
                 type: 'line',
                 source: sourceId,
                 layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': '#6b7280', 'line-width': 4, 'line-opacity': 0.7 }
+                paint: { 'line-color': '#6b7280', 'line-width': 2, 'line-opacity': 0.7 }
             }, 'vehicles-layer');
             console.debug('[ChefMap] addRouteShapeFeature: layer added for routeId=' + routeId);
         }

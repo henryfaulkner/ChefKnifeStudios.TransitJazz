@@ -81,7 +81,10 @@ async function instrumentFor(routeId) {
                     _instrumentCache.set(routeId, { sampler, scale: slot.scale, durations: slot.durations });
                     resolve({ sampler, scale: slot.scale, durations: slot.durations });
                 },
-                onerror: (err) => reject(err),
+                onerror: (err) => {
+                    console.error('[TransitSynth] sampler load failed for routeId=' + routeId + ' instrument=' + slot.instrument, err);
+                    reject(err);
+                },
             }
         );
     });

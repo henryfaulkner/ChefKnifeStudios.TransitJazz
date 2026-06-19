@@ -62,9 +62,8 @@ export function ensureLayer(map) {
         data: { type: 'FeatureCollection', features: [] }
     });
 
-    const beforeLayer = map.getLayer('vehicles-layer') ? 'vehicles-layer' : undefined;
-
     // Active dot: solid filled circle at the checkpoint, stays fully opaque for the pulse duration.
+    // No beforeLayer arg — renders on top of everything (vehicles, trigger-points, routes).
     map.addLayer({
         id: DOT_LAYER_ID,
         type: 'circle',
@@ -78,9 +77,9 @@ export function ensureLayer(map) {
             'circle-stroke-color': '#000000',
             'circle-stroke-opacity': 1
         }
-    }, beforeLayer);
+    });
 
-    // Expanding ring: grows outward and fades.
+    // Expanding ring: grows outward and fades. Added before the dot so the dot stays on top.
     map.addLayer({
         id: LAYER_ID,
         type: 'circle',
@@ -92,7 +91,7 @@ export function ensureLayer(map) {
             'circle-opacity': ['get', 'opacity'],
             'circle-stroke-width': 0
         }
-    }, beforeLayer);
+    }, DOT_LAYER_ID);
 }
 
 export function start(map, routeId, triggerIndex, coordinates, color) {
