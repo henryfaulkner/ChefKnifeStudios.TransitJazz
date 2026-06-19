@@ -8,10 +8,27 @@ window.ChefMap = {
             container: containerDivId,
             style: settings.styleUrl,
             center: settings.center,
-            zoom: settings.zoom
+            zoom: settings.zoom,
+            dragRotate: false,
+            touchZoomRotate: false
         });
 
         ChefMap.maps[containerDivId] = map;
+
+        // Ctrl+drag: pan instead of rotate (dragRotate is disabled above)
+        let ctrlDragStart = null;
+        map.getCanvas().addEventListener('mousedown', function (e) {
+            if (e.ctrlKey) ctrlDragStart = { x: e.clientX, y: e.clientY };
+        });
+        map.getCanvas().addEventListener('mousemove', function (e) {
+            if (ctrlDragStart && e.buttons === 1 && e.ctrlKey) {
+                map.panBy([ctrlDragStart.x - e.clientX, ctrlDragStart.y - e.clientY], { animate: false });
+                ctrlDragStart = { x: e.clientX, y: e.clientY };
+            } else if (!e.ctrlKey || e.buttons !== 1) {
+                ctrlDragStart = null;
+            }
+        });
+        map.getCanvas().addEventListener('mouseup', function () { ctrlDragStart = null; });
 
         map.on('load', function () {
             // Vehicles GeoJSON source + circle layer — must exist before the animator calls getSource('vehicles')
