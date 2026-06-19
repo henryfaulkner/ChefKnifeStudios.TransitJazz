@@ -9,7 +9,7 @@ window.ChefMap = {
             style: settings.styleUrl,
             center: settings.center,
             zoom: settings.zoom,
-            minZoom: 10,
+            minZoom: 7,
             maxZoom: 18,
             dragRotate: false,
             touchZoomRotate: false

@@ -103,6 +103,11 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             kvp => kvp.Key,
             kvp => kvp.Value.Count,
             StringComparer.Ordinal);
+
+        RouteItems = RouteItems
+            .OrderByDescending(x => _lastBatchRouteCounts.TryGetValue(x.RouteId, out var c) ? c : 0)
+            .ToList();
+
         RecomputeActiveBusCount();
 
         return Task.CompletedTask;
@@ -149,6 +154,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 Color = x.Properties.Color ?? "#888888",
                 IsSelected = previouslySelected.Contains(x.Properties.RouteShortName!),
             })
+            .OrderByDescending(x => _lastBatchRouteCounts.TryGetValue(x.RouteId, out var c) ? c : 0)
             .ToList();
 
         _logger.LogDebug("RouteFilterViewModel.BuildRouteItems: built {Count} route items", RouteItems.Count());
