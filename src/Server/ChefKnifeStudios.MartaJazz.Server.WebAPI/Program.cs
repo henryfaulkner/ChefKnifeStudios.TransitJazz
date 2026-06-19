@@ -45,20 +45,7 @@ builder.Services.AddSignalR(options =>
 
 builder.Services.ConfigureHttpJsonOptions(static options =>
 {
-    var src = JsonOptions.Get();
-    var dest = options.SerializerOptions;
-
-    // copy common scalar settings
-    dest.PropertyNameCaseInsensitive = src.PropertyNameCaseInsensitive;
-    dest.PropertyNamingPolicy = src.PropertyNamingPolicy;
-    dest.DictionaryKeyPolicy = src.DictionaryKeyPolicy;
-    dest.DefaultIgnoreCondition = src.DefaultIgnoreCondition;
-    dest.Converters.Clear();
-    foreach (var conv in src.Converters)
-    {
-        dest.Converters.Add(conv);
-    }
-    dest.WriteIndented = src.WriteIndented;
+    JsonSettings.ApplyTo(options.SerializerOptions);
 });
 
 builder.Services.AddSingleton(typeof(IKeyValueRepository<>), typeof(InMemoryKeyValueRepository<>));
