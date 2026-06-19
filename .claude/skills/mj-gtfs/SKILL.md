@@ -52,12 +52,14 @@ This is the **primary decode path**. It requires no pip installs and works in au
 The field numbers below are verified against real MARTA feed data.
 
 ```
-GTFS-RT proto field reference (verified 2026-06-19 against live MARTA feed):
+GTFS-RT proto field reference:
   FeedMessage:       1=header (msg), 2=entity (msg, repeated)
   FeedHeader:        1=gtfs_realtime_version (str), 2=timestamp (varint, may be 0)
   FeedEntity:        1=id (str), 2=is_deleted, 3=trip_update, 4=vehicle (msg), 5=alert
-  VehiclePosition:   1=trip (msg), 2=vehicle_descriptor (msg), 3=position (msg),
-                     5=timestamp (varint), 6=current_status (varint)
+  VehiclePosition:   1=trip (msg), 5=timestamp (varint), 6=current_status (varint)
+                     SPEC says: 2=vehicle_descriptor, 3=position
+                     MARTA observed (2026-06-19): 2=position (vehicle_descriptor absent),
+                     8=occupancy_status — spec field numbers shift when fields are omitted
   TripDescriptor:    1=trip_id (str), 5=route_id (str)
   VehicleDescriptor: 1=id (str)
   Position:          1=latitude (float32/wire5), 2=longitude (float32/wire5),
@@ -67,6 +69,8 @@ GTFS-RT proto field reference (verified 2026-06-19 against live MARTA feed):
   Wire types: 0=varint, 1=64-bit, 2=length-delimited (msg/str/bytes), 5=32-bit float
   NOTE: header.timestamp=0 is normal for some feeds (e.g. MARTA) — not a decode error.
   NOTE: speed field 5 of Position is float32 in m/s; absent on ~40% of MARTA vehicles.
+  WARNING: If lat/lon decode as null, run the raw field inspection below — field numbers
+           vary by feed depending on which optional fields the publisher omits.
 ```
 
 ```powershell
@@ -140,8 +144,11 @@ for _, entity_bytes in entities:
         route_id = strv(tf, 5)
 
     lat = lon = speed = bearing = None
-    if 3 in vf:
-        pf = parse_fields(vf[3][0][1])
+    # MARTA encodes position at field 2 (vehicle_descriptor absent, so position shifts up).
+    # Spec says field 3. Use field 2 first; fall back to field 3 for feeds that follow spec.
+    pos_field = 2 if 2 in vf else (3 if 3 in vf else None)
+    if pos_field:
+        pf = parse_fields(vf[pos_field][0][1])
         lat = flt(pf, 1); lon = flt(pf, 2); bearing = flt(pf, 3); speed = flt(pf, 5)
         if lat: has_lat += 1
         if bearing and bearing > 0: has_bearing += 1
@@ -151,7 +158,8 @@ for _, entity_bytes in entities:
     if vts: has_ts += 1
 
     vid = None
-    if 2 in vf:
+    # VehicleDescriptor: only attempt field 2 if it wasn't consumed as position
+    if pos_field != 2 and 2 in vf:
         vidf = parse_fields(vf[2][0][1])
         vid = strv(vidf, 1)
 
@@ -172,7 +180,7 @@ for _, entity_bytes in entities:
 
 pct = lambda n: round(n / vehicle_count * 100, 1) if vehicle_count else 0
 
-print(json.dumps({
+result = {
     'header_version': header_ver,
     'header_timestamp': header_ts,
     'total_bytes': len(raw),
@@ -186,7 +194,15 @@ print(json.dumps({
     'timestamp_pct': pct(has_ts),
     'route_ids': sorted(route_ids),
     'samples': samples,
-}, indent=2))
+}
+# Self-diagnosis: if position decoded as 0%, emit the actual VehiclePosition field map
+# so the caller can identify the correct field number without a separate inspection run.
+if vehicle_count > 0 and has_lat == 0:
+    ef0 = parse_fields(entities[0][1])
+    vf0 = parse_fields(ef0[4][0][1]) if 4 in ef0 else {}
+    result['_diag_vp_fields'] = list(vf0.keys())
+    result['_diag_note'] = 'lat/lon=0: check _diag_vp_fields — position field number differs from expected'
+print(json.dumps(result, indent=2))
 "@
 ```
 

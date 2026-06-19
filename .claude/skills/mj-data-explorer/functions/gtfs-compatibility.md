@@ -42,11 +42,18 @@ Ask the user for:
 If the user only has one of the two URLs, proceed with what's available and flag what's
 missing in the report.
 
-### Step 2 — Fetch both feeds via mj-gtfs
+### Step 2 — Fetch both feeds via mj-gtfs (in parallel)
 
-Read and follow `mj-gtfs` to fetch and decode:
-1. The static GTFS zip → get the **GTFS-RT output block** and **Static shapes output block**
-2. The GTFS-RT protobuf feed → get the same two blocks
+Read `mj-gtfs` first, then issue both fetches in a single parallel tool call:
+1. Fetch + decode the **GTFS-RT protobuf** → produces the **GTFS-RT output block**
+2. Fetch + decode the **static GTFS zip** → produces the **Static shapes output block**
+
+Do not serialize these — they are independent and fetching in parallel saves latency.
+
+After decoding: if `lat_lon_pct` is 0% but `vehicles_with_route_id > 0`, the decoder
+hit a field-number mismatch. The output will include `_diag_vp_fields` listing the
+actual VehiclePosition field numbers — use those to identify the position field before
+continuing. Do not proceed to Step 3 with null positions.
 
 ### Step 3 — Cross-check route ID alignment
 
