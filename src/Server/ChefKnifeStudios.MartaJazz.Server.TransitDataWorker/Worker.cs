@@ -18,7 +18,6 @@ public class Worker(
     LogEventWorker logEventWorker,
     ILoggingService loggingService) : BackgroundService
 {
-    readonly ConcurrentDictionary<string, VehiclePositionBatchEvent.VehiclePositionRecord> _lastUpdateCache = new();
     readonly ConcurrentDictionary<string, VehicleState> _vehicleStateCache = new();
     ulong? _lastFeedHeaderTimestamp;
     readonly string _gtfsRtUrl = "https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb";
@@ -42,14 +41,9 @@ public class Worker(
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             var feed = await FetchGtfsRtFeedAsync(stoppingToken);
-            if (feed != null)
+            if (feed != null && _routeIndex != null)
             {
-                await ProcessGtfsRtFeedAsync(feed, stoppingToken);
-
-                if (_routeIndex != null)
-                {
-                    await ProcessSpatialReconciliationAsync(feed, stoppingToken);
-                }
+                await ProcessSpatialReconciliationAsync(feed, stoppingToken);
             }
         }
     }
@@ -420,7 +414,7 @@ public class Worker(
                 DuplicateFeed = feedIsDuplicate,
                 ActiveRouteIds = string.Join(",", activeRouteIdSet.Order()),
                 ActiveVehicleIds = string.Join(",", activeVehicleIdSet.Order()),
-                LastUpdateCacheSize = _lastUpdateCache.Count,
+                LastUpdateCacheSize = 0,
                 VehicleStateCacheSize = _vehicleStateCache.Count,
                 SidecarBufferOccupancy = bufferOccupancy,
                 SidecarDroppedRecords = droppedRecords,
@@ -522,73 +516,6 @@ public class Worker(
             {
                 logger.LogError(ex, "Failed to refresh route index. Retaining existing index.");
             }
-        }
-    }
-
-    async Task ProcessGtfsRtFeedAsync(FeedMessage feed, CancellationToken ct)
-    {
-        try
-        {
-            var batch = new List<EventEnvelope>();
-
-            foreach (var entity in feed.Entities)
-            {
-                if (entity.Vehicle == null) continue;
-
-                _lastUpdateCache.TryGetValue(entity.Id, out var cachedRecord);
-                var records = new List<VehiclePositionBatchEvent.VehiclePositionRecord>();
-
-                if (entity.Vehicle.Position == null)
-                {
-                    if (cachedRecord == null) continue;
-
-                    records.Add(cachedRecord with { IsStale = true });
-                }
-                else
-                {
-                    if (cachedRecord != null)
-                    {
-                        records.Add(cachedRecord);
-                    }
-
-                    var vehicle = entity.Vehicle;
-                    var vehicleData = EventMapper.ToVehicleData(vehicle.Vehicle!, vehicle);
-                    var positionData = EventMapper.ToPositionData(vehicle.Position, vehicle);
-                    var tripData = EventMapper.ToTripData(vehicle.Trip);
-
-                    var currentRecord = new VehiclePositionBatchEvent.VehiclePositionRecord(vehicleData, positionData, tripData, IsStale: false);
-                    records.Add(currentRecord);
-                    _lastUpdateCache[entity.Id] = currentRecord;
-                }
-
-                batch.Add(new EventEnvelope(
-                    nameof(VehiclePositionBatchEvent),
-                    DateTimeOffset.UtcNow,
-                    new VehiclePositionBatchEvent(records)
-                ));
-            }
-
-            logger.LogInformation("Processed GTFS-RT feed: {UpdatedCount} vehicles updated.", batch.Count);
-
-            if (batch.Count > 0)
-            {
-                var isBatchPublished = await transitHubPublisher.PublishBatchAsync(batch, ct);
-
-                if (isBatchPublished)
-                {
-                    logger.LogInformation("SignalR batch published: {Count} events.", batch.Count);
-                }
-                else
-                {
-                    logger.LogWarning("Failed to publish SignalR batch.");
-                    logger.LogInformation("Attempting to reconnect to the SignalR hub.");
-                    await transitHubPublisher.StartAsync(ct);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error processing GTFS-RT feed.");
         }
     }
 
