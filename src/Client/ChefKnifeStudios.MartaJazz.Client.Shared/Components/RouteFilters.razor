@@ -1,17 +1,21 @@
-﻿@using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
 @using Microsoft.Extensions.Localization
 @inject IStringLocalizer<RouteFilterResources> Loc
 
 <div class="route-filters">
+    <div class="route-filters__controls">
+        <button class="route-filters__control-btn" @onclick="HandleClearSelections">@Loc["ClearSelections"]</button>
+    </div>
     @foreach (var routeItem in RouteFilterViewModel.RouteItems)
     {
-        <div 
+        <div
             class="route-filters__route-filter"
+            @onclick="() => HandleSelect(routeItem)"
             @onmouseover="(args) => HandleMouseOver(args, routeItem)"
             @onmouseout="(args) => HandleMouseOut(args, routeItem)"
         >
             <div
-                class="route-filters__route-filter-circle @(RouteFilterViewModel.HasSelection && !routeItem.IsSelected ? "route-filters__route-filter-disabled" : string.Empty)"
+                class="route-filters__route-filter-circle @((RouteFilterViewModel.HasSelection || RouteFilterViewModel.HoveredRouteId != null) && !routeItem.IsSelected && routeItem.RouteId != RouteFilterViewModel.HoveredRouteId ? "route-filters__route-filter-disabled" : string.Empty)"
                 style="--route-filter-color: @routeItem.Color"
             >
                 <span class="route-filters__route-filter-label">
@@ -21,4 +25,3 @@
         </div>
     }
 </div>
-

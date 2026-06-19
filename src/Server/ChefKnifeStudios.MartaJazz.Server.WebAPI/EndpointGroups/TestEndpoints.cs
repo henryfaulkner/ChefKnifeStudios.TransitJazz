@@ -1,6 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.SignalR;
 using ChefKnifeStudios.MartaJazz.Shared;
-using ChefKnifeStudios.MartaJazz.Shared.EventData;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -19,7 +18,7 @@ public static class TestEndpoints
         {
             var batch = new List<EventEnvelope>
             {
-                new EventEnvelope("TestPing", DateTimeOffset.UtcNow, new ArrivalPredictionEvent(null, null, null, null, [])),
+                new EventEnvelope(nameof(RouteNearestPointBatchEvent), DateTimeOffset.UtcNow, new RouteNearestPointBatchEvent([])),
             };
             await hub.Clients.All.SendAsync("ReceiveBatch", batch);
         }).AllowAnonymous();

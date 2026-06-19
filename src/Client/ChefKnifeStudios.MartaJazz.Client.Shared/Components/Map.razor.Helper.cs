@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace ChefKnifeStudios.MartaJazz.Client.Shared.Components;
@@ -89,6 +90,12 @@ public partial class Map : ComponentBase
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.focusRoute", ElementId, routeId); }
         catch (Exception ex) { Console.WriteLine($"[Map] FocusRoute failed for routeId={routeId}: {ex}"); }
+    }
+
+    public async Task FocusRoutesAsync(IEnumerable<string> routeIds)
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.focusRoutes", ElementId, routeIds); }
+        catch (Exception ex) { Console.WriteLine($"[Map] FocusRoutes failed: {ex}"); }
     }
 
     public async Task SetCheckpointVisibilityAsync(bool visible)

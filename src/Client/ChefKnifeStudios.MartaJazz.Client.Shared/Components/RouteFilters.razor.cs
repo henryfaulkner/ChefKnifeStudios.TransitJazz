@@ -1,10 +1,8 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Text;
 
 namespace ChefKnifeStudios.MartaJazz.Client.Shared.Components;
 
@@ -25,7 +23,7 @@ public partial class RouteFilters : ComponentBase, IDisposable
 
     void RouteFilterViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection) or nameof(IRouteFilterViewModel.ActiveBusCount))
+        if (e.PropertyName is nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection) or nameof(IRouteFilterViewModel.ActiveBusCount) or nameof(IRouteFilterViewModel.HoveredRouteId))
         {
             InvokeAsync(StateHasChanged);
         }
@@ -33,10 +31,20 @@ public partial class RouteFilters : ComponentBase, IDisposable
 
     void HandleMouseOver(MouseEventArgs args, RouteItem routeItem)
     {
-        RouteFilterViewModel.SelectRoute(routeItem);
+        RouteFilterViewModel.SetHoveredRoute(routeItem);
     }
 
     void HandleMouseOut(MouseEventArgs args, RouteItem routeItem)
+    {
+        RouteFilterViewModel.SetHoveredRoute(null);
+    }
+
+    void HandleSelect(RouteItem routeItem)
+    {
+        RouteFilterViewModel.SelectRoute(routeItem);
+    }
+
+    void HandleClearSelections()
     {
         RouteFilterViewModel.ClearSelection();
     }

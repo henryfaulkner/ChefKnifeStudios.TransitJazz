@@ -29,7 +29,7 @@ public partial class RouteBlurbBar : ComponentBase, IDisposable
     {
         if (e.PropertyName is nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection))
         {
-            _blurb = RouteFilterViewModel.SelectedRouteId is { } id
+            _blurb = RouteFilterViewModel.IsSingleSelection && RouteFilterViewModel.SelectedRouteId is { } id
                 ? RouteBlurbStore.GetForRoute(id)
                 : null;
             InvokeAsync(StateHasChanged);

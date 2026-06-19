@@ -48,9 +48,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _audioEnabled = true;
     DotNetObjectReference<object>? _dotNetRef;
 
-    // vehicleId → routeId, updated on every VehiclePositionUpdatedEvent
-    readonly Dictionary<string, string> _vehicleRouteMap = new();
-
     // routeId → GeoJSON string (client-side cache, lives for page lifetime)
     readonly Dictionary<string, RouteShapeFeature> _routeShapeCache = new(StringComparer.Ordinal);
     bool _routesLoaded;
@@ -104,8 +101,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     public async Task OnCrossingsAsync(CrossingEventDto[] crossings)
     {
         if (!_audioEnabled) return;
+        var selected = RouteFilterViewModel.SelectedRouteIds;
         foreach (var crossing in crossings)
         {
+            if (selected.Count > 0 && !selected.Contains(crossing.RouteId)) continue;
             try
             {
                 await TransitSynth.TriggerNoteAsync(crossing.RouteId, crossing.VehicleId);
@@ -150,6 +149,9 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 var result = await _map.SetBasemapStyleAsync(url);
                 await RenderRoutesAsync();
 
+                // Re-apply focus (hover preview or persistent selection) after the basemap swap resets all layers.
+                ApplyMapFocus();
+
                 // Restore checkpoint visibility to match the current setting.
                 var settings = SettingsService.GetSettings();
                 await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
@@ -181,15 +183,37 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     void OnRouteFilterPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is not (nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection)))
+        if (e.PropertyName is not (nameof(IRouteFilterViewModel.RouteItems)
+                                or nameof(IRouteFilterViewModel.HasSelection)
+                                or nameof(IRouteFilterViewModel.HoveredRouteId)))
             return;
 
         if (!_mapReady || _map is null) return;
 
-        if (RouteFilterViewModel.SelectedRouteId is { } id)
-            InvokeAsync(() => _map.FocusRouteAsync(id));
-        else
+        ApplyMapFocus();
+    }
+
+    void ApplyMapFocus()
+    {
+        if (_map is null) return;
+
+        var selected = RouteFilterViewModel.SelectedRouteIds;
+        var hovered = RouteFilterViewModel.HoveredRouteId;
+
+        if (hovered is null && selected.Count == 0)
+        {
             InvokeAsync(() => _map.ClearRouteFocusAsync());
+            return;
+        }
+
+        // Emphasize the union of persistently selected routes and the hovered route.
+        var focusSet = hovered is null
+            ? selected
+            : selected.Contains(hovered)
+                ? selected
+                : selected.Concat([hovered]).ToList();
+
+        InvokeAsync(() => _map.FocusRoutesAsync(focusSet));
     }
 
     async Task OnMapReadyAsync(Map map)
@@ -292,10 +316,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             .SelectMany(e => e.BatchRecords)
             .ToArray();
 
-        Logger.LogDebug("TransitMap: batch contains {NearestCount} nearest-point records, {PosCount} position events",
-            nearestPointRecords.Length,
-            batch.Count(x => x.Payload is VehiclePositionUpdatedEvent));
-
         nearestPointRecords = nearestPointRecords.Where(r => IsAllowedRoute(r.RouteId)).ToArray();
 
         if (nearestPointRecords.Length > 0)
@@ -316,54 +336,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
             Logger.LogDebug("TransitMap: forwarding {Count} nearest-point records to animator", records.Length);
             await _map.ProcessNearestPointBatchAsync(records);
-        }
-
-        // V1 fallback: only plot raw positions when no nearest-point events arrived this batch.
-        // If the animator is active, PlotVehiclesAsync clears the datasource and wipes animator-managed features.
-        if (nearestPointRecords.Length == 0)
-        {
-            var payloadBatch = batch
-                .Where(x => x.Payload is VehiclePositionUpdatedEvent)
-                .Select(x => x.Payload as VehiclePositionUpdatedEvent)
-                .Where(x => x?.Trip?.RouteId is { } rid && IsAllowedRoute(rid));
-
-            var featureCollection = new
-            {
-                type = "FeatureCollection",
-                features = payloadBatch
-                    .Select(x => new
-                    {
-                        type = "Feature",
-                        id = $"vehicle-{x.Vehicle.Id}",
-                        properties = new
-                        {
-                            vehicleId = x.Vehicle.Id,
-                            vehicleName = x.Vehicle.LicensePlate,
-                            pinIcon = "stop-pin-green",
-                        },
-                        geometry = new
-                        {
-                            type = "Point",
-                            coordinates = new[] { x.Position.Longitude, x.Position.Latitude }
-                        }
-                    }).ToArray(),
-            };
-
-            foreach (var payload in payloadBatch)
-            {
-                if (payload.Position is null) continue;
-                if (float.IsNaN(payload.Position.Latitude) || float.IsNaN(payload.Position.Longitude))
-                {
-                    Logger.LogDebug("TransitMap: Skipping vehicle {VehicleId} — invalid coordinates", payload.Vehicle.Id);
-                    continue;
-                }
-
-                if (payload.Trip?.RouteId is { } routeId)
-                    _vehicleRouteMap[payload.Vehicle.Id] = routeId;
-            }
-
-            Logger.LogDebug("TransitMap: no nearest-point records, falling back to V1 plot");
-            await _map.PlotVehiclesAsync(featureCollection, true);
         }
 
         await InvokeAsync(StateHasChanged);
