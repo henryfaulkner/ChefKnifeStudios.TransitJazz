@@ -20,4 +20,8 @@ public partial class Settings : ObservableObject
     [ObservableProperty]
     [property: Description("SettingBusesVisible")]
     private bool _isBusesVisible = false;
+
+    [ObservableProperty]
+    [property: Description("SettingAllCheckpointsVisible")]
+    private bool _areAllCheckpointsVisible = false;
 }

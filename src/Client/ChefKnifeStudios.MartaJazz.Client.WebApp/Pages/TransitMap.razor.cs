@@ -46,6 +46,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     IEnumerable<EventEnvelope>? _pendingBatch;
 
     bool _audioEnabled = true;
+    bool _checkpointsVisible = false;
     DotNetObjectReference<object>? _dotNetRef;
 
     // routeId → GeoJSON string (client-side cache, lives for page lifetime)
@@ -62,6 +63,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
         var settings = SettingsService.GetSettings();
         _audioEnabled = settings.IsAudioEnabled;
+        _checkpointsVisible = settings.AreCheckpointsVisible;
 
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived += HandleSettingsEventReceived;
@@ -93,6 +95,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             await RenderRoutesAsync();
             var settings = SettingsService.GetSettings();
             await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
+            await _map.SetAllCheckpointsVisibilityAsync(settings.AreAllCheckpointsVisible);
             await _map.SetVehiclesVisibleAsync(settings.IsBusesVisible);
         }
     }
@@ -101,11 +104,16 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     public async Task OnCrossingsAsync(CrossingEventDto[] crossings)
     {
         var selected = RouteFilterViewModel.SelectedRouteIds;
+        var hovered = RouteFilterViewModel.HoveredRouteId;
+        var effectiveIds = selected.Count > 0 || hovered is not null
+            ? selected.Concat(hovered is not null ? [hovered] : []).ToHashSet(StringComparer.Ordinal)
+            : null;
+
         foreach (var crossing in crossings)
         {
-            if (selected.Count > 0 && !selected.Contains(crossing.RouteId)) continue;
+            if (effectiveIds is not null && !effectiveIds.Contains(crossing.RouteId)) continue;
 
-            if (_map is not null)
+            if (_checkpointsVisible && _map is not null)
             {
                 try { await _map.PulseCheckpointAsync(crossing.RouteId, crossing.TriggerIndex); }
                 catch (Exception ex) { Logger.LogWarning(ex, "PulseCheckpointAsync failed for {RouteId}/{Idx}", crossing.RouteId, crossing.TriggerIndex); }
@@ -129,6 +137,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
         if (e is CheckpointVisibilityChangedEventArgs checkpoint)
         {
+            _checkpointsVisible = checkpoint.AreCheckpointsVisible;
             InvokeAsync(async () =>
             {
                 if (_map is not null)
@@ -143,6 +152,16 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             {
                 if (_map is not null)
                     await _map.SetVehiclesVisibleAsync(buses.IsBusesVisible);
+            });
+            return;
+        }
+
+        if (e is AllCheckpointsVisibilityChangedEventArgs allCheckpoints)
+        {
+            InvokeAsync(async () =>
+            {
+                if (_map is not null)
+                    await _map.SetAllCheckpointsVisibilityAsync(allCheckpoints.AreAllCheckpointsVisible);
             });
             return;
         }
@@ -168,6 +187,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 // Restore checkpoint visibility to match the current setting.
                 var settings = SettingsService.GetSettings();
                 await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
+                await _map.SetAllCheckpointsVisibilityAsync(settings.AreAllCheckpointsVisible);
                 await _map.SetVehiclesVisibleAsync(settings.IsBusesVisible);
             });
         }

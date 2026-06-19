@@ -51,6 +51,7 @@ public partial class SettingsBlade : IDisposable
                 nameof(Settings.AreCheckpointsVisible) => new CheckpointVisibilityChangedEventArgs { AreCheckpointsVisible = value },
                 nameof(Settings.IsStreetMapEnabled) => new GisSettingChangedEventArgs { IsStreetMapEnabled = value },
                 nameof(Settings.IsBusesVisible) => new BusVisibilitySettingChangedEventArgs { IsBusesVisible = value },
+                nameof(Settings.AreAllCheckpointsVisible) => new AllCheckpointsVisibilityChangedEventArgs { AreAllCheckpointsVisible = value },
                 _ => null
             };
 

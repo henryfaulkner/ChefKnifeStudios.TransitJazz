@@ -110,6 +110,12 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Console.WriteLine($"[Map] PulseCheckpoint failed for routeId={routeId} triggerIndex={triggerIndex}: {ex}"); }
     }
 
+    public async Task SetAllCheckpointsVisibilityAsync(bool visible)
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setAllCheckpointsVisibility", ElementId, visible); }
+        catch (Exception ex) { Console.WriteLine($"[Map] SetAllCheckpointsVisibility failed: {ex}"); }
+    }
+
     public async Task SetVehiclesVisibleAsync(bool visible)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.setVehiclesVisible", ElementId, visible); }

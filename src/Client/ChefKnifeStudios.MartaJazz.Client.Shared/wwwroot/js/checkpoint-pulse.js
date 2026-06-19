@@ -3,6 +3,8 @@
 
 const SOURCE_ID = 'checkpoint-pulse';
 const LAYER_ID = 'checkpoint-pulse-layer';
+const DOT_LAYER_ID = 'checkpoint-active-dot-layer';
+const DOT_RADIUS = 4;
 
 const DURATION_MS = 600;
 const R_START = 3;
@@ -23,6 +25,12 @@ function _tick(map) {
 
     for (const [key, pulse] of _activePulses) {
         const t = Math.min(1, (now - pulse.startTimeMs) / DURATION_MS);
+
+        if (t >= 1) {
+            _activePulses.delete(key);
+            continue;
+        }
+
         const eased = _easeOutCubic(t);
         const radius = R_START + eased * (R_END - R_START);
         const opacity = O_START * (1 - t);
@@ -32,8 +40,6 @@ function _tick(map) {
             geometry: { type: 'Point', coordinates: pulse.coordinates },
             properties: { radius, color: pulse.color, opacity }
         });
-
-        if (t >= 1) _activePulses.delete(key);
     }
 
     try {
@@ -56,10 +62,25 @@ export function ensureLayer(map) {
         data: { type: 'FeatureCollection', features: [] }
     });
 
-    const beforeLayer = map.getLayer('vehicles-layer') ? 'vehicles-layer'
-        : map.getLayer('trigger-points-layer') ? 'trigger-points-layer'
-        : undefined;
+    const beforeLayer = map.getLayer('vehicles-layer') ? 'vehicles-layer' : undefined;
 
+    // Active dot: solid filled circle at the checkpoint, stays fully opaque for the pulse duration.
+    map.addLayer({
+        id: DOT_LAYER_ID,
+        type: 'circle',
+        source: SOURCE_ID,
+        layout: { visibility: 'visible' },
+        paint: {
+            'circle-radius': DOT_RADIUS,
+            'circle-color': ['get', 'color'],
+            'circle-opacity': 1,
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#000000',
+            'circle-stroke-opacity': 1
+        }
+    }, beforeLayer);
+
+    // Expanding ring: grows outward and fades.
     map.addLayer({
         id: LAYER_ID,
         type: 'circle',
@@ -92,5 +113,14 @@ export function reset(map) {
     try {
         const src = map.getSource(SOURCE_ID);
         if (src) src.setData({ type: 'FeatureCollection', features: [] });
+    } catch (_) { }
+}
+
+export function setVisible(map, visible) {
+    const vis = visible ? 'visible' : 'none';
+    if (!visible) reset(map);
+    try {
+        if (map.getLayer(DOT_LAYER_ID)) map.setLayoutProperty(DOT_LAYER_ID, 'visibility', vis);
+        if (map.getLayer(LAYER_ID)) map.setLayoutProperty(LAYER_ID, 'visibility', vis);
     } catch (_) { }
 }

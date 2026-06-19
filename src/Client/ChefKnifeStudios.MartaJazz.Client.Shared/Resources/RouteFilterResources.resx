@@ -148,13 +148,16 @@
     <value>Audio</value>
   </data>
   <data name="SettingCheckpointsVisible" xml:space="preserve">
-    <value>Checkpoints</value>
+    <value>Checkpoint pulses</value>
   </data>
   <data name="SettingStreetMap" xml:space="preserve">
     <value>Street map</value>
   </data>
   <data name="SettingBusesVisible" xml:space="preserve">
     <value>Buses</value>
+  </data>
+  <data name="SettingAllCheckpointsVisible" xml:space="preserve">
+    <value>All checkpoints</value>
   </data>
   <data name="NumBusesRunning" xml:space="preserve">
     <value>buses running</value>
