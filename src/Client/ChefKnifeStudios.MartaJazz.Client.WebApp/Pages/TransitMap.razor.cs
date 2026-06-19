@@ -48,9 +48,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _audioEnabled = true;
     DotNetObjectReference<object>? _dotNetRef;
 
-    // vehicleId → routeId, updated on every VehiclePositionUpdatedEvent
-    readonly Dictionary<string, string> _vehicleRouteMap = new();
-
     // routeId → GeoJSON string (client-side cache, lives for page lifetime)
     readonly Dictionary<string, RouteShapeFeature> _routeShapeCache = new(StringComparer.Ordinal);
     bool _routesLoaded;
@@ -319,10 +316,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             .SelectMany(e => e.BatchRecords)
             .ToArray();
 
-        Logger.LogDebug("TransitMap: batch contains {NearestCount} nearest-point records, {PosCount} position events",
-            nearestPointRecords.Length,
-            batch.Count(x => x.Payload is VehiclePositionUpdatedEvent));
-
         nearestPointRecords = nearestPointRecords.Where(r => IsAllowedRoute(r.RouteId)).ToArray();
 
         if (nearestPointRecords.Length > 0)
@@ -343,54 +336,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
             Logger.LogDebug("TransitMap: forwarding {Count} nearest-point records to animator", records.Length);
             await _map.ProcessNearestPointBatchAsync(records);
-        }
-
-        // V1 fallback: only plot raw positions when no nearest-point events arrived this batch.
-        // If the animator is active, PlotVehiclesAsync clears the datasource and wipes animator-managed features.
-        if (nearestPointRecords.Length == 0)
-        {
-            var payloadBatch = batch
-                .Where(x => x.Payload is VehiclePositionUpdatedEvent)
-                .Select(x => x.Payload as VehiclePositionUpdatedEvent)
-                .Where(x => x?.Trip?.RouteId is { } rid && IsAllowedRoute(rid));
-
-            var featureCollection = new
-            {
-                type = "FeatureCollection",
-                features = payloadBatch
-                    .Select(x => new
-                    {
-                        type = "Feature",
-                        id = $"vehicle-{x.Vehicle.Id}",
-                        properties = new
-                        {
-                            vehicleId = x.Vehicle.Id,
-                            vehicleName = x.Vehicle.LicensePlate,
-                            pinIcon = "stop-pin-green",
-                        },
-                        geometry = new
-                        {
-                            type = "Point",
-                            coordinates = new[] { x.Position.Longitude, x.Position.Latitude }
-                        }
-                    }).ToArray(),
-            };
-
-            foreach (var payload in payloadBatch)
-            {
-                if (payload.Position is null) continue;
-                if (float.IsNaN(payload.Position.Latitude) || float.IsNaN(payload.Position.Longitude))
-                {
-                    Logger.LogDebug("TransitMap: Skipping vehicle {VehicleId} — invalid coordinates", payload.Vehicle.Id);
-                    continue;
-                }
-
-                if (payload.Trip?.RouteId is { } routeId)
-                    _vehicleRouteMap[payload.Vehicle.Id] = routeId;
-            }
-
-            Logger.LogDebug("TransitMap: no nearest-point records, falling back to V1 plot");
-            await _map.PlotVehiclesAsync(featureCollection, true);
         }
 
         await InvokeAsync(StateHasChanged);

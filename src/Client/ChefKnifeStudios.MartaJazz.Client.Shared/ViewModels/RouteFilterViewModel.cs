@@ -111,11 +111,27 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     void RecomputeActiveBusCount()
     {
         var selected = SelectedRouteIds;
-        int count;
-        if (selected.Count > 0)
-            count = selected.Sum(id => _lastBatchRouteCounts.TryGetValue(id, out var c) ? c : 0);
+        var hovered = HoveredRouteId;
+
+        // Build the effective emphasis set: union of persistent selection and hover.
+        // Empty set means unscoped (all buses).
+        IReadOnlyCollection<string> effectiveIds;
+        if (selected.Count == 0 && hovered is null)
+        {
+            effectiveIds = [];
+        }
+        else if (hovered is null || selected.Contains(hovered))
+        {
+            effectiveIds = selected;
+        }
         else
-            count = _lastBatchRouteCounts.Values.Sum();
+        {
+            effectiveIds = [.. selected, hovered];
+        }
+
+        int count = effectiveIds.Count > 0
+            ? effectiveIds.Sum(id => _lastBatchRouteCounts.TryGetValue(id, out var c) ? c : 0)
+            : _lastBatchRouteCounts.Values.Sum();
 
         ActiveBusCount = count;
     }
@@ -164,6 +180,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     public void SetHoveredRoute(RouteItem? routeItem)
     {
         HoveredRouteId = routeItem?.RouteId;
+        RecomputeActiveBusCount();
     }
 
     public bool HasSelection => RouteItems.Any(x => x.IsSelected);
