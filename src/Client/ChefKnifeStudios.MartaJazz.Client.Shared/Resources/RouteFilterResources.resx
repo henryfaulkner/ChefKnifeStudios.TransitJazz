@@ -153,6 +153,9 @@
   <data name="SettingStreetMap" xml:space="preserve">
     <value>Street map</value>
   </data>
+  <data name="SettingBusesVisible" xml:space="preserve">
+    <value>Buses</value>
+  </data>
   <data name="NumBusesRunning" xml:space="preserve">
     <value>buses running</value>
   </data>

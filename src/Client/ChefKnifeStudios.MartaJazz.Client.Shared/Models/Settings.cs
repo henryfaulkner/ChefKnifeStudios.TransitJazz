@@ -16,4 +16,8 @@ public partial class Settings : ObservableObject
     [ObservableProperty]
     [property: Description("SettingStreetMap")]
     private bool _isStreetMapEnabled = true;
+
+    [ObservableProperty]
+    [property: Description("SettingBusesVisible")]
+    private bool _isBusesVisible = false;
 }

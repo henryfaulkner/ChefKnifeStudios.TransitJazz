@@ -1,3 +1,11 @@
+let _checkpointPulseModule = null;
+async function _getCheckpointPulse() {
+    if (!_checkpointPulseModule) {
+        _checkpointPulseModule = await import('/_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/checkpoint-pulse.js');
+    }
+    return _checkpointPulseModule;
+}
+
 window.ChefMap = {
     maps: {},
 
@@ -138,6 +146,14 @@ window.ChefMap = {
                     console.warn('[ChefMap] setMapStyle: could not restore vehicles layer: ' + e);
                 }
 
+                // Re-add pulse overlay and clear any in-flight pulses (FR-012).
+                try {
+                    _getCheckpointPulse().then(function (pulse) {
+                        pulse.ensureLayer(map);
+                        pulse.reset(map);
+                    });
+                } catch (e) { }
+
                 // Signal C# to re-render routes from cache; colors will reapply via debounce in addRouteShapeFeature.
                 resolve({ checkpointVisible: checkpointVisible });
             });
@@ -197,13 +213,15 @@ window.ChefMap = {
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
 
+        let routeColor = ChefMap._routeColorsByRouteId[routeId] || '#facc15';
+
         // Build one Point feature per trigger point using the route's coord array
         ChefMap._triggerPointFeatures[routeId] = triggerPoints.map(function (tp) {
             let coord = coords[tp.index] || coords[coords.length - 1];
             return {
                 type: 'Feature',
                 geometry: { type: 'Point', coordinates: coord },
-                properties: { routeId: routeId, triggerIndex: tp.index, alongDistanceM: tp.alongDistanceM }
+                properties: { routeId: routeId, triggerIndex: tp.index, alongDistanceM: tp.alongDistanceM, color: routeColor }
             };
         });
 
@@ -221,10 +239,10 @@ window.ChefMap = {
                 layout: { 'visibility': 'none' },
                 paint: {
                     'circle-radius': 4,
-                    'circle-color': '#facc15',       // yellow — visible against route lines
+                    'circle-color': ['coalesce', ['get', 'color'], '#facc15'],
                     'circle-opacity': 0.85,
                     'circle-stroke-width': 1,
-                    'circle-stroke-color': '#78350f'  // dark amber outline
+                    'circle-stroke-color': '#000000'
                 }
             }, 'vehicles-layer');  // insert below vehicles so buses render on top
         } else {
@@ -315,11 +333,57 @@ window.ChefMap = {
         });
     },
 
-    setCheckpointVisibility: function (containerDivId, visible) {
+    pulseCheckpoint: async function (containerDivId, routeId, triggerIndex) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+
+        if (map.getLayer('trigger-points-layer') &&
+            map.getLayoutProperty('trigger-points-layer', 'visibility') === 'none') return;
+
+        let features = ChefMap._triggerPointFeatures[routeId];
+        if (!features) {
+            console.warn('[ChefMap] pulseCheckpoint: no trigger features for routeId=' + routeId);
+            return;
+        }
+        let feature = features.find(function (f) { return f.properties.triggerIndex === triggerIndex; });
+        if (!feature) {
+            console.warn('[ChefMap] pulseCheckpoint: triggerIndex ' + triggerIndex + ' not found for routeId=' + routeId);
+            return;
+        }
+
+        let color = ChefMap._routeColorsByRouteId[routeId] || '#facc15';
+        let coords = feature.geometry.coordinates;
+
+        try {
+            let pulse = await _getCheckpointPulse();
+            pulse.ensureLayer(map);
+            pulse.start(map, routeId, triggerIndex, coords, color);
+        } catch (e) {
+            console.error('[ChefMap] pulseCheckpoint: error — ', e);
+        }
+    },
+
+    setCheckpointVisibility: async function (containerDivId, visible) {
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
         if (!map.getLayer('trigger-points-layer')) return;
         map.setLayoutProperty('trigger-points-layer', 'visibility', visible ? 'visible' : 'none');
+
+        try {
+            let pulse = await _getCheckpointPulse();
+            if (!visible) {
+                pulse.reset(map);
+                if (map.getLayer('checkpoint-pulse-layer')) {
+                    map.setLayoutProperty('checkpoint-pulse-layer', 'visibility', 'none');
+                }
+            } else {
+                if (map.getLayer('checkpoint-pulse-layer')) {
+                    map.setLayoutProperty('checkpoint-pulse-layer', 'visibility', 'visible');
+                }
+            }
+        } catch (e) {
+            console.warn('[ChefMap] setCheckpointVisibility: pulse layer error — ' + e);
+        }
     },
 
     setVehiclesVisible: function (containerDivId, visible) {

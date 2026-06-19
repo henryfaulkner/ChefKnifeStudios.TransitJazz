@@ -50,6 +50,7 @@ public partial class SettingsBlade : IDisposable
                 nameof(Settings.IsAudioEnabled) => new AudioSettingChangedEventArgs { IsAudioEnabled = value },
                 nameof(Settings.AreCheckpointsVisible) => new CheckpointVisibilityChangedEventArgs { AreCheckpointsVisible = value },
                 nameof(Settings.IsStreetMapEnabled) => new GisSettingChangedEventArgs { IsStreetMapEnabled = value },
+                nameof(Settings.IsBusesVisible) => new BusVisibilitySettingChangedEventArgs { IsBusesVisible = value },
                 _ => null
             };
 
