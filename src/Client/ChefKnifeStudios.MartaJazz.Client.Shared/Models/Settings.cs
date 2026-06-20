@@ -1,3 +1,4 @@
+using ChefKnifeStudios.MartaJazz.Client.Shared.Attributes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.ComponentModel;
 
@@ -19,9 +20,11 @@ public partial class Settings : ObservableObject
 
     [ObservableProperty]
     [property: Description("SettingBusesVisible")]
+    [property: HiddenSetting]
     private bool _isBusesVisible = false;
 
     [ObservableProperty]
     [property: Description("SettingAllCheckpointsVisible")]
+    [property: HiddenSetting]
     private bool _areAllCheckpointsVisible = false;
 }

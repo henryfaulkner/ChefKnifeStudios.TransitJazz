@@ -1,4 +1,5 @@
 @namespace ChefKnifeStudios.MartaJazz.Client.Shared.Components.Blades
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Attributes
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Models
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
 @using Microsoft.Extensions.Localization
@@ -13,6 +14,11 @@
         <div class="settings-list">
             @foreach (var prop in typeof(Settings).GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
+                if (prop.GetCustomAttribute<HiddenSettingAttribute>() is not null)
+                {
+                    continue;
+                }
+
                 var propName = prop.Name;
                 var descAttr = prop.GetCustomAttribute<DescriptionAttribute>();
                 var resourceKey = descAttr?.Description ?? propName;
