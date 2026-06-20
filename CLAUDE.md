@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/021-checkpoint-flash-onpass/plan.md
+feature plan at specs/022-map-render-performance/plan.md
 
 017-map-style-toggle adds ONE boolean to the existing 016 Settings Blade —
 IsStreetMapEnabled (default false), [Description("SettingStreetMap")] — that

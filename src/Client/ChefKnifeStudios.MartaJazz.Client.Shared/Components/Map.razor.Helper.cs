@@ -49,29 +49,10 @@ public partial class Map : ComponentBase
         }
     }
 
-    public async Task AddRouteShapeFeatureAsync(string routeId, double[][] coordinates, string? color)
+    public async Task AddAllRoutesAsync(object payload)
     {
-        try
-        {
-            await JsRuntime.InvokeVoidAsync("ChefMap.addRouteShapeFeature", ElementId, routeId, coordinates, color);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Map] AddRouteShapeFeature failed for routeId={routeId}: {ex}");
-        }
-    }
-
-    public async Task LoadRouteGeometryForAnimationAsync(string routeId, double[][] coordinates)
-    {
-        try
-        {
-            Console.WriteLine($"[Map] LoadRouteGeometryForAnimation: routeId={routeId} coords={coordinates.Length}");
-            await JsRuntime.InvokeVoidAsync("ChefMapAnimator.loadRouteGeometry", routeId, coordinates);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Map] LoadRouteGeometryForAnimation failed for routeId={routeId}: {ex}");
-        }
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.addAllRoutes", ElementId, payload); }
+        catch (Exception ex) { Console.WriteLine($"[Map] AddAllRoutes failed: {ex}"); }
     }
 
     public async Task AddTriggerPointMarkersAsync(string routeId, object[] triggerPoints, double[][] coords)
@@ -140,6 +121,12 @@ public partial class Map : ComponentBase
             Console.WriteLine($"[Map] SetBasemapStyle failed: {ex}");
             return null;
         }
+    }
+
+    public async Task FlushTriggerPointsAsync()
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.flushTriggerPoints", ElementId); }
+        catch (Exception ex) { Console.WriteLine($"[Map] FlushTriggerPoints failed: {ex}"); }
     }
 
     public async Task ProcessNearestPointBatchAsync(object[] records)

@@ -21,6 +21,7 @@ public class GtfsStaticLoader(
     ILogger<GtfsStaticLoader> logger) : IHostedService
 {
     const string GtfsStaticUrl = "https://itsmarta.com/google_transit_feed/google_transit.zip";
+    const double SimplifyToleranceMeters = 10.0;
     public const string ReadyKey = "__gtfs_static_ready__";
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -50,7 +51,8 @@ public class GtfsStaticLoader(
                     textColor = meta.TextColor;
                 }
 
-                var geoJson = BuildLineStringFeature(routeId, shortName, points, color, textColor);
+                var simplified = Simplify(points, SimplifyToleranceMeters);
+                var geoJson = BuildLineStringFeature(routeId, shortName, simplified, color, textColor);
                 await routeShapeRepo.SetAsync(routeId, geoJson, cancellationToken);
                 stored++;
             }
@@ -167,6 +169,72 @@ public class GtfsStaticLoader(
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
         return raw.StartsWith('#') ? raw : $"#{raw}";
+    }
+
+    static List<(double Lat, double Lon, int Seq)> Simplify(List<(double Lat, double Lon, int Seq)> pts, double toleranceMeters)
+    {
+        if (pts.Count < 3) return pts;
+
+        double avgLat = 0;
+        for (int i = 0; i < pts.Count; i++) avgLat += pts[i].Lat;
+        avgLat /= pts.Count;
+
+        double tolLat = toleranceMeters / 111_320.0;
+        double tolLon = toleranceMeters / (111_320.0 * Math.Cos(avgLat * Math.PI / 180));
+
+        var keep = new bool[pts.Count];
+        keep[0] = true;
+        keep[pts.Count - 1] = true;
+
+        // Iterative RDP using an explicit stack to avoid stack overflow on long routes.
+        var stack = new Stack<(int Start, int End)>();
+        stack.Push((0, pts.Count - 1));
+
+        while (stack.Count > 0)
+        {
+            var (start, end) = stack.Pop();
+            if (end - start < 2) continue;
+
+            double ax = pts[start].Lon, ay = pts[start].Lat;
+            double bx = pts[end].Lon, by = pts[end].Lat;
+            double dx = bx - ax, dy = by - ay;
+            double lenSq = dx * dx + dy * dy;
+
+            double maxDist = 0;
+            int maxIdx = start;
+
+            for (int i = start + 1; i < end; i++)
+            {
+                double px = pts[i].Lon - ax, py = pts[i].Lat - ay;
+                double perpX, perpY;
+                if (lenSq == 0)
+                {
+                    perpX = px;
+                    perpY = py;
+                }
+                else
+                {
+                    double t = (px * dx + py * dy) / lenSq;
+                    perpX = px - t * dx;
+                    perpY = py - t * dy;
+                }
+                // Scale to approximate meters for the tolerance comparison.
+                double distM = Math.Sqrt(perpX * perpX / (tolLon * tolLon) + perpY * perpY / (tolLat * tolLat)) * toleranceMeters;
+                if (distM > maxDist) { maxDist = distM; maxIdx = i; }
+            }
+
+            if (maxDist > toleranceMeters)
+            {
+                keep[maxIdx] = true;
+                stack.Push((start, maxIdx));
+                stack.Push((maxIdx, end));
+            }
+        }
+
+        var result = new List<(double, double, int)>(pts.Count);
+        for (int i = 0; i < pts.Count; i++)
+            if (keep[i]) result.Add(pts[i]);
+        return result;
     }
 
     static string BuildLineStringFeature(

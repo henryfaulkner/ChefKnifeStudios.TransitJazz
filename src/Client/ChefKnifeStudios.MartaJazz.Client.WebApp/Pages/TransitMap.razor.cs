@@ -93,6 +93,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             _routesRendered = true;
             await _map.SetCheckpointVisibilityAsync(false);
             await RenderRoutesAsync();
+            _ = ConfigureAllTrackersAsync();
             var settings = SettingsService.GetSettings();
             await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
             await _map.SetAllCheckpointsVisibilityAsync(settings.AreAllCheckpointsVisible);
@@ -269,26 +270,34 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         Logger.LogDebug("TransitMap.RenderRoutesAsync: pushing {Count} cached routes to map", _routeShapeCache.Count);
 
         if (_routeShapeCache.Count == 0)
-            Logger.LogWarning("TransitMap.RenderRoutesAsync: route cache is empty — routes will not render");
-
-        foreach (var (routeId, feature) in _routeShapeCache)
         {
-            var coordCount = feature.Geometry?.Coordinates?.Length ?? -1;
-            Logger.LogDebug("TransitMap.RenderRoutesAsync: rendering routeId={RouteId} CoordCount={CoordCount} Color={Color}",
-                routeId, coordCount, feature.Properties?.Color);
-
-            if (feature.Geometry?.Coordinates is null || feature.Geometry.Coordinates.Length == 0)
-            {
-                Logger.LogWarning("TransitMap.RenderRoutesAsync: skipping routeId={RouteId} — Geometry.Coordinates is null or empty", routeId);
-                continue;
-            }
-
-            await _map!.AddRouteShapeFeatureAsync(routeId, feature.Geometry.Coordinates, feature.Properties.Color);
-            await _map!.LoadRouteGeometryForAnimationAsync(routeId, feature.Geometry.Coordinates);
-            await ConfigureTrackerForRouteAsync(routeId, feature);
+            Logger.LogWarning("TransitMap.RenderRoutesAsync: route cache is empty — routes will not render");
+            return;
         }
 
+        var payload = _routeShapeCache
+            .Where(kvp => kvp.Value.Geometry?.Coordinates is { Length: > 0 })
+            .Select(kvp => (object)new
+        {
+                routeId = kvp.Key,
+                color = kvp.Value.Properties?.Color ?? "#6b7280",
+                coordinates = kvp.Value.Geometry!.Coordinates
+            })
+            .ToArray();
+
+        if (_map is not null)
+            await _map.AddAllRoutesAsync(payload);
+
         Logger.LogDebug("TransitMap.RenderRoutesAsync: route geometry push complete");
+            }
+
+    async Task ConfigureAllTrackersAsync()
+    {
+        await Task.Yield();
+        foreach (var (routeId, feature) in _routeShapeCache)
+            await ConfigureTrackerForRouteAsync(routeId, feature);
+        if (_map is not null)
+            await _map.FlushTriggerPointsAsync();
     }
 
     async Task ConfigureTrackerForRouteAsync(string routeId, RouteShapeFeature feature)

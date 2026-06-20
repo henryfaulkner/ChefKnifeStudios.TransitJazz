@@ -8,6 +8,7 @@ async function _getCheckpointPulse() {
 
 window.ChefMap = {
     maps: {},
+    _routesFeatureCollection: null,
 
     createMap: async function (containerDivId, dotNetRef) {
         let settings = await dotNetRef.invokeMethodAsync('getMapSettings');
@@ -185,13 +186,33 @@ window.ChefMap = {
                     console.warn('[ChefMap] setMapStyle: could not restore trigger-points layer: ' + e);
                 }
 
+                // Re-add the consolidated routes source+layer from cached data.
+                try {
+                    if (ChefMap._routesFeatureCollection && !map.getSource('routes')) {
+                        map.addSource('routes', { type: 'geojson', data: ChefMap._routesFeatureCollection });
+                        map.addLayer({
+                            id: 'routes-layer',
+                            type: 'line',
+                            source: 'routes',
+                            layout: { 'line-join': 'round', 'line-cap': 'round' },
+                            paint: {
+                                'line-color': '#6b7280',
+                                'line-width': 2,
+                                'line-opacity': 0.7
+                            }
+                        }, 'vehicles-layer');
+                    }
+                } catch (e) {
+                    console.warn('[ChefMap] setMapStyle: could not restore routes layer: ' + e);
+                }
+
                 // Re-add pulse overlay and clear any in-flight pulses (FR-012).
                 _getCheckpointPulse().then(function (pulse) {
                     pulse.ensureLayer(map);
                     pulse.reset(map);
                 });
 
-                // Signal C# to re-render routes from cache; colors will reapply via debounce in addRouteShapeFeature.
+                // Signal C# to re-render routes from cache (addAllRoutes will hit setData branch).
                 resolve({});
             }
 
@@ -251,13 +272,15 @@ window.ChefMap = {
     _triggerPointFeatures: {},
 
     addTriggerPointMarkers: function (containerDivId, routeId, triggerPoints, coords) {
-        let map = ChefMap.maps[containerDivId];
+        var map = ChefMap.maps[containerDivId];
         if (!map) return;
 
-        let routeColor = ChefMap._routeColorsByRouteId[routeId] || '#facc15';
+        var routeColor = ChefMap._routeColorsByRouteId[routeId] || '#facc15';
 
+        // Accumulate this route's features — do NOT rebuild/flush the combined collection here.
+        // flushTriggerPoints() does a single combined setData after all routes are added.
         ChefMap._triggerPointFeatures[routeId] = triggerPoints.map(function (tp) {
-            let coord = coords[tp.index] || coords[coords.length - 1];
+            var coord = coords[tp.index] || coords[coords.length - 1];
             return {
                 type: 'Feature',
                 geometry: { type: 'Point', coordinates: coord },
@@ -265,10 +288,36 @@ window.ChefMap = {
             };
         });
 
-        let allFeatures = Object.values(ChefMap._triggerPointFeatures).flat();
-        let fc = { type: 'FeatureCollection', features: allFeatures };
+        // Ensure the source + layer exist (with empty data) so visibility toggles work
+        // before the first flush. No per-route data push here.
+        if (!map.getSource('trigger-points')) {
+            map.addSource('trigger-points', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+            map.addLayer({
+                id: 'trigger-points-layer',
+                type: 'circle',
+                source: 'trigger-points',
+                layout: { visibility: 'none' },
+                paint: {
+                    'circle-radius': 4,
+                    'circle-color': ['coalesce', ['get', 'color'], '#facc15'],
+                    'circle-opacity': 0.85,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#000000'
+                }
+            });
+        }
+    },
 
-        let source = map.getSource('trigger-points');
+    // Build the combined trigger-point FeatureCollection once and push it to the map.
+    // Called exactly once after all routes have been added via addTriggerPointMarkers.
+    flushTriggerPoints: function (containerDivId) {
+        var map = ChefMap.maps[containerDivId];
+        if (!map) return;
+
+        var allFeatures = Object.values(ChefMap._triggerPointFeatures).flat();
+        var fc = { type: 'FeatureCollection', features: allFeatures };
+
+        var source = map.getSource('trigger-points');
         if (!source) {
             map.addSource('trigger-points', { type: 'geojson', data: fc });
             map.addLayer({
@@ -296,9 +345,7 @@ window.ChefMap = {
         map.setLayoutProperty('trigger-points-layer', 'visibility', visible ? 'visible' : 'none');
     },
 
-    _routeColors: {},      // routeLayerId → data color, set at addRouteShapeFeature time
     _routeColorsByRouteId: {},  // routeId → data color, for vehicle dot coloring
-    _applyRouteColorsTimer: null,
 
     _applyVehicleRouteColors: function (containerDivId) {
         let map = ChefMap.maps[containerDivId];
@@ -319,64 +366,36 @@ window.ChefMap = {
 
     focusRoutes: function (containerDivId, routeIds) {
         let map = ChefMap.maps[containerDivId];
-        if (!map) return;
-        let style = map.getStyle();
-        if (!style) return;
+        if (!map || !map.getLayer('routes-layer')) return;
 
         let selected = new Set(routeIds || []);
-        (style.layers || []).forEach(function (layer) {
-            if (!layer.id || !layer.id.startsWith('route-layer-')) return;
-            let id = layer.id;
-            if (!map.getLayer(id)) return;
-            let routeId = id.substring('route-layer-'.length);
-            if (selected.has(routeId)) {
-                map.setPaintProperty(id, 'line-opacity', 0.95);
-                map.setPaintProperty(id, 'line-color', ChefMap._routeColors[id] || '#22c55e');
-            } else {
-                map.setPaintProperty(id, 'line-opacity', 0.3);
-                map.setPaintProperty(id, 'line-color', '#d1d5db');
-            }
+
+        // Build match expressions: selected routes get their route color at full opacity;
+        // all others get grey at reduced opacity.
+        let colorExpr = ['match', ['get', 'routeId']];
+        let opacityExpr = ['match', ['get', 'routeId']];
+        Object.entries(ChefMap._routeColorsByRouteId).forEach(function ([rid, color]) {
+            colorExpr.push(rid, selected.has(rid) ? color : '#9ca3af');
+            opacityExpr.push(rid, selected.has(rid) ? 0.95 : 0.35);
         });
+        colorExpr.push('#9ca3af');   // fallback
+        opacityExpr.push(0.35);      // fallback
+
+        map.setPaintProperty('routes-layer', 'line-color', colorExpr);
+        map.setPaintProperty('routes-layer', 'line-opacity', opacityExpr);
     },
 
     focusRoute: function (containerDivId, routeId) {
-        let map = ChefMap.maps[containerDivId];
-        if (!map) return;
-
-        let style = map.getStyle();
-        if (!style) return;
-
-        let targetLayerId = 'route-layer-' + routeId;
-
-        (style.layers || []).forEach(function (layer) {
-            if (!layer.id || !layer.id.startsWith('route-layer-')) return;
-            let id = layer.id;
-            if (!map.getLayer(id)) return;
-
-            if (id === targetLayerId) {
-                map.setPaintProperty(id, 'line-opacity', 0.95);
-                map.setPaintProperty(id, 'line-color', ChefMap._routeColors[id] || '#22c55e');
-            } else {
-                map.setPaintProperty(id, 'line-opacity', 0.3);
-                map.setPaintProperty(id, 'line-color', '#d1d5db');
-            }
-        });
+        ChefMap.focusRoutes(containerDivId, [routeId]);
     },
 
     clearRouteFocus: function (containerDivId) {
         let map = ChefMap.maps[containerDivId];
-        if (!map) return;
+        if (!map || !map.getLayer('routes-layer')) return;
 
-        let style = map.getStyle();
-        if (!style) return;
-
-        (style.layers || []).forEach(function (layer) {
-            if (!layer.id || !layer.id.startsWith('route-layer-')) return;
-            let id = layer.id;
-            if (!map.getLayer(id)) return;
-            map.setPaintProperty(id, 'line-opacity', 0.7);
-            map.setPaintProperty(id, 'line-color', '#6b7280');
-        });
+        // No selection — all routes grey at default opacity.
+        map.setPaintProperty('routes-layer', 'line-color', '#6b7280');
+        map.setPaintProperty('routes-layer', 'line-opacity', 0.7);
     },
 
     pulseCheckpoint: async function (containerDivId, routeId, triggerIndex) {
@@ -425,58 +444,56 @@ window.ChefMap = {
         map.setLayoutProperty('vehicles-layer', 'visibility', visible ? 'visible' : 'none');
     },
 
-    addRouteShapeFeature: function (containerDivId, routeId, coordinates, color) {
+    addAllRoutes: function (containerDivId, routes) {
         let map = ChefMap.maps[containerDivId];
         if (!map) {
-            console.warn('[ChefMap] addRouteShapeFeature: no map for containerDivId=' + containerDivId);
+            console.warn('[ChefMap] addAllRoutes: no map for containerDivId=' + containerDivId);
             return;
         }
 
-        let sourceId = 'route-' + routeId;
-        let layerId = 'route-layer-' + routeId;
-        let lineColor = color || '#0078D4';
+        let features = [];
+        (routes || []).forEach(function (route) {
+            if (!route.coordinates || route.coordinates.length === 0) return;
 
-        console.debug('[ChefMap] addRouteShapeFeature: routeId=' + routeId
-            + ' coords=' + (coordinates ? coordinates.length : 'null')
-            + ' color=' + lineColor
-            + ' sourceExists=' + !!map.getSource(sourceId));
+            let lineColor = route.color || '#6b7280';
 
-        if (!coordinates || coordinates.length === 0) {
-            console.warn('[ChefMap] addRouteShapeFeature: skipping routeId=' + routeId + ' — coordinates null/empty');
-            return;
-        }
+            ChefMap._routeColorsByRouteId[route.routeId] = lineColor;
 
-        let geojson = {
-            type: 'Feature',
-            geometry: { type: 'LineString', coordinates: coordinates },
-            properties: { routeId: routeId, color: lineColor }
-        };
+            ChefMapAnimator.loadRouteGeometry(route.routeId, route.coordinates);
 
-        // Store colors for route line focus/unfocus and vehicle dot coloring.
-        ChefMap._routeColors[layerId] = lineColor;
-        ChefMap._routeColorsByRouteId[routeId] = lineColor;
+            features.push({
+                type: 'Feature',
+                id: route.routeId,
+                geometry: { type: 'LineString', coordinates: route.coordinates },
+                properties: { routeId: route.routeId, color: lineColor }
+            });
+        });
 
-        // Debounce the vehicle color update — routes load one at a time, apply once after they settle.
-        clearTimeout(ChefMap._applyRouteColorsTimer);
-        ChefMap._applyRouteColorsTimer = setTimeout(function () {
-            ChefMap._applyVehicleRouteColors(containerDivId);
-        }, 200);
+        let fc = { type: 'FeatureCollection', features: features };
+        ChefMap._routesFeatureCollection = fc;
 
-        let source = map.getSource(sourceId);
+        let source = map.getSource('routes');
         if (source) {
-            console.debug('[ChefMap] addRouteShapeFeature: updating existing source for routeId=' + routeId);
-            source.setData(geojson);
+            source.setData(fc);
         } else {
-            console.debug('[ChefMap] addRouteShapeFeature: adding new source+layer for routeId=' + routeId);
-            map.addSource(sourceId, { type: 'geojson', data: geojson });
+            map.addSource('routes', { type: 'geojson', data: fc });
             map.addLayer({
-                id: layerId,
+                id: 'routes-layer',
                 type: 'line',
-                source: sourceId,
+                source: 'routes',
                 layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': '#6b7280', 'line-width': 2, 'line-opacity': 0.7 }
+                paint: {
+                    'line-color': '#6b7280',
+                    'line-width': 2,
+                    'line-opacity': 0.7
+                }
             }, 'vehicles-layer');
-            console.debug('[ChefMap] addRouteShapeFeature: layer added for routeId=' + routeId);
         }
+
+        ChefMap._applyVehicleRouteColors(containerDivId);
+    },
+
+    addRouteShapeFeature: function (containerDivId, routeId, coordinates, color) {
+        console.warn('[ChefMap] addRouteShapeFeature is deprecated — use addAllRoutes instead');
     }
 };
