@@ -35,8 +35,12 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] ISettingsService SettingsService { get; set; } = null!;
     [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
     [Inject] ITransitEndpointsService TransitEndpointsService { get; set; } = null!;
+    [Inject] IOutsideClickJsInterop OutsideClickJsInterop { get; set; } = null!;
 
     const float MinWidth = 1100;
+
+    readonly string _accordionElementId = $"route-accordion-{Guid.NewGuid()}";
+    bool _accordionExpanded;
 
     IDisposable? _viewportSub;
     bool _isMobile;
@@ -88,6 +92,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+            await OutsideClickJsInterop.AddOutsideClickListenerAsync(
+                _accordionElementId, CollapseAccordion);
+
         if (_mapReady && _routesLoaded && !_routesRendered && _map is not null)
         {
             _routesRendered = true;
@@ -205,6 +213,12 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         InvokeAsync(StateHasChanged);
     }
 
+    void CollapseAccordion()
+    {
+        _accordionExpanded = false;
+        InvokeAsync(StateHasChanged);
+    }
+
     public async ValueTask DisposeAsync()
     {
         RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
@@ -212,6 +226,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         NotificationService.NotificationReceived -= HandleVehicleBatchAsync;
         _viewportSub?.Dispose();
         await CheckpointTracker.ClearAsync();
+        await OutsideClickJsInterop.RemoveOutsideClickListenerAsync(_accordionElementId);
         _dotNetRef?.Dispose();
     }
 

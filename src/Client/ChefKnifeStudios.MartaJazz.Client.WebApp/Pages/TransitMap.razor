@@ -6,8 +6,9 @@
 
 <div class="transit-map-container">
     <div class="transit-map__accordion @(_isMobile ? "transit-map__accordion-mobile" : "")">
+    <div id="@_accordionElementId" class="transit-map__accordion @(_isMobile ? "transit-map__accordion-mobile" : "")">
         <MatAccordion Class="">
-            <MatExpansionPanel>
+            <MatExpansionPanel @bind-Expanded="_accordionExpanded">
                 <MatExpansionPanelSummary>
                     <MatExpansionPanelHeader>@Loc["RoutesLabel"]</MatExpansionPanelHeader>
                     <MatExpansionPanelSubHeader>
