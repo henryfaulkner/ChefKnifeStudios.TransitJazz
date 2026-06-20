@@ -50,6 +50,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     IEnumerable<EventEnvelope>? _pendingBatch;
 
     bool _audioEnabled = true;
+    bool _audioUnlocked = false;
     bool _checkpointsVisible = false;
     DotNetObjectReference<object>? _dotNetRef;
 
@@ -133,6 +134,27 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 try { await TransitSynth.TriggerNoteAsync(crossing.RouteId, crossing.VehicleId, crossing.TriggerIndex, crossing.TotalTriggers); }
                 catch (Exception ex) { Logger.LogWarning(ex, "TransitMap.OnCrossingsAsync: TriggerNoteAsync failed for vehicle {VehicleId} on route {RouteId}", crossing.VehicleId, crossing.RouteId); }
             }
+        }
+    }
+
+    // Unlocks the Web Audio context from a real user gesture (required by mobile
+    // browser autoplay policies — Tone.start() is a no-op outside a gesture stack),
+    // then dismisses the overlay. After this one tap, every later crossing plays
+    // without further interaction.
+    async Task EnableAudioAsync()
+    {
+        try
+        {
+            await TransitSynth.UnlockAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "TransitMap.EnableAudioAsync: failed to unlock audio context");
+        }
+        finally
+        {
+            _audioUnlocked = true;
+            StateHasChanged();
         }
     }
 
@@ -293,7 +315,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         var payload = _routeShapeCache
             .Where(kvp => kvp.Value.Geometry?.Coordinates is { Length: > 0 })
             .Select(kvp => (object)new
-        {
+            {
                 routeId = kvp.Key,
                 color = kvp.Value.Properties?.Color ?? "#6b7280",
                 coordinates = kvp.Value.Geometry!.Coordinates
@@ -304,7 +326,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             await _map.AddAllRoutesAsync(payload);
 
         Logger.LogDebug("TransitMap.RenderRoutesAsync: route geometry push complete");
-            }
+    }
 
     async Task ConfigureAllTrackersAsync()
     {

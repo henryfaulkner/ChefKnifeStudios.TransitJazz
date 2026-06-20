@@ -125,11 +125,9 @@ export function isUnlocked() {
 // triggerIndex and totalTriggers come from checkpoint-tracker; both default to
 // 0/1 so the C# interop path (which omits them) still plays without error.
 export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTriggers = 1) {
+    if (!_unlocked) return;
     try {
         const T = await getTone();
-        if (T.context.state !== 'running') {
-            await T.start();
-        }
         const { sampler, scale, durations } = await instrumentFor(routeId);
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
         const duration = durations[djb2(String(vehicleId)) % durations.length];
