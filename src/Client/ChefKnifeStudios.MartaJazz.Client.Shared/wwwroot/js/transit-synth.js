@@ -15,11 +15,11 @@ const SCALE_LOW  = ['C2','Eb2','F2','G2','Bb2','C3','Eb3','F3','G3','Bb3'];
 // Three sampled voices cycling across routes: bass → viola → cello → bass …
 const PALETTE = [
     {
-        instrument: 'contrabass',
-        scale: SCALE_BASS,
-        notes: { C2:'C2',Eb2:'Eb2',F2:'F2',G2:'G2',Bb2:'Bb2',C3:'C3',Eb3:'Eb3',F3:'F3',G3:'G3',Bb3:'Bb3' },
-        release: 1.2,
-        durations: ['4n', '4n.', '2n'],
+        instrument: 'bassoon',
+        scale: ['C1','Eb1','F1','G1','Bb1'],
+        notes: { C1:'C1',Eb1:'Eb1',F1:'F1',G1:'G1',Bb1:'Bb1' },
+        release: 0.3,
+        durations: ['8n', '8n.', '4n'],
     },
     {
         instrument: 'viola',
@@ -68,7 +68,10 @@ async function instrumentFor(routeId) {
     if (_instrumentCache.has(routeId)) return _instrumentCache.get(routeId);
 
     const h = djb2(String(routeId));
-    const slot = PALETTE[h % PALETTE.length];
+    const slotIndex = h % PALETTE.length;
+    const slot = PALETTE[slotIndex];
+
+    console.log('[TransitSynth] route=' + routeId + ' → slot=' + slotIndex + ' instrument=' + slot.instrument);
 
     return new Promise((resolve, reject) => {
         const sampler = new T.Sampler(
@@ -76,6 +79,7 @@ async function instrumentFor(routeId) {
             {
                 release: slot.release ?? 1.2,
                 onload: () => {
+                    console.log('[TransitSynth] loaded route=' + routeId + ' instrument=' + slot.instrument);
                     const vol = new T.Volume(slot.volume ?? 0).toDestination();
                     sampler.connect(vol);
                     _instrumentCache.set(routeId, { sampler, scale: slot.scale, durations: slot.durations });
@@ -129,6 +133,7 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
         const { sampler, scale, durations } = await instrumentFor(routeId);
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
         const duration = durations[djb2(String(vehicleId)) % durations.length];
+        console.log('[TransitSynth] play route=' + routeId + ' note=' + note + ' duration=' + duration);
         sampler.triggerAttackRelease(note, duration);
     } catch (err) {
         console.warn('[TransitSynth] triggerNote error:', err);
