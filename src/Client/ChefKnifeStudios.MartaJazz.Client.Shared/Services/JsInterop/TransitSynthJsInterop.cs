@@ -30,16 +30,6 @@ public class TransitSynthJsInterop : ITransitSynthJsInterop
         catch (Exception ex) { LogError(ex, nameof(PreloadAsync)); }
     }
 
-    public async Task AttachUnlockGestureAsync(string elementId)
-    {
-        try
-        {
-            var module = await _moduleTask.Value;
-            await module.InvokeVoidAsync("attachUnlockGesture", elementId);
-        }
-        catch (Exception ex) { LogError(ex, nameof(AttachUnlockGestureAsync)); }
-    }
-
     public async Task UnlockAsync()
     {
         try
