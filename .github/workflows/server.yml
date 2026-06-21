@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main, bug/fix-mobile]
+    branches: [main, bug/fix-mobile-audio]
 
 env:
   REGISTRY: chefknife.azurecr.io
