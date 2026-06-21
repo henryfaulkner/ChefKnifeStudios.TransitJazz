@@ -2,7 +2,7 @@ name: Client CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 024-browser-memory-investigation]
 
 jobs:
   build:

@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 024-browser-memory-investigation]
 
 env:
   REGISTRY: chefknife.azurecr.io
