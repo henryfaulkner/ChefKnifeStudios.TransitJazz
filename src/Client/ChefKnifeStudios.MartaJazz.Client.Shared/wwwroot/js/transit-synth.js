@@ -5,6 +5,19 @@
 let _tone = null;
 let _unlocked = false;
 const _instrumentCache = new Map();
+const _pendingInstruments = new Map();
+
+// Start Tone.js import immediately when module loads, before any function is called.
+// This gives the import a head start on slow mobile connections.
+const _tonePromise = import('https://esm.sh/tone@15');
+
+// Create a bare AudioContext at module level so it exists when the gesture fires.
+// It starts "suspended"; the native click handler resumes it synchronously within
+// the gesture stack — no dependency on Tone.js being loaded yet.
+let _audioCtx = null;
+try {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+} catch (_) { /* older browser or non-browser environment */ }
 
 const SOUNDFONT_BASE = 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM';
 
@@ -48,8 +61,8 @@ function djb2(s) {
 
 async function getTone() {
     if (_tone) return _tone;
-    console.log('[TransitSynth] getTone: importing Tone.js');
-    const mod = await import('https://esm.sh/tone@15');
+    console.log('[TransitSynth] getTone: awaiting Tone.js import');
+    const mod = await _tonePromise;
     if (!_tone) _tone = mod;
     console.log('[TransitSynth] getTone: Tone.js imported, context state=' + _tone.getContext().rawContext.state);
     return _tone;
@@ -64,36 +77,48 @@ function buildSampleUrls(instrument, notes) {
     return urls;
 }
 
+// Per-route dedup: concurrent calls for the same route share one promise,
+// preventing duplicate Sampler instances.
 async function instrumentFor(routeId) {
     if (_instrumentCache.has(routeId)) return _instrumentCache.get(routeId);
-    const T = await getTone();
-    if (_instrumentCache.has(routeId)) return _instrumentCache.get(routeId);
+    if (_pendingInstruments.has(routeId)) return _pendingInstruments.get(routeId);
 
-    const h = djb2(String(routeId));
-    const slotIndex = h % PALETTE.length;
-    const slot = PALETTE[slotIndex];
+    const promise = (async () => {
+        const T = await getTone();
+        if (_instrumentCache.has(routeId)) return _instrumentCache.get(routeId);
 
-    console.log('[TransitSynth] route=' + routeId + ' → slot=' + slotIndex + ' instrument=' + slot.instrument);
+        const h = djb2(String(routeId));
+        const slotIndex = h % PALETTE.length;
+        const slot = PALETTE[slotIndex];
 
-    return new Promise((resolve, reject) => {
-        const sampler = new T.Sampler(
-            buildSampleUrls(slot.instrument, slot.notes),
-            {
-                release: slot.release ?? 1.2,
-                onload: () => {
-                    console.log('[TransitSynth] loaded route=' + routeId + ' instrument=' + slot.instrument);
-                    const vol = new T.Volume(slot.volume ?? 0).toDestination();
-                    sampler.connect(vol);
-                    _instrumentCache.set(routeId, { sampler, scale: slot.scale, durations: slot.durations });
-                    resolve({ sampler, scale: slot.scale, durations: slot.durations });
-                },
-                onerror: (err) => {
-                    console.error('[TransitSynth] sampler load failed for routeId=' + routeId + ' instrument=' + slot.instrument, err);
-                    reject(err);
-                },
-            }
-        );
-    });
+        console.log('[TransitSynth] route=' + routeId + ' → slot=' + slotIndex + ' instrument=' + slot.instrument);
+
+        return new Promise((resolve, reject) => {
+            const sampler = new T.Sampler(
+                buildSampleUrls(slot.instrument, slot.notes),
+                {
+                    release: slot.release ?? 1.2,
+                    onload: () => {
+                        console.log('[TransitSynth] loaded route=' + routeId + ' instrument=' + slot.instrument);
+                        const vol = new T.Volume(slot.volume ?? 0).toDestination();
+                        sampler.connect(vol);
+                        const result = { sampler, scale: slot.scale, durations: slot.durations };
+                        _instrumentCache.set(routeId, result);
+                        _pendingInstruments.delete(routeId);
+                        resolve(result);
+                    },
+                    onerror: (err) => {
+                        console.error('[TransitSynth] sampler load failed for routeId=' + routeId + ' instrument=' + slot.instrument, err);
+                        _pendingInstruments.delete(routeId);
+                        reject(err);
+                    },
+                }
+            );
+        });
+    })();
+
+    _pendingInstruments.set(routeId, promise);
+    return promise;
 }
 
 // Maps a bus's progress along its route to a scale degree.
@@ -118,29 +143,47 @@ export async function preload(routeIds) {
 // Attaches a one-shot native click listener to the unlock button so that
 // AudioContext.resume() fires synchronously inside the gesture event, before
 // Blazor's async interop chain breaks the browser's autoplay trust window
-// (iOS Safari). Sets _unlocked immediately so triggerNote works on first crossing.
-export async function attachUnlockGesture(elementId) {
-    console.log('[TransitSynth] attachUnlockGesture: waiting for Tone, elementId=' + elementId);
-    const T = await getTone();
+// (iOS Safari). Uses a bare AudioContext created at module load so there is
+// zero dependency on the Tone.js import — the handler is attached immediately.
+//
+// When Tone.js finishes loading, its context is replaced with our already-running
+// AudioContext via setContext, so every later triggerNote runs without issue.
+export function attachUnlockGesture(elementId) {
+    console.log('[TransitSynth] attachUnlockGesture: elementId=' + elementId);
     const el = document.getElementById(elementId);
     if (!el) {
         console.warn('[TransitSynth] attachUnlockGesture: element not found, id=' + elementId);
         return;
     }
-    console.log('[TransitSynth] attachUnlockGesture: listener attached, context state=' + T.getContext().rawContext.state);
+
     function handler() {
         el.removeEventListener('click', handler);
-        // Call resume() synchronously within the gesture stack — iOS Safari
-        // requires the call to originate here, not in a downstream Promise chain.
-        const ctx = T.getContext().rawContext;
-        console.log('[TransitSynth] gesture fired, context state before resume=' + ctx.state);
-        if (ctx.state !== 'running') {
-            ctx.resume().then(() => console.log('[TransitSynth] resume() resolved, context state=' + ctx.state));
+        // Resume bare AudioContext synchronously within the gesture stack.
+        // iOS Safari requires the resume() call to originate here, not in a
+        // downstream Promise chain.
+        if (_audioCtx && _audioCtx.state !== 'running') {
+            _audioCtx.resume();
         }
         _unlocked = true;
-        console.log('[TransitSynth] _unlocked set true');
+        console.log('[TransitSynth] _unlocked set true via native gesture');
     }
     el.addEventListener('click', handler);
+
+    // When Tone.js finishes loading, swap in our bare AudioContext so Tone
+    // uses the exact same context that the native gesture handler resumes.
+    // Always adopt — even while suspended — so that when the gesture fires,
+    // ctx.resume() on the bare AudioContext wakes Tone up too.
+    _tonePromise.then(T => {
+        _tone = T;
+        if (_audioCtx) {
+            try {
+                T.setContext(new T.Context(_audioCtx));
+                console.log('[TransitSynth] Tone context adopted from bare AudioContext, state=' + _audioCtx.state);
+            } catch (err) {
+                console.warn('[TransitSynth] could not adopt bare AudioContext into Tone, falling back', err);
+            }
+        }
+    });
 }
 
 export async function unlock() {
@@ -168,7 +211,8 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
         const T = await getTone();
         const ctx = T.getContext().rawContext;
         if (ctx.state !== 'running') {
-            console.warn('[TransitSynth] triggerNote: context not running, state=' + ctx.state + ' route=' + routeId);
+            console.warn('[TransitSynth] triggerNote: context not running, resuming, state=' + ctx.state + ' route=' + routeId);
+            ctx.resume();
         }
         const { sampler, scale, durations } = await instrumentFor(routeId);
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
@@ -185,6 +229,7 @@ export async function dispose() {
         try { sampler.dispose(); } catch (_) { /* ignore */ }
     }
     _instrumentCache.clear();
+    _pendingInstruments.clear();
     _unlocked = false;
     _tone = null;
 }
