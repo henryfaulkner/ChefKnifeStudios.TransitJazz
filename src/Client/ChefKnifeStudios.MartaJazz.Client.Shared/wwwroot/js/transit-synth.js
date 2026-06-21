@@ -48,8 +48,10 @@ function djb2(s) {
 
 async function getTone() {
     if (_tone) return _tone;
+    console.log('[TransitSynth] getTone: importing Tone.js');
     const mod = await import('https://esm.sh/tone@15');
     if (!_tone) _tone = mod;
+    console.log('[TransitSynth] getTone: Tone.js imported, context state=' + _tone.getContext().rawContext.state);
     return _tone;
 }
 
@@ -107,32 +109,48 @@ function noteForPosition(scale, triggerIndex, totalTriggers) {
 // AudioContext to be running — files arrive before the first gesture.
 export async function preload(routeIds) {
     if (!Array.isArray(routeIds) || routeIds.length === 0) return;
-    await Promise.allSettled(routeIds.map(id => instrumentFor(id)));
+    console.log('[TransitSynth] preload: starting for ' + routeIds.length + ' routes');
+    const results = await Promise.allSettled(routeIds.map(id => instrumentFor(id)));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    console.log('[TransitSynth] preload: complete — ' + (routeIds.length - failed) + ' loaded, ' + failed + ' failed');
 }
 
 // Attaches a one-shot native click listener to the unlock button so that
-// Tone.start() fires synchronously inside the gesture event, before Blazor's
-// async interop chain breaks the browser's autoplay trust window (iOS Safari).
+// AudioContext.resume() fires synchronously inside the gesture event, before
+// Blazor's async interop chain breaks the browser's autoplay trust window
+// (iOS Safari). Sets _unlocked immediately so triggerNote works on first crossing.
 export async function attachUnlockGesture(elementId) {
+    console.log('[TransitSynth] attachUnlockGesture: waiting for Tone, elementId=' + elementId);
     const T = await getTone();
     const el = document.getElementById(elementId);
-    if (!el) return;
+    if (!el) {
+        console.warn('[TransitSynth] attachUnlockGesture: element not found, id=' + elementId);
+        return;
+    }
+    console.log('[TransitSynth] attachUnlockGesture: listener attached, context state=' + T.getContext().rawContext.state);
     function handler() {
         el.removeEventListener('click', handler);
-        T.start().then(() => {
-            _unlocked = true;
-            console.log('[TransitSynth] unlocked via gesture');
-        });
+        // Call resume() synchronously within the gesture stack — iOS Safari
+        // requires the call to originate here, not in a downstream Promise chain.
+        const ctx = T.getContext().rawContext;
+        console.log('[TransitSynth] gesture fired, context state before resume=' + ctx.state);
+        if (ctx.state !== 'running') {
+            ctx.resume().then(() => console.log('[TransitSynth] resume() resolved, context state=' + ctx.state));
+        }
+        _unlocked = true;
+        console.log('[TransitSynth] _unlocked set true');
     }
     el.addEventListener('click', handler);
 }
 
 export async function unlock() {
+    console.log('[TransitSynth] unlock: called, _unlocked=' + _unlocked);
     if (_unlocked) return;
     const T = await getTone();
+    console.log('[TransitSynth] unlock: calling T.start(), context state=' + T.getContext().rawContext.state);
     await T.start();
     _unlocked = true;
-    console.log('[TransitSynth] unlocked');
+    console.log('[TransitSynth] unlock: complete, context state=' + T.getContext().rawContext.state);
 }
 
 export function isUnlocked() {
@@ -142,13 +160,20 @@ export function isUnlocked() {
 // triggerIndex and totalTriggers come from checkpoint-tracker; both default to
 // 0/1 so the C# interop path (which omits them) still plays without error.
 export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTriggers = 1) {
-    if (!_unlocked) return;
+    if (!_unlocked) {
+        console.log('[TransitSynth] triggerNote: skipped, not unlocked (route=' + routeId + ')');
+        return;
+    }
     try {
         const T = await getTone();
+        const ctx = T.getContext().rawContext;
+        if (ctx.state !== 'running') {
+            console.warn('[TransitSynth] triggerNote: context not running, state=' + ctx.state + ' route=' + routeId);
+        }
         const { sampler, scale, durations } = await instrumentFor(routeId);
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
         const duration = durations[djb2(String(vehicleId)) % durations.length];
-        console.log('[TransitSynth] play route=' + routeId + ' note=' + note + ' duration=' + duration);
+        console.log('[TransitSynth] play route=' + routeId + ' note=' + note + ' duration=' + duration + ' contextState=' + ctx.state);
         sampler.triggerAttackRelease(note, duration);
     } catch (err) {
         console.warn('[TransitSynth] triggerNote error:', err);
@@ -164,4 +189,4 @@ export async function dispose() {
     _tone = null;
 }
 
-window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose };
+window.TransitSynth = { unlock, isUnlocked, preload, attachUnlockGesture, triggerNote, dispose };
