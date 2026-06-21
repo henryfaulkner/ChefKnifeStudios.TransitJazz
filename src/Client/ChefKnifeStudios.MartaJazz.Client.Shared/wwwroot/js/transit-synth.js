@@ -110,6 +110,23 @@ export async function preload(routeIds) {
     await Promise.allSettled(routeIds.map(id => instrumentFor(id)));
 }
 
+// Attaches a one-shot native click listener to the unlock button so that
+// Tone.start() fires synchronously inside the gesture event, before Blazor's
+// async interop chain breaks the browser's autoplay trust window (iOS Safari).
+export async function attachUnlockGesture(elementId) {
+    const T = await getTone();
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    function handler() {
+        el.removeEventListener('click', handler);
+        T.start().then(() => {
+            _unlocked = true;
+            console.log('[TransitSynth] unlocked via gesture');
+        });
+    }
+    el.addEventListener('click', handler);
+}
+
 export async function unlock() {
     if (_unlocked) return;
     const T = await getTone();
