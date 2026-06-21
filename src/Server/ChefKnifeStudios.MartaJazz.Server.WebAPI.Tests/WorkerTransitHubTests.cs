@@ -52,6 +52,42 @@ public class WorkerTransitHubTests
         Assert.Equal("ReceiveBatch", fakeHub.AllProxy.LastMethodCalled);
     }
 
+    // T011 (US2): a batch with both non-stale and stale records is relayed in FULL (stale included);
+    // the relayed argument is the same instance as the input, proving filtering touches only the cache.
+    [Fact]
+    public async Task PublishBatch_RelaysFullBatchIncludingStale()
+    {
+        var fakeHub = new FakeHubContext();
+        var hub = new WorkerTransitHub(fakeHub, NullLogger<WorkerTransitHub>.Instance, new FakeLastBatchCache());
+        var batch = new List<EventEnvelope>
+        {
+            new EventEnvelope(
+                "RouteNearestPointBatchEvent",
+                DateTimeOffset.UtcNow,
+                new RouteNearestPointBatchEvent(new[]
+                {
+                    new RouteNearestPointBatchEvent.RouteNearestPointRecord(
+                        "v1", "74", 33.75, -84.39, DateTime.UtcNow,
+                        33.751, -84.389, DateTime.UtcNow, null, null, false),
+                    new RouteNearestPointBatchEvent.RouteNearestPointRecord(
+                        "v2", "74", 33.75, -84.39, DateTime.UtcNow,
+                        33.760, -84.380, DateTime.UtcNow, null, null, true)
+                }))
+        };
+
+        await hub.PublishBatch(batch);
+
+        var relayed = Assert.IsAssignableFrom<IReadOnlyList<EventEnvelope>>(fakeHub.AllProxy.LastArgs![0]);
+        Assert.Same(batch, relayed);
+        var relayedRecords = relayed
+            .Select(e => e.Payload)
+            .OfType<RouteNearestPointBatchEvent>()
+            .SelectMany(p => p.BatchRecords)
+            .ToList();
+        Assert.Equal(2, relayedRecords.Count);
+        Assert.Contains(relayedRecords, r => r.IsStale);
+    }
+
     [Fact]
     public async Task PublishBatch_CachesEvenIfEmpty()
     {
@@ -85,11 +121,13 @@ public class WorkerTransitHubTests
     {
         public int SendAsyncCallCount { get; private set; }
         public string? LastMethodCalled { get; private set; }
+        public object?[]? LastArgs { get; private set; }
 
         public Task SendCoreAsync(string method, object?[] args, CancellationToken cancellationToken = default)
         {
             SendAsyncCallCount++;
             LastMethodCalled = method;
+            LastArgs = args;
             return Task.CompletedTask;
         }
     }

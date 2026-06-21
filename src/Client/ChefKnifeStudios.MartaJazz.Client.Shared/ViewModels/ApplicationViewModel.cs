@@ -16,6 +16,13 @@ public interface IApplicationViewModel : IViewModel
     /// <summary>Raised for every batch received from the SignalR hub.</summary>
     event SignalRNotificationHandler? NotificationReceived;
 
+    /// <summary>
+    /// Fan an out-of-band batch (e.g. the cold-start REST snapshot) through the same
+    /// <see cref="NotificationReceived"/> path the live SignalR stream uses, so every
+    /// subscriber (running-count, etc.) sees it uniformly.
+    /// </summary>
+    Task PublishBatch(List<EventEnvelope> batch);
+
     /// <summary>routeId (short name or id) → route shape, loaded once for the app lifetime.</summary>
     IReadOnlyDictionary<string, RouteShapeFeature> RouteShapes { get; }
 
@@ -101,6 +108,9 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
     }
 
     Task OnNotificationReceived(List<EventEnvelope> batch)
+        => NotificationReceived?.Invoke(batch) ?? Task.CompletedTask;
+
+    public Task PublishBatch(List<EventEnvelope> batch)
         => NotificationReceived?.Invoke(batch) ?? Task.CompletedTask;
 
     async Task LoadRoutesAsync(CancellationToken ct)

@@ -5,6 +5,7 @@ using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
+using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.AspNetCore.Components;
@@ -31,6 +32,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] ICheckpointTrackerJsInterop CheckpointTracker { get; set; } = null!;
     [Inject] ITransitSynthJsInterop TransitSynth { get; set; } = null!;
     [Inject] IRouteFilterViewModel RouteFilterViewModel { get; set; } = null!;
+    [Inject] IApplicationViewModel ApplicationViewModel { get; set; } = null!;
     [Inject] IEventNotificationService EventNotificationService { get; set; } = null!;
     [Inject] ISettingsService SettingsService { get; set; } = null!;
     [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
@@ -469,6 +471,11 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 _mapReady);
 
             await HandleVehicleBatchAsync(envelopes);
+
+            // Fan the snapshot through the same notification path the live stream uses
+            // so the running-count seeds from the cold-start fleet and the header matches
+            // what the map renders (the count subscriber lives on this event).
+            await ApplicationViewModel.PublishBatch(envelopes);
         }
         catch (Exception ex)
         {
