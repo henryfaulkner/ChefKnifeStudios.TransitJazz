@@ -46,3 +46,7 @@
 .route-filters__route-filter-label {
     color: white;
 }
+
+.route-filters__clear-btn {
+    background-color: #888;
+}
