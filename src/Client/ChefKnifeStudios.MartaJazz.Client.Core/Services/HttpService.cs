@@ -1,4 +1,5 @@
 using Ardalis.Result;
+using ChefKnifeStudios.MartaJazz.Shared;
 using System;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -28,9 +29,13 @@ public class HttpService : IHttpService
         _client = client;
         _options = new JsonSerializerOptions
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true
         };
+        // Align with the server's serialization (JsonSettings.DefaultOptions) so polymorphic
+        // EventEnvelope.Payload round-trips: registers EventEnvelopeConverter (+ enum converter,
+        // camelCase naming, number handling). Without this the GetLastBatch warm-cache snapshot
+        // fails to deserialize and the buses don't paint until the first SignalR batch arrives.
+        JsonSettings.ApplyTo(_options);
     }
 
     public async Task<Result<T>> GetAsync<T>(string? requestUri, CancellationToken ct = default)
