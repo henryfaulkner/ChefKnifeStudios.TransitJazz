@@ -51,9 +51,11 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     readonly IToastService _toastService;
     readonly IApplicationViewModel _applicationViewModel;
 
-    // Retained per-route running counts from the last batch so ActiveBusCount
-    // can recompute on selection change without waiting for a new batch.
-    Dictionary<string, int> _lastBatchRouteCounts = new(StringComparer.Ordinal);
+    // Accumulated distinct non-stale vehicle IDs per route, upserted across every batch
+    // (live + cold-start snapshot) — mirrors the server-side LastBatchCache accumulator so
+    // the running count reflects all known buses, not just the ones that moved this cycle.
+    // An empty/all-stale batch adds nothing, so the count holds its last value.
+    readonly Dictionary<string, HashSet<string>> _routeVehicles = new(StringComparer.Ordinal);
 
     public RouteFilterViewModel(
         ILogger<RouteFilterViewModel> logger,
@@ -81,31 +83,27 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 
     Task OnNotificationReceived(List<EventEnvelope> batch)
     {
-        // Count distinct active vehicles per route from RouteNearestPointBatchEvent —
-        // the authoritative per-cycle view that drives animation. Stale records
-        // (same GPS reading repeated) are excluded so only moving buses count.
-        var routeVehicles = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        // Accumulate distinct non-stale vehicles per route across batches (live + the
+        // cold-start snapshot fanned through this same event). Stale records (same GPS
+        // reading repeated) are excluded. An empty/all-stale batch upserts nothing, so
+        // the count holds its last value rather than flickering to 0.
+        var changed = false;
         foreach (var envelope in batch)
         {
             if (envelope.Payload is not RouteNearestPointBatchEvent batchEvent) continue;
             foreach (var record in batchEvent.BatchRecords)
             {
                 if (record.IsStale || string.IsNullOrEmpty(record.RouteId)) continue;
-                if (!routeVehicles.TryGetValue(record.RouteId, out var vehicles))
-                    routeVehicles[record.RouteId] = vehicles = new HashSet<string>(StringComparer.Ordinal);
-                vehicles.Add(record.VehicleId);
+                if (!_routeVehicles.TryGetValue(record.RouteId, out var vehicles))
+                    _routeVehicles[record.RouteId] = vehicles = new HashSet<string>(StringComparer.Ordinal);
+                changed |= vehicles.Add(record.VehicleId);
             }
         }
 
-        if (routeVehicles.Count == 0) return Task.CompletedTask;
-
-        _lastBatchRouteCounts = routeVehicles.ToDictionary(
-            kvp => kvp.Key,
-            kvp => kvp.Value.Count,
-            StringComparer.Ordinal);
+        if (!changed) return Task.CompletedTask;
 
         RouteItems = RouteItems
-            .OrderByDescending(x => _lastBatchRouteCounts.TryGetValue(x.RouteId, out var c) ? c : 0)
+            .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteId, out var v) ? v.Count : 0)
             .ToList();
 
         RecomputeActiveBusCount();
@@ -135,8 +133,8 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
         }
 
         int count = effectiveIds.Count > 0
-            ? effectiveIds.Sum(id => _lastBatchRouteCounts.TryGetValue(id, out var c) ? c : 0)
-            : _lastBatchRouteCounts.Values.Sum();
+            ? effectiveIds.Sum(id => _routeVehicles.TryGetValue(id, out var v) ? v.Count : 0)
+            : _routeVehicles.Values.Sum(v => v.Count);
 
         ActiveBusCount = count;
     }
@@ -154,7 +152,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 Color = x.Properties.Color ?? "#888888",
                 IsSelected = previouslySelected.Contains(x.Properties.RouteShortName!),
             })
-            .OrderByDescending(x => _lastBatchRouteCounts.TryGetValue(x.RouteId, out var c) ? c : 0)
+            .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteId, out var v) ? v.Count : 0)
             .ToList();
 
         _logger.LogDebug("RouteFilterViewModel.BuildRouteItems: built {Count} route items", RouteItems.Count());

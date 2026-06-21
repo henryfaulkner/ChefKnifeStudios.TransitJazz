@@ -5,6 +5,7 @@ using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
+using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.AspNetCore.Components;
@@ -31,6 +32,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] ICheckpointTrackerJsInterop CheckpointTracker { get; set; } = null!;
     [Inject] ITransitSynthJsInterop TransitSynth { get; set; } = null!;
     [Inject] IRouteFilterViewModel RouteFilterViewModel { get; set; } = null!;
+    [Inject] IApplicationViewModel ApplicationViewModel { get; set; } = null!;
     [Inject] IEventNotificationService EventNotificationService { get; set; } = null!;
     [Inject] ISettingsService SettingsService { get; set; } = null!;
     [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
@@ -47,7 +49,11 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     Map? _map;
     bool _mapReady;
-    IEnumerable<EventEnvelope>? _pendingBatch;
+    // Batches that arrive before the map is ready (the initial REST snapshot and any
+    // SignalR batches that beat OnMapReadyAsync). Accumulate rather than overwrite — a
+    // single slot let a small SignalR batch clobber the full initial snapshot, so the
+    // snapshot never painted and buses only appeared from the next live batch.
+    readonly List<IEnumerable<EventEnvelope>> _pendingBatches = new();
 
     bool _audioEnabled = true;
     bool _audioUnlocked = false;
@@ -294,11 +300,17 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
         await InvokeAsync(StateHasChanged);
 
-        if (_pendingBatch is not null)
+        if (_pendingBatches.Count > 0)
         {
-            var batch = _pendingBatch;
-            _pendingBatch = null;
-            await HandleVehicleBatchAsync(batch);
+            var batches = _pendingBatches.ToArray();
+            _pendingBatches.Clear();
+            Logger.LogInformation("TransitMap.OnMapReadyAsync: replaying {Count} pending batch(es)", batches.Length);
+            foreach (var batch in batches)
+                await HandleVehicleBatchAsync(batch);
+        }
+        else
+        {
+            Logger.LogInformation("TransitMap.OnMapReadyAsync: no pending batch to replay");
         }
     }
 
@@ -384,7 +396,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         if (!_mapReady || _map is null)
         {
-            _pendingBatch = batch;
+            _pendingBatches.Add(batch);
             return;
         }
 
@@ -437,14 +449,33 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             var res = await TransitEndpointsService.GetLastBatch(ct);
             if (!res.IsSuccess)
             {
-                Logger.LogWarning("TransitMap.FetchInitialSnapshotAsync: GetLastBatch failed — Status={Status}", res.Status);
+                Logger.LogWarning("TransitMap.FetchInitialSnapshotAsync: GetLastBatch failed — Status={Status} Errors={Errors}",
+                    res.Status, string.Join("; ", res.Errors));
                 return;
             }
 
             var batch = res.Value;
-            if (batch is null) return;
+            if (batch is null)
+            {
+                Logger.LogWarning("TransitMap.FetchInitialSnapshotAsync: GetLastBatch returned success but null batch");
+                return;
+            }
 
-            await HandleVehicleBatchAsync(batch);
+            var envelopes = batch.ToList();
+            var nearestPointCount = envelopes.Count(x => x.Payload is RouteNearestPointBatchEvent);
+            Logger.LogInformation(
+                "TransitMap.FetchInitialSnapshotAsync: GetLastBatch returned {Total} envelope(s), {Nearest} RouteNearestPointBatchEvent, payload types=[{Types}], mapReady={MapReady}",
+                envelopes.Count,
+                nearestPointCount,
+                string.Join(", ", envelopes.Select(x => x.Payload?.GetType().Name ?? "null").Distinct()),
+                _mapReady);
+
+            await HandleVehicleBatchAsync(envelopes);
+
+            // Fan the snapshot through the same notification path the live stream uses
+            // so the running-count seeds from the cold-start fleet and the header matches
+            // what the map renders (the count subscriber lives on this event).
+            await ApplicationViewModel.PublishBatch(envelopes);
         }
         catch (Exception ex)
         {

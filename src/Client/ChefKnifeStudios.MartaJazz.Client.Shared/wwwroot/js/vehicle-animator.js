@@ -311,7 +311,32 @@ window.ChefMapAnimator = {
                 continue;
             }
             if (rec.isStale && !existingState) {
+                // No prior client state to extrapolate from, but the record still
+                // carries a valid current position. This is the cold-start case: the
+                // warm last-batch snapshot is almost entirely stale records, so dropping
+                // them left the map empty until the first fresh SignalR batch arrived.
+                // Place the bus at its current position as an idle vehicle; the next
+                // live (non-stale) batch will pick it up and begin animating.
                 staleVehicles++;
+                var staleStartPos = [rec.currentLon, rec.currentLat];
+                this.vehicles[rec.vehicleId] = {
+                    vehicleId: rec.vehicleId,
+                    routeId: rec.routeId,
+                    subPath: [staleStartPos],
+                    subPathCumDist: [0],
+                    totalDistance: 0,
+                    startTime: now,
+                    duration: rec.durationMs || 10000,
+                    speed: rec.speed || null,
+                    empiricalSpeed: 0,
+                    bearing: rec.bearing || null,
+                    currentPos: staleStartPos,
+                    endPos: staleStartPos,
+                    extrapolateFromPos: staleStartPos,
+                    history: [],
+                    phase: 'idle'
+                };
+                newVehicles++;
                 continue;
             }
 

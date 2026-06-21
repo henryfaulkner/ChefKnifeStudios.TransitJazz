@@ -1,6 +1,7 @@
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 
 namespace ChefKnifeStudios.MartaJazz.Server.WebAPI.SignalR;
@@ -13,10 +14,40 @@ public interface ILastBatchCache
 
 public sealed class LastBatchCache : ILastBatchCache
 {
+    private readonly object _gate = new();
+    private readonly Dictionary<string, RouteNearestPointBatchEvent.RouteNearestPointRecord> _vehicles = new();
     private IReadOnlyList<EventEnvelope> _current = Array.Empty<EventEnvelope>();
 
     public IReadOnlyList<EventEnvelope> Current => Volatile.Read(ref _current);
 
     public void Set(IReadOnlyList<EventEnvelope> batch)
-        => Volatile.Write(ref _current, batch ?? Array.Empty<EventEnvelope>());
+    {
+        lock (_gate)
+        {
+            if (batch is not null)
+            {
+                foreach (var env in batch)
+                {
+                    if (env?.Payload is not RouteNearestPointBatchEvent rnp) continue;
+                    foreach (var rec in rnp.BatchRecords)
+                    {
+                        if (rec.IsStale) continue;       // ignore stale: never overwrite, never seed
+                        _vehicles[rec.VehicleId] = rec;  // upsert latest non-stale per vehicle
+                    }
+                }
+            }
+
+            var rebuilt = _vehicles.Count == 0
+                ? Array.Empty<EventEnvelope>()
+                : new[]
+                {
+                    new EventEnvelope(
+                        nameof(RouteNearestPointBatchEvent),
+                        DateTimeOffset.UtcNow,
+                        new RouteNearestPointBatchEvent(_vehicles.Values.ToList()))
+                };
+
+            Volatile.Write(ref _current, rebuilt);
+        }
+    }
 }
