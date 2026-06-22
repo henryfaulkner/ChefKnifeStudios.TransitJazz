@@ -8,23 +8,24 @@ public partial class Settings : ObservableObject
 {
     [ObservableProperty]
     [property: Description("SettingAudioEnabled")]
-    private bool _isAudioEnabled = true;
+    bool _isAudioEnabled = true;
 
     [ObservableProperty]
     [property: Description("SettingCheckpointsVisible")]
-    private bool _areCheckpointsVisible = true;
+    [property: HiddenSetting]
+    bool _areCheckpointsVisible = true;
 
     [ObservableProperty]
     [property: Description("SettingStreetMap")]
-    private bool _isStreetMapEnabled = false;
+    bool _isStreetMapEnabled = false;
 
     [ObservableProperty]
     [property: Description("SettingBusesVisible")]
     [property: HiddenSetting]
-    private bool _isBusesVisible = false;
+    bool _isBusesVisible = false;
 
     [ObservableProperty]
     [property: Description("SettingAllCheckpointsVisible")]
     [property: HiddenSetting]
-    private bool _areAllCheckpointsVisible = false;
+    bool _areAllCheckpointsVisible = false;
 }
