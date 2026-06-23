@@ -66,7 +66,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _routesRendered;
 
     CameraOptions DefaultCameraOptions
-        => new() { Center = new Position(33.749, -84.388), Zoom = _isMobile ? 8.5 : 9.5 };
+        => new() { Center = new Position(33.749, -84.388), Zoom = _isMobile ? 7.5 : 9.5 };
 
     protected override async Task OnInitializedAsync()
     {
