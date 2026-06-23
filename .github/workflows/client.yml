@@ -2,7 +2,7 @@ name: Client CI/CD
 
 on:
   push:
-    branches: [main, 025-mobile-map-controls]
+    branches: [main]
 
 jobs:
   build:
