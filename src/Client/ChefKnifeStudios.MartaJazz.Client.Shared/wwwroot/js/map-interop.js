@@ -20,9 +20,16 @@ window.ChefMap = {
             zoom: settings.zoom,
             minZoom: 7,
             maxZoom: 18,
-            dragRotate: false,
-            touchZoomRotate: false
+            dragRotate: false
         });
+
+        // Pinch-to-zoom on, touch rotation off — keeps the map north-up (FR-003, FR-007).
+        map.touchZoomRotate.enable();
+        map.touchZoomRotate.disableRotation();
+
+        // On-screen zoom +/− buttons at bottom-left; compass omitted (no rotation — FR-007).
+        // Bottom-right is occupied by the fixed-position settings gear FAB (Principle X).
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false, showZoom: true, visualizePitch: false }), 'bottom-left');
 
         ChefMap.maps[containerDivId] = map;
 
