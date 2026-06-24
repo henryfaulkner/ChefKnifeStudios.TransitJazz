@@ -37,6 +37,19 @@ const PALETTE = [
     },
 ];
 
+// Default Tone Transport tempo is 120 BPM (unchanged in this app):
+//   4n = 0.5s, 8n. = 0.375s, 8n = 0.25s
+const DURATION_SECONDS = { '8n': 0.25, '8n.': 0.375, '4n': 0.5 };
+
+// All current palette slots share this duration set; selection is stable across routes.
+const DURATIONS = ['8n', '8n.', '4n'];
+
+// Deterministic, audio-independent selection of the note-duration token for a vehicle.
+// Shared by triggerNote (audible note) and durationSecondsFor (trail growth) so they always agree.
+function _durationTokenFor(vehicleId) {
+    return DURATIONS[djb2(String(vehicleId)) % DURATIONS.length];
+}
+
 // djb2 hash — deterministic, no crypto needed
 function djb2(s) {
     let h = 5381;
@@ -147,12 +160,21 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
         const T = await getTone();
         const { sampler, scale, durations } = await instrumentFor(routeId);
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
+        // Same selection index as durationSecondsFor → audible note and trail agree on duration.
         const duration = durations[djb2(String(vehicleId)) % durations.length];
         console.log('[TransitSynth] play route=' + routeId + ' note=' + note + ' duration=' + duration);
         sampler.triggerAttackRelease(note, duration);
     } catch (err) {
         console.warn('[TransitSynth] triggerNote error:', err);
     }
+}
+
+// Audio-independent note duration in seconds for a vehicle's crossing. No _unlocked
+// guard, no AudioContext, no Tone import — callable while muted/locked (FR-001). Uses
+// the SAME deterministic selection as triggerNote so the trail length matches the note.
+export function durationSecondsFor(vehicleId) {
+    const tok = _durationTokenFor(vehicleId);
+    return DURATION_SECONDS[tok] ?? 0.25;
 }
 
 export async function dispose() {
@@ -164,4 +186,4 @@ export async function dispose() {
     _tone = null;
 }
 
-window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose };
+window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor };

@@ -6,6 +6,14 @@ async function _getCheckpointPulse() {
     return _checkpointPulseModule;
 }
 
+let _checkpointTrailModule = null;
+async function _getCheckpointTrail() {
+    if (!_checkpointTrailModule) {
+        _checkpointTrailModule = await import('/_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/checkpoint-trail.js');
+    }
+    return _checkpointTrailModule;
+}
+
 window.ChefMap = {
     maps: {},
     _routesFeatureCollection: null,
@@ -28,7 +36,7 @@ window.ChefMap = {
         map.touchZoomRotate.disableRotation();
 
         // On-screen zoom +/− buttons at bottom-left; compass omitted (no rotation — FR-007).
-        // Bottom-right is occupied by the fixed-position settings gear FAB (Principle X).
+        // Bottom-right is occupied by fixed-position audio and map-style FABs.
         map.addControl(new maplibregl.NavigationControl({ showCompass: false, showZoom: true, visualizePitch: false }), 'bottom-left');
 
         ChefMap.maps[containerDivId] = map;
@@ -94,6 +102,9 @@ window.ChefMap = {
 
             // Pre-create pulse layers so setCheckpointVisibility works before the first crossing.
             _getCheckpointPulse().then(function (pulse) { pulse.ensureLayer(map); });
+
+            // Pre-create the crossing-trail layer so the first crossing renders immediately.
+            _getCheckpointTrail().then(function (trail) { trail.ensureLayer(map); });
 
             let containerDiv = document.getElementById(containerDivId);
             if (containerDiv) {
@@ -218,6 +229,11 @@ window.ChefMap = {
                     pulse.ensureLayer(map);
                     pulse.reset(map);
                 });
+
+                // Re-add the crossing-trail layer so the next crossing renders after a basemap swap
+                // (Principle VII). Active trails are sub-second and need not be preserved.
+                try { _getCheckpointTrail().then(function (trail) { trail.ensureLayer(map); }); }
+                catch (e) { console.warn('[ChefMap] setMapStyle: could not restore crossing-trail layer: ' + e); }
 
                 // Signal C# to re-render routes from cache (addAllRoutes will hit setData branch).
                 resolve({});
@@ -441,6 +457,44 @@ window.ChefMap = {
             pulse.setVisible(map, visible);
         } catch (e) {
             console.warn('[ChefMap] setCheckpointVisibility: pulse layer error — ' + e);
+        }
+    },
+
+    startCrossingTrail: async function (containerDivId, routeId, vehicleId, triggerIndex, durationSec) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+
+        // Anchor: reuse the trigger feature (same lookup as pulseCheckpoint).
+        let features = ChefMap._triggerPointFeatures[routeId];
+        if (!features) return;                       // route geometry not loaded yet
+        let feature = features.find(function (f) { return f.properties.triggerIndex === triggerIndex; });
+        if (!feature) return;
+
+        let anchorCoord = feature.geometry.coordinates;
+        let anchorDistanceM = feature.properties.alongDistanceM;
+        let color = ChefMap._routeColorsByRouteId[routeId] || '#facc15';   // FR-005
+
+        // Speed: read empirical speed from the animator (audio-independent — R5).
+        let vstate = ChefMapAnimator.vehicles[vehicleId];
+        let speedMps = (vstate && (vstate.empiricalSpeed ?? vstate.speed)) || 0;
+
+        try {
+            let trail = await _getCheckpointTrail();
+            trail.ensureLayer(map);
+            trail.start(map, routeId, vehicleId, triggerIndex, anchorCoord, anchorDistanceM, color, speedMps, durationSec);
+        } catch (e) {
+            console.error('[ChefMap] startCrossingTrail: error — ', e);
+        }
+    },
+
+    setCrossingTrailVisibility: async function (containerDivId, visible) {
+        let map = ChefMap.maps[containerDivId];
+        if (!map) return;
+        try {
+            let trail = await _getCheckpointTrail();
+            trail.setVisible(map, visible);          // false → reset() clears active trails (FR-006)
+        } catch (e) {
+            console.warn('[ChefMap] setCrossingTrailVisibility: trail layer error — ' + e);
         }
     },
 

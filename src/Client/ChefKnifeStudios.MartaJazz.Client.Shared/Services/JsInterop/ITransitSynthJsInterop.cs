@@ -11,4 +11,5 @@ public interface ITransitSynthJsInterop : IAsyncDisposable
     Task UnlockAsync();
     Task<bool> IsUnlockedAsync();
     Task TriggerNoteAsync(string routeId, string vehicleId, int triggerIndex = 0, int totalTriggers = 1);
+    Task<double> DurationSecondsForAsync(string vehicleId);
 }

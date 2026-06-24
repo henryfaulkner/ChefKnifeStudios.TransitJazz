@@ -58,6 +58,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _audioEnabled = true;
     bool _audioUnlocked = false;
     bool _checkpointsVisible = false;
+    bool _crossingTrailVisible = true;
     DotNetObjectReference<object>? _dotNetRef;
 
     // routeId → GeoJSON string (client-side cache, lives for page lifetime)
@@ -75,6 +76,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         var settings = SettingsService.GetSettings();
         _audioEnabled = settings.IsAudioEnabled;
         _checkpointsVisible = settings.AreCheckpointsVisible;
+        _crossingTrailVisible = settings.IsCrossingTrailVisible;
 
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived += HandleSettingsEventReceived;
@@ -111,6 +113,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             _ = ConfigureAllTrackersAsync();
             var settings = SettingsService.GetSettings();
             await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
+            await _map.SetCrossingTrailVisibilityAsync(settings.IsCrossingTrailVisible);
             await _map.SetAllCheckpointsVisibilityAsync(settings.AreAllCheckpointsVisible);
             await _map.SetVehiclesVisibleAsync(settings.IsBusesVisible);
         }
@@ -129,10 +132,23 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         {
             if (effectiveIds is not null && !effectiveIds.Contains(crossing.RouteId)) continue;
 
+            // Pulse (expanding ring) is gated on its own checkpoint-visibility setting.
             if (_checkpointsVisible && _map is not null)
             {
                 try { await _map.PulseCheckpointAsync(crossing.RouteId, crossing.TriggerIndex); }
                 catch (Exception ex) { Logger.LogWarning(ex, "PulseCheckpointAsync failed for {RouteId}/{Idx}", crossing.RouteId, crossing.TriggerIndex); }
+            }
+
+            // Trail is gated on its own setting, independent of the pulse AND of audio
+            // mute/lock state (FR-001).
+            if (_crossingTrailVisible && _map is not null)
+            {
+                try
+                {
+                    var durationSec = await TransitSynth.DurationSecondsForAsync(crossing.VehicleId);
+                    await _map.StartCrossingTrailAsync(crossing.RouteId, crossing.VehicleId, crossing.TriggerIndex, durationSec);
+                }
+                catch (Exception ex) { Logger.LogWarning(ex, "StartCrossingTrailAsync failed for {RouteId}/{Idx}", crossing.RouteId, crossing.TriggerIndex); }
             }
 
             if (_audioEnabled)
@@ -183,6 +199,18 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             return;
         }
 
+        if (e is CrossingTrailVisibilityChangedEventArgs trail)
+        {
+            _crossingTrailVisible = trail.IsCrossingTrailVisible;
+            InvokeAsync(async () =>
+            {
+                if (_map is not null)
+                    // false → clears active trails immediately (FR-006).
+                    await _map.SetCrossingTrailVisibilityAsync(trail.IsCrossingTrailVisible);
+            });
+            return;
+        }
+
         if (e is BusVisibilitySettingChangedEventArgs buses)
         {
             InvokeAsync(async () =>
@@ -224,6 +252,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 // Restore checkpoint visibility to match the current setting.
                 var settings = SettingsService.GetSettings();
                 await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
+                await _map.SetCrossingTrailVisibilityAsync(settings.IsCrossingTrailVisible);
                 await _map.SetAllCheckpointsVisibilityAsync(settings.AreAllCheckpointsVisible);
                 await _map.SetVehiclesVisibleAsync(settings.IsBusesVisible);
             });
