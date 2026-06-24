@@ -12,7 +12,7 @@ public partial class Settings : ObservableObject
 
     [ObservableProperty]
     [property: Description("SettingCheckpointsVisible")]
-    bool _areCheckpointsVisible = false;
+    bool _areCheckpointsVisible = true;
 
     [ObservableProperty]
     [property: Description("SettingCrossingTrailVisible")]
