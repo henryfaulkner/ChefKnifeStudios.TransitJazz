@@ -150,6 +150,9 @@
   <data name="SettingCheckpointsVisible" xml:space="preserve">
     <value>Checkpoint pulses</value>
   </data>
+  <data name="SettingCrossingTrailVisible" xml:space="preserve">
+    <value>Crossing trails</value>
+  </data>
   <data name="SettingStreetMap" xml:space="preserve">
     <value>Street map</value>
   </data>

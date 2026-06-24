@@ -12,8 +12,11 @@ public partial class Settings : ObservableObject
 
     [ObservableProperty]
     [property: Description("SettingCheckpointsVisible")]
-    [property: HiddenSetting]
-    bool _areCheckpointsVisible = true;
+    bool _areCheckpointsVisible = false;
+
+    [ObservableProperty]
+    [property: Description("SettingCrossingTrailVisible")]
+    bool _isCrossingTrailVisible = true;
 
     [ObservableProperty]
     [property: Description("SettingStreetMap")]
@@ -21,11 +24,9 @@ public partial class Settings : ObservableObject
 
     [ObservableProperty]
     [property: Description("SettingBusesVisible")]
-    [property: HiddenSetting]
     bool _isBusesVisible = false;
 
     [ObservableProperty]
     [property: Description("SettingAllCheckpointsVisible")]
-    [property: HiddenSetting]
     bool _areAllCheckpointsVisible = false;
 }

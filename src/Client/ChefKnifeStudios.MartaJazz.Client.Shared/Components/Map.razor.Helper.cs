@@ -91,6 +91,18 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Console.WriteLine($"[Map] PulseCheckpoint failed for routeId={routeId} triggerIndex={triggerIndex}: {ex}"); }
     }
 
+    public async Task StartCrossingTrailAsync(string routeId, string vehicleId, int triggerIndex, double durationSeconds)
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.startCrossingTrail", ElementId, routeId, vehicleId, triggerIndex, durationSeconds); }
+        catch (Exception ex) { Console.WriteLine($"[Map] StartCrossingTrail failed for routeId={routeId} triggerIndex={triggerIndex}: {ex}"); }
+    }
+
+    public async Task SetCrossingTrailVisibilityAsync(bool visible)
+    {
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setCrossingTrailVisibility", ElementId, visible); }
+        catch (Exception ex) { Console.WriteLine($"[Map] SetCrossingTrailVisibility failed: {ex}"); }
+    }
+
     public async Task SetAllCheckpointsVisibilityAsync(bool visible)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.setAllCheckpointsVisibility", ElementId, visible); }

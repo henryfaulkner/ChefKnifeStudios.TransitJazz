@@ -74,6 +74,20 @@ public class TransitSynthJsInterop : ITransitSynthJsInterop
         catch (Exception ex) { LogError(ex, nameof(TriggerNoteAsync)); }
     }
 
+    public async Task<double> DurationSecondsForAsync(string vehicleId)
+    {
+        try
+        {
+            var module = await _moduleTask.Value;
+            return await module.InvokeAsync<double>("durationSecondsFor", vehicleId);
+        }
+        catch (Exception ex)
+        {
+            LogError(ex, nameof(DurationSecondsForAsync));
+            return 0.25;
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_moduleTask.IsValueCreated)

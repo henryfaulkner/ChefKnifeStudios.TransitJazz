@@ -1,6 +1,6 @@
-.settings-fab-container {
+.mapstyle-fab-container {
     position: fixed;
-    bottom: 92px;
+    bottom: 42px;
     right: 24px;
     z-index: 100;
 }

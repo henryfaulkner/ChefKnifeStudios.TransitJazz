@@ -3,11 +3,20 @@
 @implements IDisposable
 @inject IEventNotificationService EventNotificationService
 
-<div class="settings-fab-container">
-    <MatFAB Icon="settings" @onclick="HandleFabClicked" />
-</div>
+@if (_showInDebug)
+{
+    <div class="settings-fab-container">
+        <MatFAB Icon="settings" Mini="true" @onclick="HandleFabClicked" />
+    </div>
+}
 
 @code {
+#if DEBUG
+    bool _showInDebug = true;
+#else
+    bool _showInDebug = false;
+#endif
+
     bool _isOpen;
 
     protected override void OnInitialized()
