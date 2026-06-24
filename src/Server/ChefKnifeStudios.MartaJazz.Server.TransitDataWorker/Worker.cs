@@ -1,4 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.Geospatial;
@@ -16,7 +17,8 @@ public class Worker(
     ITransitHubPublisher transitHubPublisher,
     IEventNotificationService eventNotifications,
     LogEventWorker logEventWorker,
-    ILoggingService loggingService) : BackgroundService
+    ILoggingService loggingService,
+    IRailRealtimeAdapter railAdapter) : BackgroundService
 {
     readonly ConcurrentDictionary<string, VehicleState> _vehicleStateCache = new();
     ulong? _lastFeedHeaderTimestamp;
@@ -40,10 +42,15 @@ public class Worker(
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            var feed = await FetchGtfsRtFeedAsync(stoppingToken);
-            if (feed != null && _routeIndex != null)
+            var busFeed = await FetchGtfsRtFeedAsync(stoppingToken);
+            var railEnts = await railAdapter.FetchAsync(stoppingToken);
+
+            var merged = busFeed ?? new FeedMessage();
+            merged.Entities.AddRange(railEnts);
+
+            if (merged.Entities.Count > 0 && _routeIndex != null)
             {
-                await ProcessSpatialReconciliationAsync(feed, stoppingToken);
+                await ProcessSpatialReconciliationAsync(merged, stoppingToken);
             }
         }
     }

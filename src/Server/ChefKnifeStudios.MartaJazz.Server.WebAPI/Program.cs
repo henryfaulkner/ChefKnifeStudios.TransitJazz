@@ -1,5 +1,6 @@
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.EndpointGroups;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.GtfsStatic;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces;
@@ -47,6 +48,13 @@ builder.Services.ConfigureHttpJsonOptions(static options =>
 {
     JsonSettings.ApplyTo(options.SerializerOptions);
 });
+
+builder.Services.AddHttpClient("RailRealtimeApi", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Marta:RailRealtime:BaseUrl"]!);
+});
+builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection("Marta:RailRealtime"));
+builder.Services.AddSingleton<IRailRealtimeAdapter, RailRealtimeAdapter>();
 
 builder.Services.AddSingleton(typeof(IKeyValueRepository<>), typeof(InMemoryKeyValueRepository<>));
 builder.Services.AddHttpClient();
