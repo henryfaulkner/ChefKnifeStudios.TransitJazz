@@ -1,4 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces;
+using ChefKnifeStudios.MartaJazz.Shared.Events;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
@@ -44,15 +45,17 @@ public class GtfsStaticLoader(
                 if (!shapes.TryGetValue(shapeId, out var points) || points.Count == 0) continue;
 
                 string? shortName = null, color = null, textColor = null;
+                var mode = TransitMode.Bus;
                 if (routeMetadata.TryGetValue(routeId, out var meta))
                 {
                     shortName = meta.RouteShortName;
                     color = meta.RouteColor;
                     textColor = meta.TextColor;
+                    mode = meta.Mode;
                 }
 
                 var simplified = Simplify(points, SimplifyToleranceMeters);
-                var geoJson = BuildLineStringFeature(routeId, shortName, simplified, color, textColor);
+                var geoJson = BuildLineStringFeature(routeId, shortName, simplified, color, textColor, mode);
                 await routeShapeRepo.SetAsync(routeId, geoJson, cancellationToken);
                 stored++;
             }
@@ -135,9 +138,9 @@ public class GtfsStaticLoader(
         return result;
     }
 
-    static Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor)> ParseRouteMetadata(ZipArchive archive)
+    static Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, TransitMode Mode)> ParseRouteMetadata(ZipArchive archive)
     {
-        var result = new Dictionary<string, (string?, string?, string?)>();
+        var result = new Dictionary<string, (string?, string?, string?, TransitMode)>();
         var entry = archive.GetEntry("routes.txt");
         if (entry == null) return result;
 
@@ -147,6 +150,7 @@ public class GtfsStaticLoader(
         int shortNameIdx = Array.IndexOf(header, "route_short_name");
         int colorIdx = Array.IndexOf(header, "route_color");
         int textColorIdx = Array.IndexOf(header, "route_text_color");
+        int routeTypeIdx = Array.IndexOf(header, "route_type");
         if (routeIdx < 0) return result;
 
         string? line;
@@ -159,8 +163,12 @@ public class GtfsStaticLoader(
             if (string.IsNullOrEmpty(shortName)) shortName = null;
             var color = colorIdx >= 0 && cols.Length > colorIdx ? NormalizeColor(cols[colorIdx].Trim()) : null;
             var textColor = textColorIdx >= 0 && cols.Length > textColorIdx ? NormalizeColor(cols[textColorIdx].Trim()) : null;
+            // GTFS route_type 1 = subway/metro (rail); any other or missing value classifies as bus.
+            var mode = routeTypeIdx >= 0 && cols.Length > routeTypeIdx && cols[routeTypeIdx].Trim() == "1"
+                ? TransitMode.Rail
+                : TransitMode.Bus;
             if (!string.IsNullOrEmpty(routeId))
-                result[routeId] = (shortName, color, textColor);
+                result[routeId] = (shortName, color, textColor, mode);
         }
         return result;
     }
@@ -242,7 +250,8 @@ public class GtfsStaticLoader(
         string? routeShortName,
         List<(double Lat, double Lon, int Seq)> points,
         string? color,
-        string? textColor)
+        string? textColor,
+        TransitMode mode)
     {
         var sb = new StringBuilder();
         sb.Append("{\"type\":\"Feature\",\"geometry\":{\"type\":\"LineString\",\"coordinates\":[");
@@ -262,6 +271,7 @@ public class GtfsStaticLoader(
         sb.Append($",\"routeShortName\":{(routeShortName != null ? JsonSerializer.Serialize(routeShortName) : "null")}");
         sb.Append($",\"color\":{(color != null ? JsonSerializer.Serialize(color) : "null")}");
         sb.Append($",\"textColor\":{(textColor != null ? JsonSerializer.Serialize(textColor) : "null")}");
+        sb.Append($",\"mode\":\"{mode}\"");
         sb.Append("}}");
         return sb.ToString();
     }

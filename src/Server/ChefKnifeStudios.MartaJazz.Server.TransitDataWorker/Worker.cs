@@ -96,10 +96,7 @@ public class Worker(
                 response.EnsureSuccessStatusCode();
 
                 var json = await response.Content.ReadAsStringAsync(ct);
-                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, JsonOptions.Get());
 
                 if (shapes == null || shapes.Count == 0)
                 {
@@ -502,10 +499,7 @@ public class Worker(
                 response.EnsureSuccessStatusCode();
 
                 var json = await response.Content.ReadAsStringAsync(ct);
-                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, JsonOptions.Get());
 
                 if (shapes == null || shapes.Count == 0)
                 {

@@ -7,9 +7,20 @@
     color: #888;
 }
 
-.route-filters {
+.route-filters__buses {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
+}
+
+.route-filters__rail {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.route-filters__section-label {
+    font-size: 0.7rem;
+    color: #888;
+    margin: 4px 0 2px;
 }
 
 .route-filters__route-filter {

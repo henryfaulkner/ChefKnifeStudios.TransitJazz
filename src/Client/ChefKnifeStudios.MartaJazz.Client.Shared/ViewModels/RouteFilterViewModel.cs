@@ -16,6 +16,7 @@ public class RouteItem
     public string RouteId { get; init; }
     public string Color { get; init; }
     public bool IsSelected { get; set; }
+    public TransitMode Mode { get; init; }
 }
 
 public interface IRouteFilterViewModel : IViewModel, IDisposable
@@ -167,6 +168,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 RouteId = x.Properties.RouteShortName!,
                 Color = x.Properties.Color ?? "#888888",
                 IsSelected = previouslySelected.Contains(x.Properties.RouteShortName!),
+                Mode = x.Properties.Mode,
             })
             .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteId, out var v) ? v.Count : 0)
             .ToList();
@@ -184,6 +186,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 RouteId = x.RouteId,
                 Color = x.Color,
                 IsSelected = x.RouteId == routeItem.RouteId ? !x.IsSelected : x.IsSelected,
+                Mode = x.Mode,
             })
             .ToList();
         RecomputeActiveTransitCounts();
@@ -192,7 +195,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     public void ClearSelection()
     {
         RouteItems = RouteItems
-            .Select(x => new RouteItem { RouteId = x.RouteId, Color = x.Color, IsSelected = false, })
+            .Select(x => new RouteItem { RouteId = x.RouteId, Color = x.Color, IsSelected = false, Mode = x.Mode, })
             .ToList();
         RecomputeActiveTransitCounts();
     }

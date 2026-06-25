@@ -186,4 +186,10 @@
   <data name="ClearSelections" xml:space="preserve">
     <value>Clear</value>
   </data>
+  <data name="Rail" xml:space="preserve">
+    <value>Rail</value>
+  </data>
+  <data name="Buses" xml:space="preserve">
+    <value>Buses</value>
+  </data>
 </root>
