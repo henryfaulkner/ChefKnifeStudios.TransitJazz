@@ -27,7 +27,7 @@ public class SettingsService : ISettingsService
         try
         {
             var settings = _localStorage.GetItem<Settings>(LocalStorageConstants.SettingsKey);
-            if (settings is not null) return settings;
+            if (settings is not null && settings.Version == Settings.CurrentVersion) return settings;
         }
         catch
         {

@@ -6,6 +6,11 @@ namespace ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 
 public partial class Settings : ObservableObject
 {
+    // ponytail: bump CurrentVersion when schema changes, old serialized data auto-discards
+    public const int CurrentVersion = 1;
+    [HiddenSetting]
+    public int Version { get; set; } = CurrentVersion;
+
     [ObservableProperty]
     [property: Description("SettingAudioEnabled")]
     bool _isAudioEnabled = true;
