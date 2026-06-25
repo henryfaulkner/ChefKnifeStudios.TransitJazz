@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 namespace ChefKnifeStudios.MartaJazz.Shared.Events;
 
+public enum TransitMode { Bus = 0, Rail = 1 }
+
 /// <summary>
 /// SignalR event containing a batch of vehicles that moved to a different nearest route point.
 /// Emitted once per poll cycle by the V2 spatial reconciliation pass.
@@ -37,6 +39,7 @@ public sealed record RouteNearestPointBatchEvent(
         DateTime CurrentUtcNow,
         float? SpeedMetersPerSec,
         float? Bearing,
-        bool IsStale
+        bool IsStale,
+        TransitMode TransitMode = TransitMode.Bus
     );
 }

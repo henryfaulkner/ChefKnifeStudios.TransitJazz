@@ -45,12 +45,16 @@ public class Worker(
             var busFeed = await FetchGtfsRtFeedAsync(stoppingToken);
             var railEnts = await railAdapter.FetchAsync(stoppingToken);
 
+            var railVehicleIds = railEnts.Count > 0
+                ? new HashSet<string>(railEnts.Select(e => e.Vehicle?.Vehicle?.Id ?? e.Id))
+                : [];
+
             var merged = busFeed ?? new FeedMessage();
             merged.Entities.AddRange(railEnts);
 
             if (merged.Entities.Count > 0 && _routeIndex != null)
             {
-                await ProcessSpatialReconciliationAsync(merged, stoppingToken);
+                await ProcessSpatialReconciliationAsync(merged, railVehicleIds, stoppingToken);
             }
         }
     }
@@ -130,7 +134,7 @@ public class Worker(
         logger.LogWarning("Could not initialize route index after {MaxRetries} attempts. V2 reconciliation will be skipped until index is built.", maxRetries);
     }
 
-    async Task ProcessSpatialReconciliationAsync(FeedMessage feed, CancellationToken ct)
+    async Task ProcessSpatialReconciliationAsync(FeedMessage feed, HashSet<string> railVehicleIds, CancellationToken ct)
     {
         try
         {
@@ -216,7 +220,8 @@ public class Worker(
                             now,
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
-                            isStale
+                            isStale,
+                            railVehicleIds.Contains(vehicleId) ? TransitMode.Rail : TransitMode.Bus
                         ));
 
                         if (isStale)
@@ -307,7 +312,8 @@ public class Worker(
                             now,
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
-                            false
+                            false,
+                            railVehicleIds.Contains(vehicleId) ? TransitMode.Rail : TransitMode.Bus
                         ));
                         outcome = "FirstObservation";
                         movedCount++;

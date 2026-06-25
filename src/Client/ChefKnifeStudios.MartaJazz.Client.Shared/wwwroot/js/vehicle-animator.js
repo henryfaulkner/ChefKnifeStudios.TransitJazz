@@ -232,6 +232,7 @@ window.ChefMapAnimator = {
                     vehicleId: state.vehicleId,
                     pinIcon: 'stop-pin-green',
                     routeId: state.routeId,
+                    transitMode: state.transitMode,
                     bearing: state.bearing
                 }
             });
@@ -442,6 +443,7 @@ window.ChefMapAnimator = {
             this.vehicles[rec.vehicleId] = {
                 vehicleId: rec.vehicleId,
                 routeId: rec.routeId,
+                transitMode: rec.transitMode || 'bus',
                 subPath: subPath,
                 subPathCumDist: subPathCumDist,
                 totalDistance: totalDistance,
