@@ -1,0 +1,28 @@
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<RouteFilterResources> Loc
+
+<div class="info-fab-container">
+    <MatFAB Icon="@(_isOpen ? "close" : "info_outline")" Mini="true" @onclick="() => _isOpen = !_isOpen" />
+</div>
+
+@if (_isOpen)
+{
+    <div class="info-overlay">
+        <div class="info-overlay__inner">
+            <div class="info-overlay__body">
+                <p>@Loc["InfoOverlayParagraph1"]</p>
+                <p>@Loc["InfoOverlayParagraph2"]</p>
+                <p>@Loc["InfoOverlayParagraph3"]</p>
+            </div>
+            <button type="button" class="info-overlay__button" @onclick="() => _isOpen = false">
+                @Loc["InfoOverlayButton"]
+            </button>
+        </div>
+        <div class="info-overlay__footer">@Loc["InfoOverlayFooter"]</div>
+    </div>
+}
+
+@code {
+    bool _isOpen;
+}

@@ -192,4 +192,19 @@
   <data name="Buses" xml:space="preserve">
     <value>Buses</value>
   </data>
+  <data name="InfoOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real MARTA vehicle, pulled live and turned into sound. Buses and trains move through Atlanta in real time, and the map plays what they're doing right now.</value>
+  </data>
+  <data name="InfoOverlayParagraph2" xml:space="preserve">
+    <value>Audio is required for the full experience — tap the volume button if you don't hear anything. Use the route filters to isolate routes and the layers button to toggle the city map.</value>
+  </data>
+  <data name="InfoOverlayParagraph3" xml:space="preserve">
+    <value>Built as a small experiment in turning a transit feed into generative music. Each note is placed by where a vehicle sits along its route, so what you hear is never quite the same twice.</value>
+  </data>
+  <data name="InfoOverlayFooter" xml:space="preserve">
+    <value>Henry Faulkner + Chef Knife Studios LLC - 2026</value>
+  </data>
+  <data name="InfoOverlayButton" xml:space="preserve">
+    <value>Return to experience</value>
+  </data>
 </root>
