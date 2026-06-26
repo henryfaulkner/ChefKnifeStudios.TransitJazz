@@ -44,8 +44,8 @@ public partial class RouteFilters : ComponentBase, IDisposable
         RouteFilterViewModel.SelectRoute(routeItem);
     }
 
-    void HandleClearSelections()
+    void HandleClearSelections(ChefKnifeStudios.MartaJazz.Shared.Events.TransitMode mode)
     {
-        RouteFilterViewModel.ClearSelection();
+        RouteFilterViewModel.ClearSelection(mode);
     }
 }

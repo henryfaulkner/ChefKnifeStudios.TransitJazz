@@ -24,10 +24,31 @@
     flex-wrap: wrap;
 }
 
+.route-filters__section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 2px;
+}
+
+.route-filters__section-header--rail {
+    margin-top: 0;
+}
+
+::deep .route-filters__clear-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+}
+
+::deep .route-filters__clear-btn i {
+    font-size: 16px;
+}
+
 ::deep .route-filters__section-label {
     font-size: 0.9rem;
     color: #888;
-    margin: 4px 0 2px !important;
+    margin: 0 !important;
 }
 
 .route-filters__route-filter {
@@ -63,9 +84,5 @@
 
 ::deep .route-filters__route-filter-label {
     color: white;
-    margin: 4px 0 2px !important;
-}
-
-.route-filters__clear-btn {
-    background-color: #888;
+    font-size: 0.8rem;
 }

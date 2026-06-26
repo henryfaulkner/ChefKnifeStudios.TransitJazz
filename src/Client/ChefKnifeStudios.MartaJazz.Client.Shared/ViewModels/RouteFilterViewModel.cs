@@ -23,9 +23,10 @@ public interface IRouteFilterViewModel : IViewModel, IDisposable
 {
     IEnumerable<RouteItem> RouteItems { get; }
     void SelectRoute(RouteItem routeItem);
-    void ClearSelection();
+    void ClearSelection(TransitMode mode);
     void SetHoveredRoute(RouteItem? routeItem);
     public bool HasSelection { get; }
+    bool HasSelectionFor(TransitMode mode);
     public bool IsSingleSelection { get; }
     public string? SelectedRouteId { get; }
     public IReadOnlyCollection<string> SelectedRouteIds { get; }
@@ -192,10 +193,10 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
         RecomputeActiveTransitCounts();
     }
 
-    public void ClearSelection()
+    public void ClearSelection(TransitMode mode)
     {
         RouteItems = RouteItems
-            .Select(x => new RouteItem { RouteId = x.RouteId, Color = x.Color, IsSelected = false, Mode = x.Mode, })
+            .Select(x => new RouteItem { RouteId = x.RouteId, Color = x.Color, IsSelected = x.Mode == mode ? false : x.IsSelected, Mode = x.Mode, })
             .ToList();
         RecomputeActiveTransitCounts();
     }
@@ -207,6 +208,8 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     }
 
     public bool HasSelection => RouteItems.Any(x => x.IsSelected);
+
+    public bool HasSelectionFor(TransitMode mode) => RouteItems.Any(x => x.IsSelected && x.Mode == mode);
 
     public bool IsSingleSelection => SelectedRouteIds.Count == 1;
 
