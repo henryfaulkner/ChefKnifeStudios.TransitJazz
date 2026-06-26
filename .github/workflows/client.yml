@@ -2,7 +2,7 @@ name: Client CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 028-marta-rail-realtime]
 
 jobs:
   build:

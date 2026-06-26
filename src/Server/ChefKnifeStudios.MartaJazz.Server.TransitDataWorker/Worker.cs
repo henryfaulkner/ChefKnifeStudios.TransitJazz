@@ -1,4 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.Geospatial;
@@ -16,7 +17,8 @@ public class Worker(
     ITransitHubPublisher transitHubPublisher,
     IEventNotificationService eventNotifications,
     LogEventWorker logEventWorker,
-    ILoggingService loggingService) : BackgroundService
+    ILoggingService loggingService,
+    IRailRealtimeAdapter railAdapter) : BackgroundService
 {
     readonly ConcurrentDictionary<string, VehicleState> _vehicleStateCache = new();
     ulong? _lastFeedHeaderTimestamp;
@@ -40,10 +42,19 @@ public class Worker(
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            var feed = await FetchGtfsRtFeedAsync(stoppingToken);
-            if (feed != null && _routeIndex != null)
+            var busFeed = await FetchGtfsRtFeedAsync(stoppingToken);
+            var railEnts = await railAdapter.FetchAsync(stoppingToken);
+
+            var railVehicleIds = railEnts.Count > 0
+                ? new HashSet<string>(railEnts.Select(e => e.Vehicle?.Vehicle?.Id ?? e.Id))
+                : [];
+
+            var merged = busFeed ?? new FeedMessage();
+            merged.Entities.AddRange(railEnts);
+
+            if (merged.Entities.Count > 0 && _routeIndex != null)
             {
-                await ProcessSpatialReconciliationAsync(feed, stoppingToken);
+                await ProcessSpatialReconciliationAsync(merged, railVehicleIds, stoppingToken);
             }
         }
     }
@@ -85,10 +96,7 @@ public class Worker(
                 response.EnsureSuccessStatusCode();
 
                 var json = await response.Content.ReadAsStringAsync(ct);
-                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, JsonOptions.Get());
 
                 if (shapes == null || shapes.Count == 0)
                 {
@@ -123,7 +131,7 @@ public class Worker(
         logger.LogWarning("Could not initialize route index after {MaxRetries} attempts. V2 reconciliation will be skipped until index is built.", maxRetries);
     }
 
-    async Task ProcessSpatialReconciliationAsync(FeedMessage feed, CancellationToken ct)
+    async Task ProcessSpatialReconciliationAsync(FeedMessage feed, HashSet<string> railVehicleIds, CancellationToken ct)
     {
         try
         {
@@ -209,7 +217,8 @@ public class Worker(
                             now,
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
-                            isStale
+                            isStale,
+                            railVehicleIds.Contains(vehicleId) ? TransitMode.Rail : TransitMode.Bus
                         ));
 
                         if (isStale)
@@ -300,7 +309,8 @@ public class Worker(
                             now,
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
-                            false
+                            false,
+                            railVehicleIds.Contains(vehicleId) ? TransitMode.Rail : TransitMode.Bus
                         ));
                         outcome = "FirstObservation";
                         movedCount++;
@@ -489,10 +499,7 @@ public class Worker(
                 response.EnsureSuccessStatusCode();
 
                 var json = await response.Content.ReadAsStringAsync(ct);
-                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, JsonOptions.Get());
 
                 if (shapes == null || shapes.Count == 0)
                 {

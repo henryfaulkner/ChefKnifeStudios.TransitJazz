@@ -2,17 +2,11 @@
 @using Microsoft.Extensions.Localization
 @inject IStringLocalizer<RouteFilterResources> Loc
 
-<div class="route-filters">
-    <div class="route-filters__controls">
-        <div class="route-filters__route-filter" @onclick="HandleClearSelections">
-            <div class="route-filters__route-filter-circle route-filters__clear-btn">
-                <span class="route-filters__route-filter-label">@Loc["ClearSelections"]</span>
-            </div>
-        </div>
-    </div>
-    @foreach (var routeItem in RouteFilterViewModel.RouteItems)
-    {
-        <div
+@using ChefKnifeStudios.MartaJazz.Shared.Events
+
+@{
+    RenderFragment<RouteItem> RoutePill = routeItem =>
+        @<div
             class="route-filters__route-filter"
             @onclick="() => HandleSelect(routeItem)"
             @onmouseover="(args) => HandleMouseOver(args, routeItem)"
@@ -26,6 +20,43 @@
                     @routeItem.RouteId
                 </span>
             </div>
+        </div>;
+}
+
+@{
+    RenderFragment<TransitMode> SectionLabel = mode =>
+        @<div class="route-filters__section-header @(mode == TransitMode.Rail ? "route-filters__section-header--rail" : "")">
+            <MatSubtitle1 Class="route-filters__section-label">@Loc[mode == TransitMode.Rail ? "Rail" : "Buses"]</MatSubtitle1>
+            @if (RouteFilterViewModel.HasSelectionFor(mode))
+            {
+                <MatIconButton
+                    Icon="close"
+                    Class="route-filters__clear-btn"
+                    @onclick="() => HandleClearSelections(mode)"
+                />
+            }
+        </div>;
+}
+
+<div class="route-filters">
+    @if (RouteFilterViewModel.RouteItems.Any(r => r.Mode == TransitMode.Rail))
+    {
+        @SectionLabel(TransitMode.Rail)
+        <div class="route-filters__rail">
+            @foreach (var routeItem in RouteFilterViewModel.RouteItems.Where(r => r.Mode == TransitMode.Rail))
+            {
+                @RoutePill(routeItem)
+            }
+        </div>
+    }
+    @if (RouteFilterViewModel.RouteItems.Any(r => r.Mode == TransitMode.Bus))
+    {
+        @SectionLabel(TransitMode.Bus)
+        <div class="route-filters__buses">
+            @foreach (var routeItem in RouteFilterViewModel.RouteItems.Where(r => r.Mode == TransitMode.Bus))
+            {
+                @RoutePill(routeItem)
+            }
         </div>
     }
 </div>

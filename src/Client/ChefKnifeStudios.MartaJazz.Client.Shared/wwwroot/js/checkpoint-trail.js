@@ -102,8 +102,9 @@ export function ensureLayer(map) {
         data: { type: 'FeatureCollection', features: [] }
     });
 
-    // Growing line: route-colored, fixed width matching the bus dot. No beforeLayer —
-    // renders above routes/trigger-points; ordering vs. vehicles is acceptable either way.
+    // Growing line: route-colored, fixed width matching the bus dot. Inserted below the
+    // checkpoint pulse layers (if present) so the expanding ring renders above the trail.
+    const beforeId = map.getLayer('checkpoint-active-dot-layer') ? 'checkpoint-active-dot-layer' : undefined;
     if (!map.getLayer(LAYER_ID)) {
         map.addLayer({
             id: LAYER_ID,
@@ -118,7 +119,7 @@ export function ensureLayer(map) {
                 'line-color': ['get', 'color'],
                 'line-width': TRAIL_WIDTH
             }
-        });
+        }, beforeId);
     }
 }
 

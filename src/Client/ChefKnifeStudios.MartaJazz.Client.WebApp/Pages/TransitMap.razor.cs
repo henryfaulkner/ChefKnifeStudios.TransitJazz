@@ -451,7 +451,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 durationMs = (r.CurrentUtcNow - r.PriorUtcNow).TotalMilliseconds,
                 speed = r.SpeedMetersPerSec,
                 bearing = r.Bearing,
-                isStale = r.IsStale
+                isStale = r.IsStale,
+                transitMode = r.TransitMode.ToString().ToLowerInvariant()
             }).ToArray();
 
             Logger.LogDebug("TransitMap: forwarding {Count} nearest-point records to animator", records.Length);

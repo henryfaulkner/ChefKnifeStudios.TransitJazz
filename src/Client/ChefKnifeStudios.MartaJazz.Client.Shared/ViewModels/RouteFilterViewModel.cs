@@ -16,20 +16,23 @@ public class RouteItem
     public string RouteId { get; init; }
     public string Color { get; init; }
     public bool IsSelected { get; set; }
+    public TransitMode Mode { get; init; }
 }
 
 public interface IRouteFilterViewModel : IViewModel, IDisposable
 {
     IEnumerable<RouteItem> RouteItems { get; }
     void SelectRoute(RouteItem routeItem);
-    void ClearSelection();
+    void ClearSelection(TransitMode mode);
     void SetHoveredRoute(RouteItem? routeItem);
     public bool HasSelection { get; }
+    bool HasSelectionFor(TransitMode mode);
     public bool IsSingleSelection { get; }
     public string? SelectedRouteId { get; }
     public IReadOnlyCollection<string> SelectedRouteIds { get; }
     public string? HoveredRouteId { get; }
     public int ActiveBusCount { get; }
+    public int ActiveRailCount { get; }
 }
 
 public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
@@ -45,6 +48,9 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     int _activeBusCount;
 
     [ObservableProperty]
+    int _activeRailCount;
+
+    [ObservableProperty]
     string? _hoveredRouteId;
 
     readonly ILogger<RouteFilterViewModel> _logger;
@@ -53,9 +59,11 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 
     // Accumulated distinct non-stale vehicle IDs per route, upserted across every batch
     // (live + cold-start snapshot) — mirrors the server-side LastBatchCache accumulator so
-    // the running count reflects all known buses, not just the ones that moved this cycle.
+    // the running count reflects all known vehicles, not just the ones that moved this cycle.
     // An empty/all-stale batch adds nothing, so the count holds its last value.
     readonly Dictionary<string, HashSet<string>> _routeVehicles = new(StringComparer.Ordinal);
+    // Tracks which vehicle IDs are rail so counts can be split without re-examining route names.
+    readonly HashSet<string> _railVehicleIds = new(StringComparer.Ordinal);
 
     public RouteFilterViewModel(
         ILogger<RouteFilterViewModel> logger,
@@ -97,6 +105,8 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 if (!_routeVehicles.TryGetValue(record.RouteId, out var vehicles))
                     _routeVehicles[record.RouteId] = vehicles = new HashSet<string>(StringComparer.Ordinal);
                 changed |= vehicles.Add(record.VehicleId);
+                if (record.TransitMode == TransitMode.Rail)
+                    _railVehicleIds.Add(record.VehicleId);
             }
         }
 
@@ -106,18 +116,18 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteId, out var v) ? v.Count : 0)
             .ToList();
 
-        RecomputeActiveBusCount();
+        RecomputeActiveTransitCounts();
 
         return Task.CompletedTask;
     }
 
-    void RecomputeActiveBusCount()
+    void RecomputeActiveTransitCounts()
     {
         var selected = SelectedRouteIds;
         var hovered = HoveredRouteId;
 
         // Build the effective emphasis set: union of persistent selection and hover.
-        // Empty set means unscoped (all buses).
+        // Empty set means unscoped (all vehicles).
         IReadOnlyCollection<string> effectiveIds;
         if (selected.Count == 0 && hovered is null)
         {
@@ -132,11 +142,19 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             effectiveIds = [.. selected, hovered];
         }
 
-        int count = effectiveIds.Count > 0
-            ? effectiveIds.Sum(id => _routeVehicles.TryGetValue(id, out var v) ? v.Count : 0)
-            : _routeVehicles.Values.Sum(v => v.Count);
+        IEnumerable<string> vehicleIds = effectiveIds.Count > 0
+            ? effectiveIds.SelectMany(id => _routeVehicles.TryGetValue(id, out var v) ? v : [])
+            : _routeVehicles.Values.SelectMany(v => v);
 
-        ActiveBusCount = count;
+        int busCount = 0, railCount = 0;
+        foreach (var id in vehicleIds)
+        {
+            if (_railVehicleIds.Contains(id)) railCount++;
+            else busCount++;
+        }
+
+        ActiveBusCount = busCount;
+        ActiveRailCount = railCount;
     }
 
     void BuildRouteItems()
@@ -151,6 +169,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 RouteId = x.Properties.RouteShortName!,
                 Color = x.Properties.Color ?? "#888888",
                 IsSelected = previouslySelected.Contains(x.Properties.RouteShortName!),
+                Mode = x.Properties.Mode,
             })
             .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteId, out var v) ? v.Count : 0)
             .ToList();
@@ -168,26 +187,29 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 RouteId = x.RouteId,
                 Color = x.Color,
                 IsSelected = x.RouteId == routeItem.RouteId ? !x.IsSelected : x.IsSelected,
+                Mode = x.Mode,
             })
             .ToList();
-        RecomputeActiveBusCount();
+        RecomputeActiveTransitCounts();
     }
 
-    public void ClearSelection()
+    public void ClearSelection(TransitMode mode)
     {
         RouteItems = RouteItems
-            .Select(x => new RouteItem { RouteId = x.RouteId, Color = x.Color, IsSelected = false, })
+            .Select(x => new RouteItem { RouteId = x.RouteId, Color = x.Color, IsSelected = x.Mode == mode ? false : x.IsSelected, Mode = x.Mode, })
             .ToList();
-        RecomputeActiveBusCount();
+        RecomputeActiveTransitCounts();
     }
 
     public void SetHoveredRoute(RouteItem? routeItem)
     {
         HoveredRouteId = routeItem?.RouteId;
-        RecomputeActiveBusCount();
+        RecomputeActiveTransitCounts();
     }
 
     public bool HasSelection => RouteItems.Any(x => x.IsSelected);
+
+    public bool HasSelectionFor(TransitMode mode) => RouteItems.Any(x => x.IsSelected && x.Mode == mode);
 
     public bool IsSingleSelection => SelectedRouteIds.Count == 1;
 

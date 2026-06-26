@@ -23,7 +23,7 @@ public partial class RouteFilters : ComponentBase, IDisposable
 
     void RouteFilterViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection) or nameof(IRouteFilterViewModel.ActiveBusCount) or nameof(IRouteFilterViewModel.HoveredRouteId))
+        if (e.PropertyName is nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection) or nameof(IRouteFilterViewModel.ActiveBusCount) or nameof(IRouteFilterViewModel.ActiveRailCount) or nameof(IRouteFilterViewModel.HoveredRouteId))
         {
             InvokeAsync(StateHasChanged);
         }
@@ -44,8 +44,8 @@ public partial class RouteFilters : ComponentBase, IDisposable
         RouteFilterViewModel.SelectRoute(routeItem);
     }
 
-    void HandleClearSelections()
+    void HandleClearSelections(ChefKnifeStudios.MartaJazz.Shared.Events.TransitMode mode)
     {
-        RouteFilterViewModel.ClearSelection();
+        RouteFilterViewModel.ClearSelection(mode);
     }
 }

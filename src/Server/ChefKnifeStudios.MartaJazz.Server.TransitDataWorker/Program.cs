@@ -1,5 +1,6 @@
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.MartaJazz.Shared;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -12,6 +13,12 @@ builder.Services.AddHttpClient("RouteShapeApi", client =>
     client.BaseAddress = new Uri(builder.Configuration["services:apiservice:https:0"]
         ?? builder.Configuration["WebApi:BaseUrl"]!);
 });
+builder.Services.AddHttpClient("RailRealtimeApi", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Marta:RailRealtime:BaseUrl"]!);
+});
+builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection("Marta:RailRealtime"));
+builder.Services.AddSingleton<IRailRealtimeAdapter, RailRealtimeAdapter>();
 builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
 
 // Logging sidecar pipeline

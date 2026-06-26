@@ -165,6 +165,9 @@
   <data name="NumBusesRunning" xml:space="preserve">
     <value>buses running</value>
   </data>
+  <data name="NumTrainsRunning" xml:space="preserve">
+    <value>trains running</value>
+  </data>
   <data name="AudioOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real bus. Dozens of them, maybe more, moving through a city that never agreed on a grid. They follow Peachtree and Cascade and Memorial Drive, routes drawn around what Atlanta actually is rather than what a planner imagined.</value>
   </data>
@@ -182,5 +185,11 @@
   </data>
   <data name="ClearSelections" xml:space="preserve">
     <value>Clear</value>
+  </data>
+  <data name="Rail" xml:space="preserve">
+    <value>Rail</value>
+  </data>
+  <data name="Buses" xml:space="preserve">
+    <value>Buses</value>
   </data>
 </root>
