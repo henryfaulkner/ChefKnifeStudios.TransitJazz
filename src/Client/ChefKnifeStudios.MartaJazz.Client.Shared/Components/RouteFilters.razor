@@ -33,7 +33,7 @@
     </div>
     @if (RouteFilterViewModel.RouteItems.Any(r => r.Mode == TransitMode.Rail))
     {
-        <div class="route-filters__section-label">@Loc["Rail"]</div>
+        <MatSubtitle1 Class="route-filters__section-label">@Loc["Rail"]</MatSubtitle1>
         <div class="route-filters__rail">
             @foreach (var routeItem in RouteFilterViewModel.RouteItems.Where(r => r.Mode == TransitMode.Rail))
             {
@@ -43,7 +43,7 @@
     }
     @if (RouteFilterViewModel.RouteItems.Any(r => r.Mode == TransitMode.Bus))
     {
-        <div class="route-filters__section-label">@Loc["Buses"]</div>
+        <MatSubtitle1 Class="route-filters__section-label">@Loc["Buses"]</MatSubtitle1>
         <div class="route-filters__buses">
             @foreach (var routeItem in RouteFilterViewModel.RouteItems.Where(r => r.Mode == TransitMode.Bus))
             {
