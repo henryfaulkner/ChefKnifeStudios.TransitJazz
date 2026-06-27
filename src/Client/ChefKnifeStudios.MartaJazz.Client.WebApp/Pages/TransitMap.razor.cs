@@ -71,8 +71,22 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     int _batchSeq;  // incremented each time HandleVehicleBatchAsync is entered
 
+    static readonly Dictionary<string, (double Lat, double Lon)> _cityCenter = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["marta"] = (33.749, -84.388),
+        ["wmata"] = (38.907, -77.037),
+    };
+
     CameraOptions DefaultCameraOptions
-        => new() { Center = new Position(33.749, -84.388), Zoom = _isMobile ? 6 : 9.5 };
+    {
+        get
+        {
+            var fragment = new Uri(NavigationManager.Uri).Fragment.TrimStart('#');
+            var city = string.IsNullOrWhiteSpace(fragment) ? "marta" : fragment.ToLowerInvariant();
+            var (lat, lon) = _cityCenter.TryGetValue(city, out var c) ? c : _cityCenter["marta"];
+            return new() { Center = new Position(lat, lon), Zoom = _isMobile ? 6 : 9.5 };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

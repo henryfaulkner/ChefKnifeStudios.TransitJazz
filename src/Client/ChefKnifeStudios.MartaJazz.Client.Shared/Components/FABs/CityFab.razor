@@ -1,26 +1,32 @@
+@using Microsoft.JSInterop
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <div class="city-fab-container">
-    <MatFAB Label="@_currentCity.ToUpperInvariant()" Mini="true" @onclick="HandleToggle" />
+    <MatFAB Label="@CurrentCity.ToUpperInvariant()" Mini="true" @onclick="HandleToggle" />
 </div>
 
 @code {
-    string _currentCity = "marta";
-
-    protected override void OnInitialized()
+    string CurrentCity
     {
-        try
+        get
         {
-            var fragment = new Uri(NavigationManager.Uri).Fragment.TrimStart('#');
-            if (!string.IsNullOrWhiteSpace(fragment))
-                _currentCity = fragment.ToLowerInvariant();
+            try
+            {
+                var fragment = new Uri(NavigationManager.Uri).Fragment.TrimStart('#');
+                if (!string.IsNullOrWhiteSpace(fragment))
+                    return fragment.ToLowerInvariant();
+            }
+            catch { }
+            return "marta";
         }
-        catch { }
     }
 
-    void HandleToggle()
+    async Task HandleToggle()
     {
-        var next = _currentCity == "marta" ? "wmata" : "marta";
-        NavigationManager.NavigateTo($"/#{next}", forceLoad: true);
+        var next = CurrentCity == "marta" ? "wmata" : "marta";
+        // Hash-only navigation is always in-page — no reload, WASM stays alive.
+        // Set the hash then force a reload so the app re-bootstraps with the new city.
+        await JS.InvokeVoidAsync("eval", $"location.hash='{next}';location.reload()");
     }
 }
