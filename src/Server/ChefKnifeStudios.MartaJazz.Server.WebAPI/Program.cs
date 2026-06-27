@@ -8,12 +8,10 @@ using ChefKnifeStudios.MartaJazz.Server.WebAPI.Repositories;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.SignalR;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Identity.Web;
 using Scalar.AspNetCore;
 using System;
 using System.Collections.Generic;
@@ -100,9 +98,6 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 
-//app.UseAuthentication();
-//app.UseAuthorization();
-
 app.MapOpenApi().AllowAnonymous();
 
 app.MapScalarApiReference(options =>
@@ -120,7 +115,6 @@ app.UseCors("Default");
 app.MapHub<TransitHub>("/hubs/transit").AllowAnonymous();
 app.MapHub<WorkerTransitHub>("/hubs/worker-transit")
     .AllowAnonymous();
-    //.RequireAuthorization("TransitDataPublisher");
 
 app.MapTestEndpoints()
     .MapGtfsEndpoints()

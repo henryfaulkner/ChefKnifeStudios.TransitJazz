@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
@@ -17,7 +18,7 @@ public partial class Map : ComponentBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString());
+            Logger.LogError(ex, "[Map] CreateMap failed");
         }
     }
 
@@ -29,7 +30,7 @@ public partial class Map : ComponentBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString());
+            Logger.LogError(ex, "[Map] CenterVehiclePin failed for vehicleId={VehicleId}", vehicleId);
         }
     }
 
@@ -44,7 +45,7 @@ public partial class Map : ComponentBase
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
+                Logger.LogError(ex, "[Map] PlotVehicles failed");
             }
         }
     }
@@ -52,7 +53,7 @@ public partial class Map : ComponentBase
     public async Task AddAllRoutesAsync(object payload)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.addAllRoutes", ElementId, payload); }
-        catch (Exception ex) { Console.WriteLine($"[Map] AddAllRoutes failed: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] AddAllRoutes failed"); }
     }
 
     public async Task AddTriggerPointMarkersAsync(string routeId, object[] triggerPoints, double[][] coords)
@@ -63,62 +64,62 @@ public partial class Map : ComponentBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Map] AddTriggerPointMarkers failed for routeId={routeId}: {ex}");
+            Logger.LogError(ex, "[Map] AddTriggerPointMarkers failed for routeId={RouteId}", routeId);
         }
     }
 
     public async Task FocusRouteAsync(string routeId)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.focusRoute", ElementId, routeId); }
-        catch (Exception ex) { Console.WriteLine($"[Map] FocusRoute failed for routeId={routeId}: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] FocusRoute failed for routeId={RouteId}", routeId); }
     }
 
     public async Task FocusRoutesAsync(IEnumerable<string> routeIds)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.focusRoutes", ElementId, routeIds); }
-        catch (Exception ex) { Console.WriteLine($"[Map] FocusRoutes failed: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] FocusRoutes failed"); }
     }
 
     public async Task SetCheckpointVisibilityAsync(bool visible)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.setCheckpointVisibility", ElementId, visible); }
-        catch (Exception ex) { Console.WriteLine($"[Map] SetCheckpointVisibility failed: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCheckpointVisibility failed"); }
     }
 
     public async Task PulseCheckpointAsync(string routeId, int triggerIndex)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.pulseCheckpoint", ElementId, routeId, triggerIndex); }
-        catch (Exception ex) { Console.WriteLine($"[Map] PulseCheckpoint failed for routeId={routeId} triggerIndex={triggerIndex}: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] PulseCheckpoint failed for routeId={RouteId} triggerIndex={TriggerIndex}", routeId, triggerIndex); }
     }
 
     public async Task StartCrossingTrailAsync(string routeId, string vehicleId, int triggerIndex, double durationSeconds)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.startCrossingTrail", ElementId, routeId, vehicleId, triggerIndex, durationSeconds); }
-        catch (Exception ex) { Console.WriteLine($"[Map] StartCrossingTrail failed for routeId={routeId} triggerIndex={triggerIndex}: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] StartCrossingTrail failed for routeId={RouteId} triggerIndex={TriggerIndex}", routeId, triggerIndex); }
     }
 
     public async Task SetCrossingTrailVisibilityAsync(bool visible)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.setCrossingTrailVisibility", ElementId, visible); }
-        catch (Exception ex) { Console.WriteLine($"[Map] SetCrossingTrailVisibility failed: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingTrailVisibility failed"); }
     }
 
     public async Task SetAllCheckpointsVisibilityAsync(bool visible)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.setAllCheckpointsVisibility", ElementId, visible); }
-        catch (Exception ex) { Console.WriteLine($"[Map] SetAllCheckpointsVisibility failed: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetAllCheckpointsVisibility failed"); }
     }
 
     public async Task SetVehiclesVisibleAsync(bool visible)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.setVehiclesVisible", ElementId, visible); }
-        catch (Exception ex) { Console.WriteLine($"[Map] SetVehiclesVisible failed: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetVehiclesVisible failed"); }
     }
 
     public async Task ClearRouteFocusAsync()
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.clearRouteFocus", ElementId); }
-        catch (Exception ex) { Console.WriteLine($"[Map] ClearRouteFocus failed: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] ClearRouteFocus failed"); }
     }
 
     public async Task<string?> SetBasemapStyleAsync(string styleUrl)
@@ -130,7 +131,7 @@ public partial class Map : ComponentBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Map] SetBasemapStyle failed: {ex}");
+            Logger.LogError(ex, "[Map] SetBasemapStyle failed");
             return null;
         }
     }
@@ -138,19 +139,19 @@ public partial class Map : ComponentBase
     public async Task FlushTriggerPointsAsync()
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.flushTriggerPoints", ElementId); }
-        catch (Exception ex) { Console.WriteLine($"[Map] FlushTriggerPoints failed: {ex}"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] FlushTriggerPoints failed"); }
     }
 
     public async Task ProcessNearestPointBatchAsync(object[] records)
     {
         try
         {
-            Console.WriteLine($"[Map] ProcessNearestPointBatch: {records.Length} records → JS");
+            Logger.LogDebug("[Map] ProcessNearestPointBatch: {Count} records → JS", records.Length);
             await JsRuntime.InvokeVoidAsync("ChefMapAnimator.processNearestPointBatch", ElementId, records);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Map] ProcessNearestPointBatch failed: {ex}");
+            Logger.LogError(ex, "[Map] ProcessNearestPointBatch failed");
         }
     }
 }

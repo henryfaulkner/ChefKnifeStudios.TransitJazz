@@ -7,6 +7,7 @@ using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
 using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
+using ChefKnifeStudios.MartaJazz.Shared.Geospatial;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
@@ -388,7 +389,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             var cumDist = new double[coords.Length];
             cumDist[0] = 0;
             for (var i = 1; i < coords.Length; i++)
-                cumDist[i] = cumDist[i - 1] + HaversineMeters(coords[i - 1], coords[i]);
+                cumDist[i] = cumDist[i - 1] + HaversineCalculator.DistanceMeters(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
 
             var triggerPoints = TriggerPointGenerator.Generate(coords, cumDist);
             Logger.LogDebug("TransitMap: route {RouteId} → {Count} trigger points", routeId, triggerPoints.Count);
@@ -408,19 +409,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
     }
 
-    static double HaversineMeters(double[] p1, double[] p2)
-    {
-        const double R = 6371000;
-        const double toRad = Math.PI / 180;
-        var dLat = (p2[1] - p1[1]) * toRad;
-        var dLon = (p2[0] - p1[0]) * toRad;
-        var lat1 = p1[1] * toRad;
-        var lat2 = p2[1] * toRad;
-        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.Cos(lat1) * Math.Cos(lat2) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
-        return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
-    }
-
     async Task HandleVehicleBatchAsync(IEnumerable<EventEnvelope> batch)
     {
         if (!_mapReady || _map is null)
@@ -435,8 +423,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             .Select(x => (RouteNearestPointBatchEvent)x.Payload)
             .SelectMany(e => e.BatchRecords)
             .ToArray();
-
-        nearestPointRecords = nearestPointRecords.Where(r => IsAllowedRoute(r.RouteId)).ToArray();
 
         if (nearestPointRecords.Length > 0)
         {
@@ -528,37 +514,25 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         Logger.LogDebug("TransitMap.LoadRoutesAsync: received {Total} features from API", allFeatures.Count);
 
         _routeShapeCache.Clear();
-        var skipped = 0;
         foreach (var routeShapeFeature in allFeatures)
         {
             var key = routeShapeFeature.Properties?.RouteShortName ?? routeShapeFeature.Properties?.RouteId ?? "(null)";
-            if (IsAllowedRoute(key))
-            {
-                _routeShapeCache[key] = routeShapeFeature;
-                Logger.LogDebug("TransitMap.LoadRoutesAsync: cached key={Key} RouteId={RouteId} CoordCount={CoordCount} Geometry={GeomNull}",
-                    key,
-                    routeShapeFeature.Properties?.RouteId,
-                    routeShapeFeature.Geometry?.Coordinates?.Length ?? -1,
-                    routeShapeFeature.Geometry is null ? "NULL" : "ok");
-            }
-            else
-            {
-                skipped++;
-            }
+            _routeShapeCache[key] = routeShapeFeature;
+            Logger.LogDebug("TransitMap.LoadRoutesAsync: cached key={Key} RouteId={RouteId} CoordCount={CoordCount} Geometry={GeomNull}",
+                key,
+                routeShapeFeature.Properties?.RouteId,
+                routeShapeFeature.Geometry?.Coordinates?.Length ?? -1,
+                routeShapeFeature.Geometry is null ? "NULL" : "ok");
         }
 
-        Logger.LogDebug("TransitMap.LoadRoutesAsync: cache populated — {Cached} cached, {Skipped} skipped by IsAllowedRoute",
-            _routeShapeCache.Count, skipped);
+        Logger.LogDebug("TransitMap.LoadRoutesAsync: cache populated — {Cached} cached",
+            _routeShapeCache.Count);
 
         _routesLoaded = true;
         await InvokeAsync(StateHasChanged);
 
         _ = TransitSynth.PreloadAsync(_routeShapeCache.Keys);
     }
-
-    // Returns true for routes that should render and produce audio.
-    // Restrict to a subset for focused testing; return true unconditionally for all routes.
-    static bool IsAllowedRoute(string routeKey) => true;
 
     public record CrossingEventDto(string VehicleId, string RouteId, int TriggerIndex, int TotalTriggers);
 }

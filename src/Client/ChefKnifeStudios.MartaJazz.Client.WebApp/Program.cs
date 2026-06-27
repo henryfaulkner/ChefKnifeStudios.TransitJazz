@@ -40,7 +40,8 @@ if (appSettings?.ExternalApis != null)
 builder.Services.AddSingleton<IHttpServiceFactory>(sp =>
 {
     var factory = sp.GetRequiredService<IHttpClientFactory>();
-    return new HttpServiceFactory(name => factory.CreateClient(name));
+    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    return new HttpServiceFactory(name => factory.CreateClient(name), loggerFactory);
 });
 
 var featureFlags = appSettings?.FeatureFlags ?? new Dictionary<FeatureFlags, bool>();

@@ -433,7 +433,9 @@ public class Worker(
 
             if (batch.Count > 0)
             {
+#if DEBUG
                 await WriteBatchToDiskAsync(debugBatch, ct);
+#endif
 
                 var envelope = new EventEnvelope(
                     nameof(RouteNearestPointBatchEvent),
@@ -526,6 +528,7 @@ public class Worker(
         }
     }
 
+#if DEBUG
     async Task WriteBatchToDiskAsync(List<BatchDebugRecord> batch, CancellationToken ct)
     {
         try
@@ -544,6 +547,7 @@ public class Worker(
             logger.LogError(ex, "Failed to write spatial reconciliation batch to disk.");
         }
     }
+#endif
 
     async Task<FeedMessage?> FetchGtfsRtFeedAsync(CancellationToken ct)
     {

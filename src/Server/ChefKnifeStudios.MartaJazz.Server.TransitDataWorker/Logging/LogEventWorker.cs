@@ -123,7 +123,7 @@ public sealed class LogEventWorker : IHostedService
         while (_channel.Reader.TryRead(out var e))
         {
             try { _sink.Accumulate(e); }
-            catch { }
+            catch (Exception ex) { _logger.LogWarning(ex, "LogEventWorker: unexpected exception."); }
         }
 
         await CancelTimerGracefully(flushTask);
@@ -146,7 +146,7 @@ public sealed class LogEventWorker : IHostedService
     static async Task CancelTimerGracefully(Task flushTask)
     {
         try { await flushTask; }
-        catch { }
+        catch (OperationCanceledException) { }
     }
 
     void LogSidecarHealth()

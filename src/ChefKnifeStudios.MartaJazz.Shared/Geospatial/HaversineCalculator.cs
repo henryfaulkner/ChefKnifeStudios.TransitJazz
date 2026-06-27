@@ -19,5 +19,8 @@ public static class HaversineCalculator
         return EarthRadiusKm * c;
     }
 
+    public static double DistanceMeters(double lat1, double lon1, double lat2, double lon2) =>
+        DistanceKm(lat1, lon1, lat2, lon2) * 1000;
+
     static double DegreesToRadians(double degrees) => degrees * (Math.PI / 180.0);
 }

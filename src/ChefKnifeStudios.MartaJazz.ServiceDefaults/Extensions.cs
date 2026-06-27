@@ -56,15 +56,6 @@ public static class Extensions
 
     private static IHostApplicationBuilder AddOpenTelemetryExporters(this IHostApplicationBuilder builder)
     {
-        var useAzureMonitor = !string.IsNullOrEmpty(
-            builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]);
-
-        if (useAzureMonitor)
-        {
-            builder.Services.AddOpenTelemetry();
-                //.UseAzureMonitor();
-        }
-
         builder.Services.AddOpenTelemetry()
             .WithMetrics(metrics => metrics.AddOtlpExporter())
             .WithTracing(tracing => tracing.AddOtlpExporter());
