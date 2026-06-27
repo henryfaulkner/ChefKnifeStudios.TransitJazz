@@ -2,13 +2,11 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.SignalR;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
 namespace ChefKnifeStudios.MartaJazz.Server.WebAPI.SignalR;
 
-//[Authorize(Policy = "TransitDataPublisher")]
 public class WorkerTransitHub : Hub
 {
     private readonly IHubContext<TransitHub> _clientHub;

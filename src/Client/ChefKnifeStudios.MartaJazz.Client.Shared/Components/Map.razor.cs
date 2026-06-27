@@ -2,6 +2,7 @@ using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using System;
 using System.Globalization;
@@ -16,6 +17,7 @@ public partial class Map : ComponentBase
     [Inject] public IJSRuntime JsRuntime { get; set; } = null!;
     [Inject] public IConfiguration Configuration { get; set; } = null!;
     [Inject] public ISettingsService SettingsService { get; set; } = null!;
+    [Inject] public ILogger<Map> Logger { get; set; } = null!;
 
     [Parameter]
     public CameraOptions CameraOptions { get; set; }

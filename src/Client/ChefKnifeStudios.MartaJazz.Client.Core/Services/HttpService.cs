@@ -1,11 +1,8 @@
 using Ardalis.Result;
 using ChefKnifeStudios.MartaJazz.Shared;
-using System;
-using System.Net.Http;
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace ChefKnifeStudios.MartaJazz.Client.Core.Services;
 
@@ -23,10 +20,12 @@ public class HttpService : IHttpService
 {
     private readonly HttpClient _client;
     private readonly JsonSerializerOptions _options;
+    private readonly ILogger<HttpService> _logger;
 
-    public HttpService(HttpClient client)
+    public HttpService(HttpClient client, ILogger<HttpService> logger)
     {
         _client = client;
+        _logger = logger;
         _options = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -123,20 +122,22 @@ public class HttpService : IHttpService
             try
             {
                 var raw = await response.Content.ReadAsStringAsync(ct);
-                Console.WriteLine($"[HttpService] {response.RequestMessage?.Method} {response.RequestMessage?.RequestUri} → {(int)response.StatusCode} body_len={raw.Length}");
+                _logger.LogDebug("[HttpService] {Method} {Uri} → {Status} body_len={BodyLen}",
+                    response.RequestMessage?.Method, response.RequestMessage?.RequestUri, (int)response.StatusCode, raw.Length);
 
                 var content = JsonSerializer.Deserialize<T>(raw, _options);
                 return Result<T>.Success(content!);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[HttpService] Deserialization failed for {typeof(T).Name}: {ex.Message}");
+                _logger.LogError(ex, "[HttpService] Deserialization failed for {Type}", typeof(T).Name);
                 return Result<T>.Error($"Deserialization failed: {ex.Message}");
             }
         }
 
         var errorBody = await response.Content.ReadAsStringAsync(ct);
-        Console.WriteLine($"[HttpService] {response.RequestMessage?.Method} {response.RequestMessage?.RequestUri} → {(int)response.StatusCode} body={errorBody}");
+        _logger.LogWarning("[HttpService] {Method} {Uri} → {Status} body={Body}",
+            response.RequestMessage?.Method, response.RequestMessage?.RequestUri, (int)response.StatusCode, errorBody);
 
         return response.StatusCode switch
         {

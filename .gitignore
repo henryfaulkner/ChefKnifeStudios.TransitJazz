@@ -60,6 +60,7 @@ nunit-*.xml
 
 .opencode
 .specify
+bloat-reports
 specs
 docs
 .mcp.json

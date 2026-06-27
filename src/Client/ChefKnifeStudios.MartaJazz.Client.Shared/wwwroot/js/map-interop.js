@@ -122,10 +122,6 @@ window.ChefMap = {
         map.setZoom(zoom);
     },
 
-    toggleTraffic: function (containerDivId, on) {
-        console.info('[ChefMap] toggleTraffic: traffic layer not implemented for POC (no-op)');
-    },
-
     setMapStyle: function (containerDivId, styleUrl) {
         let map = ChefMap.maps[containerDivId];
         if (!map) return Promise.resolve();
@@ -552,9 +548,5 @@ window.ChefMap = {
         }
 
         ChefMap._applyVehicleRouteColors(containerDivId);
-    },
-
-    addRouteShapeFeature: function (containerDivId, routeId, coordinates, color) {
-        console.warn('[ChefMap] addRouteShapeFeature is deprecated — use addAllRoutes instead');
     }
 };
