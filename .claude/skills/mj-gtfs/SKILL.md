@@ -1,6 +1,6 @@
 ---
 name: mj-gtfs
-description: Fetch and decode GTFS data from two sources: (1) a GTFS-RT vehicle positions protobuf feed (live positions) and (2) a static GTFS zip (routes.txt + shapes.txt + trips.txt) from a transit agency's published feed. Outputs clean structured snapshots of both. Use when any skill or the user needs live vehicle feed data, static route geometry, or both for analysis, compatibility evaluation, or adding a new transit data source.
+description: Fetch and decode transit data from three sources: (1) a GTFS-RT vehicle positions protobuf feed (live bus positions), (2) a static GTFS zip (routes.txt + shapes.txt + trips.txt, incl. route_type so rail routes are identified) from a transit agency's published feed, and (3) an agency-specific rail realtime API (live train positions, e.g. MARTA's JSON traindata feed) where one exists. Outputs clean structured snapshots of each. Use when any skill or the user needs live vehicle/train feed data, static route geometry, or any combination for analysis, compatibility evaluation, or adding a new transit data source.
 ---
 
 # MJ GTFS
@@ -14,14 +14,23 @@ This is a **data-fetch tool** — it retrieves and formats; callers apply their 
 |--------|-----------------|--------|
 | GTFS-RT feed | Live vehicle positions: lat/lon, route_id, speed, bearing, timestamps | Binary protobuf |
 | Static GTFS zip | Route geometry: routes.txt + shapes.txt + trips.txt from the agency's published feed | ZIP of CSV files |
+| Rail realtime feed | Live **train** positions (heavy rail), where the agency publishes them in a separate, non-GTFS-RT API | Agency-specific JSON |
+
+**Why rail is separate:** A GTFS-RT protobuf feed often carries **buses only**. Heavy-rail
+positions frequently come from a different, agency-specific realtime API (MARTA's is JSON,
+not protobuf — see section 3). Static GTFS *does* describe rail routes (`route_type=1`),
+so rail geometry is in the static zip; only the *live* rail position source differs. When
+evaluating an agency, treat "buses via GTFS-RT" and "trains via a rail API" as two
+independent realtime sources — either can be present, absent, or incompatible on its own.
 
 ### Known agency feeds
 
-| Agency | Static GTFS zip | GTFS-RT vehicle positions |
-|--------|----------------|--------------------------|
-| MARTA (Atlanta) | `https://itsmarta.com/google_transit_feed/google_transit.zip` | `https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb` |
+| Agency | Static GTFS zip | GTFS-RT vehicle positions (buses) | Rail realtime (trains) |
+|--------|----------------|--------------------------|------------------------|
+| MARTA (Atlanta) | `https://itsmarta.com/google_transit_feed/google_transit.zip` | `https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb` | `https://developerservices.itsmarta.com:18096/itsmarta/railrealtimearrivals/developerservices/traindata?apiKey={KEY}` (JSON) |
 
-When working with a new agency, ask the user for both URLs before proceeding.
+When working with a new agency, ask the user for the static zip + GTFS-RT URL, and — if the
+agency runs heavy rail — whether they have a separate rail realtime API.
 
 ---
 
@@ -320,6 +329,7 @@ with open(os.path.join(base, 'routes.txt'), encoding='utf-8-sig') as f:
             'route_short_name': row.get('route_short_name', ''),
             'route_color': row.get('route_color', ''),
             'route_text_color': row.get('route_text_color', ''),
+            'route_type': row.get('route_type', ''),  # 1 = rail, 3 = bus
         }
 
 # trips.txt: first shape_id per route_id
@@ -349,16 +359,20 @@ for route_id, meta in routes.items():
         'shape_id': shape_id,
         'point_count': point_count,
         'color': meta['route_color'],
+        'route_type': meta['route_type'],
     })
 
 index_keys = sorted({r['route_short_name'] or r['route_id'] for r in summary})
 total_points = sum(r['point_count'] for r in summary)
+rail = [r for r in summary if r['route_type'] == '1']
 
 print(json.dumps({
     'route_count': len(routes),
     'routes_with_shape': sum(1 for r in summary if r['shape_id']),
     'routes_without_shape': sum(1 for r in summary if not r['shape_id']),
     'total_shape_points': total_points,
+    'rail_route_count': len(rail),  # route_type == 1
+    'rail_index_keys': sorted({r['route_short_name'] or r['route_id'] for r in rail}),
     'index_keys': index_keys,
     'sample_routes': summary[:5],
 }, indent=2))
@@ -372,17 +386,120 @@ Static GTFS Shapes Snapshot
 ----------------------------
 Source:                <zip URL>
 Routes:                <route_count> total / <routes_with_shape> with shape / <routes_without_shape> without
+Rail routes:           <rail_route_count> (route_type=1) — keys: <rail_index_keys or "none">
 Total shape points:    <total>
 
 Route index keys (<count>): <comma-separated routeShortName values, first 20 + "… and N more">
 
 Sample routes (up to 5):
-  route_id=<>  short_name=<>  shape_id=<>  points=<>  color=<>
+  route_id=<>  short_name=<>  shape_id=<>  points=<>  color=<>  type=<route_type>
 ```
 
 > **Index key note**: The worker keys its route index by `routeShortName` (falling back
 > to `routeId`). These are the values that `trip.route_id` in the GTFS-RT feed must
 > match for a vehicle to be snapped rather than counted as `skippedUnknownRoute`.
+
+> **Rail note**: routes.txt carries `route_type` (GTFS standard: `1` = subway/metro =
+> heavy rail; `3` = bus). The worker classifies a route as Rail vs Bus from this column
+> (`GtfsStaticLoader.cs`). Rail routes have shapes in the static zip just like buses —
+> their *live positions* are the only thing that comes from a separate source (section 3).
+> The summary script above reports `route_type` per route so you can see which static
+> routes are rail. MARTA's four rail routes are `route_type=1` with short names
+> `RED / GOLD / BLUE / GREEN`.
+
+---
+
+## 3. Fetch & decode rail realtime (live train positions)
+
+Only relevant for agencies that run heavy rail **and** publish train positions through a
+separate API (not the GTFS-RT protobuf feed). MARTA's is JSON over HTTPS:
+
+```powershell
+# Key is optional on MARTA's deployment (returned 200 keyless on 2026-06-23) but pass it if you have one.
+$url = "https://developerservices.itsmarta.com:18096/itsmarta/railrealtimearrivals/developerservices/traindata"
+# With key: $url = "$url`?apiKey=<VALUE>"
+$json = (Invoke-WebRequest -Uri $url -UseBasicParsing).Content
+$json | Out-File "$env:TEMP\rail-rt.json" -Encoding utf8
+Write-Host "Downloaded $($json.Length) chars"
+```
+
+The response is a JSON **array** with one element **per (train, upcoming-station)** — so a
+single train appears many times. All values are JSON **strings**; numeric fields need
+parsing. Fields the worker's adapter uses are in **bold**:
+
+```
+DESTINATION, DIRECTION, EVENT_TIME (parsed → VehiclePosition.Timestamp),
+**IS_REALTIME** (drop rows != "true"), **LINE** (→ route_id; matches static rail
+short name RED/GOLD/BLUE/GREEN with zero translation), NEXT_ARR, STATION,
+**TRAIN_ID** (→ entity id + vehicleId), WAITING_SECONDS, WAITING_TIME, DELAY,
+**LATITUDE**, **LONGITUDE** (→ live position; same for all rows of one TRAIN_ID)
+```
+
+Decode + the two contract checks the worker's `RailRealtimeAdapter` relies on:
+
+```powershell
+python -c @"
+import json, collections
+
+# utf-8-sig tolerates the BOM PowerShell's Out-File -Encoding utf8 prepends on 5.1.
+with open(r'$env:TEMP\rail-rt.json', encoding='utf-8-sig') as f:
+    rows = json.load(f)
+
+realtime = [r for r in rows if str(r.get('IS_REALTIME','')).strip().lower() == 'true']
+
+by_train = collections.defaultdict(list)
+for r in realtime:
+    by_train[r.get('TRAIN_ID')].append(r)
+
+trains = []
+contract_violations = []
+lines = set()
+for tid, group in by_train.items():
+    coords = {(r.get('LATITUDE'), r.get('LONGITUDE')) for r in group}
+    if len(coords) > 1:
+        # Live-position contract broken: lat/lon should be identical across a train's rows.
+        contract_violations.append({'train_id': tid, 'distinct_coords': len(coords)})
+    line = group[0].get('LINE')
+    lines.add(line)
+    trains.append({
+        'train_id': tid, 'line': line,
+        'lat': group[0].get('LATITUDE'), 'lon': group[0].get('LONGITUDE'),
+        'station_rows': len(group),
+    })
+
+print(json.dumps({
+    'total_rows': len(rows),
+    'realtime_rows': len(realtime),
+    'dropped_not_realtime': len(rows) - len(realtime),
+    'distinct_trains': len(by_train),
+    'distinct_lines': sorted(l for l in lines if l),
+    'contract_violations': contract_violations,  # MUST be empty — else lat/lon is not live position
+    'sample_trains': trains[:5],
+}, indent=2))
+"@
+```
+
+### Rail realtime output block
+
+```
+Rail Realtime Snapshot
+----------------------
+URL:                  <url>
+Total rows:           <N>  (one per train × upcoming-station)
+Realtime rows:        <N>  (dropped <N> with IS_REALTIME != "true")
+Distinct trains:      <N>
+Lines seen:           <comma-separated LINE values — must match static rail short names>
+Live-position check:  <PASS (one coord per train) / FAIL — N trains with multiple coords>
+
+Sample trains (up to 5):
+  train_id=<>  line=<>  lat=<>  lon=<>  station_rows=<>
+```
+
+> **Line-key note**: a row's `LINE` becomes the live `route_id`. For the train to snap, it
+> must match a static rail route's index key (`routeShortName ?? routeId`). MARTA's `LINE`
+> values equal the static `route_short_name` exactly, so no transform is needed. A new
+> agency's rail API may use different line identifiers — check this the same way you check
+> bus `route_id` alignment.
 
 ---
 
@@ -398,6 +515,10 @@ Sample routes (up to 5):
 | Missing file in static zip | Report which of routes.txt / trips.txt / shapes.txt is absent; stop that parse step |
 | Routes with no shape | Normal; report count separately |
 | `header.timestamp = 0` | Normal for some feeds (confirmed MARTA behavior) — not an error |
+| Rail API returns HTML/empty | Wrong URL, key required, or agency has no rail API; report and stop the rail step only |
+| Rail rows all `IS_REALTIME != "true"` | All rows dropped; report — feed may be schedule-only at this time of day |
+| One TRAIN_ID has multiple distinct coords | Live-position contract broken: lat/lon is NOT the live train position; flag (worker logs a warning, still snaps the first row) |
+| No `route_type=1` routes in static zip | Agency has no heavy rail (or doesn't tag it); rail realtime step is N/A |
 
 ### Raw field inspection (if decoder produces null lat/lon)
 

@@ -42,7 +42,7 @@ Then route based on their answer (you do not need an exact keyword match — rea
 | Maintaining the skill: "I added/changed a telemetry schema", "sync the schemas", "the columns/datasets changed", docs are out of date | [functions/sync-schemas.md](functions/sync-schemas.md) |
 | Asking how the data/query works, what columns exist, what a field means | answer from [references/telemetry-schema.md](references/telemetry-schema.md) (no function needed) |
 | Cross-referencing a `route_id` against live GTFS data, "does route X exist", "why are routes missing", checking if GTFS is loaded | call the API — see [references/mj-api-schema.md](references/mj-api-schema.md) and [references/mj-api-query-guide.md](references/mj-api-query-guide.md) |
-| Evaluating a new transit agency's feeds, "can we add agency X", "is this GTFS feed compatible", "why are buses skipped for this source" | [functions/gtfs-compatibility.md](functions/gtfs-compatibility.md) |
+| Evaluating a new transit agency's feeds, "can we add agency X", "is this GTFS feed compatible", "why are buses/trains skipped for this source", whether an agency's heavy rail can be added | [functions/gtfs-compatibility.md](functions/gtfs-compatibility.md) |
 | Asking about neighborhoods — which routes serve a neighborhood, which neighborhoods a route passes through, transit-commute rankings, demographic comparisons, "does route X go through Y?" | read the committed lean file — see [references/neighborhood-routes-context.md](references/neighborhood-routes-context.md) |
 
 If intent is ambiguous, ask one clarifying free-text question before routing.
@@ -61,8 +61,9 @@ If intent is ambiguous, ask one clarifying free-text question before routing.
 - **SKILL.md** (this file) — router + conversational UX.
 - **functions/troubleshooting.md** — data-driven diagnosis of common app issues.
 - **functions/insights.md** — discover patterns and trends across the datasets.
-- **functions/gtfs-compatibility.md** — evaluate a transit agency's GTFS-RT and static
-  feeds for compatibility with the data worker algorithm. Uses `mj-gtfs` as its fetch tool.
+- **functions/gtfs-compatibility.md** — evaluate a transit agency's GTFS-RT (buses),
+  static, and rail-realtime (trains) feeds for compatibility with the data worker
+  algorithm. Uses `mj-gtfs` as its fetch tool.
 - **functions/sync-schemas.md** — re-derive the schema references from the repo's
   source of truth (`validate.go`) when telemetry datasets/columns change. Skill
   maintenance, not data exploration.
