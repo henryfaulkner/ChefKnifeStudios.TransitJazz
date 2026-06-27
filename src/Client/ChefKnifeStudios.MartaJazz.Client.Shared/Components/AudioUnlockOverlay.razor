@@ -4,13 +4,14 @@
 @using Microsoft.Extensions.Localization
 @inject IStringLocalizer<RouteFilterResources> Loc
 @inject ITransitSynthJsInterop TransitSynth
+@inject NavigationManager NavigationManager
 
 <div class="audio-unlock-overlay">
     <div class="audio-unlock-overlay__inner">
         <div class="audio-unlock-overlay__body">
-            <p>@Loc["AudioOverlayParagraph1"]</p>
-            <p>@Loc["AudioOverlayParagraph2"]</p>
-            <p>@Loc["AudioOverlayParagraph3"]</p>
+            <p>@Loc[_prefix + "Paragraph1"]</p>
+            <p>@Loc[_prefix + "Paragraph2"]</p>
+            <p>@Loc[_prefix + "Paragraph3"]</p>
         </div>
         <button type="button" id="@_buttonId" class="audio-unlock-overlay__button" @onclick="OnEnable">
             @Loc["AudioOverlayButton"]
@@ -107,6 +108,18 @@
     [Parameter, EditorRequired] public EventCallback OnEnable { get; set; }
 
     readonly string _buttonId = $"audio-unlock-btn-{Guid.NewGuid():N}";
+    string _prefix = "AudioOverlay";
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            var fragment = new Uri(NavigationManager.Uri).Fragment.TrimStart('#');
+            if (string.Equals(fragment, "wmata", StringComparison.OrdinalIgnoreCase))
+                _prefix = "WmataAudioOverlay";
+        }
+        catch { }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

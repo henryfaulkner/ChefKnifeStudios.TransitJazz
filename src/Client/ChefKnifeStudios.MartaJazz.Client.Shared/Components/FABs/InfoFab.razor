@@ -1,6 +1,7 @@
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
 @using Microsoft.Extensions.Localization
 @inject IStringLocalizer<RouteFilterResources> Loc
+@inject NavigationManager NavigationManager
 
 <div class="info-fab-container">
     <MatFAB Icon="@(_isOpen ? "close" : "info_outline")" Mini="true" @onclick="() => _isOpen = !_isOpen" />
@@ -11,7 +12,7 @@
     <div class="info-overlay">
         <div class="info-overlay__inner">
             <div class="info-overlay__body">
-                <p>@Loc["InfoOverlayParagraph1"]</p>
+                <p>@Loc[_prefix + "Paragraph1"]</p>
                 <p>@Loc["InfoOverlayParagraph2"]</p>
                 <p>@Loc["InfoOverlayParagraph3"]</p>
             </div>
@@ -25,4 +26,16 @@
 
 @code {
     bool _isOpen;
+    string _prefix = "InfoOverlay";
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            var fragment = new Uri(NavigationManager.Uri).Fragment.TrimStart('#');
+            if (string.Equals(fragment, "wmata", StringComparison.OrdinalIgnoreCase))
+                _prefix = "WmataOverlay";
+        }
+        catch { }
+    }
 }
