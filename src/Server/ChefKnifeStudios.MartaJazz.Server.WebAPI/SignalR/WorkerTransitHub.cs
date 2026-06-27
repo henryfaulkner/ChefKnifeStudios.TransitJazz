@@ -20,11 +20,10 @@ public class WorkerTransitHub : Hub
         _lastBatchCache = lastBatchCache;
     }
 
-    public async Task PublishBatch(List<EventEnvelope> batch)
+    public async Task PublishBatch(string city, List<EventEnvelope> batch)
     {
-        _lastBatchCache.Set(batch);
-        await _clientHub.Clients.All.SendAsync("ReceiveBatch", batch);
-        _logger.LogDebug("WorkerTransitHub: cached and relayed {Count} events", batch.Count);
-        _logger.LogInformation("Relayed {Count} events from worker", batch.Count);
+        _lastBatchCache.Set(city, batch);
+        await _clientHub.Clients.Group(city).SendAsync("ReceiveBatch", batch);
+        _logger.LogInformation("WorkerTransitHub: sent {Count} events to group '{City}'", batch.Count, city);
     }
 }

@@ -1,0 +1,26 @@
+@inject NavigationManager NavigationManager
+
+<div class="city-fab-container">
+    <MatFAB Label="@_currentCity.ToUpperInvariant()" Mini="true" @onclick="HandleToggle" />
+</div>
+
+@code {
+    string _currentCity = "marta";
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            var fragment = new Uri(NavigationManager.Uri).Fragment.TrimStart('#');
+            if (!string.IsNullOrWhiteSpace(fragment))
+                _currentCity = fragment.ToLowerInvariant();
+        }
+        catch { }
+    }
+
+    void HandleToggle()
+    {
+        var next = _currentCity == "marta" ? "wmata" : "marta";
+        NavigationManager.NavigateTo($"/#{next}", forceLoad: true);
+    }
+}

@@ -23,7 +23,6 @@ public static class GtfsEndpoints
             .WithName(nameof(ApiEndpoints.Gtfs))
             .WithTags(nameof(ApiEndpoints.Gtfs));
 
-        // Diagnostic: list all stored route keys (remove before production)
         group.MapGet("/gtfs/debug/keys", async (
             [FromServices] IKeyValueRepository<string> repo,
             CancellationToken ct) =>
@@ -36,11 +35,13 @@ public static class GtfsEndpoints
 
         group.MapGet(ApiEndpoints.Gtfs.GetRouteShape, async (
             string routeId,
+            [FromQuery] string? city,
             [FromServices] IKeyValueRepository<string> repo,
             [FromServices] ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
+            var cityKey = (city ?? "marta").ToLowerInvariant();
 
             var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);
             if (!readyResult.IsSuccess)
@@ -49,17 +50,18 @@ public static class GtfsEndpoints
                 return Results.StatusCode(503);
             }
 
-            var shapeResult = await repo.GetAsync(routeId, ct);
+            var kvKey = $"{cityKey}:{routeId}";
+            var shapeResult = await repo.GetAsync(kvKey, ct);
             if (!shapeResult.IsSuccess)
             {
-                logger.LogWarning("GtfsEndpoints: Route shape not found for routeId {RouteId}.", routeId);
+                logger.LogWarning("GtfsEndpoints: Route shape not found for {Key}.", kvKey);
                 return Results.NotFound();
             }
 
             var feature = JsonSerializer.Deserialize<RouteShapeFeature>(shapeResult.Value, Shared.JsonOptions.Get());
             if (feature is null)
             {
-                logger.LogWarning("GtfsEndpoints: Failed to deserialize route shape for routeId {RouteId}.", routeId);
+                logger.LogWarning("GtfsEndpoints: Failed to deserialize route shape for {Key}.", kvKey);
                 return Results.StatusCode(503);
             }
 
@@ -71,6 +73,7 @@ public static class GtfsEndpoints
         .Produces(StatusCodes.Status503ServiceUnavailable);
 
         group.MapGet(ApiEndpoints.Gtfs.GetAllRouteShapes, async (
+            [FromQuery] string? city,
             [FromServices] IKeyValueRepository<string> repo,
             [FromServices] ILoggerFactory loggerFactory,
             CancellationToken ct) =>
@@ -91,8 +94,10 @@ public static class GtfsEndpoints
                 return Results.StatusCode(503);
             }
 
+            var prefix = city is not null ? $"{city.ToLowerInvariant()}:" : null;
+
             var features = allShapesResult.Value
-                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey)
+                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey && (prefix is null || kvp.Key.StartsWith(prefix)))
                 .Select(kvp => JsonSerializer.Deserialize<RouteShapeFeature>(kvp.Value, Shared.JsonOptions.Get()))
                 .Where(f => f is not null)
                 .ToList();
@@ -104,11 +109,14 @@ public static class GtfsEndpoints
         .Produces(StatusCodes.Status503ServiceUnavailable);
 
         group.MapGet(ApiEndpoints.Gtfs.GetAllRoutes, async (
+            [FromQuery] string? city,
             [FromServices] IKeyValueRepository<string> repo,
             [FromServices] ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
+            var cityKey = (city ?? "marta").ToLowerInvariant();
+            var prefix = $"{cityKey}:";
 
             var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);
             if (!readyResult.IsSuccess)
@@ -125,9 +133,9 @@ public static class GtfsEndpoints
             }
 
             var featureProperties = allShapesResult.Value
-                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey)
+                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey && kvp.Key.StartsWith(prefix))
                 .Select(kvp => JsonSerializer.Deserialize<RouteShapeFeature>(kvp.Value, Shared.JsonOptions.Get()))
-                .Select(x => x.Properties)
+                .Select(x => x?.Properties)
                 .Where(f => f is not null)
                 .ToList();
 

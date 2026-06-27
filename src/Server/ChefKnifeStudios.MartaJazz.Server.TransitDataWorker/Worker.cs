@@ -1,12 +1,11 @@
+using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
-using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.Geospatial;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net.Http.Headers;
 using System.Text.Json;
 
 namespace ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
@@ -18,15 +17,16 @@ public class Worker(
     IEventNotificationService eventNotifications,
     LogEventWorker logEventWorker,
     ILoggingService loggingService,
-    IRailRealtimeAdapter railAdapter) : BackgroundService
+    IEnumerable<ITransitCity> cities) : BackgroundService
 {
-    readonly ConcurrentDictionary<string, VehicleState> _vehicleStateCache = new();
-    ulong? _lastFeedHeaderTimestamp;
-    readonly string _gtfsRtUrl = "https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb";
+    readonly Dictionary<string, ConcurrentDictionary<string, VehicleState>> _vehicleStateCaches = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, ulong?> _lastFeedHeaderTimestamps = new(StringComparer.OrdinalIgnoreCase);
     readonly string _batchOutputDir = Path.Combine(AppContext.BaseDirectory, "event-batches");
     static readonly JsonSerializerOptions _batchJsonOptions = new() { WriteIndented = true };
 
-    IReadOnlyDictionary<string, RoutePoint[]>? _routeIndex;
+    Dictionary<string, IReadOnlyDictionary<string, RoutePoint[]>> _routeIndex = new(StringComparer.OrdinalIgnoreCase);
+    // per-city routeId→TransitMode, built from GTFS route_type at static-data load time
+    Dictionary<string, IReadOnlyDictionary<string, TransitMode>> _routeMode = new(StringComparer.OrdinalIgnoreCase);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -42,45 +42,70 @@ public class Worker(
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            var busFeed = await FetchGtfsRtFeedAsync(stoppingToken);
-            var railEnts = await railAdapter.FetchAsync(stoppingToken);
-
-            var railVehicleIds = railEnts.Count > 0
-                ? new HashSet<string>(railEnts.Select(e => e.Vehicle?.Vehicle?.Id ?? e.Id))
-                : [];
-
-            var merged = busFeed ?? new FeedMessage();
-            merged.Entities.AddRange(railEnts);
-
-            if (merged.Entities.Count > 0 && _routeIndex != null)
+            foreach (var city in cities)
             {
-                await ProcessSpatialReconciliationAsync(merged, railVehicleIds, stoppingToken);
+                try
+                {
+                    var feed = await city.FetchVehiclesAsync(stoppingToken);
+
+                    if (!_routeIndex.TryGetValue(city.Name, out var index) || index == null)
+                    {
+                        logger.LogWarning("City {City}: route index not ready, skipping tick.", city.Name);
+                        continue;
+                    }
+
+                    _routeMode.TryGetValue(city.Name, out var modeMap);
+                    if (feed.Entities.Count > 0)
+                        await ProcessSpatialReconciliationAsync(city, feed, index, modeMap, stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "City {City} tick failed; other cities unaffected", city.Name);
+                }
             }
         }
     }
 
-    IReadOnlyDictionary<string, RoutePoint[]> BuildRouteIndex(List<RouteShapeFeature> shapes)
+    // Partition a flat list of shapes into per-city indexes using RouteShapeProperties.City.
+    // A single HTTP call to /gtfs/routes/shapes returns all cities (INV-S2, Q4).
+    (Dictionary<string, IReadOnlyDictionary<string, RoutePoint[]>> index,
+     Dictionary<string, IReadOnlyDictionary<string, TransitMode>> mode)
+        BuildRouteIndex(List<RouteShapeFeature> shapes)
     {
-        var routeGroups = new Dictionary<string, List<RoutePoint>>();
+        var perCityPoints = new Dictionary<string, Dictionary<string, List<RoutePoint>>>(StringComparer.OrdinalIgnoreCase);
+        var perCityMode = new Dictionary<string, Dictionary<string, TransitMode>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var shape in shapes)
         {
+            var cityName = shape.Properties.City ?? "marta";
+
+            if (!perCityPoints.TryGetValue(cityName, out var routeGroups))
+                perCityPoints[cityName] = routeGroups = new Dictionary<string, List<RoutePoint>>();
+            if (!perCityMode.TryGetValue(cityName, out var modeMap))
+                perCityMode[cityName] = modeMap = new Dictionary<string, TransitMode>();
+
             var key = shape.Properties.RouteShortName ?? shape.Properties.RouteId;
             if (!routeGroups.TryGetValue(key, out var points))
-            {
-                points = new List<RoutePoint>();
-                routeGroups[key] = points;
-            }
+                routeGroups[key] = points = new List<RoutePoint>();
 
             foreach (var coord in shape.Geometry.Coordinates)
-            {
-                double lon = coord[0];
-                double lat = coord[1];
-                points.Add(new RoutePoint(key, lat, lon));
-            }
+                points.Add(new RoutePoint(key, coord[1], coord[0]));
+
+            modeMap[key] = shape.Properties.Mode;
         }
 
-        return routeGroups.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToArray());
+        var indexResult = perCityPoints.ToDictionary(
+            kvp => kvp.Key,
+            kvp => (IReadOnlyDictionary<string, RoutePoint[]>)kvp.Value.ToDictionary(
+                r => r.Key, r => r.Value.ToArray()),
+            StringComparer.OrdinalIgnoreCase);
+
+        var modeResult = perCityMode.ToDictionary(
+            kvp => kvp.Key,
+            kvp => (IReadOnlyDictionary<string, TransitMode>)kvp.Value,
+            StringComparer.OrdinalIgnoreCase);
+
+        return (indexResult, modeResult);
     }
 
     async Task InitializeRouteIndexAsync(CancellationToken ct)
@@ -105,13 +130,13 @@ public class Worker(
                     continue;
                 }
 
-                _routeIndex = BuildRouteIndex(shapes);
+                (_routeIndex, _routeMode) = BuildRouteIndex(shapes);
                 sw.Stop();
 
-                int routeCount = _routeIndex.Count;
-                int totalPoints = _routeIndex.Values.Sum(pts => pts.Length);
-                logger.LogInformation("Built route index: {RouteCount} routes, {TotalPoints} total points in {ElapsedMs}ms",
-                    routeCount, totalPoints, sw.ElapsedMilliseconds);
+                int totalRoutes = _routeIndex.Values.Sum(d => d.Count);
+                int totalPoints = _routeIndex.Values.Sum(d => d.Values.Sum(pts => pts.Length));
+                logger.LogInformation("Built route index: {Cities} cities, {RouteCount} routes, {TotalPoints} total points in {ElapsedMs}ms",
+                    _routeIndex.Count, totalRoutes, totalPoints, sw.ElapsedMilliseconds);
                 return;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -122,22 +147,30 @@ public class Worker(
             {
                 logger.LogError(ex, "Failed to initialize route index (attempt {Attempt}/{MaxRetries}).", attempt, maxRetries);
                 if (attempt < maxRetries)
-                {
                     await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
-                }
             }
         }
 
         logger.LogWarning("Could not initialize route index after {MaxRetries} attempts. V2 reconciliation will be skipped until index is built.", maxRetries);
     }
 
-    async Task ProcessSpatialReconciliationAsync(FeedMessage feed, HashSet<string> railVehicleIds, CancellationToken ct)
+    ConcurrentDictionary<string, VehicleState> GetVehicleCache(string city)
+    {
+        if (!_vehicleStateCaches.TryGetValue(city, out var cache))
+            _vehicleStateCaches[city] = cache = new ConcurrentDictionary<string, VehicleState>();
+        return cache;
+    }
+
+    async Task ProcessSpatialReconciliationAsync(
+        ITransitCity city,
+        FeedMessage feed,
+        IReadOnlyDictionary<string, RoutePoint[]> index,
+        IReadOnlyDictionary<string, TransitMode>? modeMap,
+        CancellationToken ct)
     {
         try
         {
-            var index = _routeIndex;
-            if (index == null) return;
-
+            var vehicleStateCache = GetVehicleCache(city.Name);
             var cycleId = Guid.NewGuid().ToString("N");
             var cycleStart = DateTime.UtcNow;
 
@@ -177,7 +210,7 @@ public class Worker(
 
                     const int SnapWindowSize = 30;
 
-                    var snap = _vehicleStateCache.TryGetValue(vehicleId, out var priorForSnap) && priorForSnap.RouteId == routeId
+                    var snap = vehicleStateCache.TryGetValue(vehicleId, out var priorForSnap) && priorForSnap.RouteId == routeId
                         ? RouteSnapper.FindNearestInWindow(lat, lon, routePoints, priorForSnap.SnapIndex, SnapWindowSize)
                         : RouteSnapper.FindNearest(lat, lon, routePoints);
                     if (snap == null) continue;
@@ -190,18 +223,11 @@ public class Worker(
                     var currentVehicleTimestamp = entity.Vehicle.Timestamp;
                     bool isStale = false;
 
-                    if (_vehicleStateCache.TryGetValue(vehicleId, out var prior))
+                    if (vehicleStateCache.TryGetValue(vehicleId, out var prior))
                     {
                         if (prior.LastUpdated > now)
-                        {
                             continue;
-                        }
 
-                        // Staleness check: the upstream GTFS-RT feed delivered the same
-                        // per-vehicle sample as last poll. Emit a passthrough record so
-                        // the client keeps extrapolating, but do not update _vehicleStateCache —
-                        // we want the *next* fresh sample to compute its prior-delta against
-                        // the last truly-new observation, not against this stale one.
                         isStale = currentVehicleTimestamp.HasValue
                             && prior.VehicleTimestamp.HasValue
                             && currentVehicleTimestamp.Value == prior.VehicleTimestamp.Value;
@@ -218,7 +244,7 @@ public class Worker(
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             isStale,
-                            railVehicleIds.Contains(vehicleId) ? TransitMode.Rail : TransitMode.Bus
+                            modeMap != null && modeMap.TryGetValue(routeId, out var m) ? m : TransitMode.Bus
                         ));
 
                         if (isStale)
@@ -275,8 +301,7 @@ public class Worker(
                             Bearing: entity.Vehicle.Position.Bearing
                         );
 
-                        // US3: post lerp delta for vehicles with a prior observation
-                        if (!isStale)
+                        if (!isStale && city.EmitsTelemetry)
                         {
                             eventNotifications.PostEvent(this, new LerpEventArgs
                             {
@@ -310,7 +335,7 @@ public class Worker(
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             false,
-                            railVehicleIds.Contains(vehicleId) ? TransitMode.Rail : TransitMode.Bus
+                            modeMap != null && modeMap.TryGetValue(routeId, out var m2) ? m2 : TransitMode.Bus
                         ));
                         outcome = "FirstObservation";
                         movedCount++;
@@ -344,31 +369,31 @@ public class Worker(
 
                     debugBatch.Add(debugRecord);
 
-                    // US2: post snap telemetry for every vehicle observation
-                    eventNotifications.PostEvent(this, new SnapEventArgs
+                    if (city.EmitsTelemetry)
                     {
-                        CycleId = cycleId,
-                        ObservationUtc = now,
-                        VehicleId = vehicleId,
-                        RouteId = nearest.RouteId,
-                        SnapOutcome = outcome,
-                        RawLat = lat,
-                        RawLon = lon,
-                        SnappedLat = nearest.Lat,
-                        SnappedLon = nearest.Lon,
-                        SnapDistanceKm = snapValue.DistanceKm,
-                        SnapIndex = snapValue.Index,
-                        RoutePointCount = routePoints.Length,
-                        SpeedMps = entity.Vehicle.Position.Speed.HasValue ? (double)entity.Vehicle.Position.Speed.Value : null,
-                        BearingDeg = entity.Vehicle.Position.Bearing.HasValue ? (double)entity.Vehicle.Position.Bearing.Value : null,
-                        IsStale = isStale
-                    });
+                        eventNotifications.PostEvent(this, new SnapEventArgs
+                        {
+                            CycleId = cycleId,
+                            ObservationUtc = now,
+                            VehicleId = vehicleId,
+                            RouteId = nearest.RouteId,
+                            SnapOutcome = outcome,
+                            RawLat = lat,
+                            RawLon = lon,
+                            SnappedLat = nearest.Lat,
+                            SnappedLon = nearest.Lon,
+                            SnapDistanceKm = snapValue.DistanceKm,
+                            SnapIndex = snapValue.Index,
+                            RoutePointCount = routePoints.Length,
+                            SpeedMps = entity.Vehicle.Position.Speed.HasValue ? (double)entity.Vehicle.Position.Speed.Value : null,
+                            BearingDeg = entity.Vehicle.Position.Bearing.HasValue ? (double)entity.Vehicle.Position.Bearing.Value : null,
+                            IsStale = isStale
+                        });
+                    }
 
-                    // Skip _vehicleStateCache update for stale samples so the next fresh
-                    // observation deltas against the last real data, not against a duplicate.
                     if (!isStale)
                     {
-                        _vehicleStateCache[vehicleId] = new VehicleState(
+                        vehicleStateCache[vehicleId] = new VehicleState(
                             nearest.Lat,
                             nearest.Lon,
                             now,
@@ -389,72 +414,73 @@ public class Worker(
             }
 
             var feedTs = feed.Header?.Timestamp;
-            var feedIsDuplicate = feedTs.HasValue && _lastFeedHeaderTimestamp.HasValue && feedTs.Value == _lastFeedHeaderTimestamp.Value;
-            _lastFeedHeaderTimestamp = feedTs;
+            _lastFeedHeaderTimestamps.TryGetValue(city.Name, out var lastTs);
+            var feedIsDuplicate = feedTs.HasValue && lastTs.HasValue && feedTs.Value == lastTs.Value;
+            _lastFeedHeaderTimestamps[city.Name] = feedTs;
 
             var cycleEnd = DateTime.UtcNow;
 
             logger.LogInformation(
-                "Spatial reconciliation: {Moved} moved, {Unchanged} unchanged, {Stationary} stationary, {Stale} stale, {SkippedNoRouteId} skippedNoRouteId, {SkippedUnknownRoute} skippedUnknownRoute. FeedHeaderTs={FeedHeaderTs} DuplicateFeed={DuplicateFeed}",
-                movedCount, unchangedCount, stationaryCount, staleCount, skippedNoRouteId, skippedUnknownRoute, feedTs, feedIsDuplicate);
+                "City {City} spatial reconciliation: {Moved} moved, {Unchanged} unchanged, {Stationary} stationary, {Stale} stale, {SkippedNoRouteId} skippedNoRouteId, {SkippedUnknownRoute} skippedUnknownRoute. FeedHeaderTs={FeedHeaderTs} DuplicateFeed={DuplicateFeed}",
+                city.Name, movedCount, unchangedCount, stationaryCount, staleCount, skippedNoRouteId, skippedUnknownRoute, feedTs, feedIsDuplicate);
 
-            // US1: post cycle telemetry — includes sidecar self-health (FR-012)
-            var droppedRecords = logEventWorker.DroppedRecords;
-            var persistFailures = loggingService.PersistFailures;
-            var bufferOccupancy = logEventWorker.BufferOccupancy;
-
-            logger.LogInformation(
-                "Sidecar self-health: BufferOccupancy={Occupancy}, DroppedRecords={Dropped}, PersistFailures={Failures}",
-                bufferOccupancy, droppedRecords, persistFailures);
-
-            eventNotifications.PostEvent(this, new CycleEventArgs
+            if (city.EmitsTelemetry)
             {
-                CycleId = cycleId,
-                CycleStartUtc = cycleStart,
-                CycleEndUtc = cycleEnd,
-                CycleExecutionSeconds = (cycleEnd - cycleStart).TotalSeconds,
-                BusesProcessed = movedCount + unchangedCount + stationaryCount + staleCount,
-                BusesMoved = movedCount,
-                BusesUnchanged = unchangedCount,
-                BusesStationary = stationaryCount,
-                BusesStale = staleCount,
-                BusesSkippedNoRouteId = skippedNoRouteId,
-                BusesSkippedUnknownRoute = skippedUnknownRoute,
-                FeedHeaderTs = feedTs.HasValue ? (long)feedTs.Value : null,
-                DuplicateFeed = feedIsDuplicate,
-                ActiveRouteIds = string.Join(",", activeRouteIdSet.Order()),
-                ActiveVehicleIds = string.Join(",", activeVehicleIdSet.Order()),
-                LastUpdateCacheSize = 0,
-                VehicleStateCacheSize = _vehicleStateCache.Count,
-                SidecarBufferOccupancy = bufferOccupancy,
-                SidecarDroppedRecords = droppedRecords,
-                SidecarPersistFailures = persistFailures
-            });
+                var droppedRecords = logEventWorker.DroppedRecords;
+                var persistFailures = loggingService.PersistFailures;
+                var bufferOccupancy = logEventWorker.BufferOccupancy;
+
+                logger.LogInformation(
+                    "Sidecar self-health: BufferOccupancy={Occupancy}, DroppedRecords={Dropped}, PersistFailures={Failures}",
+                    bufferOccupancy, droppedRecords, persistFailures);
+
+                eventNotifications.PostEvent(this, new CycleEventArgs
+                {
+                    CycleId = cycleId,
+                    CycleStartUtc = cycleStart,
+                    CycleEndUtc = cycleEnd,
+                    CycleExecutionSeconds = (cycleEnd - cycleStart).TotalSeconds,
+                    BusesProcessed = movedCount + unchangedCount + stationaryCount + staleCount,
+                    BusesMoved = movedCount,
+                    BusesUnchanged = unchangedCount,
+                    BusesStationary = stationaryCount,
+                    BusesStale = staleCount,
+                    BusesSkippedNoRouteId = skippedNoRouteId,
+                    BusesSkippedUnknownRoute = skippedUnknownRoute,
+                    FeedHeaderTs = feedTs.HasValue ? (long)feedTs.Value : null,
+                    DuplicateFeed = feedIsDuplicate,
+                    ActiveRouteIds = string.Join(",", activeRouteIdSet.Order()),
+                    ActiveVehicleIds = string.Join(",", activeVehicleIdSet.Order()),
+                    LastUpdateCacheSize = 0,
+                    VehicleStateCacheSize = vehicleStateCache.Count,
+                    SidecarBufferOccupancy = bufferOccupancy,
+                    SidecarDroppedRecords = droppedRecords,
+                    SidecarPersistFailures = persistFailures
+                });
+            }
 
             if (batch.Count > 0)
             {
 #if DEBUG
                 await WriteBatchToDiskAsync(debugBatch, ct);
 #endif
-
                 var envelope = new EventEnvelope(
                     nameof(RouteNearestPointBatchEvent),
                     DateTimeOffset.UtcNow,
                     new RouteNearestPointBatchEvent(batch)
                 );
 
-                var isBatchPublished = await transitHubPublisher.PublishBatchAsync(new List<EventEnvelope> { envelope }, ct);
+                var isBatchPublished = await transitHubPublisher.PublishBatchAsync(city.Name, new List<EventEnvelope> { envelope }, ct);
                 if (!isBatchPublished)
-                {
-                    logger.LogWarning("Failed to publish spatial reconciliation batch.");
-                }
+                    logger.LogWarning("Failed to publish spatial reconciliation batch for city {City}.", city.Name);
             }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error in spatial reconciliation.");
+            logger.LogError(ex, "Error in spatial reconciliation for city {City}.", city.Name);
         }
     }
+
 
     async Task PruneStaleVehicleStatesAsync(CancellationToken ct)
     {
@@ -467,19 +493,16 @@ public class Worker(
                 int pruned = 0;
                 var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(20);
 
-                foreach (var kvp in _vehicleStateCache)
+                foreach (var cache in _vehicleStateCaches.Values)
                 {
-                    if (kvp.Value.LastUpdated < cutoff)
+                    foreach (var kvp in cache)
                     {
-                        if (_vehicleStateCache.TryRemove(kvp.Key, out _))
-                        {
+                        if (kvp.Value.LastUpdated < cutoff && cache.TryRemove(kvp.Key, out _))
                             pruned++;
-                        }
                     }
                 }
 
-                logger.LogInformation("Pruned {PrunedCount} stale vehicle states, {RemainingCount} remaining.",
-                    pruned, _vehicleStateCache.Count);
+                logger.LogInformation("Pruned {PrunedCount} stale vehicle states.", pruned);
             }
             catch (Exception ex)
             {
@@ -509,13 +532,8 @@ public class Worker(
                     continue;
                 }
 
-                var newIndex = BuildRouteIndex(shapes);
-                _routeIndex = newIndex;
-
-                int routeCount = newIndex.Count;
-                int totalPoints = newIndex.Values.Sum(pts => pts.Length);
-                logger.LogInformation("Refreshed route index: {RouteCount} routes, {TotalPoints} total points.",
-                    routeCount, totalPoints);
+                (_routeIndex, _routeMode) = BuildRouteIndex(shapes);
+                logger.LogInformation("Refreshed route index: {Cities} cities.", _routeIndex.Count);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -548,23 +566,4 @@ public class Worker(
         }
     }
 #endif
-
-    async Task<FeedMessage?> FetchGtfsRtFeedAsync(CancellationToken ct)
-    {
-        var client = httpClientFactory.CreateClient();
-
-        var request = new HttpRequestMessage(HttpMethod.Get, _gtfsRtUrl);
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("TransitJazz", "1.0"));
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
-
-        var response = await client.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
-        {
-            logger.LogWarning("Failed to fetch GTFS-RT feed: {StatusCode}", response.StatusCode);
-            return null;
-        }
-
-        await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        return ProtoBuf.Serializer.Deserialize<FeedMessage>(stream);
-    }
 }

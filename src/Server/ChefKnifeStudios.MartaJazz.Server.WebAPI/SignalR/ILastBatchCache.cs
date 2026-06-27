@@ -8,21 +8,39 @@ namespace ChefKnifeStudios.MartaJazz.Server.WebAPI.SignalR;
 
 public interface ILastBatchCache
 {
-    IReadOnlyList<EventEnvelope> Current { get; }
-    void Set(IReadOnlyList<EventEnvelope> batch);
+    IReadOnlyList<EventEnvelope> Current(string city);
+    void Set(string city, IReadOnlyList<EventEnvelope> batch);
 }
 
 public sealed class LastBatchCache : ILastBatchCache
 {
-    private readonly object _gate = new();
-    private readonly Dictionary<string, RouteNearestPointBatchEvent.RouteNearestPointRecord> _vehicles = new();
-    private IReadOnlyList<EventEnvelope> _current = Array.Empty<EventEnvelope>();
+    readonly object _gate = new();
+    readonly Dictionary<string, CityCache> _cities = new(StringComparer.OrdinalIgnoreCase);
 
-    public IReadOnlyList<EventEnvelope> Current => Volatile.Read(ref _current);
-
-    public void Set(IReadOnlyList<EventEnvelope> batch)
+    public IReadOnlyList<EventEnvelope> Current(string city)
     {
         lock (_gate)
+            return _cities.TryGetValue(city, out var c) ? c.Current : Array.Empty<EventEnvelope>();
+    }
+
+    public void Set(string city, IReadOnlyList<EventEnvelope> batch)
+    {
+        lock (_gate)
+        {
+            if (!_cities.TryGetValue(city, out var c))
+                _cities[city] = c = new CityCache();
+            c.Set(batch);
+        }
+    }
+
+    sealed class CityCache
+    {
+        readonly Dictionary<string, RouteNearestPointBatchEvent.RouteNearestPointRecord> _vehicles = new();
+        IReadOnlyList<EventEnvelope> _current = Array.Empty<EventEnvelope>();
+
+        public IReadOnlyList<EventEnvelope> Current => _current;
+
+        public void Set(IReadOnlyList<EventEnvelope> batch)
         {
             if (batch is not null)
             {
@@ -31,13 +49,13 @@ public sealed class LastBatchCache : ILastBatchCache
                     if (env?.Payload is not RouteNearestPointBatchEvent rnp) continue;
                     foreach (var rec in rnp.BatchRecords)
                     {
-                        if (rec.IsStale) continue;       // ignore stale: never overwrite, never seed
-                        _vehicles[rec.VehicleId] = rec;  // upsert latest non-stale per vehicle
+                        if (rec.IsStale) continue;
+                        _vehicles[rec.VehicleId] = rec;
                     }
                 }
             }
 
-            var rebuilt = _vehicles.Count == 0
+            _current = _vehicles.Count == 0
                 ? Array.Empty<EventEnvelope>()
                 : new[]
                 {
@@ -46,8 +64,6 @@ public sealed class LastBatchCache : ILastBatchCache
                         DateTimeOffset.UtcNow,
                         new RouteNearestPointBatchEvent(_vehicles.Values.ToList()))
                 };
-
-            Volatile.Write(ref _current, rebuilt);
         }
     }
 }

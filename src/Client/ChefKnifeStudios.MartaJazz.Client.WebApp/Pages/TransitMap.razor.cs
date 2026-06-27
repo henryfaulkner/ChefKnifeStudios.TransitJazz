@@ -39,6 +39,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
     [Inject] ITransitEndpointsService TransitEndpointsService { get; set; } = null!;
     [Inject] IOutsideClickJsInterop OutsideClickJsInterop { get; set; } = null!;
+    [Inject] NavigationManager NavigationManager { get; set; } = null!;
 
     const float MinWidth = 1100;
 
@@ -47,6 +48,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     IDisposable? _viewportSub;
     bool _isMobile;
+    SignalRNotificationHandler? _batchHandler;
 
     Map? _map;
     bool _mapReady;
@@ -67,12 +69,18 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _routesLoaded;
     bool _routesRendered;
 
+    int _batchSeq;  // incremented each time HandleVehicleBatchAsync is entered
+
     CameraOptions DefaultCameraOptions
         => new() { Center = new Position(33.749, -84.388), Zoom = _isMobile ? 6 : 9.5 };
 
     protected override async Task OnInitializedAsync()
     {
         _dotNetRef = DotNetObjectReference.Create((object)this);
+
+        var uri = new Uri(NavigationManager.Uri);
+        if (string.IsNullOrEmpty(uri.Fragment))
+            NavigationManager.NavigateTo(NavigationManager.Uri + "#marta", forceLoad: false);
 
         var settings = SettingsService.GetSettings();
         _audioEnabled = settings.IsAudioEnabled;
@@ -86,17 +94,21 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _viewportSub = ViewportSize.AddViewportSizeChangeCallback(OnViewportChanged);
         await ViewportSize.RegisterViewportSizeAsync();
 
+        _batchHandler = batch =>
+        {
+            Logger.LogInformation("[TransitMap] NotificationReceived fired on thread {Thread}, queueing InvokeAsync", System.Threading.Thread.CurrentThread.ManagedThreadId);
+            return InvokeAsync(() => HandleVehicleBatchAsync(batch));
+        };
+        NotificationService.NotificationReceived += _batchHandler;
+
         try
         {
-            await NotificationService.InitAsync();
-            NotificationService.NotificationReceived += HandleVehicleBatchAsync;
-
             await LoadRoutesAsync();
             await FetchInitialSnapshotAsync();
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "TransitMap: Failed to connect to SignalR hub");
+            Logger.LogError(ex, "TransitMap: Failed to load routes or initial snapshot");
         }
     }
 
@@ -281,7 +293,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived -= HandleSettingsEventReceived;
-        NotificationService.NotificationReceived -= HandleVehicleBatchAsync;
+        if (_batchHandler != null)
+            NotificationService.NotificationReceived -= _batchHandler;
         _viewportSub?.Dispose();
         await CheckpointTracker.ClearAsync();
         await OutsideClickJsInterop.RemoveOutsideClickListenerAsync(_accordionElementId);
@@ -411,9 +424,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     async Task HandleVehicleBatchAsync(IEnumerable<EventEnvelope> batch)
     {
+        var seq = ++_batchSeq;
+        Logger.LogInformation("[TransitMap] HandleVehicleBatchAsync #{Seq} entered, mapReady={MapReady}", seq, _mapReady);
+
         if (!_mapReady || _map is null)
         {
             _pendingBatches.Add(batch);
+            Logger.LogInformation("[TransitMap] #{Seq} queued as pending (mapReady={MapReady})", seq, _mapReady);
             return;
         }
 
@@ -423,6 +440,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             .Select(x => (RouteNearestPointBatchEvent)x.Payload)
             .SelectMany(e => e.BatchRecords)
             .ToArray();
+
+        Logger.LogInformation("[TransitMap] #{Seq} nearestPointRecords={Count}", seq, nearestPointRecords.Length);
 
         if (nearestPointRecords.Length > 0)
         {
@@ -441,11 +460,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 transitMode = r.TransitMode.ToString().ToLowerInvariant()
             }).ToArray();
 
-            Logger.LogDebug("TransitMap: forwarding {Count} nearest-point records to animator", records.Length);
+            Logger.LogInformation("[TransitMap] #{Seq} calling ProcessNearestPointBatchAsync with {Count} records", seq, records.Length);
             await _map.ProcessNearestPointBatchAsync(records);
+            Logger.LogInformation("[TransitMap] #{Seq} ProcessNearestPointBatchAsync returned", seq);
         }
 
-        await InvokeAsync(StateHasChanged);
+        StateHasChanged();
+        Logger.LogInformation("[TransitMap] #{Seq} complete", seq);
     }
 
     async Task OnVehicleMarkerClickedAsync((Map Map, string VehicleId) args)

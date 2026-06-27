@@ -67,7 +67,7 @@ public sealed class SignalRHubPublisher : ITransitHubPublisher, IAsyncDisposable
         }
     }
 
-    public async Task<bool> PublishBatchAsync(List<EventEnvelope> batch, CancellationToken ct = default)
+    public async Task<bool> PublishBatchAsync(string city, List<EventEnvelope> batch, CancellationToken ct = default)
     {
         if (_connection.State != HubConnectionState.Connected)
         {
@@ -75,7 +75,7 @@ public sealed class SignalRHubPublisher : ITransitHubPublisher, IAsyncDisposable
             return false;
         }
 
-        await _connection.InvokeAsync("PublishBatch", batch, ct);
+        await _connection.InvokeAsync("PublishBatch", city, batch, ct);
         return true;
     }
 

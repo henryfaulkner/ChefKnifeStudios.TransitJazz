@@ -1,5 +1,6 @@
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
@@ -19,49 +20,32 @@ namespace ChefKnifeStudios.MartaJazz.Server.WebAPI.GtfsStatic;
 public class GtfsStaticLoader(
     IHttpClientFactory httpClientFactory,
     IKeyValueRepository<string> routeShapeRepo,
+    IConfiguration configuration,
     ILogger<GtfsStaticLoader> logger) : IHostedService
 {
-    const string GtfsStaticUrl = "https://itsmarta.com/google_transit_feed/google_transit.zip";
+    sealed record CityStaticEntry(string Name, string[] StaticZipUrls, string? ApiKeyEnvVar);
+
     const double SimplifyToleranceMeters = 10.0;
     public const string ReadyKey = "__gtfs_static_ready__";
 
+    // Fallback MARTA URL for backwards compat when no Cities: config exists
+    const string MartaFallbackZipUrl = "https://itsmarta.com/google_transit_feed/google_transit.zip";
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("GtfsStaticLoader: downloading GTFS Static zip...");
+        logger.LogInformation("GtfsStaticLoader: loading GTFS static data for all cities...");
         try
         {
+            var cities = LoadCityEntries();
             var client = httpClientFactory.CreateClient();
-            var zipBytes = await client.GetByteArrayAsync(GtfsStaticUrl, cancellationToken);
 
-            using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
-
-            var routeToShape = ParseRouteToShapeMap(archive);
-            var shapes = ParseShapes(archive);
-            var routeMetadata = ParseRouteMetadata(archive);
-
-            int stored = 0;
-            foreach (var (routeId, shapeId) in routeToShape)
+            foreach (var city in cities)
             {
-                if (!shapes.TryGetValue(shapeId, out var points) || points.Count == 0) continue;
-
-                string? shortName = null, color = null, textColor = null;
-                var mode = TransitMode.Bus;
-                if (routeMetadata.TryGetValue(routeId, out var meta))
-                {
-                    shortName = meta.RouteShortName;
-                    color = meta.RouteColor;
-                    textColor = meta.TextColor;
-                    mode = meta.Mode;
-                }
-
-                var simplified = Simplify(points, SimplifyToleranceMeters);
-                var geoJson = BuildLineStringFeature(routeId, shortName, simplified, color, textColor, mode);
-                await routeShapeRepo.SetAsync(routeId, geoJson, cancellationToken);
-                stored++;
+                await LoadCityAsync(city, client, cancellationToken);
             }
 
             await routeShapeRepo.SetAsync(ReadyKey, "ready", cancellationToken);
-            logger.LogInformation("GtfsStaticLoader: loaded {Count} route shapes.", stored);
+            logger.LogInformation("GtfsStaticLoader: all cities loaded.");
         }
         catch (Exception ex)
         {
@@ -71,7 +55,91 @@ public class GtfsStaticLoader(
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    // Returns routeId → shapeId (one representative shape per route, first encountered wins)
+    List<CityStaticEntry> LoadCityEntries()
+    {
+        var section = configuration.GetSection("Cities");
+        if (!section.Exists())
+        {
+            // Backwards compat: no Cities: block → just MARTA
+            return [new CityStaticEntry("marta", [MartaFallbackZipUrl], null)];
+        }
+
+        var result = new List<CityStaticEntry>();
+        foreach (var child in section.GetChildren())
+        {
+            var name = child["Name"] ?? string.Empty;
+            if (string.IsNullOrEmpty(name)) continue;
+
+            var urls = child.GetSection("StaticZipUrls").GetChildren()
+                .Select(u => u.Value ?? string.Empty)
+                .Where(u => !string.IsNullOrEmpty(u))
+                .ToArray();
+
+            if (urls.Length == 0) continue;
+
+            var apiKeyEnvVar = child["ApiKeyEnvVar"];
+            result.Add(new CityStaticEntry(name, urls, apiKeyEnvVar));
+        }
+
+        return result.Count > 0 ? result : [new CityStaticEntry("marta", [MartaFallbackZipUrl], null)];
+    }
+
+    async Task LoadCityAsync(CityStaticEntry city, HttpClient client, CancellationToken ct)
+    {
+        var apiKey = city.ApiKeyEnvVar is not null
+            ? Environment.GetEnvironmentVariable(city.ApiKeyEnvVar)
+            : null;
+
+        // Merge all zip archives for this city into one shape set (multi-zip per city, Q4)
+        var allRouteToShape = new Dictionary<string, string>();
+        var allShapes = new Dictionary<string, List<(double Lat, double Lon, int Seq)>>();
+        var allMeta = new Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, TransitMode Mode)>();
+
+        foreach (var zipUrl in city.StaticZipUrls)
+        {
+            try
+            {
+                var fetchUrl = apiKey is not null ? $"{zipUrl}?api_key={apiKey}" : zipUrl;
+                var zipBytes = await client.GetByteArrayAsync(fetchUrl, ct);
+                using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+
+                foreach (var (k, v) in ParseRouteToShapeMap(archive))
+                    allRouteToShape.TryAdd(k, v);
+                foreach (var (k, v) in ParseShapes(archive))
+                    allShapes.TryAdd(k, v);
+                foreach (var (k, v) in ParseRouteMetadata(archive))
+                    allMeta.TryAdd(k, v);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "GtfsStaticLoader: failed to load zip for city {City} from {Url}.", city.Name, zipUrl);
+            }
+        }
+
+        int stored = 0;
+        foreach (var (routeId, shapeId) in allRouteToShape)
+        {
+            if (!allShapes.TryGetValue(shapeId, out var points) || points.Count == 0) continue;
+
+            string? shortName = null, color = null, textColor = null;
+            var mode = TransitMode.Bus;
+            if (allMeta.TryGetValue(routeId, out var meta))
+            {
+                shortName = meta.RouteShortName;
+                color = meta.RouteColor;
+                textColor = meta.TextColor;
+                mode = meta.Mode;
+            }
+
+            var simplified = Simplify(points, SimplifyToleranceMeters);
+            var geoJson = BuildLineStringFeature(routeId, shortName, simplified, color, textColor, mode, city.Name);
+            await routeShapeRepo.SetAsync($"{city.Name}:{routeId}", geoJson, ct);
+            stored++;
+        }
+
+        logger.LogInformation("GtfsStaticLoader: city {City} loaded {Count} route shapes.", city.Name, stored);
+    }
+
     static Dictionary<string, string> ParseRouteToShapeMap(ZipArchive archive)
     {
         var result = new Dictionary<string, string>();
@@ -80,7 +148,6 @@ public class GtfsStaticLoader(
 
         using var reader = new StreamReader(entry.Open());
         var headerLine = reader.ReadLine() ?? string.Empty;
-        // Strip BOM and normalize \r
         headerLine = headerLine.TrimStart('﻿').Replace("\r", "");
         var header = headerLine.Split(',');
 
@@ -95,7 +162,6 @@ public class GtfsStaticLoader(
             if (cols.Length <= Math.Max(routeIdx, shapeIdx)) continue;
             var routeId = cols[routeIdx].Trim();
             var shapeId = cols[shapeIdx].Trim();
-            // First trip per route wins; skip if already have a shape for this route
             if (!string.IsNullOrEmpty(routeId) && !string.IsNullOrEmpty(shapeId)
                 && !result.ContainsKey(routeId))
                 result[routeId] = shapeId;
@@ -163,7 +229,6 @@ public class GtfsStaticLoader(
             if (string.IsNullOrEmpty(shortName)) shortName = null;
             var color = colorIdx >= 0 && cols.Length > colorIdx ? NormalizeColor(cols[colorIdx].Trim()) : null;
             var textColor = textColorIdx >= 0 && cols.Length > textColorIdx ? NormalizeColor(cols[textColorIdx].Trim()) : null;
-            // GTFS route_type 1 = subway/metro (rail); any other or missing value classifies as bus.
             var mode = routeTypeIdx >= 0 && cols.Length > routeTypeIdx && cols[routeTypeIdx].Trim() == "1"
                 ? TransitMode.Rail
                 : TransitMode.Bus;
@@ -194,7 +259,6 @@ public class GtfsStaticLoader(
         keep[0] = true;
         keep[pts.Count - 1] = true;
 
-        // Iterative RDP using an explicit stack to avoid stack overflow on long routes.
         var stack = new Stack<(int Start, int End)>();
         stack.Push((0, pts.Count - 1));
 
@@ -226,7 +290,6 @@ public class GtfsStaticLoader(
                     perpX = px - t * dx;
                     perpY = py - t * dy;
                 }
-                // Scale to approximate meters for the tolerance comparison.
                 double distM = Math.Sqrt(perpX * perpX / (tolLon * tolLon) + perpY * perpY / (tolLat * tolLat)) * toleranceMeters;
                 if (distM > maxDist) { maxDist = distM; maxIdx = i; }
             }
@@ -251,7 +314,8 @@ public class GtfsStaticLoader(
         List<(double Lat, double Lon, int Seq)> points,
         string? color,
         string? textColor,
-        TransitMode mode)
+        TransitMode mode,
+        string city)
     {
         var sb = new StringBuilder();
         sb.Append("{\"type\":\"Feature\",\"geometry\":{\"type\":\"LineString\",\"coordinates\":[");
@@ -272,6 +336,7 @@ public class GtfsStaticLoader(
         sb.Append($",\"color\":{(color != null ? JsonSerializer.Serialize(color) : "null")}");
         sb.Append($",\"textColor\":{(textColor != null ? JsonSerializer.Serialize(textColor) : "null")}");
         sb.Append($",\"mode\":\"{mode}\"");
+        sb.Append($",\"city\":{JsonSerializer.Serialize(city)}");
         sb.Append("}}");
         return sb.ToString();
     }

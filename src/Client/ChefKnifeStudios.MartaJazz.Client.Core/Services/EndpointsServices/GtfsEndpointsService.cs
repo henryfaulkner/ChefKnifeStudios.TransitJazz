@@ -2,6 +2,7 @@ using Ardalis.Result;
 using ChefKnifeStudios.MartaJazz.Client.Core.Enums;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 
 namespace ChefKnifeStudios.MartaJazz.Client.Core.Services.EndpointsServices;
@@ -16,20 +17,38 @@ public class GtfsEndpointsService : IGtfsEndpointsService
 {
     readonly ILogger<GtfsEndpointsService> _logger;
     readonly IHttpService _httpService;
+    readonly NavigationManager _navigationManager;
 
     public GtfsEndpointsService(
         ILogger<GtfsEndpointsService> logger,
-        IHttpServiceFactory httpClientFactory)
+        IHttpServiceFactory httpClientFactory,
+        NavigationManager navigationManager)
     {
         _logger = logger;
         _httpService = httpClientFactory.Create(nameof(APIs.TransitJazzAPI));
+        _navigationManager = navigationManager;
+    }
+
+    // Parse #city from the current URL hash, defaulting to "marta" (FR-004)
+    string ResolveCity()
+    {
+        try
+        {
+            var uri = new Uri(_navigationManager.Uri);
+            var fragment = uri.Fragment.TrimStart('#');
+            if (!string.IsNullOrWhiteSpace(fragment))
+                return Uri.UnescapeDataString(fragment).ToLowerInvariant();
+        }
+        catch { }
+        return "marta";
     }
 
     public async Task<Result<RouteShapeFeature>> GetRouteShape(string routeId, CancellationToken cancellationToken = default)
     {
         try
         {
-            var url = ApiEndpoints.Gtfs.GetRouteShape.Replace("{routeId}", routeId);
+            var city = ResolveCity();
+            var url = ApiEndpoints.Gtfs.GetRouteShape.Replace("{routeId}", routeId) + $"?city={city}";
             var result = await _httpService.GetAsync<RouteShapeFeature>(url, cancellationToken);
             return result;
         }
@@ -44,26 +63,15 @@ public class GtfsEndpointsService : IGtfsEndpointsService
     {
         try
         {
-            _logger.LogDebug("GtfsEndpointsService.GetAllRouteShapes: requesting {Url}", ApiEndpoints.Gtfs.GetAllRouteShapes);
-            var result = await _httpService.GetAsync<IEnumerable<RouteShapeFeature>>(ApiEndpoints.Gtfs.GetAllRouteShapes, cancellationToken);
+            var city = ResolveCity();
+            var url = $"{ApiEndpoints.Gtfs.GetAllRouteShapes}?city={city}";
+            _logger.LogDebug("GtfsEndpointsService.GetAllRouteShapes: requesting {Url}", url);
+            var result = await _httpService.GetAsync<IEnumerable<RouteShapeFeature>>(url, cancellationToken);
 
             if (result.IsSuccess)
             {
                 var list = result.Value?.ToList();
                 _logger.LogDebug("GtfsEndpointsService.GetAllRouteShapes: deserialized {Count} features", list?.Count ?? 0);
-                if (list is not null)
-                {
-                    foreach (var f in list)
-                    {
-                        _logger.LogDebug(
-                            "  route: RouteId={RouteId} ShortName={ShortName} CoordCount={CoordCount} Color={Color} GeomType={GeomType}",
-                            f.Properties?.RouteId,
-                            f.Properties?.RouteShortName,
-                            f.Geometry?.Coordinates?.Length ?? -1,
-                            f.Properties?.Color,
-                            f.Geometry?.Type);
-                    }
-                }
             }
             else
             {

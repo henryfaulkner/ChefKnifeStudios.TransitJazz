@@ -1,4 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
+using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.EndpointGroups;
@@ -12,6 +13,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using System.Net.Http;
 using Scalar.AspNetCore;
 using System;
 using System.Collections.Generic;
@@ -49,10 +52,32 @@ builder.Services.ConfigureHttpJsonOptions(static options =>
 
 builder.Services.AddHttpClient("RailRealtimeApi", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Marta:RailRealtime:BaseUrl"]!);
+    client.BaseAddress = new Uri(builder.Configuration["Cities:0:RailRealtime:BaseUrl"]
+        ?? builder.Configuration["Marta:RailRealtime:BaseUrl"]!);
 });
-builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection("Marta:RailRealtime"));
-builder.Services.AddSingleton<IRailRealtimeAdapter, RailRealtimeAdapter>();
+builder.Services.Configure<RailRealtimeOptions>(
+    builder.Configuration.GetSection("Cities:0:RailRealtime").Exists()
+        ? builder.Configuration.GetSection("Cities:0:RailRealtime")
+        : builder.Configuration.GetSection("Marta:RailRealtime"));
+builder.Services.AddSingleton<MartaCity>();
+
+var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
+builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
+{
+    var cities = new List<ITransitCity>();
+    var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
+    var logFactory = sp.GetRequiredService<ILoggerFactory>();
+    foreach (var cfg in cityConfigs)
+    {
+        if (string.Equals(cfg.Name, "marta", StringComparison.OrdinalIgnoreCase))
+            cities.Add(sp.GetRequiredService<MartaCity>());
+        else
+            cities.Add(new GtfsRtCity(cfg, httpFactory, logFactory.CreateLogger<GtfsRtCity>()));
+    }
+    if (cities.Count == 0)
+        cities.Add(sp.GetRequiredService<MartaCity>());
+    return cities;
+});
 
 builder.Services.AddSingleton(typeof(IKeyValueRepository<>), typeof(InMemoryKeyValueRepository<>));
 builder.Services.AddHttpClient();
