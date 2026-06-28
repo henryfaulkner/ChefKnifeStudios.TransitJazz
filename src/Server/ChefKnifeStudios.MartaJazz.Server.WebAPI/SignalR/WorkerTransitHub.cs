@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.SignalR;
+using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -23,7 +24,7 @@ public class WorkerTransitHub : Hub
     public async Task PublishBatch(string city, List<EventEnvelope> batch)
     {
         _lastBatchCache.Set(city, batch);
-        await _clientHub.Clients.Group(city).SendAsync("ReceiveBatch", batch);
+        await _clientHub.Clients.Group(city).SendAsync(HubMethods.ReceiveBatch, batch);
         _logger.LogInformation("WorkerTransitHub: sent {Count} events to group '{City}'", batch.Count, city);
     }
 }

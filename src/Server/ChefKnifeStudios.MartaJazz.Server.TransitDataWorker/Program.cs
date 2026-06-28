@@ -16,14 +16,9 @@ builder.Services.AddHttpClient("RouteShapeApi", client =>
 });
 builder.Services.AddHttpClient("RailRealtimeApi", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Cities:0:RailRealtime:BaseUrl"]
-        ?? builder.Configuration["Marta:RailRealtime:BaseUrl"]!);
+    client.BaseAddress = new Uri(builder.Configuration["Cities:0:RailRealtime:BaseUrl"]!);
 });
-builder.Services.Configure<RailRealtimeOptions>(
-    builder.Configuration.GetSection("Cities:0:RailRealtime")
-        .Exists()
-        ? builder.Configuration.GetSection("Cities:0:RailRealtime")
-        : builder.Configuration.GetSection("Marta:RailRealtime"));
+builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection("Cities:0:RailRealtime"));
 builder.Services.AddSingleton<MartaCity>();
 builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
 
@@ -37,7 +32,7 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
 
     foreach (var cfg in cityConfigs)
     {
-        if (string.Equals(cfg.Name, "marta", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(cfg.Name, CityNames.Marta, StringComparison.OrdinalIgnoreCase))
         {
             cities.Add(sp.GetRequiredService<MartaCity>());
         }

@@ -1,3 +1,5 @@
+@using ChefKnifeStudios.MartaJazz.Client.Core.Services
+@using ChefKnifeStudios.MartaJazz.Shared
 @using Microsoft.JSInterop
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
@@ -12,41 +14,28 @@
     <MatMenu @ref="Menu2" Class="city-fab-menu">
         <MatList>
             <MatListItem>
-                <MatButton Label="Atlanta, GA" Mini="true" @onclick="HandleMartaClicked" Disabled="@(CurrentCity == "marta")" />
+                <MatButton Label="Atlanta, GA" Mini="true" @onclick="HandleMartaClicked" Disabled="@(CurrentCity == CityNames.Marta)" />
             </MatListItem>
             <MatListItem>
-                <MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked"  Disabled="@(CurrentCity == "wmata")" />
+                <MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked"  Disabled="@(CurrentCity == CityNames.Wmata)" />
             </MatListItem>
         </MatList>
     </MatMenu>
 </div>
 
 @code {
-    string CurrentCity
-    {
-        get
-        {
-            try
-            {
-                var fragment = new Uri(NavigationManager.Uri).Fragment.TrimStart('#');
-                if (!string.IsNullOrWhiteSpace(fragment))
-                    return fragment.ToLowerInvariant();
-            }
-            catch { }
-            return "marta";
-        }
-    }
+    string CurrentCity => NavigationManager.ResolveCity();
 
     async Task HandleMartaClicked()
     {
-        // Hash-only navigation is always in-page â€” no reload, WASM stays alive.
+        // Hash-only navigation is always in-page — no reload, WASM stays alive.
         // Set the hash then force a reload so the app re-bootstraps with the new city.
         await JS.InvokeVoidAsync("eval", $"location.hash='marta';location.reload()");
     }
 
     async Task HandleWmataClicked()
     {
-        // Hash-only navigation is always in-page â€” no reload, WASM stays alive.
+        // Hash-only navigation is always in-page — no reload, WASM stays alive.
         // Set the hash then force a reload so the app re-bootstraps with the new city.
         await JS.InvokeVoidAsync("eval", $"location.hash='wmata';location.reload()");
     }

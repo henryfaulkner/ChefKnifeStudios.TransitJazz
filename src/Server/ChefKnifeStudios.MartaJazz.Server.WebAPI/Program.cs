@@ -52,13 +52,9 @@ builder.Services.ConfigureHttpJsonOptions(static options =>
 
 builder.Services.AddHttpClient("RailRealtimeApi", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Cities:0:RailRealtime:BaseUrl"]
-        ?? builder.Configuration["Marta:RailRealtime:BaseUrl"]!);
+    client.BaseAddress = new Uri(builder.Configuration["Cities:0:RailRealtime:BaseUrl"]!);
 });
-builder.Services.Configure<RailRealtimeOptions>(
-    builder.Configuration.GetSection("Cities:0:RailRealtime").Exists()
-        ? builder.Configuration.GetSection("Cities:0:RailRealtime")
-        : builder.Configuration.GetSection("Marta:RailRealtime"));
+builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection("Cities:0:RailRealtime"));
 builder.Services.AddSingleton<MartaCity>();
 
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
@@ -69,7 +65,7 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
     var logFactory = sp.GetRequiredService<ILoggerFactory>();
     foreach (var cfg in cityConfigs)
     {
-        if (string.Equals(cfg.Name, "marta", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(cfg.Name, CityNames.Marta, StringComparison.OrdinalIgnoreCase))
             cities.Add(sp.GetRequiredService<MartaCity>());
         else
             cities.Add(new GtfsRtCity(cfg, httpFactory, logFactory.CreateLogger<GtfsRtCity>()));

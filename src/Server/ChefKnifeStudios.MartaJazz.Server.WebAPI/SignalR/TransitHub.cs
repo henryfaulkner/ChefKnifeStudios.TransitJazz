@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -23,6 +24,6 @@ public class TransitHub : Hub
         var current = _lastBatchCache.Current(city);
         _logger.LogInformation("TransitHub.JoinCity: connectionId={ConnectionId} joined group '{City}', replayCount={ReplayCount}", Context.ConnectionId, city, current.Count);
         if (current.Count > 0)
-            await Clients.Caller.SendAsync("ReceiveBatch", current);
+            await Clients.Caller.SendAsync(HubMethods.ReceiveBatch, current);
     }
 }

@@ -1,4 +1,6 @@
+@using ChefKnifeStudios.MartaJazz.Client.Core.Services
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using ChefKnifeStudios.MartaJazz.Shared
 @using Microsoft.Extensions.Localization
 @inject IStringLocalizer<RouteFilterResources> Loc
 @inject NavigationManager NavigationManager
@@ -30,12 +32,7 @@
 
     protected override void OnInitialized()
     {
-        try
-        {
-            var fragment = new Uri(NavigationManager.Uri).Fragment.TrimStart('#');
-            if (string.Equals(fragment, "wmata", StringComparison.OrdinalIgnoreCase))
-                _prefix = "WmataOverlay";
-        }
-        catch { }
+        if (NavigationManager.ResolveCity() == CityNames.Wmata)
+            _prefix = "WmataOverlay";
     }
 }

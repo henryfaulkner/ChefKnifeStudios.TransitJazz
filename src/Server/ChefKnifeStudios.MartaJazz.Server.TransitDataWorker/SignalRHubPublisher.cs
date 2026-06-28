@@ -75,7 +75,7 @@ public sealed class SignalRHubPublisher : ITransitHubPublisher, IAsyncDisposable
             return false;
         }
 
-        await _connection.InvokeAsync("PublishBatch", city, batch, ct);
+        await _connection.InvokeAsync(HubMethods.PublishBatch, city, batch, ct);
         return true;
     }
 

@@ -1,4 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces;
+using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -61,7 +62,7 @@ public class GtfsStaticLoader(
         if (!section.Exists())
         {
             // Backwards compat: no Cities: block → just MARTA
-            return [new CityStaticEntry("marta", [MartaFallbackZipUrl], null)];
+            return [new CityStaticEntry(CityNames.Marta, [MartaFallbackZipUrl], null)];
         }
 
         var result = new List<CityStaticEntry>();
@@ -81,7 +82,7 @@ public class GtfsStaticLoader(
             result.Add(new CityStaticEntry(name, urls, apiKeyEnvVar));
         }
 
-        return result.Count > 0 ? result : [new CityStaticEntry("marta", [MartaFallbackZipUrl], null)];
+        return result.Count > 0 ? result : [new CityStaticEntry(CityNames.Marta, [MartaFallbackZipUrl], null)];
     }
 
     async Task LoadCityAsync(CityStaticEntry city, HttpClient client, CancellationToken ct)

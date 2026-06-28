@@ -1,5 +1,6 @@
 using Ardalis.Result;
 using ChefKnifeStudios.MartaJazz.Client.Core.Enums;
+using ChefKnifeStudios.MartaJazz.Client.Core.Services;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.AspNetCore.Components;
@@ -29,25 +30,11 @@ public class GtfsEndpointsService : IGtfsEndpointsService
         _navigationManager = navigationManager;
     }
 
-    // Parse #city from the current URL hash, defaulting to "marta" (FR-004)
-    string ResolveCity()
-    {
-        try
-        {
-            var uri = new Uri(_navigationManager.Uri);
-            var fragment = uri.Fragment.TrimStart('#');
-            if (!string.IsNullOrWhiteSpace(fragment))
-                return Uri.UnescapeDataString(fragment).ToLowerInvariant();
-        }
-        catch { }
-        return "marta";
-    }
-
     public async Task<Result<RouteShapeFeature>> GetRouteShape(string routeId, CancellationToken cancellationToken = default)
     {
         try
         {
-            var city = ResolveCity();
+            var city = _navigationManager.ResolveCity();
             var url = ApiEndpoints.Gtfs.GetRouteShape.Replace("{routeId}", routeId) + $"?city={city}";
             var result = await _httpService.GetAsync<RouteShapeFeature>(url, cancellationToken);
             return result;
@@ -63,7 +50,7 @@ public class GtfsEndpointsService : IGtfsEndpointsService
     {
         try
         {
-            var city = ResolveCity();
+            var city = _navigationManager.ResolveCity();
             var url = $"{ApiEndpoints.Gtfs.GetAllRouteShapes}?city={city}";
             _logger.LogDebug("GtfsEndpointsService.GetAllRouteShapes: requesting {Url}", url);
             var result = await _httpService.GetAsync<IEnumerable<RouteShapeFeature>>(url, cancellationToken);

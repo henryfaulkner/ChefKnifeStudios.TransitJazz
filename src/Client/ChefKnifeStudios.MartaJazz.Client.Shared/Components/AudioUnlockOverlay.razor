@@ -1,5 +1,7 @@
+@using ChefKnifeStudios.MartaJazz.Client.Core.Services
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop
+@using ChefKnifeStudios.MartaJazz.Shared
 @using Microsoft.AspNetCore.Components
 @using Microsoft.Extensions.Localization
 @inject IStringLocalizer<RouteFilterResources> Loc
@@ -112,13 +114,8 @@
 
     protected override void OnInitialized()
     {
-        try
-        {
-            var fragment = new Uri(NavigationManager.Uri).Fragment.TrimStart('#');
-            if (string.Equals(fragment, "wmata", StringComparison.OrdinalIgnoreCase))
-                _prefix = "WmataAudioOverlay";
-        }
-        catch { }
+        if (NavigationManager.ResolveCity() == CityNames.Wmata)
+            _prefix = "WmataAudioOverlay";
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

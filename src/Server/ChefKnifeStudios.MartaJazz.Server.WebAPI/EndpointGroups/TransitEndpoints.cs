@@ -25,7 +25,7 @@ public static class TransitEndpoints
             [FromServices] ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(TransitEndpoints));
-            var cityKey = (city ?? "marta").ToLowerInvariant();
+            var cityKey = (city ?? CityNames.Marta).ToLowerInvariant();
             var snapshot = cache.Current(cityKey);
             logger.LogDebug("TransitEndpoints: serving last-batch snapshot for {City} with {Count} events", cityKey, snapshot.Count);
             return Results.Ok(snapshot);

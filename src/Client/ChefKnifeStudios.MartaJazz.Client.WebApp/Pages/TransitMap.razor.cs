@@ -6,6 +6,7 @@ using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
 using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels;
+using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.Geospatial;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
@@ -69,21 +70,18 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _routesLoaded;
     bool _routesRendered;
 
-    int _batchSeq;  // incremented each time HandleVehicleBatchAsync is entered
-
     static readonly Dictionary<string, (double Lat, double Lon)> _cityCenter = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["marta"] = (33.749, -84.388),
-        ["wmata"] = (38.907, -77.037),
+        [CityNames.Marta] = (33.749, -84.388),
+        [CityNames.Wmata] = (38.907, -77.037),
     };
 
     CameraOptions DefaultCameraOptions
     {
         get
         {
-            var fragment = new Uri(NavigationManager.Uri).Fragment.TrimStart('#');
-            var city = string.IsNullOrWhiteSpace(fragment) ? "marta" : fragment.ToLowerInvariant();
-            var (lat, lon) = _cityCenter.TryGetValue(city, out var c) ? c : _cityCenter["marta"];
+            var city = NavigationManager.ResolveCity();
+            var (lat, lon) = _cityCenter.TryGetValue(city, out var c) ? c : _cityCenter[CityNames.Marta];
             return new() { Center = new Position(lat, lon), Zoom = _isMobile ? 6 : 9.5 };
         }
     }
@@ -94,7 +92,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
         var uri = new Uri(NavigationManager.Uri);
         if (string.IsNullOrEmpty(uri.Fragment))
-            NavigationManager.NavigateTo(NavigationManager.Uri + "#marta", forceLoad: false);
+            NavigationManager.NavigateTo(NavigationManager.Uri + "#" + CityNames.Marta, forceLoad: false);
 
         var settings = SettingsService.GetSettings();
         _audioEnabled = settings.IsAudioEnabled;
@@ -108,11 +106,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _viewportSub = ViewportSize.AddViewportSizeChangeCallback(OnViewportChanged);
         await ViewportSize.RegisterViewportSizeAsync();
 
-        _batchHandler = batch =>
-        {
-            Logger.LogInformation("[TransitMap] NotificationReceived fired on thread {Thread}, queueing InvokeAsync", System.Threading.Thread.CurrentThread.ManagedThreadId);
-            return InvokeAsync(() => HandleVehicleBatchAsync(batch));
-        };
+        _batchHandler = batch => InvokeAsync(() => HandleVehicleBatchAsync(batch));
         NotificationService.NotificationReceived += _batchHandler;
 
         try
@@ -438,13 +432,9 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     async Task HandleVehicleBatchAsync(IEnumerable<EventEnvelope> batch)
     {
-        var seq = ++_batchSeq;
-        Logger.LogInformation("[TransitMap] HandleVehicleBatchAsync #{Seq} entered, mapReady={MapReady}", seq, _mapReady);
-
         if (!_mapReady || _map is null)
         {
             _pendingBatches.Add(batch);
-            Logger.LogInformation("[TransitMap] #{Seq} queued as pending (mapReady={MapReady})", seq, _mapReady);
             return;
         }
 
@@ -454,8 +444,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             .Select(x => (RouteNearestPointBatchEvent)x.Payload)
             .SelectMany(e => e.BatchRecords)
             .ToArray();
-
-        Logger.LogInformation("[TransitMap] #{Seq} nearestPointRecords={Count}", seq, nearestPointRecords.Length);
 
         if (nearestPointRecords.Length > 0)
         {
@@ -474,13 +462,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 transitMode = r.TransitMode.ToString().ToLowerInvariant()
             }).ToArray();
 
-            Logger.LogInformation("[TransitMap] #{Seq} calling ProcessNearestPointBatchAsync with {Count} records", seq, records.Length);
             await _map.ProcessNearestPointBatchAsync(records);
-            Logger.LogInformation("[TransitMap] #{Seq} ProcessNearestPointBatchAsync returned", seq);
         }
 
         StateHasChanged();
-        Logger.LogInformation("[TransitMap] #{Seq} complete", seq);
     }
 
     async Task OnVehicleMarkerClickedAsync((Map Map, string VehicleId) args)

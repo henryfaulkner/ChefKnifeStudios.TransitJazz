@@ -20,7 +20,7 @@ public static class TestEndpoints
             {
                 new EventEnvelope(nameof(RouteNearestPointBatchEvent), DateTimeOffset.UtcNow, new RouteNearestPointBatchEvent([])),
             };
-            await hub.Clients.All.SendAsync("ReceiveBatch", batch);
+            await hub.Clients.All.SendAsync(HubMethods.ReceiveBatch, batch);
         }).AllowAnonymous();
 
         return builder;

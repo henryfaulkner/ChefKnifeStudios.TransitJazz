@@ -1,5 +1,5 @@
-using ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.GtfsStatic;
+using ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.AspNetCore.Builder;
@@ -41,7 +41,7 @@ public static class GtfsEndpoints
             CancellationToken ct) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
-            var cityKey = (city ?? "marta").ToLowerInvariant();
+            var cityKey = (city ?? CityNames.Marta).ToLowerInvariant();
 
             var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);
             if (!readyResult.IsSuccess)
@@ -115,7 +115,7 @@ public static class GtfsEndpoints
             CancellationToken ct) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
-            var cityKey = (city ?? "marta").ToLowerInvariant();
+            var cityKey = (city ?? CityNames.Marta).ToLowerInvariant();
             var prefix = $"{cityKey}:";
 
             var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);

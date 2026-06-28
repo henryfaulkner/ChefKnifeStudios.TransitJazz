@@ -1,4 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
+using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -16,7 +17,7 @@ public class MartaCity(
     static readonly JsonSerializerOptions _railJsonOptions = new() { PropertyNameCaseInsensitive = true };
     const string BusUrl = "https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb";
 
-    public string Name => "marta";
+    public string Name => CityNames.Marta;
     public bool EmitsTelemetry => true;
 
     public async Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)

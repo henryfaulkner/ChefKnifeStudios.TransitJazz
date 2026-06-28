@@ -77,7 +77,7 @@ public class Worker(
 
         foreach (var shape in shapes)
         {
-            var cityName = shape.Properties.City ?? "marta";
+            var cityName = shape.Properties.City ?? CityNames.Marta;
 
             if (!perCityPoints.TryGetValue(cityName, out var routeGroups))
                 perCityPoints[cityName] = routeGroups = new Dictionary<string, List<RoutePoint>>();
