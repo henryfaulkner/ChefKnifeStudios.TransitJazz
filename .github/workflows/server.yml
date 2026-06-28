@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main, 028-marta-rail-realtime]
+    branches: [main]
 
 env:
   REGISTRY: chefknife.azurecr.io

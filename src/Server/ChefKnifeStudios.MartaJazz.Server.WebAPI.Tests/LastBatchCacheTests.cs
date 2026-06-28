@@ -10,8 +10,7 @@ namespace ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests;
 
 public class LastBatchCacheTests
 {
-    // Existing factory: one non-stale envelope per vehicle id. Kept for untouched tests.
-    static List<EventEnvelope> MakeBatch(params string[] vehicleIds)
+    static List<EventEnvelope> MakeBatch(string city, params string[] vehicleIds)
         => vehicleIds.Select(id => new EventEnvelope(
             "RouteNearestPointBatchEvent",
             DateTimeOffset.UtcNow,
@@ -23,15 +22,13 @@ public class LastBatchCacheTests
             })
         )).ToList();
 
-    // Build a single explicit record with controllable id, position, and staleness.
     static RouteNearestPointBatchEvent.RouteNearestPointRecord MakeRecord(
         string vehicleId, double currentLat, double currentLon, bool isStale)
         => new(
             vehicleId, "74", 33.75, -84.39, DateTime.UtcNow,
             currentLat, currentLon, DateTime.UtcNow, null, null, isStale);
 
-    // Wrap explicit records into a one-envelope batch (mirrors what the worker publishes).
-    static List<EventEnvelope> MakeBatch(params RouteNearestPointBatchEvent.RouteNearestPointRecord[] records)
+    static List<EventEnvelope> MakeBatch(string city, params RouteNearestPointBatchEvent.RouteNearestPointRecord[] records)
         => new()
         {
             new EventEnvelope(
@@ -40,7 +37,6 @@ public class LastBatchCacheTests
                 new RouteNearestPointBatchEvent(records))
         };
 
-    // Helper: flatten the snapshot to its records.
     static IReadOnlyList<RouteNearestPointBatchEvent.RouteNearestPointRecord> RecordsOf(
         IReadOnlyList<EventEnvelope> snapshot)
         => snapshot
@@ -53,32 +49,30 @@ public class LastBatchCacheTests
     public void New_Current_IsEmptyNonNull()
     {
         var cache = new LastBatchCache();
-        Assert.NotNull(cache.Current);
-        Assert.Empty(cache.Current);
+        Assert.NotNull(cache.Current("marta"));
+        Assert.Empty(cache.Current("marta"));
     }
 
-    // Rewritten (T018): Current is a rebuilt envelope, so assert v1 is present and non-stale (content, not reference).
     [Fact]
     public void Set_Then_Current_ContainsNonStaleVehicle()
     {
         var cache = new LastBatchCache();
-        cache.Set(MakeBatch("v1"));
+        cache.Set("marta", MakeBatch("marta", "v1"));
 
-        var records = RecordsOf(cache.Current);
+        var records = RecordsOf(cache.Current("marta"));
         var v1 = Assert.Single(records);
         Assert.Equal("v1", v1.VehicleId);
         Assert.False(v1.IsStale);
     }
 
-    // Rewritten (T019): merge semantics — Set(v1) then Set(v2) retains BOTH (not replacement).
     [Fact]
     public void Set_Twice_MergesBothVehicles()
     {
         var cache = new LastBatchCache();
-        cache.Set(MakeBatch("v1"));
-        cache.Set(MakeBatch("v2"));
+        cache.Set("marta", MakeBatch("marta", "v1"));
+        cache.Set("marta", MakeBatch("marta", "v2"));
 
-        var ids = RecordsOf(cache.Current).Select(r => r.VehicleId).ToList();
+        var ids = RecordsOf(cache.Current("marta")).Select(r => r.VehicleId).ToList();
         Assert.Equal(2, ids.Count);
         Assert.Contains("v1", ids);
         Assert.Contains("v2", ids);
@@ -88,26 +82,25 @@ public class LastBatchCacheTests
     public void Set_Null_YieldsEmptyNonNull()
     {
         var cache = new LastBatchCache();
-        cache.Set(null!);
-        Assert.NotNull(cache.Current);
-        Assert.Empty(cache.Current);
+        cache.Set("marta", null!);
+        Assert.NotNull(cache.Current("marta"));
+        Assert.Empty(cache.Current("marta"));
     }
 
-    // Rewritten (T020): each read non-null; every record non-stale and from some written batch (merged snapshot may span batches).
     [Fact]
     public void Concurrent_SetAndRead_NeverTornOrNull()
     {
         var cache = new LastBatchCache();
         var batches = Enumerable.Range(0, 8)
-            .Select(i => (IReadOnlyList<EventEnvelope>)MakeBatch($"v{i}"))
+            .Select(i => (IReadOnlyList<EventEnvelope>)MakeBatch("marta", $"v{i}"))
             .ToArray();
         var knownIds = Enumerable.Range(0, 8).Select(i => $"v{i}").ToHashSet();
 
-        Parallel.For(0, 8, i => cache.Set(batches[i]));
+        Parallel.For(0, 8, i => cache.Set("marta", batches[i]));
 
         Parallel.For(0, 32, _ =>
         {
-            var snapshot = cache.Current;
+            var snapshot = cache.Current("marta");
             Assert.NotNull(snapshot);
             foreach (var rec in RecordsOf(snapshot))
             {
@@ -117,110 +110,122 @@ public class LastBatchCacheTests
         });
     }
 
-    // --- User Story 1: cold-start snapshot is stale-free and never an empty envelope ---
+    // INV-T3 (FR-011): same vehicleId under two cities never collides
+    [Fact]
+    public void T010_PerCityCacheIsolation_SameVehicleIdNeverCollides()
+    {
+        var cache = new LastBatchCache();
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.75, -84.39, false)));
+        cache.Set("wmata", MakeBatch("wmata", MakeRecord("v1", 38.90, -77.03, false)));
 
-    // T006 / vector D: mixed batch -> only the non-stale record survives.
+        var martaRecs = RecordsOf(cache.Current("marta"));
+        var wmataRecs = RecordsOf(cache.Current("wmata"));
+
+        Assert.Single(martaRecs);
+        Assert.Equal(33.75, martaRecs[0].CurrentNearestLat);
+
+        Assert.Single(wmataRecs);
+        Assert.Equal(38.90, wmataRecs[0].CurrentNearestLat);
+    }
+
+    [Fact]
+    public void T010_Current_UnknownCity_ReturnsEmpty()
+    {
+        var cache = new LastBatchCache();
+        Assert.Empty(cache.Current("unknown-city"));
+    }
+
     [Fact]
     public void US1_MixedBatch_ExcludesStale()
     {
         var cache = new LastBatchCache();
-        cache.Set(MakeBatch(
+        cache.Set("marta", MakeBatch("marta",
             MakeRecord("v1", 33.751, -84.389, isStale: false),
             MakeRecord("v2", 33.760, -84.380, isStale: true)));
 
-        var records = RecordsOf(cache.Current);
+        var records = RecordsOf(cache.Current("marta"));
         var v1 = Assert.Single(records);
         Assert.Equal("v1", v1.VehicleId);
         Assert.DoesNotContain(records, r => r.IsStale);
     }
 
-    // T007 / vector C: all-stale first batch (nothing seen non-stale) -> empty snapshot.
     [Fact]
     public void US1_AllStaleFirstBatch_YieldsEmpty()
     {
         var cache = new LastBatchCache();
-        cache.Set(MakeBatch(
+        cache.Set("marta", MakeBatch("marta",
             MakeRecord("v1", 33.751, -84.389, isStale: true),
             MakeRecord("v2", 33.760, -84.380, isStale: true)));
 
-        Assert.Empty(cache.Current);
+        Assert.Empty(cache.Current("marta"));
     }
 
-    // T008 / vector J: any non-empty Current has no empty BatchRecords envelope.
     [Fact]
     public void US1_NonEmptyCurrent_HasNoEmptyEnvelope()
     {
         var cache = new LastBatchCache();
-        cache.Set(MakeBatch("v1", "v2"));
+        cache.Set("marta", MakeBatch("marta", "v1", "v2"));
 
-        Assert.NotEmpty(cache.Current);
-        foreach (var env in cache.Current)
+        Assert.NotEmpty(cache.Current("marta"));
+        foreach (var env in cache.Current("marta"))
         {
             var rnp = Assert.IsType<RouteNearestPointBatchEvent>(env.Payload);
             Assert.NotEmpty(rnp.BatchRecords);
         }
     }
 
-    // --- User Story 3: per-vehicle retention across batches ---
-
-    // T013 / vector E: Set(v1 non-stale) then Set(v1 stale) -> v1 retained at non-stale position.
     [Fact]
     public void US3_StaleAfterGood_RetainsNonStalePosition()
     {
         var cache = new LastBatchCache();
-        cache.Set(MakeBatch(MakeRecord("v1", 33.751, -84.389, isStale: false)));
-        cache.Set(MakeBatch(MakeRecord("v1", 33.900, -84.100, isStale: true)));
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.751, -84.389, isStale: false)));
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.900, -84.100, isStale: true)));
 
-        var v1 = Assert.Single(RecordsOf(cache.Current));
+        var v1 = Assert.Single(RecordsOf(cache.Current("marta")));
         Assert.Equal("v1", v1.VehicleId);
         Assert.False(v1.IsStale);
         Assert.Equal(33.751, v1.CurrentNearestLat);
         Assert.Equal(-84.389, v1.CurrentNearestLon);
     }
 
-    // T014 / vectors I & H: all-stale-after-good and empty-after-good both leave the snapshot unchanged.
     [Fact]
     public void US3_AllStaleOrEmptyAfterGood_LeavesSnapshotUnchanged()
     {
         var cache = new LastBatchCache();
-        cache.Set(MakeBatch(MakeRecord("v1", 33.751, -84.389, isStale: false)));
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.751, -84.389, isStale: false)));
 
-        // all-stale batch (vector I)
-        cache.Set(MakeBatch(
+        cache.Set("marta", MakeBatch("marta",
             MakeRecord("v1", 33.900, -84.100, isStale: true),
             MakeRecord("v2", 33.800, -84.200, isStale: true)));
 
-        var idsAfterStale = RecordsOf(cache.Current).Select(r => r.VehicleId).ToList();
+        var idsAfterStale = RecordsOf(cache.Current("marta")).Select(r => r.VehicleId).ToList();
         Assert.Equal(new[] { "v1" }, idsAfterStale);
 
-        // empty batch (vector H)
-        cache.Set(new List<EventEnvelope>());
+        cache.Set("marta", new List<EventEnvelope>());
 
-        var idsAfterEmpty = RecordsOf(cache.Current).Select(r => r.VehicleId).ToList();
+        var idsAfterEmpty = RecordsOf(cache.Current("marta")).Select(r => r.VehicleId).ToList();
         Assert.Equal(new[] { "v1" }, idsAfterEmpty);
     }
 
-    // T015 / vector G: cross-batch retention — Set(v1) then Set(v2) -> both present.
     [Fact]
     public void US3_CrossBatchRetention_KeepsBothVehicles()
     {
         var cache = new LastBatchCache();
-        cache.Set(MakeBatch(MakeRecord("v1", 33.751, -84.389, isStale: false)));
-        cache.Set(MakeBatch(MakeRecord("v2", 33.760, -84.380, isStale: false)));
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.751, -84.389, isStale: false)));
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v2", 33.760, -84.380, isStale: false)));
 
-        var ids = RecordsOf(cache.Current).Select(r => r.VehicleId).OrderBy(x => x).ToList();
+        var ids = RecordsOf(cache.Current("marta")).Select(r => r.VehicleId).OrderBy(x => x).ToList();
         Assert.Equal(new[] { "v1", "v2" }, ids);
     }
 
-    // T016 / vector F: latest-non-stale-wins — v1 @posA then v1 @posB -> @posB exactly once.
     [Fact]
     public void US3_LatestNonStaleWins_UpsertsInPlace()
     {
         var cache = new LastBatchCache();
-        cache.Set(MakeBatch(MakeRecord("v1", 33.751, -84.389, isStale: false)));
-        cache.Set(MakeBatch(MakeRecord("v1", 33.900, -84.100, isStale: false)));
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.751, -84.389, isStale: false)));
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.900, -84.100, isStale: false)));
 
-        var v1 = Assert.Single(RecordsOf(cache.Current));
+        var v1 = Assert.Single(RecordsOf(cache.Current("marta")));
         Assert.Equal("v1", v1.VehicleId);
         Assert.Equal(33.900, v1.CurrentNearestLat);
         Assert.Equal(-84.100, v1.CurrentNearestLon);

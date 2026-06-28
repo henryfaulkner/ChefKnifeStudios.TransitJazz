@@ -1,6 +1,7 @@
-﻿using ChefKnifeStudios.MartaJazz.Client.Core.Enums;
+using ChefKnifeStudios.MartaJazz.Client.Core.Enums;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
+using ChefKnifeStudios.MartaJazz.Client.Core.Services;
 
 namespace ChefKnifeStudios.MartaJazz.Client.Core.Services;
 
@@ -24,23 +26,24 @@ public interface ISignalRNotificationService
 public class SignalRNotificationService(
         IConfiguration configuration,
         IWebAssemblyHostEnvironment hostEnvironment,
+        NavigationManager navigationManager,
         ILogger<SignalRNotificationService> logger) : ISignalRNotificationService
 {
     private HubConnection? _hubConnection;
+    private string _city = CityNames.Marta;
     public event SignalRNotificationHandler? NotificationReceived;
 
     public async Task InitAsync(CancellationToken ct = default)
     {
         logger.LogInformation("Starting SignalRNotificationService.InitAsync");
         if (_hubConnection != null && _hubConnection.State == HubConnectionState.Connected)
-        {
-            
             return;
-        }
 
         try
         {
             CloseConnection();
+
+            _city = navigationManager.ResolveCity();
 
             var apis = configuration.GetSection("AppSettings:ExternalApis");
             var itemArray = apis.GetChildren();
@@ -87,13 +90,21 @@ public class SignalRNotificationService(
 
                 logger.LogInformation("Connecting to SignalR hub: {host}", baseUri.Host);
 
-                _hubConnection.On<List<EventEnvelope>>("ReceiveBatch", batch =>
+                _hubConnection.On<List<EventEnvelope>>(HubMethods.ReceiveBatch, batch =>
                 {
-                    logger.LogInformation("Received batch of {count} events from SignalR hub", batch.Count);
                     NotificationReceived?.Invoke(batch);
                 });
 
-                await _hubConnection.StartAsync();
+                _hubConnection.Reconnected += async _ =>
+                {
+                    logger.LogInformation("Reconnected; rejoining city group {City}", _city);
+                    await _hubConnection.InvokeAsync(HubMethods.JoinCity, _city);
+                };
+
+                await _hubConnection.StartAsync(ct);
+                await _hubConnection.InvokeAsync(HubMethods.JoinCity, _city, ct);
+
+                logger.LogInformation("Joined city group {City}", _city);
             }
         }
         catch (Exception ex)
@@ -133,20 +144,5 @@ public class SignalRNotificationService(
             logger.LogError(ex, "Error closing SignalR connection");
             throw;
         }
-    }
-
-    private Task<bool> EnsureConnectedAsync(string operationName)
-    {
-        if (_hubConnection != null && _hubConnection.State == HubConnectionState.Connected)
-        {
-            return Task.FromResult(true);
-        }
-
-        logger.LogWarning(
-            "SignalR operation '{operation}' attempted but connection not established. State: {state}. Automatic reconnect will handle this.",
-            operationName,
-            _hubConnection?.State.ToString() ?? "null");
-
-        return Task.FromResult(false);
     }
 }

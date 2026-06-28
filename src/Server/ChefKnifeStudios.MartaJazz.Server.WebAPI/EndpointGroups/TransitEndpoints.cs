@@ -20,12 +20,14 @@ public static class TransitEndpoints
             .WithTags(nameof(ApiEndpoints.Transit));
 
         group.MapGet(ApiEndpoints.Transit.GetLastBatch, (
+            [FromQuery] string? city,
             [FromServices] ILastBatchCache cache,
             [FromServices] ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(TransitEndpoints));
-            var snapshot = cache.Current;
-            logger.LogDebug("TransitEndpoints: serving last-batch snapshot with {Count} events", snapshot.Count);
+            var cityKey = (city ?? CityNames.Marta).ToLowerInvariant();
+            var snapshot = cache.Current(cityKey);
+            logger.LogDebug("TransitEndpoints: serving last-batch snapshot for {City} with {Count} events", cityKey, snapshot.Count);
             return Results.Ok(snapshot);
         })
         .WithName(nameof(ApiEndpoints.Transit.GetLastBatch))

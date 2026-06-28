@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.SignalR;
+using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -20,11 +21,10 @@ public class WorkerTransitHub : Hub
         _lastBatchCache = lastBatchCache;
     }
 
-    public async Task PublishBatch(List<EventEnvelope> batch)
+    public async Task PublishBatch(string city, List<EventEnvelope> batch)
     {
-        _lastBatchCache.Set(batch);
-        await _clientHub.Clients.All.SendAsync("ReceiveBatch", batch);
-        _logger.LogDebug("WorkerTransitHub: cached and relayed {Count} events", batch.Count);
-        _logger.LogInformation("Relayed {Count} events from worker", batch.Count);
+        _lastBatchCache.Set(city, batch);
+        await _clientHub.Clients.Group(city).SendAsync(HubMethods.ReceiveBatch, batch);
+        _logger.LogInformation("WorkerTransitHub: sent {Count} events to group '{City}'", batch.Count, city);
     }
 }

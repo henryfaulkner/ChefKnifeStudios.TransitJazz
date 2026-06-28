@@ -4,7 +4,8 @@
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "WMATA_API_KEY": "fe06d6246fa3494d9c545990487a87d3"
       },
       "applicationUrl": "https://localhost:52834;http://localhost:52835"
     }

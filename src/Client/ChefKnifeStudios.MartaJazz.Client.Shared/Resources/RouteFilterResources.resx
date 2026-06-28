@@ -177,6 +177,15 @@
   <data name="AudioOverlayParagraph3" xml:space="preserve">
     <value>MARTA runs on faith. You wait, and then it comes. This is the music inside that waiting.</value>
   </data>
+  <data name="WmataAudioOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real bus or train. Hundreds of them, spread across a city that was planned on a diagonal and then grew past every boundary. They follow Wisconsin and Georgia and Benning Road, and the Red Line arcing through Bethesda, routes drawn around three jurisdictions that never quite agreed on anything.</value>
+  </data>
+  <data name="WmataAudioOverlayParagraph2" xml:space="preserve">
+    <value>The harmony shifts with the system. A note lands where the vehicle happens to be along its route — transferring at Metro Center, crossing the Anacostia, moving through Silver Spring at rush hour. Commuter peaks fill the piece with density; late nights thin it out to something sparse and unhurried. What is playing right now has not played before.</value>
+  </data>
+  <data name="WmataAudioOverlayParagraph3" xml:space="preserve">
+    <value>WMATA connects a capital to itself. Across DC, Maryland, and Virginia, something is always moving. This is the music inside that motion.</value>
+  </data>
   <data name="AudioOverlayButton" xml:space="preserve">
     <value>Enter Experience</value>
   </data>
@@ -200,6 +209,9 @@
   </data>
   <data name="InfoOverlayParagraph3" xml:space="preserve">
     <value>Built as a small experiment in turning a transit feed into generative music. Each note is placed by where a vehicle sits along its route, so what you hear is never quite the same twice.</value>
+  </data>
+  <data name="WmataOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real WMATA vehicle, pulled live and turned into sound. Buses and Metro trains move through Washington DC, Maryland, and Virginia in real time, and the map plays what they're doing right now.</value>
   </data>
   <data name="InfoOverlayFooter" xml:space="preserve">
     <value>Henry Faulkner + Chef Knife Studios LLC - 2026</value>

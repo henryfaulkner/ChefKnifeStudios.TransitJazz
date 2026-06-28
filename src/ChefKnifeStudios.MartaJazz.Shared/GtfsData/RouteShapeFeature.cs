@@ -18,5 +18,5 @@ public sealed record RouteShapeProperties(
     string? RouteShortName,
     string? Color,
     string? TextColor,
-    TransitMode Mode = TransitMode.Bus   // from GTFS route_type
-);
+    TransitMode Mode = TransitMode.Bus,   // from GTFS route_type
+    string? City = null);

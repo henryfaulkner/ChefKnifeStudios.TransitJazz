@@ -306,33 +306,41 @@ Sample vehicles (up to 5):
 
 ## 2. Fetch & decode static GTFS zip (route shapes)
 
+**Use an agency-specific temp directory** — never `$env:TEMP\gtfs-static` (shared name
+causes collisions when evaluating multiple agencies, and a partial write from a 35MB zip
+is silent). Name it after the agency slug, e.g. `$env:TEMP\gtfs-mbta`.
+
 ```powershell
-Invoke-WebRequest -Uri "<STATIC_GTFS_ZIP_URL>" -OutFile "$env:TEMP\gtfs-static.zip" -UseBasicParsing
-Expand-Archive -Path "$env:TEMP\gtfs-static.zip" -DestinationPath "$env:TEMP\gtfs-static" -Force
-Write-Host "Extracted to $env:TEMP\gtfs-static"
-Get-ChildItem "$env:TEMP\gtfs-static" | Select-Object Name, Length
+$agency = "<agency-slug>"   # e.g. "mbta", "marta", "trimet"
+Invoke-WebRequest -Uri "<STATIC_GTFS_ZIP_URL>" -OutFile "$env:TEMP\gtfs-$agency.zip" -UseBasicParsing
+Expand-Archive -Path "$env:TEMP\gtfs-$agency.zip" -DestinationPath "$env:TEMP\gtfs-$agency" -Force
+Write-Host "Extracted to $env:TEMP\gtfs-$agency"
+Get-ChildItem "$env:TEMP\gtfs-$agency" | Select-Object Name, Length
 ```
 
-Then parse the three files the worker depends on:
+Then parse the files the worker depends on. **`shapes.txt` is optional for alignment
+checks** — omit it (and set `total_shape_points` to `null`) when you only need route ID
+alignment. Read it only when the report needs shape richness metrics.
 
 ```powershell
 python -c @"
-import csv, json, os
+import csv, json, os, sys
 
-base = r'$env:TEMP\gtfs-static'
+agency = '<agency-slug>'
+base = rf'$env:TEMP\gtfs-{agency}'
+skip_shapes = '--no-shapes' in sys.argv  # pass flag to skip shapes.txt
 
-# routes.txt: route_id -> route_short_name, color
+# routes.txt: route_id -> route_short_name, color, route_type
 routes = {}
 with open(os.path.join(base, 'routes.txt'), encoding='utf-8-sig') as f:
     for row in csv.DictReader(f):
         routes[row['route_id']] = {
             'route_short_name': row.get('route_short_name', ''),
             'route_color': row.get('route_color', ''),
-            'route_text_color': row.get('route_text_color', ''),
-            'route_type': row.get('route_type', ''),  # 1 = rail, 3 = bus
+            'route_type': row.get('route_type', ''),
         }
 
-# trips.txt: first shape_id per route_id
+# trips.txt: first shape_id per route_id (needed even when skipping shapes, for has-shape flag)
 route_to_shape = {}
 with open(os.path.join(base, 'trips.txt'), encoding='utf-8-sig') as f:
     for row in csv.DictReader(f):
@@ -341,14 +349,13 @@ with open(os.path.join(base, 'trips.txt'), encoding='utf-8-sig') as f:
         if rid and sid and rid not in route_to_shape:
             route_to_shape[rid] = sid
 
-# shapes.txt: shape_id -> sorted coordinate count
 shape_point_counts = {}
-with open(os.path.join(base, 'shapes.txt'), encoding='utf-8-sig') as f:
-    for row in csv.DictReader(f):
-        sid = row.get('shape_id', '')
-        shape_point_counts[sid] = shape_point_counts.get(sid, 0) + 1
+if not skip_shapes and os.path.exists(os.path.join(base, 'shapes.txt')):
+    with open(os.path.join(base, 'shapes.txt'), encoding='utf-8-sig') as f:
+        for row in csv.DictReader(f):
+            sid = row.get('shape_id', '')
+            shape_point_counts[sid] = shape_point_counts.get(sid, 0) + 1
 
-# Build summary
 summary = []
 for route_id, meta in routes.items():
     shape_id = route_to_shape.get(route_id)
@@ -357,13 +364,13 @@ for route_id, meta in routes.items():
         'route_id': route_id,
         'route_short_name': meta['route_short_name'],
         'shape_id': shape_id,
-        'point_count': point_count,
+        'point_count': point_count if not skip_shapes else None,
         'color': meta['route_color'],
         'route_type': meta['route_type'],
     })
 
 index_keys = sorted({r['route_short_name'] or r['route_id'] for r in summary})
-total_points = sum(r['point_count'] for r in summary)
+total_points = sum(r['point_count'] for r in summary if r['point_count']) if not skip_shapes else None
 rail = [r for r in summary if r['route_type'] == '1']
 
 print(json.dumps({
@@ -371,7 +378,7 @@ print(json.dumps({
     'routes_with_shape': sum(1 for r in summary if r['shape_id']),
     'routes_without_shape': sum(1 for r in summary if not r['shape_id']),
     'total_shape_points': total_points,
-    'rail_route_count': len(rail),  # route_type == 1
+    'rail_route_count': len(rail),
     'rail_index_keys': sorted({r['route_short_name'] or r['route_id'] for r in rail}),
     'index_keys': index_keys,
     'sample_routes': summary[:5],
@@ -387,7 +394,7 @@ Static GTFS Shapes Snapshot
 Source:                <zip URL>
 Routes:                <route_count> total / <routes_with_shape> with shape / <routes_without_shape> without
 Rail routes:           <rail_route_count> (route_type=1) — keys: <rail_index_keys or "none">
-Total shape points:    <total>
+Total shape points:    <total or "— (shapes not read)">
 
 Route index keys (<count>): <comma-separated routeShortName values, first 20 + "… and N more">
 
@@ -500,6 +507,184 @@ Sample trains (up to 5):
 > values equal the static `route_short_name` exactly, so no transform is needed. A new
 > agency's rail API may use different line identifiers — check this the same way you check
 > bus `route_id` alignment.
+
+---
+
+## Combined decode + alignment (compatibility evaluation fast path)
+
+For compatibility checks, run this **single script** after both feeds are already
+downloaded. It does RT decode + static parse + route ID alignment in one Python
+invocation — no manual set-copying, no intermediate JSON files, 1 tool call instead of 3.
+
+**Prerequisites:** GTFS-RT already at `$env:TEMP\gtfs-rt.pb`; static already extracted
+to `$env:TEMP\gtfs-<agency>`. Run the fetch + extract steps first (in parallel), then
+this script once both are done.
+
+```powershell
+python -c @"
+import struct, csv, json, os
+
+agency = '<agency-slug>'   # e.g. mbta, marta, trimet
+static_base = rf'$env:TEMP\gtfs-{agency}'
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+def read_varint(buf, pos):
+    result = shift = 0
+    while True:
+        b = buf[pos]; pos += 1
+        result |= (b & 0x7F) << shift
+        if not (b & 0x80): return result, pos
+        shift += 7
+
+def parse_fields(buf):
+    pos = 0; end = len(buf); fields = {}
+    while pos < end:
+        tag, pos = read_varint(buf, pos)
+        fn, wt = tag >> 3, tag & 7
+        if wt == 0: v, pos = read_varint(buf, pos)
+        elif wt == 1: v = buf[pos:pos+8]; pos += 8
+        elif wt == 2:
+            n, pos = read_varint(buf, pos); v = buf[pos:pos+n]; pos += n
+        elif wt == 5: v = buf[pos:pos+4]; pos += 4
+        else: break
+        fields.setdefault(fn, []).append((wt, v))
+    return fields
+
+def flt(f, n): return struct.unpack('<f', f[n][0][1])[0] if n in f and f[n][0][0] == 5 else None
+def strv(f, n): return f[n][0][1].decode('utf-8', errors='replace') if n in f and f[n][0][0] == 2 else None
+def intv(f, n): return f[n][0][1] if n in f and f[n][0][0] == 0 else None
+
+# ── decode GTFS-RT ────────────────────────────────────────────────────────────
+with open(r'$env:TEMP\gtfs-rt.pb', 'rb') as f:
+    raw = bytearray(f.read())
+
+top = parse_fields(raw)
+header_ts = header_ver = None
+if 1 in top:
+    hf = parse_fields(top[1][0][1])
+    header_ts = intv(hf, 2); header_ver = strv(hf, 1)
+
+entities = top.get(2, [])
+vehicle_count = with_route = without_route = has_lat = has_speed = has_bearing = has_ts = 0
+rt_route_ids = set()
+samples = []
+
+for _, eb in entities:
+    ef = parse_fields(eb)
+    if 4 not in ef: continue
+    vehicle_count += 1
+    vf = parse_fields(ef[4][0][1])
+
+    route_id = strv(parse_fields(vf[1][0][1]), 5) if 1 in vf else None
+
+    lat = lon = speed = bearing = None
+    pos_field = 2 if 2 in vf else (3 if 3 in vf else None)
+    if pos_field:
+        pf = parse_fields(vf[pos_field][0][1])
+        lat = flt(pf, 1); lon = flt(pf, 2); bearing = flt(pf, 3); speed = flt(pf, 5)
+        if lat: has_lat += 1
+        if bearing and bearing > 0: has_bearing += 1
+        if speed and speed > 0: has_speed += 1
+
+    vts = intv(vf, 5) if 5 in vf else None
+    if vts: has_ts += 1
+
+    if route_id: with_route += 1; rt_route_ids.add(route_id)
+    else: without_route += 1
+
+    if len(samples) < 5:
+        samples.append({'route_id': route_id,
+            'lat': round(lat,5) if lat else None, 'lon': round(lon,5) if lon else None,
+            'speed_ms': round(speed,2) if speed else None, 'ts': vts})
+
+pct = lambda n: round(n / vehicle_count * 100, 1) if vehicle_count else 0
+
+rt_result = {
+    'header_version': header_ver, 'header_timestamp': header_ts,
+    'total_bytes': len(raw), 'total_entities': len(entities),
+    'vehicle_entities': vehicle_count,
+    'vehicles_with_route_id': with_route, 'vehicles_without_route_id': without_route,
+    'lat_lon_pct': pct(has_lat), 'speed_pct': pct(has_speed),
+    'bearing_pct': pct(has_bearing), 'timestamp_pct': pct(has_ts),
+    'route_ids': sorted(rt_route_ids), 'samples': samples,
+}
+if vehicle_count > 0 and has_lat == 0:
+    ef0 = parse_fields(entities[0][1])
+    vf0 = parse_fields(ef0[4][0][1]) if 4 in ef0 else {}
+    rt_result['_diag_vp_fields'] = list(vf0.keys())
+    rt_result['_diag_note'] = 'lat/lon=0: check _diag_vp_fields'
+
+# ── parse static GTFS (routes + trips only; shapes skipped for alignment) ─────
+routes = {}
+with open(os.path.join(static_base, 'routes.txt'), encoding='utf-8-sig') as f:
+    for row in csv.DictReader(f):
+        routes[row['route_id']] = {
+            'short_name': row.get('route_short_name', ''),
+            'route_type': row.get('route_type', ''),
+            'color': row.get('route_color', ''),
+        }
+
+route_to_shape = {}
+with open(os.path.join(static_base, 'trips.txt'), encoding='utf-8-sig') as f:
+    for row in csv.DictReader(f):
+        rid = row.get('route_id', '')
+        sid = row.get('shape_id', '')
+        if rid and sid and rid not in route_to_shape:
+            route_to_shape[rid] = sid
+
+summary = [{'route_id': rid, 'short_name': m['short_name'],
+            'has_shape': rid in route_to_shape, 'route_type': m['route_type'],
+            'color': m['color']} for rid, m in routes.items()]
+
+index_keys = sorted({r['short_name'] or r['route_id'] for r in summary})
+rail = [r for r in summary if r['route_type'] == '1']
+rail_keys = sorted({r['short_name'] or r['route_id'] for r in rail})
+
+static_result = {
+    'route_count': len(routes),
+    'routes_with_shape': sum(1 for r in summary if r['has_shape']),
+    'routes_without_shape': sum(1 for r in summary if not r['has_shape']),
+    'total_shape_points': None,  # shapes.txt not read — use separate parse if needed
+    'rail_route_count': len(rail), 'rail_index_keys': rail_keys,
+    'index_keys': index_keys, 'sample_routes': summary[:5],
+}
+
+# ── route ID alignment ────────────────────────────────────────────────────────
+static_key_set = set(index_keys)
+matched = rt_route_ids & static_key_set
+unmatched_rt = sorted(rt_route_ids - static_key_set)
+unmatched_static = sorted(static_key_set - rt_route_ids)
+
+alignment = {
+    'rt_distinct': len(rt_route_ids),
+    'static_keys': len(static_key_set),
+    'matched': len(matched),
+    'match_pct': round(len(matched) / len(rt_route_ids) * 100, 1) if rt_route_ids else 0,
+    'unmatched_rt_ids': unmatched_rt,
+    'static_only_sample': unmatched_static[:10],
+    'static_only_total': len(unmatched_static),
+}
+
+print(json.dumps({'rt': rt_result, 'static': static_result, 'alignment': alignment}, indent=2))
+"@
+```
+
+### Combined output fields → report mapping
+
+| JSON path | Report field |
+|-----------|-------------|
+| `rt.total_bytes` | RT feed size |
+| `rt.header_timestamp` | Header ts (`0` = normal) |
+| `rt.vehicle_entities` | Vehicle entities |
+| `rt.vehicles_with_route_id` + `rt.lat_lon_pct` | Required fields PASS/FAIL |
+| `rt.speed_pct`, `rt.bearing_pct`, `rt.timestamp_pct` | Optional fields |
+| `rt.route_ids` | Input to alignment (already computed — don't re-type) |
+| `static.route_count` / `routes_with_shape` | Static routes row |
+| `static.rail_route_count` / `rail_index_keys` | Rail section |
+| `static.index_keys` | Input to alignment (already computed) |
+| `alignment.match_pct` | Route ID alignment verdict |
+| `alignment.unmatched_rt_ids` | Unmatched RT IDs (sample) |
+| `alignment.static_only_sample` | Static-only keys (sample) |
 
 ---
 

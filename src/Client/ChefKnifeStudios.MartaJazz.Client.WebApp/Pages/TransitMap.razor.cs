@@ -6,6 +6,7 @@ using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
 using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels;
+using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.Geospatial;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
@@ -39,6 +40,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
     [Inject] ITransitEndpointsService TransitEndpointsService { get; set; } = null!;
     [Inject] IOutsideClickJsInterop OutsideClickJsInterop { get; set; } = null!;
+    [Inject] NavigationManager NavigationManager { get; set; } = null!;
 
     const float MinWidth = 1100;
 
@@ -47,6 +49,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     IDisposable? _viewportSub;
     bool _isMobile;
+    SignalRNotificationHandler? _batchHandler;
 
     Map? _map;
     bool _mapReady;
@@ -67,12 +70,29 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _routesLoaded;
     bool _routesRendered;
 
+    static readonly Dictionary<string, (double Lat, double Lon)> _cityCenter = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [CityNames.Marta] = (33.749, -84.388),
+        [CityNames.Wmata] = (38.907, -77.037),
+    };
+
     CameraOptions DefaultCameraOptions
-        => new() { Center = new Position(33.749, -84.388), Zoom = _isMobile ? 6 : 9.5 };
+    {
+        get
+        {
+            var city = NavigationManager.ResolveCity();
+            var (lat, lon) = _cityCenter.TryGetValue(city, out var c) ? c : _cityCenter[CityNames.Marta];
+            return new() { Center = new Position(lat, lon), Zoom = _isMobile ? 6 : 9.5 };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
         _dotNetRef = DotNetObjectReference.Create((object)this);
+
+        var uri = new Uri(NavigationManager.Uri);
+        if (string.IsNullOrEmpty(uri.Fragment))
+            NavigationManager.NavigateTo(NavigationManager.Uri + "#" + CityNames.Marta, forceLoad: false);
 
         var settings = SettingsService.GetSettings();
         _audioEnabled = settings.IsAudioEnabled;
@@ -86,17 +106,17 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _viewportSub = ViewportSize.AddViewportSizeChangeCallback(OnViewportChanged);
         await ViewportSize.RegisterViewportSizeAsync();
 
+        _batchHandler = batch => InvokeAsync(() => HandleVehicleBatchAsync(batch));
+        NotificationService.NotificationReceived += _batchHandler;
+
         try
         {
-            await NotificationService.InitAsync();
-            NotificationService.NotificationReceived += HandleVehicleBatchAsync;
-
             await LoadRoutesAsync();
             await FetchInitialSnapshotAsync();
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "TransitMap: Failed to connect to SignalR hub");
+            Logger.LogError(ex, "TransitMap: Failed to load routes or initial snapshot");
         }
     }
 
@@ -281,7 +301,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived -= HandleSettingsEventReceived;
-        NotificationService.NotificationReceived -= HandleVehicleBatchAsync;
+        if (_batchHandler != null)
+            NotificationService.NotificationReceived -= _batchHandler;
         _viewportSub?.Dispose();
         await CheckpointTracker.ClearAsync();
         await OutsideClickJsInterop.RemoveOutsideClickListenerAsync(_accordionElementId);
@@ -441,11 +462,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 transitMode = r.TransitMode.ToString().ToLowerInvariant()
             }).ToArray();
 
-            Logger.LogDebug("TransitMap: forwarding {Count} nearest-point records to animator", records.Length);
             await _map.ProcessNearestPointBatchAsync(records);
         }
 
-        await InvokeAsync(StateHasChanged);
+        StateHasChanged();
     }
 
     async Task OnVehicleMarkerClickedAsync((Map Map, string VehicleId) args)

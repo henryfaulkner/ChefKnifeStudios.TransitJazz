@@ -84,7 +84,6 @@ async function instrumentFor(routeId) {
     const slotIndex = h % PALETTE.length;
     const slot = PALETTE[slotIndex];
 
-    console.log('[TransitSynth] route=' + routeId + ' → slot=' + slotIndex + ' instrument=' + slot.instrument);
 
     return new Promise((resolve, reject) => {
         const sampler = new T.Sampler(
@@ -92,7 +91,6 @@ async function instrumentFor(routeId) {
             {
                 release: slot.release ?? 1.2,
                 onload: () => {
-                    console.log('[TransitSynth] loaded route=' + routeId + ' instrument=' + slot.instrument);
                     const vol = new T.Volume(slot.volume ?? 0).toDestination();
                     sampler.connect(vol);
                     _instrumentCache.set(routeId, { sampler, scale: slot.scale, durations: slot.durations });
@@ -162,7 +160,6 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
         // Same selection index as durationSecondsFor → audible note and trail agree on duration.
         const duration = durations[djb2(String(vehicleId)) % durations.length];
-        console.log('[TransitSynth] play route=' + routeId + ' note=' + note + ' duration=' + duration);
         sampler.triggerAttackRelease(note, duration);
     } catch (err) {
         console.warn('[TransitSynth] triggerNote error:', err);

@@ -376,7 +376,6 @@ window.ChefMapAnimator = {
                 subPathCumDist = this.buildCumulativeDistances(subPath);
                 totalDistance = subPathCumDist[subPathCumDist.length - 1];
             } else {
-                this._log('warn', 'vehicle ' + rec.vehicleId + ': no geometry for route ' + rec.routeId + ', falling back to straight-line lerp');
                 fallbackLerpVehicles++;
                 subPath = [[rec.priorLon, rec.priorLat], [rec.currentLon, rec.currentLat]];
                 subPathCumDist = this.buildCumulativeDistances(subPath);

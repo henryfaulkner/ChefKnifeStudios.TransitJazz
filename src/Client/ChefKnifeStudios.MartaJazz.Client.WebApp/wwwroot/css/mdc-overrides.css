@@ -1,5 +1,26 @@
 /* MatBlazor/MDC component style overrides */
 
+/* CityFab menu: MatMenu portals .mdc-menu into <body>, outside the scoped component tree,
+   so ::deep in CityFab.razor.css never reaches it. Global rule required. */
+.city-fab-menu.mdc-menu {
+    transform: translateY(-50px) !important;
+
+    & .mdc-list {
+        padding: 0;
+
+        & .mdc-list-item {
+            padding: 0;
+
+            & .mdc-button {
+                padding: 8px 24px;
+                height: 100%;
+                width: 100%;
+                justify-content: flex-start;
+            }
+        }
+    }
+}
+
 .mdc-button {
   border-radius: 4px;
 }
