@@ -167,7 +167,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             .Select(x => new RouteItem
             {
                 RouteId = x.Properties.RouteShortName!,
-                Color = x.Properties.Color ?? "#888888",
+                Color = IsVisibleColor(x.Properties.Color) ? x.Properties.Color! : "#CC0000",
                 IsSelected = previouslySelected.Contains(x.Properties.RouteShortName!),
                 Mode = x.Properties.Mode,
             })
@@ -205,6 +205,13 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     {
         HoveredRouteId = routeItem?.RouteId;
         RecomputeActiveTransitCounts();
+    }
+
+    static bool IsVisibleColor(string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color)) return false;
+        var c = color.TrimStart('#').ToUpperInvariant();
+        return c is not ("FFFFFF" or "FFF" or "FEFEFE");
     }
 
     public bool HasSelection => RouteItems.Any(x => x.IsSelected);

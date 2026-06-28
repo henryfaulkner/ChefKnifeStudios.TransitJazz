@@ -57,6 +57,10 @@
     display: flex;
     align-self: center;
     justify-self: center;
+    width: 60px;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: ellipsis;
 
     > .route-filters__route-filter-circle {
         background-color: var(--route-filter-color, red);
