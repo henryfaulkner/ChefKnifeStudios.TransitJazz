@@ -3,7 +3,22 @@
 @inject IJSRuntime JS
 
 <div class="city-fab-container">
-    <MatFAB Label="@CurrentCity.ToUpperInvariant()" Mini="true" @onclick="HandleToggle" />
+    <MatFAB 
+        Icon="location_city"
+        Mini="true" 
+        OnClick="OnClick2" 
+        @ref="Button2"
+    />
+    <MatMenu @ref="Menu2" Class="city-fab-menu">
+        <MatList>
+            <MatListItem>
+                <MatButton Label="Atlanta, GA" Mini="true" @onclick="HandleMartaClicked" Disabled="@(CurrentCity == "marta")" />
+            </MatListItem>
+            <MatListItem>
+                <MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked"  Disabled="@(CurrentCity == "wmata")" />
+            </MatListItem>
+        </MatList>
+    </MatMenu>
 </div>
 
 @code {
@@ -22,11 +37,24 @@
         }
     }
 
-    async Task HandleToggle()
+    async Task HandleMartaClicked()
     {
-        var next = CurrentCity == "marta" ? "wmata" : "marta";
         // Hash-only navigation is always in-page — no reload, WASM stays alive.
         // Set the hash then force a reload so the app re-bootstraps with the new city.
-        await JS.InvokeVoidAsync("eval", $"location.hash='{next}';location.reload()");
+        await JS.InvokeVoidAsync("eval", $"location.hash='marta';location.reload()");
+    }
+
+    async Task HandleWmataClicked()
+    {
+        // Hash-only navigation is always in-page — no reload, WASM stays alive.
+        // Set the hash then force a reload so the app re-bootstraps with the new city.
+        await JS.InvokeVoidAsync("eval", $"location.hash='wmata';location.reload()");
+    }
+
+    MatFAB Button2;
+    BaseMatMenu Menu2;
+    public void OnClick2(MouseEventArgs e)
+    {
+        this.Menu2.OpenAsync(Button2.Ref);
     }
 }
