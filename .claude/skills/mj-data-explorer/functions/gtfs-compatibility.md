@@ -74,42 +74,46 @@ If the user only has some of these URLs, proceed with what's available and flag 
 missing in the report. If they don't mention rail, you can still detect rail routes from
 the static zip (`route_type=1`) and then ask whether a rail position feed exists.
 
-### Step 2 — Fetch feeds via mj-gtfs (in parallel)
+### Step 2 — Fetch feeds via mj-gtfs (in parallel), then run combined decode + align
 
-Read `mj-gtfs` first, then issue the available fetches in a single parallel tool call:
-1. Fetch + decode the **GTFS-RT protobuf** → produces the **GTFS-RT output block**
-2. Fetch + decode the **static GTFS zip** → produces the **Static shapes output block**
-   (this also reports `rail_route_count` / `rail_index_keys` from `route_type=1`)
-3. If a rail realtime URL was supplied → fetch + decode it → **Rail Realtime output block**
+Read `mj-gtfs` first, then:
 
-Do not serialize these — they are independent and fetching in parallel saves latency.
+**2a. Parallel fetch** — issue both downloads in a single parallel tool call:
+1. Download the **GTFS-RT protobuf** → `$env:TEMP\gtfs-rt.pb`
+2. Download + extract the **static GTFS zip** → `$env:TEMP\gtfs-<agency-slug>\`
+   (always use the agency-slug directory — never the shared `gtfs-static` name)
+3. If a rail realtime URL was supplied → fetch it too (parallel)
 
-If the static zip shows `rail_route_count > 0` but no rail realtime URL was provided, note
-that the agency *has* rail geometry but its live train source is unassessed — ask for the
-rail API URL before declaring rail compatible.
+**2b. Combined decode + align** — once both downloads complete, run the **combined
+decode + alignment script** from `mj-gtfs` in a **single tool call**. This does RT
+decode + static parse + route ID alignment together and emits one JSON blob. Do not
+run separate decode scripts and manually copy route ID sets between them.
 
-After decoding: if `lat_lon_pct` is 0% but `vehicles_with_route_id > 0`, the decoder
-hit a field-number mismatch. The output will include `_diag_vp_fields` listing the
-actual VehiclePosition field numbers — use those to identify the position field before
-continuing. Do not proceed to Step 3 with null positions.
+The combined script skips `shapes.txt` by default (big file, not needed for alignment).
+Only run the full static parse (with shapes) if the report needs shape point counts.
 
-### Step 3 — Cross-check route ID alignment
+After the combined run: if `rt._diag_note` is present, the decoder hit a field-number
+mismatch — fix the position field before continuing. Do not proceed with `lat_lon_pct = 0`.
 
-The critical question: do the GTFS-RT `route_id` values match the static route index keys?
+If a rail realtime URL was supplied, decode it separately using the rail section of
+`mj-gtfs` (it's a different format — JSON, not protobuf).
 
-```
-RT route IDs (sample):   110, 12, 15, 19, 1, 21, 23, 240, ...
-Static index keys:        1, 10, 100, 101, 102, 103, ...
-```
+If the combined output shows `static.rail_route_count > 0` but no rail realtime URL was
+provided, note it as RAIL UNASSESSED and ask for the rail API URL.
 
-- **Exact match**: a RT `route_id` appears verbatim in the static index keys → vehicle will snap
-- **Mismatch**: RT uses `"route_110"` but static has `"110"` → `skippedUnknownRoute`
-- **Format difference**: numeric vs zero-padded, prefixed, or agency-prefixed IDs are a
-  common failure mode
+### Step 3 — Interpret alignment output
+
+The combined script already computed alignment — read it from `alignment.*`:
+
+- `alignment.match_pct` — the headline number. 100% = COMPATIBLE; <100% = investigate.
+- `alignment.unmatched_rt_ids` — vehicles in the RT feed that will be `skippedUnknownRoute`.
+  Look for a pattern: prefix (`Green-` → strip it), numeric vs. named, zero-padding.
+- `alignment.static_only_sample` — routes in static with no active vehicles (off-peak
+  routes, inactive lines) — usually expected, not a problem.
 
 Compute and report:
-- What % of RT route IDs have a corresponding static index key
-- Any systematic transformation that would fix a mismatch (e.g. strip prefix, parse int)
+- What % of RT route IDs have a corresponding static index key (`alignment.match_pct`)
+- Any systematic transformation that would fix a mismatch (e.g. strip `Green-` prefix)
 
 ### Step 3b — Cross-check rail (only if a rail feed was fetched)
 
