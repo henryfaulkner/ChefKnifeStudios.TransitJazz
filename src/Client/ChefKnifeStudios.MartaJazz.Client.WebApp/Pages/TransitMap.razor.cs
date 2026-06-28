@@ -434,36 +434,45 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         if (!_mapReady || _map is null)
         {
+            // Bound the buffer: if the map never readies these would grow unbounded,
+            // each holding a full EventEnvelope list. Keep the oldest (the initial REST
+            // snapshot, added first) plus the most recent live batches.
+            const int MaxPendingBatches = 8;
+            if (_pendingBatches.Count >= MaxPendingBatches)
+                _pendingBatches.RemoveAt(1);
             _pendingBatches.Add(batch);
             return;
         }
 
-        // Handle RouteNearestPointBatchEvent — animated path-following
-        var nearestPointRecords = batch
-            .Where(x => x.Payload is RouteNearestPointBatchEvent)
-            .Select(x => (RouteNearestPointBatchEvent)x.Payload)
-            .SelectMany(e => e.BatchRecords)
-            .ToArray();
-
-        if (nearestPointRecords.Length > 0)
+        // Handle RouteNearestPointBatchEvent — animated path-following. Build the JS
+        // payload in a single pass (per-batch, every 10s) rather than materializing an
+        // intermediate record array then projecting again — transient .NET allocation
+        // churn is the lever that raises the never-returned WASM heap high-water.
+        var records = new List<object>();
+        foreach (var envelope in batch)
         {
-            var records = nearestPointRecords.Select(r => (object)new
+            if (envelope.Payload is not RouteNearestPointBatchEvent e) continue;
+            foreach (var r in e.BatchRecords)
             {
-                vehicleId = r.VehicleId,
-                routeId = r.RouteId,
-                priorLon = r.PriorNearestLon,
-                priorLat = r.PriorNearestLat,
-                currentLon = r.CurrentNearestLon,
-                currentLat = r.CurrentNearestLat,
-                durationMs = (r.CurrentUtcNow - r.PriorUtcNow).TotalMilliseconds,
-                speed = r.SpeedMetersPerSec,
-                bearing = r.Bearing,
-                isStale = r.IsStale,
-                transitMode = r.TransitMode.ToString().ToLowerInvariant()
-            }).ToArray();
-
-            await _map.ProcessNearestPointBatchAsync(records);
+                records.Add(new
+                {
+                    vehicleId = r.VehicleId,
+                    routeId = r.RouteId,
+                    priorLon = r.PriorNearestLon,
+                    priorLat = r.PriorNearestLat,
+                    currentLon = r.CurrentNearestLon,
+                    currentLat = r.CurrentNearestLat,
+                    durationMs = (r.CurrentUtcNow - r.PriorUtcNow).TotalMilliseconds,
+                    speed = r.SpeedMetersPerSec,
+                    bearing = r.Bearing,
+                    isStale = r.IsStale,
+                    transitMode = r.TransitMode.ToString().ToLowerInvariant()
+                });
+            }
         }
+
+        if (records.Count > 0)
+            await _map.ProcessNearestPointBatchAsync(records);
 
         StateHasChanged();
     }

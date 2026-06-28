@@ -142,11 +142,11 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Logger.LogError(ex, "[Map] FlushTriggerPoints failed"); }
     }
 
-    public async Task ProcessNearestPointBatchAsync(object[] records)
+    public async Task ProcessNearestPointBatchAsync(IReadOnlyList<object> records)
     {
         try
         {
-            Logger.LogDebug("[Map] ProcessNearestPointBatch: {Count} records → JS", records.Length);
+            Logger.LogDebug("[Map] ProcessNearestPointBatch: {Count} records → JS", records.Count);
             await JsRuntime.InvokeVoidAsync("ChefMapAnimator.processNearestPointBatch", ElementId, records);
         }
         catch (Exception ex)

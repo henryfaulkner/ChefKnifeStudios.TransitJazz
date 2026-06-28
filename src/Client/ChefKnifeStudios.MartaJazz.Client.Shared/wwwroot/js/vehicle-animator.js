@@ -9,6 +9,10 @@ window.ChefMapAnimator = {
 
     HISTORY_SIZE: 4,
     MAX_EXTRAPOLATION_MS: 30000,
+    // Vehicles not seen in a batch for this long are dropped from the dict, which
+    // otherwise grows monotonically with every unique vehicleId ever observed.
+    // Comfortably longer than MAX_EXTRAPOLATION_MS so an animating bus is never evicted.
+    EVICT_AFTER_MS: 120000,
 
     _log: function (level, msg, data) {
         if (data !== undefined) {
@@ -190,6 +194,13 @@ window.ChefMapAnimator = {
             var state = this.vehicles[vehicleIds[i]];
             if (!state) continue;
 
+            // Evict vehicles the feed has stopped reporting so the dict can't grow
+            // unbounded across a long session.
+            if (state.lastSeenMs != null && (now - state.lastSeenMs) > this.EVICT_AFTER_MS) {
+                delete this.vehicles[vehicleIds[i]];
+                continue;
+            }
+
             var newPos = state.currentPos;
 
             if (state.phase === 'idle') {
@@ -287,6 +298,9 @@ window.ChefMapAnimator = {
         for (var i = 0; i < records.length; i++) {
             var rec = records[i];
             var existingState = this.vehicles[rec.vehicleId];
+            // Every record that references a vehicle refreshes its eviction stamp,
+            // regardless of which branch below handles it.
+            if (existingState) existingState.lastSeenMs = now;
 
             // Route transfer — teleport, don't animate
             if (existingState && existingState.routeId !== rec.routeId) {
@@ -335,7 +349,8 @@ window.ChefMapAnimator = {
                     endPos: staleStartPos,
                     extrapolateFromPos: staleStartPos,
                     history: [],
-                    phase: 'idle'
+                    phase: 'idle',
+                    lastSeenMs: now
                 };
                 newVehicles++;
                 continue;
@@ -455,7 +470,8 @@ window.ChefMapAnimator = {
                 endPos: subPath[subPath.length - 1],
                 extrapolateFromPos: startPos,
                 history: history,
-                phase: phase
+                phase: phase,
+                lastSeenMs: now
             };
         }
 
