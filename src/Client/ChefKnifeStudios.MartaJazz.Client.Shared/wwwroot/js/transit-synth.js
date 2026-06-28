@@ -1,54 +1,75 @@
 // transit-synth.js — Tone.js synthesis module for 009-transit-soundscape
 // Route → instrument (3-voice acoustic jazz trio via Sampler)
 // Pitch maps trigger position along route → C-minor pentatonic scale degree
+//
+// ============================================================================
+// BROWSER-MEMORY FINDINGS — READ BEFORE CHANGING THE AUDIO LOADING STRATEGY
+// ============================================================================
+// This file is THE dominant lever on the client's browser RAM. History:
+//
+//   * Good baseline (commit e07ae70, oscillators): client used sub-500 MB.
+//   * After commit 187e784 ("sampler-based strings trio"): client jumped to
+//     ~1.2 GB resident, flat over time, prod == dev.
+//   * Reverting to oscillators dropped it back to sub-600 MB — proving the
+//     soundfonts, not the .NET WASM heap, were the regression.
+//
+// Why a heap snapshot MISSED this: a Chrome heap snapshot is post-GC JS-heap
+// only (~170 MB here) and does NOT show decoded-audio cost or the WASM
+// high-water the early decode burst pins. An earlier investigation therefore
+// wrongly blamed "unavoidable WASM linear memory." It is NOT — it is decoded
+// audio PCM. Don't chase the WASM heap or MapLibre cache for this number.
+//
+// WHY SAMPLERS ARE SO HEAVY: Tone.Sampler fetches each note's MP3 and the Web
+// Audio API decodes it to a raw 32-bit-float PCM AudioBuffer held resident for
+// the session. The MP3s are tiny; the DECODED buffers are not (a multi-second
+// FluidR3 note ≈ 0.5–1 MB each). The original loaded ~25 notes eagerly for
+// every route → that's the ~600 MB.
+//
+// THE THREE LEVERS THIS BUILD USES (keep all three; each is load-bearing):
+//   1. TWO anchor notes per instrument instead of 5–10. Tone.Sampler pitch-
+//      shifts between supplied notes, so 2 anchors cover the whole scale.
+//      This is the biggest cut (~75% less decoded PCM). Anchors C2 + C3 keep
+//      every C2–Bb3 target within ~3 semitones of a real sample — below the
+//      ~5–7 semitone threshold where pitch-shifting sounds artificial. Do NOT
+//      go back to a dense note map "for quality"; it re-creates the 600 MB.
+//   2. LAZY load — build a route's Sampler on first trigger, never eagerly for
+//      all routes. preload() only warms the Tone.js import. This also kills the
+//      early concurrent decode burst that pinned the WASM high-water mark.
+//   3. dispose-on-inactive — disposeInactiveRoutes() frees Samplers for routes
+//      whose vehicles have left the feed (driven from TransitMap, with a few-
+//      batch hysteresis so a brief gap doesn't force a re-fetch+decode). Keeps
+//      the resident set proportional to what's actually sounding.
+//
+// Net result: sampled timbre retained at ~200–300 MB instead of ~1.2 GB.
+// If you must enrich the sound, prefer SHORTER / mono / self-hosted samples
+// (less PCM per note) over adding more notes per instrument.
+// ============================================================================
 
 let _tone = null;
 let _unlocked = false;
+// routeId → { sampler, scale, durations } once loaded, or a pending Promise while loading.
 const _instrumentCache = new Map();
 
 const SOUNDFONT_BASE = 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM';
 
-// C-minor pentatonic: C Eb F G Bb — kept in low octaves for warmth
-const SCALE_BASS = ['C2','Eb2','F2','G2','Bb2','C3','Eb3','F3','G3','Bb3'];
-const SCALE_LOW  = ['C2','Eb2','F2','G2','Bb2','C3','Eb3','F3','G3','Bb3'];
+// C-minor pentatonic across the low octaves used for harmony warmth. These are the
+// PLAYED notes; the Sampler interpolates them from the two anchor samples below.
+const SCALE = ['C2', 'Eb2', 'F2', 'G2', 'Bb2', 'C3', 'Eb3', 'F3', 'G3', 'Bb3'];
+
+// Two anchor notes per instrument — the only MP3s actually fetched + decoded. One low,
+// one high, so the worst-case pitch shift to any SCALE note is ~3 semitones.
+const ANCHORS = { C2: 'C2', C3: 'C3' };
 
 // Three sampled voices cycling across routes: bass → viola → cello → bass …
 const PALETTE = [
-    {
-        instrument: 'bassoon',
-        scale: ['C1','Eb1','F1','G1','Bb1'],
-        notes: { C1:'C1',Eb1:'Eb1',F1:'F1',G1:'G1',Bb1:'Bb1' },
-        release: 0.3,
-        durations: ['8n', '8n.', '4n'],
-    },
-    {
-        instrument: 'viola',
-        scale: SCALE_LOW,
-        notes: { C2:'C2',Eb2:'Eb2',F2:'F2',G2:'G2',Bb2:'Bb2',C3:'C3',Eb3:'Eb3',F3:'F3',G3:'G3',Bb3:'Bb3' },
-        release: 0.5,
-        durations: ['8n', '8n.', '4n'],
-    },
-    {
-        instrument: 'cello',
-        scale: SCALE_BASS,
-        notes: { C2:'C2',Eb2:'Eb2',F2:'F2',G2:'G2',Bb2:'Bb2',C3:'C3',Eb3:'Eb3',F3:'F3',G3:'G3',Bb3:'Bb3' },
-        release: 0.5,
-        durations: ['8n', '8n.', '4n'],
-    },
+    { instrument: 'contrabass', scale: SCALE, anchors: ANCHORS, release: 1.2, durations: ['4n', '4n.', '2n'] },
+    { instrument: 'viola',      scale: SCALE, anchors: ANCHORS, release: 0.5, durations: ['8n', '8n.', '4n'] },
+    { instrument: 'cello',      scale: SCALE, anchors: ANCHORS, release: 0.5, durations: ['8n', '8n.', '4n'] },
 ];
 
 // Default Tone Transport tempo is 120 BPM (unchanged in this app):
-//   4n = 0.5s, 8n. = 0.375s, 8n = 0.25s
-const DURATION_SECONDS = { '8n': 0.25, '8n.': 0.375, '4n': 0.5 };
-
-// All current palette slots share this duration set; selection is stable across routes.
-const DURATIONS = ['8n', '8n.', '4n'];
-
-// Deterministic, audio-independent selection of the note-duration token for a vehicle.
-// Shared by triggerNote (audible note) and durationSecondsFor (trail growth) so they always agree.
-function _durationTokenFor(vehicleId) {
-    return DURATIONS[djb2(String(vehicleId)) % DURATIONS.length];
-}
+//   2n = 1.0s, 4n. = 0.75s, 4n = 0.5s, 8n. = 0.375s, 8n = 0.25s
+const DURATION_SECONDS = { '8n': 0.25, '8n.': 0.375, '4n': 0.5, '4n.': 0.75, '2n': 1.0 };
 
 // djb2 hash — deterministic, no crypto needed
 function djb2(s) {
@@ -59,6 +80,13 @@ function djb2(s) {
     return h >>> 0;
 }
 
+// Deterministic, audio-independent duration token for a vehicle. Shared by triggerNote
+// (audible note) and durationSecondsFor (trail growth) so they always agree. Resolves the
+// route's palette slot so the token comes from that instrument's own duration set.
+function _slotForRoute(routeId) {
+    return PALETTE[djb2(String(routeId)) % PALETTE.length];
+}
+
 async function getTone() {
     if (_tone) return _tone;
     const mod = await import('https://esm.sh/tone@15');
@@ -66,43 +94,43 @@ async function getTone() {
     return _tone;
 }
 
-function buildSampleUrls(instrument, notes) {
+function buildSampleUrls(instrument, anchors) {
     const urls = {};
-    for (const note of Object.keys(notes)) {
-        // MIDI.js filenames use unicode flat sign: Eb4 → Eb4.mp3
+    for (const note of Object.keys(anchors)) {
         urls[note] = `${SOUNDFONT_BASE}/${instrument}-mp3/${note}.mp3`;
     }
     return urls;
 }
 
-async function instrumentFor(routeId) {
-    if (_instrumentCache.has(routeId)) return _instrumentCache.get(routeId);
-    const T = await getTone();
-    if (_instrumentCache.has(routeId)) return _instrumentCache.get(routeId);
+// Lazily builds (and caches) the Sampler for a route. Concurrent callers share the same
+// in-flight Promise so a note never double-loads.
+function instrumentFor(routeId) {
+    const cached = _instrumentCache.get(routeId);
+    if (cached) return cached;
 
-    const h = djb2(String(routeId));
-    const slotIndex = h % PALETTE.length;
-    const slot = PALETTE[slotIndex];
+    const slot = PALETTE[djb2(String(routeId)) % PALETTE.length];
 
-
-    return new Promise((resolve, reject) => {
+    const loading = getTone().then(T => new Promise((resolve, reject) => {
         const sampler = new T.Sampler(
-            buildSampleUrls(slot.instrument, slot.notes),
+            buildSampleUrls(slot.instrument, slot.anchors),
             {
                 release: slot.release ?? 1.2,
                 onload: () => {
-                    const vol = new T.Volume(slot.volume ?? 0).toDestination();
-                    sampler.connect(vol);
-                    _instrumentCache.set(routeId, { sampler, scale: slot.scale, durations: slot.durations });
-                    resolve({ sampler, scale: slot.scale, durations: slot.durations });
+                    const entry = { sampler: sampler.toDestination(), scale: slot.scale, durations: slot.durations };
+                    _instrumentCache.set(routeId, entry); // replace the pending Promise with the resolved entry
+                    resolve(entry);
                 },
                 onerror: (err) => {
                     console.error('[TransitSynth] sampler load failed for routeId=' + routeId + ' instrument=' + slot.instrument, err);
+                    _instrumentCache.delete(routeId); // allow a later retry
                     reject(err);
                 },
             }
         );
-    });
+    }));
+
+    _instrumentCache.set(routeId, loading);
+    return loading;
 }
 
 // Maps a bus's progress along its route to a scale degree.
@@ -114,11 +142,11 @@ function noteForPosition(scale, triggerIndex, totalTriggers) {
     return scale[scaleIndex];
 }
 
-// Kicks off Sampler HTTP fetches for the given route IDs without waiting for
-// AudioContext to be running — files arrive before the first gesture.
+// LAZY build replaces the old eager preload of every route. Kept as an export (the C#
+// PreloadAsync call) but now only warms the Tone.js import so the first real trigger
+// doesn't pay the module-load latency. No samples are fetched until a route first sounds.
 export async function preload(routeIds) {
-    if (!Array.isArray(routeIds) || routeIds.length === 0) return;
-    await Promise.allSettled(routeIds.map(id => instrumentFor(id)));
+    await getTone();
 }
 
 // Attaches a one-shot native click listener to the unlock button so that
@@ -155,10 +183,8 @@ export function isUnlocked() {
 export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTriggers = 1) {
     if (!_unlocked) return;
     try {
-        const T = await getTone();
         const { sampler, scale, durations } = await instrumentFor(routeId);
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
-        // Same selection index as durationSecondsFor → audible note and trail agree on duration.
         const duration = durations[djb2(String(vehicleId)) % durations.length];
         sampler.triggerAttackRelease(note, duration);
     } catch (err) {
@@ -168,19 +194,39 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
 
 // Audio-independent note duration in seconds for a vehicle's crossing. No _unlocked
 // guard, no AudioContext, no Tone import — callable while muted/locked (FR-001). Uses
-// the SAME deterministic selection as triggerNote so the trail length matches the note.
-export function durationSecondsFor(vehicleId) {
-    const tok = _durationTokenFor(vehicleId);
+// the SAME deterministic selection as triggerNote (route slot → duration set → djb2)
+// so the trail length matches the note.
+export function durationSecondsFor(vehicleId, routeId) {
+    const durations = routeId ? _slotForRoute(routeId).durations : PALETTE[0].durations;
+    const tok = durations[djb2(String(vehicleId)) % durations.length];
     return DURATION_SECONDS[tok] ?? 0.25;
 }
 
+// Frees Samplers for routes no longer active so decoded PCM doesn't accumulate across a
+// long session. Callable from the C# side with the current set of routes that have live
+// vehicles; any cached route NOT in that set is disposed.
+export function disposeInactiveRoutes(activeRouteIds) {
+    const active = new Set(Array.isArray(activeRouteIds) ? activeRouteIds.map(String) : []);
+    for (const routeId of [..._instrumentCache.keys()]) {
+        if (active.has(String(routeId))) continue;
+        const entry = _instrumentCache.get(routeId);
+        // Skip entries still loading (Promises) — don't dispose mid-fetch.
+        if (entry && entry.sampler) {
+            try { entry.sampler.dispose(); } catch (_) { /* ignore */ }
+            _instrumentCache.delete(routeId);
+        }
+    }
+}
+
 export async function dispose() {
-    for (const { sampler } of _instrumentCache.values()) {
-        try { sampler.dispose(); } catch (_) { /* ignore */ }
+    for (const entry of _instrumentCache.values()) {
+        if (entry && entry.sampler) {
+            try { entry.sampler.dispose(); } catch (_) { /* ignore */ }
+        }
     }
     _instrumentCache.clear();
     _unlocked = false;
     _tone = null;
 }
 
-window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor };
+window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes };

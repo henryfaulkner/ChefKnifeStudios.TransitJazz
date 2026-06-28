@@ -11,5 +11,11 @@ public interface ITransitSynthJsInterop : IAsyncDisposable
     Task UnlockAsync();
     Task<bool> IsUnlockedAsync();
     Task TriggerNoteAsync(string routeId, string vehicleId, int triggerIndex = 0, int totalTriggers = 1);
-    Task<double> DurationSecondsForAsync(string vehicleId);
+    Task<double> DurationSecondsForAsync(string vehicleId, string? routeId = null);
+
+    /// <summary>
+    /// Frees Samplers cached for routes not in <paramref name="activeRouteIds"/> so decoded
+    /// audio doesn't accumulate across a long session. Pass the routes with live vehicles.
+    /// </summary>
+    Task DisposeInactiveRoutesAsync(IEnumerable<string> activeRouteIds);
 }

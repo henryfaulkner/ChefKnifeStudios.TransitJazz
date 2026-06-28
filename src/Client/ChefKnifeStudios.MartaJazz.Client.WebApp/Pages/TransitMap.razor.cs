@@ -70,6 +70,12 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _routesLoaded;
     bool _routesRendered;
 
+    // routeId → consecutive batches with no live vehicle. A route's audio Sampler is
+    // disposed once it's been absent this many batches in a row (~tolerates brief feed
+    // gaps so we don't re-fetch+decode a route that flickers out for one cycle).
+    readonly Dictionary<string, int> _routeAbsenceBatches = new(StringComparer.Ordinal);
+    const int RouteAudioEvictAfterBatches = 3;
+
     static readonly Dictionary<string, (double Lat, double Lon)> _cityCenter = new(StringComparer.OrdinalIgnoreCase)
     {
         [CityNames.Marta] = (33.749, -84.388),
@@ -166,7 +172,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             {
                 try
                 {
-                    var durationSec = await TransitSynth.DurationSecondsForAsync(crossing.VehicleId);
+                    var durationSec = await TransitSynth.DurationSecondsForAsync(crossing.VehicleId, crossing.RouteId);
                     await _map.StartCrossingTrailAsync(crossing.RouteId, crossing.VehicleId, crossing.TriggerIndex, durationSec);
                 }
                 catch (Exception ex) { Logger.LogWarning(ex, "StartCrossingTrailAsync failed for {RouteId}/{Idx}", crossing.RouteId, crossing.TriggerIndex); }
@@ -449,11 +455,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         // intermediate record array then projecting again — transient .NET allocation
         // churn is the lever that raises the never-returned WASM heap high-water.
         var records = new List<object>();
+        var activeRoutes = new HashSet<string>(StringComparer.Ordinal);
         foreach (var envelope in batch)
         {
             if (envelope.Payload is not RouteNearestPointBatchEvent e) continue;
             foreach (var r in e.BatchRecords)
             {
+                activeRoutes.Add(r.RouteId);
                 records.Add(new
                 {
                     vehicleId = r.VehicleId,
@@ -472,9 +480,33 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
 
         if (records.Count > 0)
+        {
             await _map.ProcessNearestPointBatchAsync(records);
+            await EvictInactiveRouteAudioAsync(activeRoutes);
+        }
 
         StateHasChanged();
+    }
+
+    // Frees audio Samplers for routes whose vehicles have left the feed, so decoded PCM
+    // doesn't accumulate over a long session. A route must be absent for several batches
+    // in a row before eviction, so a one-cycle feed gap doesn't force a re-fetch+decode.
+    async Task EvictInactiveRouteAudioAsync(HashSet<string> activeRoutes)
+    {
+        foreach (var routeId in activeRoutes)
+            _routeAbsenceBatches.Remove(routeId);
+
+        var stale = false;
+        foreach (var routeId in _routeShapeCache.Keys)
+        {
+            if (activeRoutes.Contains(routeId)) continue;
+            var count = _routeAbsenceBatches.GetValueOrDefault(routeId) + 1;
+            _routeAbsenceBatches[routeId] = count;
+            if (count >= RouteAudioEvictAfterBatches) stale = true;
+        }
+
+        if (stale)
+            await TransitSynth.DisposeInactiveRoutesAsync(activeRoutes);
     }
 
     async Task OnVehicleMarkerClickedAsync((Map Map, string VehicleId) args)
