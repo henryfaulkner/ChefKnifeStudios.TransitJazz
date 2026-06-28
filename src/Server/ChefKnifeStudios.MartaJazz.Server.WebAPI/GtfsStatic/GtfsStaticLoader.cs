@@ -148,9 +148,7 @@ public class GtfsStaticLoader(
         if (entry == null) return result;
 
         using var reader = new StreamReader(entry.Open());
-        var headerLine = reader.ReadLine() ?? string.Empty;
-        headerLine = headerLine.TrimStart('﻿').Replace("\r", "");
-        var header = headerLine.Split(',');
+        var header = SplitCsvLine((reader.ReadLine() ?? string.Empty).TrimStart('﻿'));
 
         int routeIdx = Array.IndexOf(header, "route_id");
         int shapeIdx = Array.IndexOf(header, "shape_id");
@@ -159,10 +157,10 @@ public class GtfsStaticLoader(
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            var cols = line.Replace("\r", "").Split(',');
+            var cols = SplitCsvLine(line);
             if (cols.Length <= Math.Max(routeIdx, shapeIdx)) continue;
-            var routeId = cols[routeIdx].Trim();
-            var shapeId = cols[shapeIdx].Trim();
+            var routeId = cols[routeIdx];
+            var shapeId = cols[shapeIdx];
             if (!string.IsNullOrEmpty(routeId) && !string.IsNullOrEmpty(shapeId)
                 && !result.ContainsKey(routeId))
                 result[routeId] = shapeId;
@@ -177,7 +175,7 @@ public class GtfsStaticLoader(
         if (entry == null) return result;
 
         using var reader = new StreamReader(entry.Open());
-        var header = (reader.ReadLine() ?? string.Empty).TrimStart('﻿').Replace("\r", "").Split(',');
+        var header = SplitCsvLine((reader.ReadLine() ?? string.Empty).TrimStart('﻿'));
         int shapeIdx = Array.IndexOf(header, "shape_id");
         int latIdx = Array.IndexOf(header, "shape_pt_lat");
         int lonIdx = Array.IndexOf(header, "shape_pt_lon");
@@ -187,12 +185,12 @@ public class GtfsStaticLoader(
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            var cols = line.Split(',');
+            var cols = SplitCsvLine(line);
             if (cols.Length <= Math.Max(shapeIdx, Math.Max(latIdx, Math.Max(lonIdx, seqIdx)))) continue;
-            var shapeId = cols[shapeIdx].Trim();
-            if (!double.TryParse(cols[latIdx].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var lat)) continue;
-            if (!double.TryParse(cols[lonIdx].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var lon)) continue;
-            if (!int.TryParse(cols[seqIdx].Trim(), out var seq)) continue;
+            var shapeId = cols[shapeIdx];
+            if (!double.TryParse(cols[latIdx], NumberStyles.Float, CultureInfo.InvariantCulture, out var lat)) continue;
+            if (!double.TryParse(cols[lonIdx], NumberStyles.Float, CultureInfo.InvariantCulture, out var lon)) continue;
+            if (!int.TryParse(cols[seqIdx], out var seq)) continue;
 
             if (!result.TryGetValue(shapeId, out var pts))
                 result[shapeId] = pts = [];
@@ -212,7 +210,7 @@ public class GtfsStaticLoader(
         if (entry == null) return result;
 
         using var reader = new StreamReader(entry.Open());
-        var header = (reader.ReadLine() ?? string.Empty).TrimStart('﻿').Replace("\r", "").Split(',');
+        var header = SplitCsvLine((reader.ReadLine() ?? string.Empty).TrimStart('﻿'));
         int routeIdx = Array.IndexOf(header, "route_id");
         int shortNameIdx = Array.IndexOf(header, "route_short_name");
         int colorIdx = Array.IndexOf(header, "route_color");
@@ -223,14 +221,14 @@ public class GtfsStaticLoader(
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            var cols = line.Split(',');
+            var cols = SplitCsvLine(line);
             if (cols.Length <= routeIdx) continue;
-            var routeId = cols[routeIdx].Trim();
-            var shortName = shortNameIdx >= 0 && cols.Length > shortNameIdx ? cols[shortNameIdx].Trim() : null;
+            var routeId = cols[routeIdx];
+            var shortName = shortNameIdx >= 0 && cols.Length > shortNameIdx ? cols[shortNameIdx] : null;
             if (string.IsNullOrEmpty(shortName)) shortName = null;
-            var color = colorIdx >= 0 && cols.Length > colorIdx ? NormalizeColor(cols[colorIdx].Trim()) : null;
-            var textColor = textColorIdx >= 0 && cols.Length > textColorIdx ? NormalizeColor(cols[textColorIdx].Trim()) : null;
-            var mode = routeTypeIdx >= 0 && cols.Length > routeTypeIdx && cols[routeTypeIdx].Trim() == "1"
+            var color = colorIdx >= 0 && cols.Length > colorIdx ? NormalizeColor(cols[colorIdx]) : null;
+            var textColor = textColorIdx >= 0 && cols.Length > textColorIdx ? NormalizeColor(cols[textColorIdx]) : null;
+            var mode = routeTypeIdx >= 0 && cols.Length > routeTypeIdx && cols[routeTypeIdx] == "1"
                 ? TransitMode.Rail
                 : TransitMode.Bus;
             if (!string.IsNullOrEmpty(routeId))
@@ -244,6 +242,18 @@ public class GtfsStaticLoader(
         if (string.IsNullOrWhiteSpace(raw)) return null;
         return raw.StartsWith('#') ? raw : $"#{raw}";
     }
+
+    // Trim whitespace then strip surrounding double-quotes from a CSV field value.
+    static string Unquote(string s)
+    {
+        s = s.Trim();
+        return s.Length >= 2 && s[0] == '"' && s[s.Length - 1] == '"'
+            ? s[1..^1].Trim()
+            : s;
+    }
+
+    static string[] SplitCsvLine(string line) =>
+        line.Replace("\r", "").Split(',').Select(Unquote).ToArray();
 
     static List<(double Lat, double Lon, int Seq)> Simplify(List<(double Lat, double Lon, int Seq)> pts, double toleranceMeters)
     {
