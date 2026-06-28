@@ -282,9 +282,9 @@ public class GtfsStaticLoader(
             if (string.IsNullOrEmpty(shortName)) shortName = null;
             var color = colorIdx >= 0 && cols.Length > colorIdx ? NormalizeColor(cols[colorIdx]) : null;
             var textColor = textColorIdx >= 0 && cols.Length > textColorIdx ? NormalizeColor(cols[textColorIdx]) : null;
-            var mode = routeTypeIdx >= 0 && cols.Length > routeTypeIdx && cols[routeTypeIdx] == "1"
-                ? TransitMode.Rail
-                : TransitMode.Bus;
+            // GTFS route_type: 0=tram/light-rail, 1=subway/heavy-rail, 2=commuter-rail — all Rail
+            var routeType = routeTypeIdx >= 0 && cols.Length > routeTypeIdx ? cols[routeTypeIdx] : "";
+            var mode = routeType is "0" or "1" or "2" ? TransitMode.Rail : TransitMode.Bus;
             if (!string.IsNullOrEmpty(routeId))
                 result[routeId] = (shortName, color, textColor, mode);
         }
