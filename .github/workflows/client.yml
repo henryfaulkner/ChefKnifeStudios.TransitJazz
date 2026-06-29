@@ -2,7 +2,7 @@ name: Client CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, deploy/transit-jazz]
 
 jobs:
   build:
@@ -49,6 +49,15 @@ jobs:
           app_location: ./client
           output_location: ""
           skip_app_build: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: blazor-client
+          path: ./client
+
+      - name: Inject production environment header
+        run: |
+          echo '{"headers":{"Blazor-Environment":"Production"}}' > ./client/staticwebapp.config.json
 
       - name: Deploy to Static Web App (transitjazz.com)
         uses: Azure/static-web-apps-deploy@v1
