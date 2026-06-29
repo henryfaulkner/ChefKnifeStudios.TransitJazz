@@ -7,7 +7,7 @@ namespace ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 public partial class Settings : ObservableObject
 {
     // ponytail: bump CurrentVersion when schema changes, old serialized data auto-discards
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     [HiddenSetting]
     public int Version { get; set; } = CurrentVersion;
 
@@ -21,7 +21,7 @@ public partial class Settings : ObservableObject
 
     [ObservableProperty]
     [property: Description("SettingCrossingTrailVisible")]
-    bool _isCrossingTrailVisible = true;
+    bool _isCrossingTrailVisible = false;
 
     [ObservableProperty]
     [property: Description("SettingStreetMap")]
