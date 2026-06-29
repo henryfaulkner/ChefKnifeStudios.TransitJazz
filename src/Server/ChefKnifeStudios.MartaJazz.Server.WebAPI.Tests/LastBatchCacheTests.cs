@@ -103,10 +103,7 @@ public class LastBatchCacheTests
             var snapshot = cache.Current("marta");
             Assert.NotNull(snapshot);
             foreach (var rec in RecordsOf(snapshot))
-            {
-                Assert.False(rec.IsStale);
                 Assert.Contains(rec.VehicleId, knownIds);
-            }
         });
     }
 
@@ -135,8 +132,10 @@ public class LastBatchCacheTests
         Assert.Empty(cache.Current("unknown-city"));
     }
 
+    // The snapshot preserves staleness so the client can idle a stopped/stale vehicle on
+    // load instead of replaying its last motion segment. Stale records are NOT dropped.
     [Fact]
-    public void US1_MixedBatch_ExcludesStale()
+    public void US1_MixedBatch_IncludesStaleWithFlagPreserved()
     {
         var cache = new LastBatchCache();
         cache.Set("marta", MakeBatch("marta",
@@ -144,20 +143,22 @@ public class LastBatchCacheTests
             MakeRecord("v2", 33.760, -84.380, isStale: true)));
 
         var records = RecordsOf(cache.Current("marta"));
-        var v1 = Assert.Single(records);
-        Assert.Equal("v1", v1.VehicleId);
-        Assert.DoesNotContain(records, r => r.IsStale);
+        Assert.Equal(2, records.Count);
+        Assert.False(records.Single(r => r.VehicleId == "v1").IsStale);
+        Assert.True(records.Single(r => r.VehicleId == "v2").IsStale);
     }
 
     [Fact]
-    public void US1_AllStaleFirstBatch_YieldsEmpty()
+    public void US1_AllStaleFirstBatch_RetainsStaleVehicles()
     {
         var cache = new LastBatchCache();
         cache.Set("marta", MakeBatch("marta",
             MakeRecord("v1", 33.751, -84.389, isStale: true),
             MakeRecord("v2", 33.760, -84.380, isStale: true)));
 
-        Assert.Empty(cache.Current("marta"));
+        var ids = RecordsOf(cache.Current("marta")).Select(r => r.VehicleId).OrderBy(x => x).ToList();
+        Assert.Equal(new[] { "v1", "v2" }, ids);
+        Assert.All(RecordsOf(cache.Current("marta")), r => Assert.True(r.IsStale));
     }
 
     [Fact]
@@ -174,8 +175,11 @@ public class LastBatchCacheTests
         }
     }
 
+    // Latest record per vehicle wins, even when the latest is stale: a vehicle that goes
+    // stale must read as stale in the snapshot (so the client idles it) rather than keeping
+    // its last moving record forever and animating a stop that never happens.
     [Fact]
-    public void US3_StaleAfterGood_RetainsNonStalePosition()
+    public void US3_StaleAfterGood_LatestStaleWins()
     {
         var cache = new LastBatchCache();
         cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.751, -84.389, isStale: false)));
@@ -183,23 +187,16 @@ public class LastBatchCacheTests
 
         var v1 = Assert.Single(RecordsOf(cache.Current("marta")));
         Assert.Equal("v1", v1.VehicleId);
-        Assert.False(v1.IsStale);
-        Assert.Equal(33.751, v1.CurrentNearestLat);
-        Assert.Equal(-84.389, v1.CurrentNearestLon);
+        Assert.True(v1.IsStale);
+        Assert.Equal(33.900, v1.CurrentNearestLat);
+        Assert.Equal(-84.100, v1.CurrentNearestLon);
     }
 
     [Fact]
-    public void US3_AllStaleOrEmptyAfterGood_LeavesSnapshotUnchanged()
+    public void US3_EmptyBatchAfterGood_LeavesSnapshotUnchanged()
     {
         var cache = new LastBatchCache();
         cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.751, -84.389, isStale: false)));
-
-        cache.Set("marta", MakeBatch("marta",
-            MakeRecord("v1", 33.900, -84.100, isStale: true),
-            MakeRecord("v2", 33.800, -84.200, isStale: true)));
-
-        var idsAfterStale = RecordsOf(cache.Current("marta")).Select(r => r.VehicleId).ToList();
-        Assert.Equal(new[] { "v1" }, idsAfterStale);
 
         cache.Set("marta", new List<EventEnvelope>());
 
@@ -229,5 +226,59 @@ public class LastBatchCacheTests
         Assert.Equal("v1", v1.VehicleId);
         Assert.Equal(33.900, v1.CurrentNearestLat);
         Assert.Equal(-84.100, v1.CurrentNearestLon);
+    }
+
+    // TTL eviction: a vehicle absent for EvictAfterCycles (3) data-carrying batches is
+    // dropped, so the cold-start snapshot can't carry ghosts of vehicles that left the feed.
+    [Fact]
+    public void Eviction_VehicleAbsentForThreeCycles_IsEvicted()
+    {
+        var cache = new LastBatchCache();
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.75, -84.39, isStale: false))); // cycle 1
+        cache.Set("marta", MakeBatch("marta", MakeRecord("other", 33.76, -84.38, isStale: false))); // cycle 2
+        cache.Set("marta", MakeBatch("marta", MakeRecord("other", 33.76, -84.38, isStale: false))); // cycle 3
+        cache.Set("marta", MakeBatch("marta", MakeRecord("other", 33.76, -84.38, isStale: false))); // cycle 4 → v1 evicted
+
+        var ids = RecordsOf(cache.Current("marta")).Select(r => r.VehicleId).ToList();
+        Assert.DoesNotContain("v1", ids);
+        Assert.Contains("other", ids);
+    }
+
+    [Fact]
+    public void Eviction_VehicleStillWithinTtl_Survives()
+    {
+        var cache = new LastBatchCache();
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.75, -84.39, isStale: false))); // cycle 1
+        cache.Set("marta", MakeBatch("marta", MakeRecord("other", 33.76, -84.38, isStale: false))); // cycle 2
+        cache.Set("marta", MakeBatch("marta", MakeRecord("other", 33.76, -84.38, isStale: false))); // cycle 3 → v1 age 2 < 3
+
+        Assert.Contains("v1", RecordsOf(cache.Current("marta")).Select(r => r.VehicleId));
+    }
+
+    // A stale re-report still proves the vehicle is being observed, so it refreshes the
+    // eviction clock and keeps the vehicle alive (marked stale).
+    [Fact]
+    public void Eviction_StaleReportRefreshesTtl()
+    {
+        var cache = new LastBatchCache();
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.75, -84.39, isStale: false))); // cycle 1
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.75, -84.39, isStale: true)));  // cycle 2 (refresh)
+        cache.Set("marta", MakeBatch("marta", MakeRecord("other", 33.76, -84.38, isStale: false))); // cycle 3
+        cache.Set("marta", MakeBatch("marta", MakeRecord("other", 33.76, -84.38, isStale: false))); // cycle 4 → v1 age 2 < 3
+
+        Assert.Contains("v1", RecordsOf(cache.Current("marta")).Select(r => r.VehicleId));
+    }
+
+    // Empty batches (feed hiccups) must not advance the eviction clock, or a brief silence
+    // would blank the whole snapshot.
+    [Fact]
+    public void Eviction_EmptyBatchesDoNotAgeOutVehicles()
+    {
+        var cache = new LastBatchCache();
+        cache.Set("marta", MakeBatch("marta", MakeRecord("v1", 33.75, -84.39, isStale: false))); // cycle 1
+        for (var i = 0; i < 5; i++)
+            cache.Set("marta", new List<EventEnvelope>()); // empty — no cycle advance
+
+        Assert.Contains("v1", RecordsOf(cache.Current("marta")).Select(r => r.VehicleId));
     }
 }

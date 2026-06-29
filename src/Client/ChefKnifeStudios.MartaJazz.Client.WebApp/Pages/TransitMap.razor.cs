@@ -115,14 +115,19 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _batchHandler = batch => InvokeAsync(() => HandleVehicleBatchAsync(batch));
         NotificationService.NotificationReceived += _batchHandler;
 
+        // NOTE: the cold-start vehicle snapshot is delivered exactly once, by the SignalR
+        // JoinCity replay (TransitHub replays LastBatchCache.Current on connect). We do NOT
+        // also fetch it over REST here — doing both delivered the identical batch twice,
+        // re-anchoring every vehicle's animation back to its start position and re-firing
+        // checkpoint crossings (the "rapid pulsing" on load). The SignalR replay also feeds
+        // the running count via ApplicationViewModel.NotificationReceived.
         try
         {
             await LoadRoutesAsync();
-            await FetchInitialSnapshotAsync();
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "TransitMap: Failed to load routes or initial snapshot");
+            Logger.LogError(ex, "TransitMap: Failed to load routes");
         }
     }
 
@@ -517,47 +522,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     async Task OnMapBodyClickedAsync(Map map)
     {
         return;
-    }
-
-    async Task FetchInitialSnapshotAsync(CancellationToken ct = default)
-    {
-        try
-        {
-            var res = await TransitEndpointsService.GetLastBatch(ct);
-            if (!res.IsSuccess)
-            {
-                Logger.LogWarning("TransitMap.FetchInitialSnapshotAsync: GetLastBatch failed — Status={Status} Errors={Errors}",
-                    res.Status, string.Join("; ", res.Errors));
-                return;
-            }
-
-            var batch = res.Value;
-            if (batch is null)
-            {
-                Logger.LogWarning("TransitMap.FetchInitialSnapshotAsync: GetLastBatch returned success but null batch");
-                return;
-            }
-
-            var envelopes = batch.ToList();
-            var nearestPointCount = envelopes.Count(x => x.Payload is RouteNearestPointBatchEvent);
-            Logger.LogInformation(
-                "TransitMap.FetchInitialSnapshotAsync: GetLastBatch returned {Total} envelope(s), {Nearest} RouteNearestPointBatchEvent, payload types=[{Types}], mapReady={MapReady}",
-                envelopes.Count,
-                nearestPointCount,
-                string.Join(", ", envelopes.Select(x => x.Payload?.GetType().Name ?? "null").Distinct()),
-                _mapReady);
-
-            await HandleVehicleBatchAsync(envelopes);
-
-            // Fan the snapshot through the same notification path the live stream uses
-            // so the running-count seeds from the cold-start fleet and the header matches
-            // what the map renders (the count subscriber lives on this event).
-            await ApplicationViewModel.PublishBatch(envelopes);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "TransitMap.FetchInitialSnapshotAsync: failed to fetch initial snapshot — continuing without it");
-        }
     }
 
     async Task LoadRoutesAsync(CancellationToken ct = default)
