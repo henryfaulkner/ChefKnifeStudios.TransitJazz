@@ -97,8 +97,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _dotNetRef = DotNetObjectReference.Create((object)this);
 
         var uri = new Uri(NavigationManager.Uri);
-        if (string.IsNullOrEmpty(uri.Fragment))
-            NavigationManager.NavigateTo(NavigationManager.Uri + "#" + CityNames.Marta, forceLoad: false);
+
+        // NO HASH SEGMENT BY DEFAULT
+        //if (string.IsNullOrEmpty(uri.Fragment))
+        //    NavigationManager.NavigateTo(NavigationManager.Uri + "#" + CityNames.Marta, forceLoad: false);
 
         var settings = SettingsService.GetSettings();
         _audioEnabled = settings.IsAudioEnabled;
