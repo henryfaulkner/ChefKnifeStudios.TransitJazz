@@ -12,7 +12,7 @@ public class TriggerPointGenerator : ITriggerPointGenerator
     //   200m @ 15 m/s → 13s per trigger (inside band)
     //   200m @  5 m/s → 40s per trigger (slightly above upper bound — truthfully sparse for slow traffic)
     // Adjust via manual verification (quickstart.md Test 5); try 150m if too sparse, 250m if too frequent.
-    const double TriggerSpacingMeters = 400.0;
+    const double TriggerSpacingMeters = 200.0;
 
     readonly ILogger<TriggerPointGenerator> _logger;
 
