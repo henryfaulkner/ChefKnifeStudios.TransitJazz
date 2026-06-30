@@ -1,7 +1,7 @@
-using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
+using ChefKnifeStudios.MartaJazz.Shared.Models;
 using System.Collections.Generic;
 
-namespace ChefKnifeStudios.MartaJazz.Client.Shared.Services;
+namespace ChefKnifeStudios.MartaJazz.Shared.Services;
 
 public interface ITriggerPointGenerator
 {
