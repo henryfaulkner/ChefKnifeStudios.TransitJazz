@@ -1,4 +1,4 @@
-name: Client CI/CD
+name: MartaJazz Client CI/CD
 
 on:
   push:
