@@ -64,6 +64,15 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     readonly Dictionary<string, HashSet<string>> _routeVehicles = new(StringComparer.Ordinal);
     // Tracks which vehicle IDs are rail so counts can be split without re-examining route names.
     readonly HashSet<string> _railVehicleIds = new(StringComparer.Ordinal);
+    // vehicleId → consecutive batches in which the vehicle was absent from the feed. Reset to 0
+    // every batch the vehicle appears in (stale OR live — a stale record still proves it's in the
+    // feed). Once a vehicle is absent this many batches in a row it's evicted from the counts, so
+    // a vehicle that finishes its run / drops out of GTFS-RT stops inflating the total instead of
+    // lingering forever. The threshold is deliberately more lenient than the audio eviction's 3
+    // (TransitMap.RouteAudioEvictAfterBatches) so the count is slow to drop and tolerant of feed
+    // gaps. Mirrors the absence-tracking pattern in TransitMap.EvictInactiveRouteAudioAsync.
+    readonly Dictionary<string, int> _vehicleAbsenceBatches = new(StringComparer.Ordinal);
+    const int VehicleEvictAfterBatches = 6;
 
     public RouteFilterViewModel(
         ILogger<RouteFilterViewModel> logger,
@@ -93,15 +102,22 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     {
         // Accumulate distinct non-stale vehicles per route across batches (live + the
         // cold-start snapshot fanned through this same event). Stale records (same GPS
-        // reading repeated) are excluded. An empty/all-stale batch upserts nothing, so
-        // the count holds its last value rather than flickering to 0.
+        // reading repeated) are excluded from the count's membership but still count as
+        // a feed appearance for absence tracking below.
         var changed = false;
+        // Vehicles seen anywhere in this batch (stale OR live). A vehicle present here is in
+        // the feed this cycle, so its absence streak resets even if its only record was stale.
+        var seenThisBatch = new HashSet<string>(StringComparer.Ordinal);
+        var sawAnyBatchEvent = false;
         foreach (var envelope in batch)
         {
             if (envelope.Payload is not RouteNearestPointBatchEvent batchEvent) continue;
+            sawAnyBatchEvent = true;
             foreach (var record in batchEvent.BatchRecords)
             {
-                if (record.IsStale || string.IsNullOrEmpty(record.RouteId)) continue;
+                if (string.IsNullOrEmpty(record.RouteId)) continue;
+                seenThisBatch.Add(record.VehicleId);
+                if (record.IsStale) continue;
                 if (!_routeVehicles.TryGetValue(record.RouteId, out var vehicles))
                     _routeVehicles[record.RouteId] = vehicles = new HashSet<string>(StringComparer.Ordinal);
                 changed |= vehicles.Add(record.VehicleId);
@@ -109,6 +125,12 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                     _railVehicleIds.Add(record.VehicleId);
             }
         }
+
+        // Age out vehicles that have dropped out of the feed. Only run when this notification
+        // actually carried a transit batch — a non-batch envelope (e.g. a settings event fanned
+        // through the same bus) must not be mistaken for a cycle in which every vehicle was absent.
+        if (sawAnyBatchEvent)
+            changed |= EvictAbsentVehicles(seenThisBatch);
 
         if (!changed) return Task.CompletedTask;
 
@@ -119,6 +141,43 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
         RecomputeActiveTransitCounts();
 
         return Task.CompletedTask;
+    }
+
+    // Increment the consecutive-absence streak for every counted vehicle missing from this
+    // cycle's feed (reset to 0 for those present), then evict any whose streak has reached the
+    // threshold. Returns true if any vehicle was removed (so the caller re-sorts and recomputes).
+    bool EvictAbsentVehicles(HashSet<string> seenThisBatch)
+    {
+        // Snapshot the currently-counted vehicle IDs (across all routes) to avoid mutating
+        // _routeVehicles while enumerating it.
+        var toEvict = new List<string>();
+        foreach (var vehicles in _routeVehicles.Values)
+        {
+            foreach (var vehicleId in vehicles)
+            {
+                if (seenThisBatch.Contains(vehicleId))
+                {
+                    _vehicleAbsenceBatches.Remove(vehicleId);
+                    continue;
+                }
+
+                var absent = _vehicleAbsenceBatches.GetValueOrDefault(vehicleId) + 1;
+                _vehicleAbsenceBatches[vehicleId] = absent;
+                if (absent >= VehicleEvictAfterBatches)
+                    toEvict.Add(vehicleId);
+            }
+        }
+
+        if (toEvict.Count == 0) return false;
+
+        var evictSet = new HashSet<string>(toEvict, StringComparer.Ordinal);
+        foreach (var vehicles in _routeVehicles.Values)
+            vehicles.RemoveWhere(evictSet.Contains);
+        _railVehicleIds.RemoveWhere(evictSet.Contains);
+        foreach (var vehicleId in toEvict)
+            _vehicleAbsenceBatches.Remove(vehicleId);
+
+        return true;
     }
 
     void RecomputeActiveTransitCounts()
