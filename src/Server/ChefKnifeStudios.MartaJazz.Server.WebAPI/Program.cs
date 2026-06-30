@@ -8,16 +8,16 @@ using ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.Repositories;
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.SignalR;
 using ChefKnifeStudios.MartaJazz.Shared;
-using ChefKnifeStudios.MartaJazz.Shared.Events;
+using ChefKnifeStudios.MartaJazz.Shared.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System.Net.Http;
 using Scalar.AspNetCore;
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -103,6 +103,8 @@ builder.Services.AddHttpClient("RouteShapeApi", client =>
     client.BaseAddress = new Uri(builder.Configuration["services:apiservice:https:0"]
         ?? builder.Configuration["WebApi:BaseUrl"]!);
 });
+
+builder.Services.AddSingleton<ITriggerPointGenerator, TriggerPointGenerator>();
 
 // Logging sidecar pipeline
 builder.Services.Configure<LoggingOptions>(builder.Configuration.GetSection("Logging:Telemetry"));

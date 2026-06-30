@@ -3,6 +3,7 @@ using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.MartaJazz.Shared;
+using ChefKnifeStudios.MartaJazz.Shared.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -48,6 +49,8 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
 
     return cities;
 });
+
+builder.Services.AddSingleton<ITriggerPointGenerator, TriggerPointGenerator>();
 
 // Logging sidecar pipeline
 builder.Services.Configure<LoggingOptions>(builder.Configuration.GetSection("Logging:Telemetry"));

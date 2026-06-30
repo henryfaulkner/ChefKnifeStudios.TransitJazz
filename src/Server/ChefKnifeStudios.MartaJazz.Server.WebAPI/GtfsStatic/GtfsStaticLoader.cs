@@ -22,39 +22,94 @@ public class GtfsStaticLoader(
     IHttpClientFactory httpClientFactory,
     IKeyValueRepository<string> routeShapeRepo,
     IConfiguration configuration,
-    ILogger<GtfsStaticLoader> logger) : IHostedService
+    ILogger<GtfsStaticLoader> logger) : BackgroundService
 {
     sealed record CityStaticEntry(string Name, string[] StaticZipUrls, string? ApiKeyEnvVar);
 
     const double SimplifyToleranceMeters = 10.0;
+    const double DefaultRefreshHours = 24.0;
     public const string ReadyKey = "__gtfs_static_ready__";
 
     // Fallback MARTA URL for backwards compat when no Cities: config exists
     const string MartaFallbackZipUrl = "https://itsmarta.com/google_transit_feed/google_transit.zip";
 
-    public async Task StartAsync(CancellationToken cancellationToken)
-    {
-        logger.LogInformation("GtfsStaticLoader: loading GTFS static data for all cities...");
-        try
-        {
-            var cities = LoadCityEntries();
-            var client = httpClientFactory.CreateClient();
+    bool _ready;
 
-            foreach (var city in cities)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var hours = configuration.GetValue("Gtfs:StaticRefreshHours", DefaultRefreshHours);
+        if (hours <= 0) hours = DefaultRefreshHours;
+        var interval = TimeSpan.FromHours(hours);
+        logger.LogInformation("GtfsStaticLoader: refresh interval {Hours}h.", hours);
+
+        using var timer = new PeriodicTimer(interval);
+
+        // Run once immediately, then on each tick. A thrown tick is logged and the
+        // loop continues so a bad upstream poll never stops future refreshes (FR-006).
+        do
+        {
+            try
             {
-                await LoadCityAsync(city, client, cancellationToken);
+                await RefreshAllCitiesAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "GtfsStaticLoader: refresh cycle failed.");
+            }
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    async Task RefreshAllCitiesAsync(CancellationToken ct)
+    {
+        logger.LogInformation("GtfsStaticLoader: refreshing GTFS static data for all cities...");
+        var cities = LoadCityEntries();
+        var client = httpClientFactory.CreateClient();
+
+        var anyStored = false;
+        foreach (var city in cities)
+        {
+            var fresh = await BuildCityShapeSetAsync(city, client, ct);
+            // ponytail: zero routes => upstream fetch failed/empty; keep last-good, skip swap (FR-005)
+            if (fresh.Count == 0)
+            {
+                logger.LogWarning("GtfsStaticLoader: city {City} produced 0 routes; keeping previous data.", city.Name);
+                continue;
             }
 
-            await routeShapeRepo.SetAsync(ReadyKey, "ready", cancellationToken);
-            logger.LogInformation("GtfsStaticLoader: all cities loaded.");
+            await ReconcileCityAsync(city.Name, fresh, ct);
+            anyStored = true;
+            logger.LogInformation("GtfsStaticLoader: city {City} refreshed {Count} route shapes.", city.Name, fresh.Count);
         }
-        catch (Exception ex)
+
+        if (anyStored && !_ready)
         {
-            logger.LogError(ex, "GtfsStaticLoader: failed to load GTFS Static data.");
+            await routeShapeRepo.SetAsync(ReadyKey, "ready", ct);
+            _ready = true;
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    // Upsert all fresh keys, then prune this city's stale keys (routes gone upstream).
+    // ponytail: O(n) full-scan diff over the cache; fine at MARTA/WMATA route counts.
+    async Task ReconcileCityAsync(string cityName, Dictionary<string, string> fresh, CancellationToken ct)
+    {
+        foreach (var (key, geoJson) in fresh)
+            await routeShapeRepo.SetAsync(key, geoJson, ct);
+
+        var all = await routeShapeRepo.GetAllAsync(ct);
+        if (!all.IsSuccess) return;
+
+        var prefix = $"{cityName}:";
+        foreach (var key in all.Value.Keys)
+        {
+            if (key.StartsWith(prefix) && !fresh.ContainsKey(key))
+                await routeShapeRepo.DeleteAsync(key, ct);
+        }
+    }
 
     List<CityStaticEntry> LoadCityEntries()
     {
@@ -85,7 +140,7 @@ public class GtfsStaticLoader(
         return result.Count > 0 ? result : [new CityStaticEntry(CityNames.Marta, [MartaFallbackZipUrl], null)];
     }
 
-    async Task LoadCityAsync(CityStaticEntry city, HttpClient client, CancellationToken ct)
+    async Task<Dictionary<string, string>> BuildCityShapeSetAsync(CityStaticEntry city, HttpClient client, CancellationToken ct)
     {
         var apiKey = city.ApiKeyEnvVar is not null
             ? Environment.GetEnvironmentVariable(city.ApiKeyEnvVar)
@@ -117,7 +172,7 @@ public class GtfsStaticLoader(
             }
         }
 
-        int stored = 0;
+        var fresh = new Dictionary<string, string>();
         foreach (var (routeId, shapeId) in allRouteToShape)
         {
             if (!allShapes.TryGetValue(shapeId, out var points) || points.Count == 0) continue;
@@ -134,11 +189,10 @@ public class GtfsStaticLoader(
 
             var simplified = Simplify(points, SimplifyToleranceMeters);
             var geoJson = BuildLineStringFeature(routeId, shortName, simplified, color, textColor, mode, city.Name);
-            await routeShapeRepo.SetAsync($"{city.Name}:{routeId}", geoJson, ct);
-            stored++;
+            fresh[$"{city.Name}:{routeId}"] = geoJson;
         }
 
-        logger.LogInformation("GtfsStaticLoader: city {City} loaded {Count} route shapes.", city.Name, stored);
+        return fresh;
     }
 
     static Dictionary<string, string> ParseRouteToShapeMap(ZipArchive archive)
