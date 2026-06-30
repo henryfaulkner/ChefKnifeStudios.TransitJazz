@@ -199,7 +199,7 @@
     <value>Rail</value>
   </data>
   <data name="Buses" xml:space="preserve">
-    <value>Buses</value>
+    <value>Bus</value>
   </data>
   <data name="InfoOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real MARTA vehicle, pulled live and turned into sound. Buses and trains move through Atlanta in real time, and the map plays what they're doing right now.</value>
