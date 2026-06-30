@@ -6,6 +6,7 @@ using ChefKnifeStudios.MartaJazz.Client.Core.Services.EndpointsServices;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Components;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
+using ChefKnifeStudios.MartaJazz.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.MartaJazz.Client.WebApp;
 using ChefKnifeStudios.MartaJazz.Shared;
@@ -58,7 +59,6 @@ builder.Services.AddSingleton<IApplicationViewModel, ApplicationViewModel>();
 builder.Services.AddSingleton<IAudioPlayerJsInterop, AudioPlayerJsInterop>();
 
 builder.Services.AddScoped<ITriggerPointGenerator, TriggerPointGenerator>();
-builder.Services.AddSingleton<ICheckpointTrackerJsInterop, CheckpointTrackerJsInterop>();
 builder.Services.AddSingleton<ITransitSynthJsInterop, TransitSynthJsInterop>();
 
 builder.Services.AddScoped<IToastService, ToastService>();

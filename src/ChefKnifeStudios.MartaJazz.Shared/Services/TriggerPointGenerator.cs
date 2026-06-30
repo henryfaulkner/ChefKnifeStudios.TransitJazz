@@ -1,9 +1,9 @@
-using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
+using ChefKnifeStudios.MartaJazz.Shared.Models;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 
-namespace ChefKnifeStudios.MartaJazz.Client.Shared.Services;
+namespace ChefKnifeStudios.MartaJazz.Shared.Services;
 
 public class TriggerPointGenerator : ITriggerPointGenerator
 {
@@ -48,7 +48,6 @@ public class TriggerPointGenerator : ITriggerPointGenerator
         return result;
     }
 
-    // Returns the smallest index i such that cumDist[i] >= targetDist.
     static int BinarySearchFirstIndexAtOrBeyond(double[] cumDist, double targetDist)
     {
         var lo = 0;

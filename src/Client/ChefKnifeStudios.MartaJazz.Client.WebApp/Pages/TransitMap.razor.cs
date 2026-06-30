@@ -4,6 +4,8 @@ using ChefKnifeStudios.MartaJazz.Client.Shared.Components;
 using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
+using ChefKnifeStudios.MartaJazz.Shared.Models;
+using ChefKnifeStudios.MartaJazz.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
 using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.MartaJazz.Shared;
@@ -13,7 +15,6 @@ using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -31,7 +32,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] ILogger<TransitMap> Logger { get; set; } = null!;
     [Inject] IGtfsEndpointsService GtfsEndpointsService { get; set; } = null!;
     [Inject] ITriggerPointGenerator TriggerPointGenerator { get; set; } = null!;
-    [Inject] ICheckpointTrackerJsInterop CheckpointTracker { get; set; } = null!;
     [Inject] ITransitSynthJsInterop TransitSynth { get; set; } = null!;
     [Inject] IRouteFilterViewModel RouteFilterViewModel { get; set; } = null!;
     [Inject] IApplicationViewModel ApplicationViewModel { get; set; } = null!;
@@ -63,7 +63,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _audioUnlocked = false;
     bool _checkpointsVisible = false;
     bool _crossingTrailVisible = true;
-    DotNetObjectReference<object>? _dotNetRef;
 
     // routeId → GeoJSON string (client-side cache, lives for page lifetime)
     readonly Dictionary<string, RouteShapeFeature> _routeShapeCache = new(StringComparer.Ordinal);
@@ -94,8 +93,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
-        _dotNetRef = DotNetObjectReference.Create((object)this);
-
         var uri = new Uri(NavigationManager.Uri);
 
         // NO HASH SEGMENT BY DEFAULT
@@ -153,9 +150,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
     }
 
-    [JSInvokable]
-    public async Task OnCrossingsAsync(CrossingEventDto[] crossings)
+    public Task OnCrossingsAsync(CrossingEventDto[] crossings)
     {
+        // Capture the route-filter snapshot at batch-receipt time so the gate reflects what
+        // was selected when the crossings arrived, not whatever changes during the spread.
         var selected = RouteFilterViewModel.SelectedRouteIds;
         var hovered = RouteFilterViewModel.HoveredRouteId;
         var effectiveIds = selected.Count > 0 || hovered is not null
@@ -166,6 +164,25 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         {
             if (effectiveIds is not null && !effectiveIds.Contains(crossing.RouteId)) continue;
 
+            // Server stamps each crossing with where in the cycle window it was actually
+            // crossed (OffsetMs). Fire each on its own delayed continuation so a burst of
+            // checkpoints spreads out in true crossing order instead of sounding all at once.
+            // Fire-and-forget: we must not block the SignalR batch handler for ~8s.
+            var c = crossing;
+            _ = FireCrossingDelayedAsync(c);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    async Task FireCrossingDelayedAsync(CrossingEventDto crossing)
+    {
+        try
+        {
+            if (crossing.OffsetMs > 0)
+                await Task.Delay(TimeSpan.FromMilliseconds(crossing.OffsetMs));
+
+            // Re-check live settings at fire time (a setting may have flipped mid-spread).
             // Pulse (expanding ring) is gated on its own checkpoint-visibility setting.
             if (_checkpointsVisible && _map is not null)
             {
@@ -190,6 +207,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 try { await TransitSynth.TriggerNoteAsync(crossing.RouteId, crossing.VehicleId, crossing.TriggerIndex, crossing.TotalTriggers); }
                 catch (Exception ex) { Logger.LogWarning(ex, "TransitMap.OnCrossingsAsync: TriggerNoteAsync failed for vehicle {VehicleId} on route {RouteId}", crossing.VehicleId, crossing.RouteId); }
             }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "TransitMap.FireCrossingDelayedAsync: failed for vehicle {VehicleId} on route {RouteId}", crossing.VehicleId, crossing.RouteId);
         }
     }
 
@@ -317,9 +338,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         if (_batchHandler != null)
             NotificationService.NotificationReceived -= _batchHandler;
         _viewportSub?.Dispose();
-        await CheckpointTracker.ClearAsync();
         await OutsideClickJsInterop.RemoveOutsideClickListenerAsync(_accordionElementId);
-        _dotNetRef?.Dispose();
     }
 
     void OnRouteFilterPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -433,9 +452,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 var jsPoints = triggerPoints.Select(p => (object)new { index = p.Index, alongDistanceM = p.AlongDistanceM }).ToArray();
                 await _map.AddTriggerPointMarkersAsync(routeId, jsPoints, coords);
             }
-
-            if (_dotNetRef is not null)
-                await CheckpointTracker.ConfigureRouteAsync(routeId, triggerPoints.ToArray(), _dotNetRef);
         }
         catch (Exception ex)
         {
@@ -491,6 +507,17 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             await _map.ProcessNearestPointBatchAsync(records);
             await EvictInactiveRouteAudioAsync(activeRoutes);
         }
+
+        // Handle RouteCrossingBatchEvent — server-authoritative checkpoint crossings
+        var crossings = batch
+            .Select(e => e.Payload)
+            .OfType<RouteCrossingBatchEvent>()
+            .SelectMany(e => e.BatchRecords)
+            .Select(r => new CrossingEventDto(r.VehicleId, r.RouteId, r.TriggerIndex, r.TotalTriggers, r.OffsetMs))
+            .ToArray();
+
+        if (crossings.Length > 0)
+            await OnCrossingsAsync(crossings);
 
         StateHasChanged();
     }
@@ -561,5 +588,5 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _ = TransitSynth.PreloadAsync(_routeShapeCache.Keys);
     }
 
-    public record CrossingEventDto(string VehicleId, string RouteId, int TriggerIndex, int TotalTriggers);
+    public record CrossingEventDto(string VehicleId, string RouteId, int TriggerIndex, int TotalTriggers, double OffsetMs);
 }
