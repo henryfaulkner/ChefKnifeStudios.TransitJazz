@@ -4,6 +4,7 @@
    so ::deep in CityFab.razor.css never reaches it. Global rule required. */
 .city-fab-menu.mdc-menu {
     transform: translateY(-50px) !important;
+    z-index: 75;
 
     & .mdc-list {
         padding: 0;

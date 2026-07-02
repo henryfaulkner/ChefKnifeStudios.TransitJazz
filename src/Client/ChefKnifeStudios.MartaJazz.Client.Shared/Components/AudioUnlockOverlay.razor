@@ -10,6 +10,9 @@
 
 <div class="audio-unlock-overlay">
     <div class="audio-unlock-overlay__inner">
+        <div class="audio-unlock-overlay__header">
+            <p>@Loc[_prefix + "Header"]</p>
+        </div>
         <div class="audio-unlock-overlay__body">
             <p>@Loc[_prefix + "Paragraph1"]</p>
             <p>@Loc[_prefix + "Paragraph2"]</p>
@@ -53,6 +56,35 @@
         max-width: 34rem;
     }
 
+    .audio-unlock-overlay__header {
+        width: 100%;
+        max-width: 34rem;
+        text-align: left;
+        font-family: monospace;
+        font-size: 12px;
+        line-height: 1.65;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(0, 0, 0, 0.9);
+    }
+
+    .audio-unlock-overlay__header p {
+        margin: 0;
+    }
+
+    @@media (min-width: 640px) {
+        .audio-unlock-overlay__header {
+            font-size: 13px;
+            line-height: 1.7;
+        }
+    }
+
+    @@media (min-width: 768px) {
+        .audio-unlock-overlay__header {
+            font-size: 14px;
+        }
+    }
+
     .audio-unlock-overlay__body {
         width: 100%;
         max-width: 34rem;
@@ -91,7 +123,7 @@
         border: 1px solid rgba(0, 0, 0, 0.4);
         padding: 0.75rem 2rem;
         background: transparent;
-        font-family: monospace;
+        font-family: Roboto, sans-serif;
         font-size: 11px;
         letter-spacing: 0.18em;
         text-transform: uppercase;

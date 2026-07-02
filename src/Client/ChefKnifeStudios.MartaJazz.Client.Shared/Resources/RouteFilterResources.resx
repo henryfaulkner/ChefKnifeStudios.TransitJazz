@@ -168,6 +168,9 @@
   <data name="NumTrainsRunning" xml:space="preserve">
     <value>trains running</value>
   </data>
+  <data name="AudioOverlayHeader" xml:space="preserve">
+    <value>MARTA - Atlanta, GA, USA</value>
+  </data>
   <data name="AudioOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real bus. Dozens of them, maybe more, moving through a city that never agreed on a grid. They follow Peachtree and Cascade and Memorial Drive, routes drawn around what Atlanta actually is rather than what a planner imagined.</value>
   </data>
@@ -176,6 +179,9 @@
   </data>
   <data name="AudioOverlayParagraph3" xml:space="preserve">
     <value>MARTA runs on faith. You wait, and then it comes. This is the music inside that waiting.</value>
+  </data>
+  <data name="WmataAudioOverlayHeader" xml:space="preserve">
+    <value>WMATA - Washington, DC, USA</value>
   </data>
   <data name="WmataAudioOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real bus or train. Hundreds of them, spread across a city that was planned on a diagonal and then grew past every boundary. They follow Wisconsin and Georgia and Benning Road, and the Red Line arcing through Bethesda, routes drawn around three jurisdictions that never quite agreed on anything.</value>
