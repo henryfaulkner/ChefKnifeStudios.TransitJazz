@@ -240,4 +240,7 @@
   <data name="InfoOverlayButton" xml:space="preserve">
     <value>Return to experience</value>
   </data>
+  <data name="MbtaAudioOverlayHeader" xml:space="preserve">
+    <value>MBTA - Boston, MA, USA</value>
+  </data>
 </root>
