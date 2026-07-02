@@ -72,11 +72,11 @@ public static class ColorConstants
 
     public static class Light
     {
-        public static readonly string Primary = "#2386CE";
+        public static readonly string Primary = "#37474F";
         public static readonly string OnPrimary = "#FFFFFF";
         public static readonly string PrimaryContainer = "#BDDCF3";
         public static readonly string OnPrimaryContainer = "#001D35";
-        public static readonly string Secondary = "#535F70";
+        public static readonly string Secondary = "#546E7A";
         public static readonly string OnSecondary = "#FFFFFF";
         public static readonly string SecondaryContainer = "#D7E3F7";
         public static readonly string OnSecondaryContainer = "#101C2C";
@@ -88,9 +88,9 @@ public static class ColorConstants
         public static readonly string OnError = "#FFFFFF";
         public static readonly string ErrorContainer = "#FFDAD6";
         public static readonly string OnErrorContainer = "#410002";
-        public static readonly string Background = "#FAFCFE";
+        public static readonly string Background = "#F5F5F5";
         public static readonly string OnBackground = "#1A1C1E";
-        public static readonly string Surface = "#FAFCFE";
+        public static readonly string Surface = "#F5F5F5";
         public static readonly string OnSurface = "#1A1C1E";
         public static readonly string SurfaceVariant = "#DDE3EB";
         public static readonly string OnSurfaceVariant = "#41484D";
@@ -100,7 +100,7 @@ public static class ColorConstants
         public static readonly string Scrim = "#000000";
         public static readonly string InverseSurface = "#2F3033";
         public static readonly string InverseOnSurface = "#F1F0F4";
-        public static readonly string InversePrimary = "#BDDCF3";
+        public static readonly string InversePrimary = "#90A4AE";
     }
 
     public static class Dark
