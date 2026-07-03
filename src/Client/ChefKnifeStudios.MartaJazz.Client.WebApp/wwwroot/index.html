@@ -15,9 +15,29 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
     <link rel="manifest" href="/favicon/site.webmanifest">
     <base href="/" />
+    <script>
+        try {
+            var s = localStorage.getItem("Setting");
+            if (s) {
+                var o = JSON.parse(s);
+                var key = Object.keys(o).find(function(k) { return k.toLowerCase() === "isdarkmodeenabled"; });
+                var isDark = key !== undefined && !!o[key];
+                document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+            } else {
+                document.documentElement.setAttribute("data-theme", "light");
+            }
+        } catch (e) {
+            document.documentElement.setAttribute("data-theme", "light");
+        }
+    </script>
 </head>
 <body>
-    <div id="app">Loading...</div>
+    <div id="app">
+        <div class="app-loader">
+            <div class="app-loader__ring"></div>
+            <span class="app-loader__label">loading...</span>
+        </div>
+    </div>
 
     <div id="blazor-error-ui">
         An unhandled error has occurred.
