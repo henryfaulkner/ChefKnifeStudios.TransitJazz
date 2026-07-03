@@ -90,3 +90,10 @@
     color: white;
     font-size: 0.8rem;
 }
+
+.route-filters--dark .route-filters__bus-count {
+    color: rgba(193, 199, 206, 0.7);
+}
+.route-filters--dark ::deep .route-filters__section-label {
+    color: rgba(193, 199, 206, 0.7) !important;
+}

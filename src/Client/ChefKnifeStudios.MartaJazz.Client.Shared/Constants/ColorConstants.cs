@@ -105,15 +105,15 @@ public static class ColorConstants
 
     public static class Dark
     {
-        public static readonly string Primary = "#9DCAF5";
-        public static readonly string OnPrimary = "#003260";
-        public static readonly string PrimaryContainer = "#064884";
+        public static readonly string Primary = "#90A4AE";
+        public static readonly string OnPrimary = "#1C3440";
+        public static readonly string PrimaryContainer = "#2C4A55";
         public static readonly string OnPrimaryContainer = "#BDDCF3";
-        public static readonly string Secondary = "#BBC7DB";
-        public static readonly string OnSecondary = "#253140";
-        public static readonly string SecondaryContainer = "#3B4859";
+        public static readonly string Secondary = "#78909C";
+        public static readonly string OnSecondary = "#1A2E38";
+        public static readonly string SecondaryContainer = "#2E4450";
         public static readonly string OnSecondaryContainer = "#D7E3F7";
-        public static readonly string Tertiary = "#D6BEE4";
+        public static readonly string Tertiary = "#C4A8D4";
         public static readonly string OnTertiary = "#3B2648";
         public static readonly string TertiaryContainer = "#523C5F";
         public static readonly string OnTertiaryContainer = "#F2DAFF";
@@ -133,6 +133,6 @@ public static class ColorConstants
         public static readonly string Scrim = "#000000";
         public static readonly string InverseSurface = "#E2E2E6";
         public static readonly string InverseOnSurface = "#1A1C1E";
-        public static readonly string InversePrimary = "#2386CE";
+        public static readonly string InversePrimary = "#37474F";
     }
 }

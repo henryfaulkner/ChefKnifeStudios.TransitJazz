@@ -1,7 +1,12 @@
 @using ChefKnifeStudios.MartaJazz.Client.Core.Services
+@using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Services
 @using ChefKnifeStudios.MartaJazz.Shared
 @using Microsoft.Extensions.Localization
+@implements IDisposable
+@inject IEventNotificationService EventNotificationService
+@inject ISettingsService SettingsService
 @inject IStringLocalizer<RouteFilterResources> Loc
 @inject NavigationManager NavigationManager
 
@@ -11,7 +16,7 @@
 
 @if (_isOpen)
 {
-    <div class="info-overlay">
+    <div class="info-overlay @(_isDark ? "info-overlay--dark" : "")">
         <div class="info-overlay__inner">
             <div class="info-overlay__body">
                 <p>@Loc[_prefix + "Paragraph1"]</p>
@@ -28,11 +33,25 @@
 
 @code {
     bool _isOpen;
+    bool _isDark;
     string _prefix = "InfoOverlay";
 
     protected override void OnInitialized()
     {
         if (NavigationManager.ResolveCity() == CityNames.Wmata)
             _prefix = "WmataOverlay";
+        _isDark = SettingsService.GetSettings().IsDarkModeEnabled;
+        EventNotificationService.EventReceived += HandleEvent;
     }
+
+    void HandleEvent(object sender, IEventArgs e)
+    {
+        if (e is ThemeChangedEventArgs theme)
+        {
+            _isDark = theme.IsDarkMode;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose() => EventNotificationService.EventReceived -= HandleEvent;
 }

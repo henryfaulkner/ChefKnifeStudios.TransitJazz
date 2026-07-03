@@ -1,0 +1,35 @@
+@using ChefKnifeStudios.MartaJazz.Client.Core.Services
+@using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Models
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Services
+@implements IDisposable
+@inject IEventNotificationService EventNotificationService
+@inject ISettingsService SettingsService
+
+<div class="darkmode-fab-container">
+    <MatFAB Icon="@GetIcon()"
+            Mini="true"
+            @onclick="HandleToggleDarkMode" />
+</div>
+
+@code {
+    Settings _settings = new();
+
+    protected override void OnInitialized()
+    {
+        _settings = SettingsService.GetSettings();
+    }
+
+    string GetIcon() => _settings.IsDarkModeEnabled ? "dark_mode" : "light_mode";
+
+    void HandleToggleDarkMode()
+    {
+        var newValue = !_settings.IsDarkModeEnabled;
+        SettingsService.SetSettingValue(nameof(Settings.IsDarkModeEnabled), newValue);
+        _settings = SettingsService.GetSettings();
+        EventNotificationService.PostEvent(this, new ThemeChangedEventArgs { IsDarkMode = _settings.IsDarkModeEnabled });
+        EventNotificationService.PostEvent(this, new GisSettingChangedEventArgs { IsStreetMapEnabled = _settings.IsStreetMapEnabled });
+    }
+
+    public void Dispose() { }
+}

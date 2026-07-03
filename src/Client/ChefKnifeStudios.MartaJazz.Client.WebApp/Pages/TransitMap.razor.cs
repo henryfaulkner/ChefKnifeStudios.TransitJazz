@@ -289,10 +289,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             InvokeAsync(async () =>
             {
                 if (_map is null) return;
-                var key = gis.IsStreetMapEnabled ? "MapTiler:StyleUrls:LightOn" : "MapTiler:StyleUrls:LightOff";
-                var url = Configuration.GetValue<string>(key)
-                          ?? Configuration.GetValue<string>("MapTiler:StyleUrl")
-                          ?? string.Empty;
+                var settings = SettingsService.GetSettings();
+                var shade = settings.IsDarkModeEnabled ? "Dark" : "Light";
+                var on    = gis.IsStreetMapEnabled ? "On" : "Off";
+                var key   = $"MapTiler:StyleUrls:{shade}{on}";
+                var url   = Configuration.GetValue<string>(key)
+                            ?? Configuration.GetValue<string>("MapTiler:StyleUrl")
+                            ?? string.Empty;
                 if (string.IsNullOrEmpty(url)) return;
 
                 // Await style.load completion, then re-render routes from cache (no re-fetch).
@@ -303,7 +306,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 ApplyMapFocus();
 
                 // Restore checkpoint visibility to match the current setting.
-                var settings = SettingsService.GetSettings();
                 await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
                 await _map.SetCrossingTrailVisibilityAsync(settings.IsCrossingTrailVisible);
                 await _map.SetAllCheckpointsVisibilityAsync(settings.AreAllCheckpointsVisible);

@@ -162,6 +162,9 @@
   <data name="SettingAllCheckpointsVisible" xml:space="preserve">
     <value>All checkpoints</value>
   </data>
+  <data name="SettingDarkMode" xml:space="preserve">
+    <value>Dark mode</value>
+  </data>
   <data name="NumBusesRunning" xml:space="preserve">
     <value>buses running</value>
   </data>

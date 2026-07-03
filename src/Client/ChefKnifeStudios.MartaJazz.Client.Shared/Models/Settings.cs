@@ -7,7 +7,7 @@ namespace ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 public partial class Settings : ObservableObject
 {
     // ponytail: bump CurrentVersion when schema changes, old serialized data auto-discards
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
     [HiddenSetting]
     public int Version { get; set; } = CurrentVersion;
 
@@ -34,4 +34,8 @@ public partial class Settings : ObservableObject
     [ObservableProperty]
     [property: Description("SettingAllCheckpointsVisible")]
     bool _areAllCheckpointsVisible = false;
+
+    [ObservableProperty]
+    [property: Description("SettingDarkMode")]
+    bool _isDarkModeEnabled = false;
 }

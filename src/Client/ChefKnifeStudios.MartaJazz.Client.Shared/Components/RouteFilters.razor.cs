@@ -13,11 +13,14 @@ public partial class RouteFilters : ComponentBase, IDisposable
 
     protected override void OnInitialized()
     {
+        _isDark = SettingsService.GetSettings().IsDarkModeEnabled;
+        EventNotificationService.EventReceived += HandleDarkEvent;
         RouteFilterViewModel.PropertyChanged += RouteFilterViewModel_PropertyChanged;
     }
 
     public void Dispose()
     {
+        EventNotificationService.EventReceived -= HandleDarkEvent;
         RouteFilterViewModel.PropertyChanged -= RouteFilterViewModel_PropertyChanged;
     }
 

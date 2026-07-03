@@ -63,7 +63,9 @@ public partial class Map : ComponentBase
         var apiKey = Configuration.GetValue<string>("MapTiler:ApiKey") ?? string.Empty;
 
         var settings = SettingsService.GetSettings();
-        var styleKey = settings.IsStreetMapEnabled ? "MapTiler:StyleUrls:LightOn" : "MapTiler:StyleUrls:LightOff";
+        var shade    = settings.IsDarkModeEnabled ? "Dark" : "Light";
+        var on       = settings.IsStreetMapEnabled ? "On" : "Off";
+        var styleKey = $"MapTiler:StyleUrls:{shade}{on}";
         var styleUrl = Configuration.GetValue<string>(styleKey)
                        ?? Configuration.GetValue<string>("MapTiler:StyleUrl")
                        ?? string.Empty;

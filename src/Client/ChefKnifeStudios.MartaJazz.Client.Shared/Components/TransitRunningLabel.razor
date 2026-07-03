@@ -1,11 +1,16 @@
 @using System.ComponentModel
+@using ChefKnifeStudios.MartaJazz.Client.Core.Services
+@using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Services
 @using Microsoft.Extensions.Localization
 @implements IDisposable
+@inject IEventNotificationService EventNotificationService
 @inject IRouteFilterViewModel RouteFilterViewModel
+@inject ISettingsService SettingsService
 @inject IStringLocalizer<RouteFilterResources> Loc
 
-<div class="transit-running-label">
+<div class="transit-running-label @(_isDark ? "transit-running-label--dark" : "")">
     @if (RouteFilterViewModel.ActiveRailCount > 0)
     {
         <div class="transit-running-label__row">
@@ -60,11 +65,39 @@
         color: #171717;
         font-size: 12px;
     }
+
+    .transit-running-label--dark .transit-running-label__count,
+    .transit-running-label--dark .transit-running-label__text {
+        color: rgba(226, 226, 230, 0.9);
+    }
+
+    .transit-running-label--dark .transit-running-label__icon--rail {
+        background-color: #7986cb;
+    }
+
+    .transit-running-label--dark .transit-running-label__icon--bus {
+        background-color: #66bb6a;
+    }
 </style>
 
 @code {
+    bool _isDark;
+
     protected override void OnInitialized()
-        => RouteFilterViewModel.PropertyChanged += OnViewModelPropertyChanged;
+    {
+        _isDark = SettingsService.GetSettings().IsDarkModeEnabled;
+        EventNotificationService.EventReceived += HandleEvent;
+        RouteFilterViewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    void HandleEvent(object sender, IEventArgs e)
+    {
+        if (e is ThemeChangedEventArgs theme)
+        {
+            _isDark = theme.IsDarkMode;
+            InvokeAsync(StateHasChanged);
+        }
+    }
 
     void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -73,5 +106,8 @@
     }
 
     public void Dispose()
-        => RouteFilterViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+    {
+        EventNotificationService.EventReceived -= HandleEvent;
+        RouteFilterViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+    }
 }

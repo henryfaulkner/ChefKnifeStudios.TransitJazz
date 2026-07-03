@@ -1,14 +1,19 @@
 @using ChefKnifeStudios.MartaJazz.Client.Core.Services
+@using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Services
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop
 @using ChefKnifeStudios.MartaJazz.Shared
 @using Microsoft.AspNetCore.Components
 @using Microsoft.Extensions.Localization
+@implements IDisposable
+@inject IEventNotificationService EventNotificationService
+@inject ISettingsService SettingsService
 @inject IStringLocalizer<RouteFilterResources> Loc
 @inject ITransitSynthJsInterop TransitSynth
 @inject NavigationManager NavigationManager
 
-<div class="audio-unlock-overlay">
+<div class="audio-unlock-overlay @(_isDark ? "audio-unlock-overlay--dark" : "")">
     <div class="audio-unlock-overlay__inner">
         <div class="audio-unlock-overlay__header">
             <p>@Loc[_prefix + "Header"]</p>
@@ -136,6 +141,22 @@
         border-color: rgba(0, 0, 0, 0.8);
         background: rgba(0, 0, 0, 0.05);
     }
+
+    .audio-unlock-overlay--dark {
+        background: #1A1C1E;
+    }
+    .audio-unlock-overlay--dark .audio-unlock-overlay__header,
+    .audio-unlock-overlay--dark .audio-unlock-overlay__body p {
+        color: rgba(226, 226, 230, 0.9);
+    }
+    .audio-unlock-overlay--dark .audio-unlock-overlay__button {
+        color: rgba(226, 226, 230, 0.9);
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+    .audio-unlock-overlay--dark .audio-unlock-overlay__button:hover {
+        border-color: rgba(255, 255, 255, 0.8);
+        background: rgba(255, 255, 255, 0.05);
+    }
 </style>
 
 @code {
@@ -143,12 +164,26 @@
 
     readonly string _buttonId = $"audio-unlock-btn-{Guid.NewGuid():N}";
     string _prefix = "AudioOverlay";
+    bool _isDark;
 
     protected override void OnInitialized()
     {
         if (NavigationManager.ResolveCity() == CityNames.Wmata)
             _prefix = "WmataAudioOverlay";
+        _isDark = SettingsService.GetSettings().IsDarkModeEnabled;
+        EventNotificationService.EventReceived += HandleEvent;
     }
+
+    void HandleEvent(object sender, IEventArgs e)
+    {
+        if (e is ThemeChangedEventArgs theme)
+        {
+            _isDark = theme.IsDarkMode;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose() => EventNotificationService.EventReceived -= HandleEvent;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

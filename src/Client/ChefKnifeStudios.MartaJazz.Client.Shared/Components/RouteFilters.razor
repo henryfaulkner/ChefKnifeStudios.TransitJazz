@@ -1,8 +1,12 @@
+@using ChefKnifeStudios.MartaJazz.Client.Core.Services
+@using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Resources
-@using Microsoft.Extensions.Localization
-@inject IStringLocalizer<RouteFilterResources> Loc
-
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Services
 @using ChefKnifeStudios.MartaJazz.Shared.Events
+@using Microsoft.Extensions.Localization
+@inject IEventNotificationService EventNotificationService
+@inject ISettingsService SettingsService
+@inject IStringLocalizer<RouteFilterResources> Loc
 
 @{
     RenderFragment<RouteItem> RoutePill = routeItem =>
@@ -38,7 +42,7 @@
         </div>;
 }
 
-<div class="route-filters">
+<div class="route-filters @(_isDark ? "route-filters--dark" : "")">
     @if (RouteFilterViewModel.RouteItems.Any(r => r.Mode == TransitMode.Rail))
     {
         @SectionLabel(TransitMode.Rail)
@@ -60,3 +64,16 @@
         </div>
     }
 </div>
+
+@code {
+    bool _isDark;
+
+    void HandleDarkEvent(object sender, IEventArgs e)
+    {
+        if (e is ThemeChangedEventArgs theme)
+        {
+            _isDark = theme.IsDarkMode;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+}

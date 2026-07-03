@@ -1,7 +1,7 @@
 .info-fab-container {
     position: fixed;
     bottom: 42px;
-    right: 174px;
+    right: 224px;
     z-index: 25;
 }
 
@@ -100,4 +100,20 @@
     transform: scale(1.03);
     border-color: rgba(0, 0, 0, 0.8);
     background: rgba(0, 0, 0, 0.05);
+}
+
+.info-overlay--dark {
+    background: #1A1C1E;
+}
+.info-overlay--dark .info-overlay__body p,
+.info-overlay--dark .info-overlay__footer {
+    color: rgba(226, 226, 230, 0.85);
+}
+.info-overlay--dark .info-overlay__button {
+    color: rgba(226, 226, 230, 0.9);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+.info-overlay--dark .info-overlay__button:hover {
+    border-color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.05);
 }
