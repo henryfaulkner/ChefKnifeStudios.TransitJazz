@@ -97,3 +97,9 @@
 .route-filters--dark ::deep .route-filters__section-label {
     color: rgba(193, 199, 206, 0.7) !important;
 }
+.route-filters--dark .route-filters__route-filter-disabled {
+    background-color: #3a3d41;
+}
+.route-filters--dark ::deep .route-filters__clear-btn i {
+    color: rgba(193, 199, 206, 0.7);
+}

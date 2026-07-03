@@ -1,26 +1,31 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject IEventNotificationService EventNotificationService
+@inject ISettingsService SettingsService
 @using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Constants
 @using ChefKnifeStudios.MartaJazz.Client.Core.Services
+@using ChefKnifeStudios.MartaJazz.Client.Shared.Services
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Components.Blades
 @using ChefKnifeStudios.MartaJazz.Client.Shared.Components.FABs
 
-<MatThemeProvider Theme="@_currentTheme">
-    @Body
-    <MatToastContainer />
-    <AudioFab />
-    <MapStyleFab />
-    <DarkModeFab />
-    <InfoFab />
-    <CityFab />
-    <SettingsBlade />
-    <SettingsFab />
-</MatThemeProvider>
+<div class="mj-theme @(_isDark ? "mj-dark" : "")">
+    <MatThemeProvider Theme="@_currentTheme">
+        @Body
+        <MatToastContainer />
+        <AudioFab />
+        <MapStyleFab />
+        <DarkModeFab />
+        <InfoFab />
+        <CityFab />
+        <SettingsBlade />
+        <SettingsFab />
+    </MatThemeProvider>
+</div>
 
 @code {
     private MatTheme _currentTheme = LightTheme;
+    private bool _isDark;
     private static readonly MatTheme LightTheme = new MatTheme
     {
         Primary = ColorConstants.Light.Primary,
@@ -43,6 +48,8 @@
 
     protected override void OnInitialized()
     {
+        _isDark = SettingsService.GetSettings().IsDarkModeEnabled;
+        _currentTheme = _isDark ? DarkTheme : LightTheme;
         EventNotificationService.EventReceived += HandleThemeChange;
     }
 
@@ -50,7 +57,8 @@
     {
         if (e is ThemeChangedEventArgs themeArgs)
         {
-            _currentTheme = themeArgs.IsDarkMode ? DarkTheme : LightTheme;
+            _isDark = themeArgs.IsDarkMode;
+            _currentTheme = _isDark ? DarkTheme : LightTheme;
             InvokeAsync(StateHasChanged);
         }
     }

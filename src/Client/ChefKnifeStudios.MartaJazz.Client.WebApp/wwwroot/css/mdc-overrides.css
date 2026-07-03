@@ -29,3 +29,40 @@
 .mdc-card {
   border-radius: 8px;
 }
+
+/* Dark mode overrides — scoped to .mj-dark set on the MainLayout wrapper */
+.mj-theme {
+    min-height: 100vh;
+    background-color: var(--background);
+    color: var(--on-background);
+}
+
+.mj-dark {
+    --background: #1A1C1E;
+    --on-background: #E2E2E6;
+    background-color: #1A1C1E;
+    color: #E2E2E6;
+}
+.mj-dark .mat-accordion .mat-expansion-panel {
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+.mj-dark .mat-accordion .mat-expansion-panel__content + .mat-expansion-panel__actions {
+    border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+.mj-dark .mat-accordion .mat-expansion-panel__summary .after {
+    color: rgba(226, 226, 230, 0.7);
+}
+
+.mj-dark .mat-accordion .mat-expansion-panel__header {
+    color: #E2E2E6;
+}
+
+.mj-dark .mdc-checkbox .mdc-checkbox__background {
+    border-color: rgba(226, 226, 230, 0.7) !important;
+}
+
+.mj-dark .mdc-form-field > label {
+    color: #E2E2E6;
+}
