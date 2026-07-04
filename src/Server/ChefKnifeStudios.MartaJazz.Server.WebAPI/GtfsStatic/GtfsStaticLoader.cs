@@ -257,7 +257,7 @@ public class GtfsStaticLoader(
         return result;
     }
 
-    static Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, TransitMode Mode)> ParseRouteMetadata(ZipArchive archive)
+    internal static Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, TransitMode Mode)> ParseRouteMetadata(ZipArchive archive)
     {
         var result = new Dictionary<string, (string?, string?, string?, TransitMode)>();
         var entry = archive.GetEntry("routes.txt");
@@ -291,10 +291,13 @@ public class GtfsStaticLoader(
         return result;
     }
 
-    static string? NormalizeColor(string raw)
+    internal static string? NormalizeColor(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
-        return raw.StartsWith('#') ? raw : $"#{raw}";
+        var hex = raw.StartsWith('#') ? raw[1..] : raw;
+        if (hex.Length is not (3 or 6)) return null;
+        if (!hex.All(c => Uri.IsHexDigit(c))) return null;
+        return $"#{hex.ToUpperInvariant()}";
     }
 
     // Trim whitespace then strip surrounding double-quotes from a CSV field value.
@@ -306,8 +309,41 @@ public class GtfsStaticLoader(
             : s;
     }
 
-    static string[] SplitCsvLine(string line) =>
-        line.Replace("\r", "").Split(',').Select(Unquote).ToArray();
+    internal static string[] SplitCsvLine(string line)
+    {
+        line = line.Replace("\r", "");
+        var fields = new List<string>();
+        int i = 0;
+        while (i < line.Length)
+        {
+            if (i < line.Length && line[i] == '"')
+            {
+                // Quoted field — consume until closing quote (doubling "" = escaped quote)
+                i++;
+                var sb = new System.Text.StringBuilder();
+                while (i < line.Length)
+                {
+                    if (line[i] == '"')
+                    {
+                        i++;
+                        if (i < line.Length && line[i] == '"') { sb.Append('"'); i++; }
+                        else break;
+                    }
+                    else { sb.Append(line[i++]); }
+                }
+                fields.Add(sb.ToString().Trim());
+                if (i < line.Length && line[i] == ',') i++;
+            }
+            else
+            {
+                int start = i;
+                while (i < line.Length && line[i] != ',') i++;
+                fields.Add(Unquote(line[start..i]));
+                if (i < line.Length) i++; // skip comma
+            }
+        }
+        return fields.ToArray();
+    }
 
     static List<(double Lat, double Lon, int Seq)> Simplify(List<(double Lat, double Lon, int Seq)> pts, double toleranceMeters)
     {
