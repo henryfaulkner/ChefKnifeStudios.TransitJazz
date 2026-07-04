@@ -21,7 +21,7 @@
                 style="--route-filter-color: @routeItem.Color"
             >
                 <span class="route-filters__route-filter-label">
-                    @routeItem.RouteId
+                    @(routeItem.RouteId.Length > 5 ? routeItem.RouteId[..5] : routeItem.RouteId)
                 </span>
             </div>
         </div>;
