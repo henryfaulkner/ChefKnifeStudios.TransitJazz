@@ -1,5 +1,6 @@
 // transit-synth.js — Tone.js synthesis module for 009-transit-soundscape
-// Route → instrument (3-voice sampled palette via Tone.Sampler)
+// Route → instrument (6-voice sampled palette via Tone.Sampler; only 3 ship to prod — see
+// PROD_INSTRUMENTS below)
 // Pitch maps trigger position along route → C-minor pentatonic scale degree
 //
 // ============================================================================
@@ -31,19 +32,40 @@
 //      DISTINCT Tone.Reverb (its own convolution impulse-response buffer —
 //      also decoded audio) per ROUTE. On a system with dozens of concurrent
 //      routes that's dozens of duplicate instrument+reverb builds instead of
-//      3 — this is what drove RAM to 1.7GB. Do not key this cache by routeId.
+//      PALETTE.length — this is what drove RAM to 1.7GB. Do not key this
+//      cache by routeId. NOTE: resident cost scales with PALETTE.length (at
+//      most 6 Samplers/Reverbs now, up from 3) — still flat regardless of
+//      route/vehicle count, but roughly double the earlier fixed floor.
 // Samples are FluidR3 GM (https://gleitz.github.io/midi-js-soundfonts,
-// {instrument}-mp3.js per-note base64 MP3s) — same CDN as the legacy build,
-// new instrument picks per docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md §1/§3
-// (plucked/struck families, NOT sustained bowed strings):
+// {instrument}-mp3.js per-note base64 MP3s) — same CDN as the legacy build.
+// Palette is 6 voices (design doc §1/§3 plucked/struck picks + the legacy
+// bowed-string trio brought back alongside them, not replacing them):
 //   pizzicato_strings (pluck), acoustic_bass (sub bass), acoustic_grand_piano
-//   (third voice — matches the Piano/Salamander-piano voice both sibling
-//   reference projects, lofi-engine and lofi-station, use; replaces an
-//   earlier tubular_bells pick).
+//   (matches the Piano/Salamander-piano voice both sibling reference
+//   projects, lofi-engine and lofi-station, use), contrabass, viola, cello.
+// PROD SHIP LIST: only pizzicato_strings/acoustic_bass/acoustic_grand_piano play in prod —
+// contrabass/viola/cello stay in PALETTE (this file has no dev/prod build split — it's a
+// plain script, no bundler strip step) but are excluded by default via _enabledSlots
+// (seeded from PROD_INSTRUMENTS, see below). Only the #if DEBUG-gated SettingsBlade dev
+// panel calls setEnabledInstruments to opt them back in for development.
 // ============================================================================
 
 let _tone = null;
 let _unlocked = false;
+// PROD SHIP LIST — only these instruments play unless a dev build opts more in via
+// setEnabledInstruments (see docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md — SettingsBlade dev
+// section, #if DEBUG-gated on the C# side). This file has no build-time dev/prod variants
+// (plain script, no bundler strip step), so the split is runtime: prod never calls
+// setEnabledInstruments and gets exactly this set; the dev-only SettingsBlade panel calls
+// it on init with the FULL PALETTE instrument list to restore all 6 for development.
+const PROD_INSTRUMENTS = ['pizzicato_strings', 'acoustic_bass', 'acoustic_grand_piano'];
+
+// DEV-ONLY instrument toggle. Slot indices allowed to be selected by _slotIndexForRoute.
+// Starts SCOPED to PROD_INSTRUMENTS (not "all enabled") so prod, which never calls
+// setEnabledInstruments, only ever plays the 3 shipped voices — contrabass/viola/cello
+// stay reachable only once a dev build explicitly re-enables them. Never persisted —
+// in-memory only, reset on page reload.
+let _enabledSlots = null; // populated lazily from PROD_INSTRUMENTS below, once PALETTE exists
 // PALETTE index → { sampler, scale, durations } once loaded, or a pending Promise while
 // loading. Keyed by SLOT, not routeId — every route mapping to the same slot (there are
 // only PALETTE.length of them) shares one Sampler/Filter/Reverb. Keying by routeId instead
@@ -62,19 +84,53 @@ const SCALE = ['C2', 'Eb2', 'F2', 'G2', 'Bb2', 'C3', 'Eb3', 'F3', 'G3', 'Bb3'];
 // one high, so the worst-case pitch shift to any SCALE note is ~3 semitones.
 const ANCHORS = { C2: 'C2', C3: 'C3' };
 
-// Three sampled voices cycling across routes: pluck → bass → piano → pluck …
-// Plucked/struck families (design doc §1) — NOT the old sustained-bowed-string palette.
-// Piano replaces an earlier tubular_bells pick, matching the Piano/Salamander-piano voice
-// both sibling reference projects (lofi-engine, lofi-station) use as their melodic voice.
+// Six sampled voices cycling across routes: pluck → bass → piano → contrabass → viola →
+// cello → pluck … First 3 are the plucked/struck picks from design doc §1/§3. Last 3
+// (contrabass/viola/cello) are the original bowed-string trio from the legacy Sampler
+// build, brought back alongside — not in place of — the newer voices for extra variety.
+// contrabass/viola/cello samples are themselves bowed (arco) recordings — Tone.Sampler
+// only plays back + envelopes a fixed recording, it can't re-synthesize a plucked attack
+// transient from a bowed one. The closest approximation within Sampler's own params:
+// attack ~0 (no fade-in, as fast an onset as the sample allows) + a SHORT release (cuts
+// the bow's natural sustain off quickly after note-off, so it reads as struck/plucked
+// rather than sustained) + short duration tokens (note-off itself comes sooner). This is
+// why the bowed trio's release/durations are deliberately SHORTER than their piano/bass/
+// pluck pairing from the previous tuning pass, not matched to it.
+// volumeDb (optional, defaults to 0 = sample's native recorded loudness) trims a single
+// voice via a per-slot Tone.Volume in the chain — piano's -8dB softens it relative to the
+// other 5 voices, which play at their native level.
 const PALETTE = [
-    { instrument: 'pizzicato_strings',    scale: SCALE, anchors: ANCHORS, release: 1.2, durations: ['4n', '4n.', '2n'] },
-    { instrument: 'acoustic_bass',        scale: SCALE, anchors: ANCHORS, release: 0.8, durations: ['8n', '8n.', '4n'] },
-    { instrument: 'acoustic_grand_piano', scale: SCALE, anchors: ANCHORS, release: 1.0, durations: ['8n', '8n.', '4n'] },
+    { instrument: 'pizzicato_strings',    scale: SCALE, anchors: ANCHORS, attack: 0,    release: 1.2,  durations: ['4n', '4n.', '2n'] },
+    { instrument: 'acoustic_bass',        scale: SCALE, anchors: ANCHORS, attack: 0,    release: 0.8,  durations: ['8n', '8n.', '4n'] },
+    { instrument: 'acoustic_grand_piano', scale: SCALE, anchors: ANCHORS, attack: 0,    release: 1.0,  durations: ['8n', '8n.', '4n'], volumeDb: -8 },
+    { instrument: 'contrabass',           scale: SCALE, anchors: ANCHORS, attack: 0.005, release: 0.3, durations: ['8n', '8n.', '4n'] },
+    { instrument: 'viola',                scale: SCALE, anchors: ANCHORS, attack: 0.005, release: 0.2, durations: ['16n', '16n.', '8n'] },
+    { instrument: 'cello',                scale: SCALE, anchors: ANCHORS, attack: 0.005, release: 0.25, durations: ['16n', '16n.', '8n'] },
 ];
 
+// Maps PALETTE.instrument names → their slot INDICES (not the names themselves — see
+// _slotIndexForRoute, which filters on index).
+function _slotIndicesForNames(names) {
+    const slots = new Set();
+    PALETTE.forEach((slot, index) => {
+        if (names.includes(slot.instrument)) slots.add(index);
+    });
+    return slots;
+}
+
+// Seeds _enabledSlots to the PROD_INSTRUMENTS ship list. Prod builds never call
+// setEnabledInstruments, so this seed is the ENTIRE prod behavior: only
+// pizzicato_strings/acoustic_bass/acoustic_grand_piano play.
+_enabledSlots = _slotIndicesForNames(PROD_INSTRUMENTS);
+
 // Default Tone Transport tempo is 120 BPM (unchanged in this app):
-//   2n = 1.0s, 4n. = 0.75s, 4n = 0.5s, 8n. = 0.375s, 8n = 0.25s
-const DURATION_SECONDS = { '8n': 0.25, '8n.': 0.375, '4n': 0.5, '4n.': 0.75, '2n': 1.0 };
+//   2n = 1.0s, 4n. = 0.75s, 4n = 0.5s, 8n. = 0.375s, 8n = 0.25s, 16n = 0.125s, 16n. = 0.1875s
+const DURATION_SECONDS = {
+    '16n': 0.125, '16n.': 0.1875,
+    '8n': 0.25, '8n.': 0.375,
+    '4n': 0.5, '4n.': 0.75,
+    '2n': 1.0,
+};
 
 // Reverb parameters — shipped in v1, uniform across all voices (design doc §4/§7).
 const REVERB_DECAY = 0.8;
@@ -92,8 +148,18 @@ function djb2(s) {
 
 // Deterministic route → palette slot INDEX. Cheap (no audio nodes) — used both to pick the
 // duration set (_slotForRoute) and to key the shared Sampler cache (instrumentForSlot).
+// _enabledSlots is ALWAYS populated (seeded to PROD_INSTRUMENTS above; dev builds widen it
+// via setEnabledInstruments) — a route that hashes to a disabled slot deterministically
+// falls forward to the next enabled slot (wrapping), keeping every route's voice stable as
+// OTHER instruments are toggled rather than reshuffling the whole palette assignment.
 function _slotIndexForRoute(routeId) {
-    return djb2(String(routeId)) % PALETTE.length;
+    const base = djb2(String(routeId)) % PALETTE.length;
+    if (!_enabledSlots || _enabledSlots.size === 0) return base; // defensive: never expected
+    for (let i = 0; i < PALETTE.length; i++) {
+        const candidate = (base + i) % PALETTE.length;
+        if (_enabledSlots.has(candidate)) return candidate;
+    }
+    return base; // unreachable given the size===0 guard above, kept for safety
 }
 
 // Deterministic, audio-independent duration token for a vehicle. Shared by triggerNote
@@ -134,13 +200,15 @@ function instrumentForSlot(slotIndex) {
     const loading = getTone().then(T => new Promise((resolve, reject) => {
         const filter = new T.Filter(3500, 'lowpass');
         const reverb = new T.Reverb({ decay: REVERB_DECAY, preDelay: REVERB_PRE_DELAY, wet: REVERB_WET });
+        const volume = new T.Volume(slot.volumeDb ?? 0);
         const sampler = new T.Sampler(
             buildSampleUrls(slot.instrument, slot.anchors),
             {
+                attack: slot.attack ?? 0,
                 release: slot.release ?? 1.2,
                 onload: () => {
                     reverb.generate().then(() => {
-                        sampler.chain(filter, reverb, T.Destination);
+                        sampler.chain(filter, volume, reverb, T.Destination);
                         const entry = { sampler, scale: slot.scale, durations: slot.durations };
                         _instrumentCache.set(slotIndex, entry); // replace the pending Promise with the resolved entry
                         resolve(entry);
@@ -228,6 +296,29 @@ export function durationSecondsFor(vehicleId, routeId) {
     return DURATION_SECONDS[tok] ?? 0.25;
 }
 
+// DEV-ONLY: the full list of PALETTE.instrument names, in slot order, for the dev
+// checkbox UI to render without hardcoding instrument names on the C# side.
+export function getInstrumentNames() {
+    return PALETTE.map(slot => slot.instrument);
+}
+
+// DEV-ONLY: restricts which PALETTE instruments _slotIndexForRoute may select. `names` is
+// an array of PALETTE[].instrument strings (e.g. "pizzicato_strings", "cello"); an empty
+// array or omitted/null argument RESETS to PROD_INSTRUMENTS (the ship default), it does
+// NOT mean "unfiltered" — prod builds never call this at all, and dev builds that want
+// "everything" must pass getInstrumentNames() explicitly (the SettingsBlade dev panel does
+// this on init so contrabass/viola/cello are available to toggle back on in dev, while
+// staying unreachable in prod, which never calls this function). Does NOT dispose already-
+// built Samplers for now-disabled slots — a route reassigned away from a slot simply stops
+// picking it; disposeInactiveRoutes still owns eviction. Not persisted across reload by
+// design (see docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md — dev-session-only debug aid, gated
+// #if DEBUG on the C# side).
+export function setEnabledInstruments(names) {
+    const slots = _slotIndicesForNames(Array.isArray(names) ? names : []);
+    // Nothing matched (empty/omitted names, or names that don't exist) — reset to prod default.
+    _enabledSlots = slots.size > 0 ? slots : _slotIndicesForNames(PROD_INSTRUMENTS);
+}
+
 // Frees a slot's Sampler if NO active route hashes to it anymore, so decoded PCM doesn't
 // stay resident once its timbre has gone fully silent. Callable from the C# side with the
 // current set of routes that have live vehicles. Cache is keyed by PALETTE slot (at most
@@ -259,4 +350,4 @@ export async function dispose() {
     _tone = null;
 }
 
-window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes };
+window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes, getInstrumentNames, setEnabledInstruments };
