@@ -36,7 +36,10 @@
 // {instrument}-mp3.js per-note base64 MP3s) — same CDN as the legacy build,
 // new instrument picks per docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md §1/§3
 // (plucked/struck families, NOT sustained bowed strings):
-//   pizzicato_strings (pluck), acoustic_bass (sub bass), tubular_bells (bell).
+//   pizzicato_strings (pluck), acoustic_bass (sub bass), acoustic_grand_piano
+//   (third voice — matches the Piano/Salamander-piano voice both sibling
+//   reference projects, lofi-engine and lofi-station, use; replaces an
+//   earlier tubular_bells pick).
 // ============================================================================
 
 let _tone = null;
@@ -59,12 +62,14 @@ const SCALE = ['C2', 'Eb2', 'F2', 'G2', 'Bb2', 'C3', 'Eb3', 'F3', 'G3', 'Bb3'];
 // one high, so the worst-case pitch shift to any SCALE note is ~3 semitones.
 const ANCHORS = { C2: 'C2', C3: 'C3' };
 
-// Three sampled voices cycling across routes: pluck → bass → bell → pluck …
+// Three sampled voices cycling across routes: pluck → bass → piano → pluck …
 // Plucked/struck families (design doc §1) — NOT the old sustained-bowed-string palette.
+// Piano replaces an earlier tubular_bells pick, matching the Piano/Salamander-piano voice
+// both sibling reference projects (lofi-engine, lofi-station) use as their melodic voice.
 const PALETTE = [
-    { instrument: 'pizzicato_strings', scale: SCALE, anchors: ANCHORS, release: 1.2, durations: ['4n', '4n.', '2n'] },
-    { instrument: 'acoustic_bass',     scale: SCALE, anchors: ANCHORS, release: 0.8, durations: ['8n', '8n.', '4n'] },
-    { instrument: 'tubular_bells',     scale: SCALE, anchors: ANCHORS, release: 1.0, durations: ['8n', '8n.', '4n'] },
+    { instrument: 'pizzicato_strings',    scale: SCALE, anchors: ANCHORS, release: 1.2, durations: ['4n', '4n.', '2n'] },
+    { instrument: 'acoustic_bass',        scale: SCALE, anchors: ANCHORS, release: 0.8, durations: ['8n', '8n.', '4n'] },
+    { instrument: 'acoustic_grand_piano', scale: SCALE, anchors: ANCHORS, release: 1.0, durations: ['8n', '8n.', '4n'] },
 ];
 
 // Default Tone Transport tempo is 120 BPM (unchanged in this app):
