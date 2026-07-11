@@ -4,6 +4,7 @@ public static class CityNames
 {
     public const string Marta = "marta";
     public const string Wmata = "wmata";
+    public const string Mbta = "mbta";
 }
 
 public static class HubMethods

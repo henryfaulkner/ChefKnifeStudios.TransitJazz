@@ -14,6 +14,7 @@ namespace ChefKnifeStudios.MartaJazz.Client.Shared.Components;
 public class RouteItem
 {
     public string RouteId { get; init; }
+    public string Label { get; init; }
     public string Color { get; init; }
     public bool IsSelected { get; set; }
     public TransitMode Mode { get; init; }
@@ -222,12 +223,13 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 
         RouteItems = _applicationViewModel.RouteShapes
             .Select(x => x.Value)
-            .Where(x => !string.IsNullOrEmpty(x.Properties.RouteShortName))
+            .Where(x => !string.IsNullOrEmpty(x.Properties.RouteShortName) || !string.IsNullOrEmpty(x.Properties.RouteId))
             .Select(x => new RouteItem
             {
-                RouteId = x.Properties.RouteShortName!,
+                RouteId = x.Properties.RouteShortName ?? x.Properties.RouteId!,
+                Label = x.Properties.RouteShortName ?? x.Properties.RouteId!,
                 Color = IsVisibleColor(x.Properties.Color) ? x.Properties.Color! : "#CC0000",
-                IsSelected = previouslySelected.Contains(x.Properties.RouteShortName!),
+                IsSelected = previouslySelected.Contains(x.Properties.RouteShortName ?? x.Properties.RouteId!),
                 Mode = x.Properties.Mode,
             })
             .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteId, out var v) ? v.Count : 0)
@@ -244,6 +246,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             .Select(x => new RouteItem
             {
                 RouteId = x.RouteId,
+                Label = x.Label,
                 Color = x.Color,
                 IsSelected = x.RouteId == routeItem.RouteId ? !x.IsSelected : x.IsSelected,
                 Mode = x.Mode,
@@ -255,7 +258,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     public void ClearSelection(TransitMode mode)
     {
         RouteItems = RouteItems
-            .Select(x => new RouteItem { RouteId = x.RouteId, Color = x.Color, IsSelected = x.Mode == mode ? false : x.IsSelected, Mode = x.Mode, })
+            .Select(x => new RouteItem { RouteId = x.RouteId, Label = x.Label, Color = x.Color, IsSelected = x.Mode == mode ? false : x.IsSelected, Mode = x.Mode, })
             .ToList();
         RecomputeActiveTransitCounts();
     }

@@ -19,6 +19,9 @@
             <MatListItem>
                 <MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked"  Disabled="@(CurrentCity == CityNames.Wmata)" />
             </MatListItem>
+            <MatListItem>
+                <MatButton Label="Boston, MA" Mini="true" @onclick="HandleMbtaClicked" Disabled="@(CurrentCity == CityNames.Mbta)" />
+            </MatListItem>
         </MatList>
     </MatMenu>
 </div>
@@ -28,16 +31,21 @@
 
     async Task HandleMartaClicked()
     {
-        // Hash-only navigation is always in-page — no reload, WASM stays alive.
+        // Hash-only navigation is always in-page ï¿½ no reload, WASM stays alive.
         // Set the hash then force a reload so the app re-bootstraps with the new city.
         await JS.InvokeVoidAsync("eval", $"location.hash='marta';location.reload()");
     }
 
     async Task HandleWmataClicked()
     {
-        // Hash-only navigation is always in-page — no reload, WASM stays alive.
+        // Hash-only navigation is always in-page ï¿½ no reload, WASM stays alive.
         // Set the hash then force a reload so the app re-bootstraps with the new city.
         await JS.InvokeVoidAsync("eval", $"location.hash='wmata';location.reload()");
+    }
+
+    async Task HandleMbtaClicked()
+    {
+        await JS.InvokeVoidAsync("eval", $"location.hash='mbta';location.reload()");
     }
 
     MatFAB Button2;

@@ -69,9 +69,9 @@ window.ChefMap = {
                 source: 'vehicles',
                 layout: { 'visibility': 'none' },
                 paint: {
-                    'circle-radius': 6,
+                    'circle-radius': ['match', ['get', 'transitMode'], 'Rail', 9, 6],
                     'circle-color': '#22c55e',
-                    'circle-stroke-width': 1,
+                    'circle-stroke-width': ['match', ['get', 'transitMode'], 'Rail', 2, 1],
                     'circle-stroke-color': '#fff'
                 }
             });
@@ -164,9 +164,9 @@ window.ChefMap = {
                             source: 'vehicles',
                             layout: { 'visibility': 'none' },
                             paint: {
-                                'circle-radius': 6,
+                                'circle-radius': ['match', ['get', 'transitMode'], 'Rail', 9, 6],
                                 'circle-color': '#22c55e',
-                                'circle-stroke-width': 1,
+                                'circle-stroke-width': ['match', ['get', 'transitMode'], 'Rail', 2, 1],
                                 'circle-stroke-color': '#fff'
                             }
                         });

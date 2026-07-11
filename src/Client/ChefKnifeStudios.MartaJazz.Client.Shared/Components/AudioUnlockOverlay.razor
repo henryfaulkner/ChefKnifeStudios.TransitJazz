@@ -168,8 +168,12 @@
 
     protected override void OnInitialized()
     {
-        if (NavigationManager.ResolveCity() == CityNames.Wmata)
-            _prefix = "WmataAudioOverlay";
+        _prefix = NavigationManager.ResolveCity() switch
+        {
+            CityNames.Wmata => "WmataAudioOverlay",
+            CityNames.Mbta  => "MbtaAudioOverlay",
+            _               => "AudioOverlay"
+        };
         _isDark = SettingsService.GetSettings().IsDarkModeEnabled;
         EventNotificationService.EventReceived += HandleEvent;
     }

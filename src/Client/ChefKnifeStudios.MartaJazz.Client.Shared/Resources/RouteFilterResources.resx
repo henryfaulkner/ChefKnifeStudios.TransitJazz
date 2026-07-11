@@ -195,6 +195,18 @@
   <data name="WmataAudioOverlayParagraph3" xml:space="preserve">
     <value>WMATA connects a capital to itself. Across DC, Maryland, and Virginia, something is always moving. This is the music inside that motion.</value>
   </data>
+  <data name="MbtaAudioOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real bus or train. Hundreds of them, spread across a region that grew outward from a harbor and never stopped. They follow Massachusetts Avenue and Blue Hill and the Riverside Line, routes drawn around Boston, Cambridge, Somerville, and the towns reaching out to Providence and Newburyport.</value>
+  </data>
+  <data name="MbtaAudioOverlayParagraph2" xml:space="preserve">
+    <value>The harmony follows the system. A note lands where the vehicle happens to be along its route — surfacing at Park Street, crossing the Charles, moving through Roxbury at rush hour. The Red, Orange, and Blue lines weave through the piece alongside hundreds of buses. What is playing right now has not played before.</value>
+  </data>
+  <data name="MbtaAudioOverlayParagraph3" xml:space="preserve">
+    <value>The T is the oldest subway in America. It carries the city forward on the same lines it always has. This is the music inside that motion.</value>
+  </data>
+  <data name="MbtaOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real MBTA vehicle, pulled live and turned into sound. Buses and trains — including the Red, Orange, and Blue lines — move through Greater Boston in real time, and the map plays what they're doing right now.</value>
+  </data>
   <data name="AudioOverlayButton" xml:space="preserve">
     <value>Enter Experience</value>
   </data>
@@ -227,5 +239,8 @@
   </data>
   <data name="InfoOverlayButton" xml:space="preserve">
     <value>Return to experience</value>
+  </data>
+  <data name="MbtaAudioOverlayHeader" xml:space="preserve">
+    <value>MBTA - Boston, MA, USA</value>
   </data>
 </root>

@@ -100,6 +100,9 @@ public class Worker(
             if (!perCityCoords.TryGetValue(cityName, out var coordGroups))
                 perCityCoords[cityName] = coordGroups = new Dictionary<string, List<double[]>>();
 
+            // Primary key is the display identifier (short name when available).
+            // GTFS-RT feeds can send either route_id or route_short_name depending on the agency,
+            // so alias both keys to the same data so index.TryGetValue succeeds either way.
             var key = shape.Properties.RouteShortName ?? shape.Properties.RouteId;
             if (!routeGroups.TryGetValue(key, out var points))
                 routeGroups[key] = points = new List<RoutePoint>();
@@ -113,6 +116,16 @@ public class Worker(
             }
 
             modeMap[key] = shape.Properties.Mode;
+
+            // Alias raw route_id → primary key so GTFS-RT lookups hit regardless of which value
+            // the agency sends (e.g. MARTA sends short name "95"; WMATA sends route_id "RED").
+            var rawId = shape.Properties.RouteId;
+            if (!string.IsNullOrEmpty(rawId) && rawId != key)
+            {
+                routeGroups.TryAdd(rawId, points);
+                coordGroups.TryAdd(rawId, coordList);
+                modeMap.TryAdd(rawId, shape.Properties.Mode);
+            }
         }
 
         var indexResult = perCityPoints.ToDictionary(
