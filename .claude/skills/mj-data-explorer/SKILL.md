@@ -1,9 +1,9 @@
 ---
 name: mj-data-explorer
-description: Conversational, agentic explorer for Marta Jazz (TransitJazz) telemetry — the snap, lerp, and cycle datasets emitted by the data worker's logging sidecar and queried via the telemetry-query-bridge MCP tool. Use when the user wants to investigate transit data, troubleshoot app behavior from telemetry, find data patterns or insights, or asks anything like "explore the telemetry", "why are buses doing X", "what does the cycle data show", "/mj-data-explorer".
+description: Conversational, agentic explorer for Marta Jazz (TransitJazz) telemetry — a single denormalized `telemetry` dataset (PerCityCycle and FullCycle event types) emitted by the data worker's logging sidecar and queried via the telemetry-query-bridge MCP tool. Use when the user wants to investigate transit data, troubleshoot app behavior from telemetry, find data patterns or insights, or asks anything like "explore the telemetry", "why are buses doing X", "what does the cycle data show", "/mj-data-explorer".
 ---
 
-<!-- last verified: 2026-06-07 -->
+<!-- last verified: 2026-07-11 -->
 
 # Marta Jazz Data Explorer
 
@@ -47,14 +47,19 @@ Then route based on their answer (you do not need an exact keyword match — rea
 
 If intent is ambiguous, ask one clarifying free-text question before routing.
 
-## The datasets (one-line each)
+## The dataset
 
-- **snap** — one row per per-vehicle snap decision in a reconciliation cycle (where a
-  bus got snapped to its route, how far, outcome).
-- **lerp** — one row per per-vehicle position delta vs. its prior state (movement,
-  speed/bearing change between cycles).
-- **cycle** — one row per completed reconciliation cycle (counts, timing, sidecar
-  health). Start here for "is the system healthy" questions.
+There is **one dataset: `telemetry`**, discriminated by `event_type`:
+
+- **PerCityCycle** — one row per telemetry-emitting city per worker tick (per-city
+  counts, feed freshness, health). Use for city-level diagnostics.
+- **FullCycle** — one row per worker tick across all cities (tick-wide counts, timing,
+  health, memory). Start here for "is the system healthy" questions.
+
+> The old `snap`, `lerp`, and `cycle` datasets no longer exist. Any filter referencing
+> retired columns (`snap_distance_km`, `pos_delta_km`, `buses_stale`, etc.) will be
+> rejected as "unknown column". See `references/telemetry-schema.md` for the full
+> current column list.
 
 ## Files in this skill
 
@@ -83,11 +88,16 @@ If intent is ambiguous, ask one clarifying free-text question before routing.
 
 ## Ground rules
 
-- The query tool is **filter-only and read-only**: you supply a `dataset`, an optional
-  `date` (UTC, `YYYY-MM-DD`, default today), and a `filter` predicate over that
-  dataset's columns. You cannot choose columns, aggregate, sort, or join — you filter
-  rows and reason over what comes back. Plan questions accordingly.
-- Validate column/kind/dataset assumptions against the schema reference before
-  querying; a wrong column or wrong literal kind is rejected, not coerced.
-- Today's date for defaults is the current date; if the user names a day, pass it
-  explicitly as `date`.
+- The query tool is **filter-only and read-only**: you supply `dataset` (always
+  `"telemetry"`), an optional `date` (UTC, `YYYY-MM-DD`, default today), and a
+  `filter` predicate over that dataset's columns. You cannot choose columns, aggregate,
+  sort, or join — you filter rows and reason over what comes back.
+- **Always lead with `event_type`.** Every row is `PerCityCycle` or `FullCycle`. A
+  filter without `event_type` scans all rows for the day and will likely time out or
+  return truncated results on busy days.
+- **Always pass `date` explicitly.** Even for "today" it avoids ambiguity. The
+  30-second timeout is per-call; a broad filter on a full day of `telemetry` rows can
+  hit it.
+- Validate column/kind/dataset assumptions against `references/telemetry-schema.md`
+  before querying; a wrong column or wrong literal kind is rejected, not coerced.
+  The old snap/lerp/cycle columns are retired — do not attempt to use them.

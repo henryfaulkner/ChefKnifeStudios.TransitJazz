@@ -9,8 +9,9 @@ public class PartitionPathTests
     {
         var path = BuildBlobPath(DateTime.UtcNow);
 
-        // Must start with dt=YYYY-MM-DD partition (no {dataset}/ segment — one dataset now)
-        Assert.StartsWith("dt=", path);
+        // Must start with the "telemetry/" virtual directory (the dataset's fixed prefix
+        // inside the configured container, which is not necessarily itself named "telemetry")
+        Assert.StartsWith("telemetry/dt=", path);
         var dtSegment = path.Split('/').First(s => s.StartsWith("dt="));
         Assert.Matches(@"^dt=\d{4}-\d{2}-\d{2}$", dtSegment);
 
@@ -45,6 +46,6 @@ public class PartitionPathTests
     static string BuildBlobPath(DateTime utcNow)
     {
         var shortGuid = Guid.NewGuid().ToString("N")[..8];
-        return $"dt={utcNow:yyyy-MM-dd}/part-{utcNow:yyyyMMddTHHmmssfffZ}-{shortGuid}.parquet";
+        return $"telemetry/dt={utcNow:yyyy-MM-dd}/part-{utcNow:yyyyMMddTHHmmssfffZ}-{shortGuid}.parquet";
     }
 }

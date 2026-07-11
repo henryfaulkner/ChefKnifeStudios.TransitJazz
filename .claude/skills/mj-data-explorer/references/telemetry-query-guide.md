@@ -17,12 +17,14 @@ mcp__telemetry-query-bridge__query_telemetry
 ```
 
 It returns the matching rows from exactly one day's partition
-(`{storage}/dt={date}/*.parquet`). It is **read-only and filter-only**:
+(`{storage}/telemetry/dt={date}/*.parquet`). It is **read-only and filter-only**:
 
 - You cannot select specific columns, aggregate, sort, group, limit, or join.
 - You filter rows; you reason over the returned rows yourself.
-- Output is byte-bounded, so a broad filter on a busy day may be truncated — prefer
-  a selective filter and, if needed, narrow further and re-query.
+- Output is byte-bounded; a broad filter on a busy day may be truncated — prefer a
+  selective filter and, if needed, narrow further and re-query.
+- **Timeout is 30 s.** A filter without `event_type` scans every row for the day and
+  will often time out. Always scope to one event type first, then add more conditions.
 
 > **Lead with `event_type`.** Every row is either `PerCityCycle` or `FullCycle` —
 > scoping on that first (e.g. `event_type = 'FullCycle' AND health_ok = false`) is

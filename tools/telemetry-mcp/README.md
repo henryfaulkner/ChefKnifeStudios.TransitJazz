@@ -3,54 +3,56 @@
 A small, standalone Go MCP server that exposes a single `query_telemetry` tool to
 Claude Code over stdio. It validates untrusted arguments against a strict allow-list
 grammar, then invokes the existing `telemetry-query-tool.exe` to run a read-only query
-over the TransitJazz telemetry datasets produced by the feature-013 logging sidecar.
+over the TransitJazz telemetry produced by the logging sidecar.
 
-## Datasets
+## Dataset
 
-Three frozen datasets are queryable (one parquet file set per dataset per UTC day):
+One denormalized dataset, `telemetry`, discriminated by an `event_type` column:
 
-- `snap`  — one row per per-vehicle snap decision in a reconciliation cycle
-- `lerp`  — one row per per-vehicle position delta (vehicles with a prior state)
-- `cycle` — one row per completed reconciliation cycle (counts, timing, health)
+- `PerCityCycle` — one row per telemetry-emitting city per worker tick
+- `FullCycle` — one row per worker tick across all cities (counts, timing, health)
 
-Each dataset has its own snake_case column contract (the frozen feature-013 schema).
-The validator enforces per-dataset column scoping: a column valid in one dataset is
-rejected when used against another.
+The dataset has one merged snake_case column contract (17 columns; some populated
+only for one event type — see
+[`specs/038-telemetry-denormalization/contracts/telemetry-event-schema.md`](../../specs/038-telemetry-denormalization/contracts/telemetry-event-schema.md)).
 
 ## Tool arguments
 
 `query_telemetry` takes three arguments:
 
-| Argument  | Required | Form                | Notes |
-|-----------|----------|---------------------|-------|
-| `dataset` | yes      | `snap`\|`lerp`\|`cycle` | validated before the filter is parsed |
-| `date`    | no       | `YYYY-MM-DD`        | strict, zero-padded, real calendar date; **default = today (UTC)** |
-| `filter`  | yes      | predicate           | allow-list grammar over the dataset's columns |
+| Argument  | Required | Form         | Notes |
+|-----------|----------|--------------|-------|
+| `dataset` | yes      | `telemetry`  | validated before the filter is parsed |
+| `date`    | no       | `YYYY-MM-DD` | strict, zero-padded, real calendar date; **default = today (UTC)** |
+| `filter`  | yes      | predicate    | allow-list grammar over the telemetry columns |
 
 The read source is assembled from a fixed template the operator cannot redirect:
-`{TELEMETRY_STORAGE_URI}/{dataset}/dt={date}/*.parquet`.
+`{TELEMETRY_STORAGE_URI}/telemetry/dt={date}/*.parquet`. `telemetry/` is a literal
+virtual-directory prefix inside whichever container `TELEMETRY_STORAGE_URI` points
+at — the container itself is not necessarily named `telemetry` (e.g. prod's worker
+writes into a container named `parquet`).
 
 ### Value kinds in `filter`
 
-- **numeric** columns compare against numbers (`snap_distance_km > 0.5`).
-- **string** columns compare against quoted strings (`vehicle_id = 'v001'`); allowed
+- **numeric** columns compare against numbers (`vehicles_processed > 0`).
+- **string** columns compare against quoted strings (`city_name = 'MARTA'`); allowed
   characters inside quotes are `[A-Za-z0-9 _-]`.
-- **timestamp** columns compare against a **date string** (`observation_utc > '2026-06-04'`).
+- **timestamp** columns compare against a **date string** (`observation_utc > '2026-07-11'`).
   Comparisons are **date-granularity only** — a full ISO timestamp like
-  `'2026-06-04T12:00:00'` is rejected (the `:`/`T` characters are not allowed inside a
+  `'2026-07-11T12:00:00'` is rejected (the `:`/`T` characters are not allowed inside a
   string literal). This is a deliberate non-goal, not a bug.
 - **bool** columns compare against the bare literals `true` / `false`
-  (`is_stale = false`). A numeric (`is_stale = 1`) or quoted (`is_stale = 'true'`)
+  (`health_ok = false`). A numeric (`health_ok = 1`) or quoted (`health_ok = 'true'`)
   literal is rejected.
 
 Identifiers are bare snake_case (`[a-z_][a-z0-9_]*`); `.` is **not** an identifier
-character, so dotted paths (`snap.outcome`) are rejected as unknown columns.
+character, so dotted paths (`event_type.value`) are rejected.
 
 ## Configuration (environment variables)
 
 | Variable                          | Required | Default | Notes |
 |-----------------------------------|----------|---------|-------|
-| `TELEMETRY_STORAGE_URI`           | yes      | —       | container base, e.g. `azure://telemetry` |
+| `TELEMETRY_STORAGE_URI`           | yes      | —       | container base, e.g. `azure://parquet` |
 | `TELEMETRY_TOOL_PATH`             | yes      | —       | path to `telemetry-query-tool.exe` |
 | `TELEMETRY_TIMEOUT_SECONDS`       | no       | `30`    | raised from 10 (parquet-over-Azure is slower) |
 | `TELEMETRY_MAX_OUTPUT_BYTES`      | no       | `65536` | output truncation cap |
@@ -58,13 +60,6 @@ character, so dotted paths (`snap.outcome`) are rejected as unknown columns.
 The delegated `telemetry-query-tool` still reads `AZURE_STORAGE_CONNECTION_STRING`
 from its own environment (unchanged).
 
-### Migration from feature 012
-
-`TELEMETRY_DATASET_URI` (the old single-dataset URI, e.g.
-`azure://telemetry/iris.parquet`) has been **removed**. It is now ignored; configure
-`TELEMETRY_STORAGE_URI` (the container base) instead. If `TELEMETRY_STORAGE_URI` is
-unset the server fails fast at startup with an error naming the new variable.
-
-> Full build, configuration, registration, and acceptance steps for the transit
-> retarget live in
-> [`specs/014-transit-datasets/quickstart.md`](../../specs/014-transit-datasets/quickstart.md).
+> Full build, configuration, and query-shape details live in
+> [`specs/038-telemetry-denormalization/`](../../specs/038-telemetry-denormalization/)
+> (plan, data-model, contracts, quickstart).

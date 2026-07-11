@@ -14,11 +14,12 @@ import (
 // underlying tool. The data source is assembled from a constant template filled only
 // with the already-validated date, so operator input can never redirect it.
 func Run(ctx context.Context, cfg *config.Config, dataset, date, validatedFilter string) (string, error) {
-	// Build the read source from the fixed template: {StorageURI}/dt={date}/*.parquet
-	// No {dataset} segment: StorageURI already points at the "telemetry" container, and
-	// there is only one dataset now (ParquetLoggingService writes dt=.../part-*.parquet
-	// directly under that container, not nested under a per-dataset prefix).
-	sourceGlob := fmt.Sprintf("%s/dt=%s/*.parquet", cfg.StorageURI, date)
+	// Build the read source from the fixed template: {StorageURI}/telemetry/dt={date}/*.parquet
+	// "telemetry/" is a literal virtual-directory prefix, not a {dataset} substitution:
+	// StorageURI is the container base (may or may not itself be named "telemetry" — prod's
+	// blob container is "parquet"), and ParquetLoggingService.BuildBlobPath writes under a
+	// literal "telemetry/" prefix inside whatever container it's configured with.
+	sourceGlob := fmt.Sprintf("%s/telemetry/dt=%s/*.parquet", cfg.StorageURI, date)
 
 	// Build the full SQL query: the data source is fixed, only the filter varies
 	fullQuery := fmt.Sprintf("SELECT * FROM '%s' WHERE %s", sourceGlob, validatedFilter)

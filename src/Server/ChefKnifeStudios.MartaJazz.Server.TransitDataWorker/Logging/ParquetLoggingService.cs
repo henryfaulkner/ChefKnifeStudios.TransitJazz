@@ -121,6 +121,9 @@ public sealed class ParquetLoggingService : ILoggingService
     {
         var now = DateTime.UtcNow;
         var shortGuid = Guid.NewGuid().ToString("N")[..8];
-        return $"dt={now:yyyy-MM-dd}/part-{now:yyyyMMddTHHmmssfffZ}-{shortGuid}.parquet";
+        // "telemetry/" is the dataset's virtual directory inside the (general-purpose)
+        // blob container — the container itself is not necessarily named "telemetry"
+        // (prod's Container is "parquet"), so this prefix must stay literal.
+        return $"telemetry/dt={now:yyyy-MM-dd}/part-{now:yyyyMMddTHHmmssfffZ}-{shortGuid}.parquet";
     }
 }
