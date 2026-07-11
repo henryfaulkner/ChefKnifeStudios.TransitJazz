@@ -1,75 +1,141 @@
 // transit-synth.js — Tone.js synthesis module for 009-transit-soundscape
-// Route → instrument (3-voice acoustic jazz trio via Sampler)
+// Route → instrument (6-voice sampled palette via Tone.Sampler; only 3 ship to prod — see
+// PROD_INSTRUMENTS below)
 // Pitch maps trigger position along route → C-minor pentatonic scale degree
 //
 // ============================================================================
-// BROWSER-MEMORY FINDINGS — READ BEFORE CHANGING THE AUDIO LOADING STRATEGY
-// ============================================================================
-// This file is THE dominant lever on the client's browser RAM. History:
-//
-//   * Good baseline (commit e07ae70, oscillators): client used sub-500 MB.
-//   * After commit 187e784 ("sampler-based strings trio"): client jumped to
-//     ~1.2 GB resident, flat over time, prod == dev.
-//   * Reverting to oscillators dropped it back to sub-600 MB — proving the
-//     soundfonts, not the .NET WASM heap, were the regression.
-//
-// Why a heap snapshot MISSED this: a Chrome heap snapshot is post-GC JS-heap
-// only (~170 MB here) and does NOT show decoded-audio cost or the WASM
-// high-water the early decode burst pins. An earlier investigation therefore
-// wrongly blamed "unavoidable WASM linear memory." It is NOT — it is decoded
-// audio PCM. Don't chase the WASM heap or MapLibre cache for this number.
-//
-// WHY SAMPLERS ARE SO HEAVY: Tone.Sampler fetches each note's MP3 and the Web
-// Audio API decodes it to a raw 32-bit-float PCM AudioBuffer held resident for
-// the session. The MP3s are tiny; the DECODED buffers are not (a multi-second
-// FluidR3 note ≈ 0.5–1 MB each). The original loaded ~25 notes eagerly for
-// every route → that's the ~600 MB.
-//
-// THE THREE LEVERS THIS BUILD USES (keep all three; each is load-bearing):
-//   1. TWO anchor notes per instrument instead of 5–10. Tone.Sampler pitch-
-//      shifts between supplied notes, so 2 anchors cover the whole scale.
-//      This is the biggest cut (~75% less decoded PCM). Anchors C2 + C3 keep
-//      every C2–Bb3 target within ~3 semitones of a real sample — below the
-//      ~5–7 semitone threshold where pitch-shifting sounds artificial. Do NOT
-//      go back to a dense note map "for quality"; it re-creates the 600 MB.
-//   2. LAZY load — build a route's Sampler on first trigger, never eagerly for
-//      all routes. preload() only warms the Tone.js import. This also kills the
-//      early concurrent decode burst that pinned the WASM high-water mark.
-//   3. dispose-on-inactive — disposeInactiveRoutes() frees Samplers for routes
-//      whose vehicles have left the feed (driven from TransitMap, with a few-
-//      batch hysteresis so a brief gap doesn't force a re-fetch+decode). Keeps
-//      the resident set proportional to what's actually sounding.
-//
-// Net result: sampled timbre retained at ~200–300 MB instead of ~1.2 GB.
-// If you must enrich the sound, prefer SHORTER / mono / self-hosted samples
-// (less PCM per note) over adding more notes per instrument.
+// SAMPLER, NOT PURE SYNTHESIS — see docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md for
+// the pure-synthesis attempt this build replaces. Two problems with the pure
+// synthesis build (PluckSynth/MonoSynth/FMSynth):
+//   1. Those instruments are each a SINGLE monophonic voice. Every route
+//      shares one synth instance (instrumentFor(routeId)), so when two
+//      vehicles on the same route cross near-simultaneously, the second
+//      triggerAttackRelease() steals/retriggers the first note before it
+//      finishes — audibly dropped notes.
+//   2. Tone.Sampler fixes this for free: each triggerAttackRelease() call
+//      gets its own internally-managed voice, so overlapping notes on the
+//      same route no longer cut each other off.
+// Going back to Sampler reopens the RAM regression documented in
+// docs/BROWSER_MEMORY_INVESTIGATION_DESIGN_DOCUMENT.md §3.5 — mitigated with
+// the SAME three levers the legacy build used, PLUS a fourth that turned out to
+// be load-bearing here (an earlier version of this file omitted it and hit
+// ~1.7GB, WORSE than the original ~1.2GB regression):
+//   1. Sparse anchor notes per instrument (not a dense chromatic map) —
+//      Tone.Sampler pitch-shifts between supplied anchors.
+//   2. LAZY load — a slot's Sampler is built on first trigger, never eagerly.
+//   3. dispose-on-inactive — disposeInactiveRoutes() frees a slot's Sampler
+//      once no active route hashes to it anymore.
+//   4. *** SHARE BY PALETTE SLOT, NOT PER ROUTE. *** _instrumentCache is keyed
+//      by slot index (0..PALETTE.length-1), NOT routeId. Every route that
+//      hashes to the same slot reuses ONE Sampler/Filter/Reverb. Keying by
+//      routeId instead builds a DISTINCT Sampler (decoded anchor PCM) and a
+//      DISTINCT Tone.Reverb (its own convolution impulse-response buffer —
+//      also decoded audio) per ROUTE. On a system with dozens of concurrent
+//      routes that's dozens of duplicate instrument+reverb builds instead of
+//      PALETTE.length — this is what drove RAM to 1.7GB. Do not key this
+//      cache by routeId. NOTE: resident cost scales with PALETTE.length (at
+//      most 6 Samplers/Reverbs now, up from 3) — still flat regardless of
+//      route/vehicle count, but roughly double the earlier fixed floor.
+// Samples are FluidR3 GM (https://gleitz.github.io/midi-js-soundfonts,
+// {instrument}-mp3.js per-note base64 MP3s) — same CDN as the legacy build.
+// Palette is 6 voices (design doc §1/§3 plucked/struck picks + the legacy
+// bowed-string trio brought back alongside them, not replacing them):
+//   pizzicato_strings (pluck), acoustic_bass (sub bass), acoustic_grand_piano
+//   (matches the Piano/Salamander-piano voice both sibling reference
+//   projects, lofi-engine and lofi-station, use), contrabass, viola, cello.
+// PROD SHIP LIST: only pizzicato_strings/acoustic_bass/acoustic_grand_piano play in prod —
+// contrabass/viola/cello stay in PALETTE (this file has no dev/prod build split — it's a
+// plain script, no bundler strip step) but are excluded by default via _enabledSlots
+// (seeded from PROD_INSTRUMENTS, see below). Only the #if DEBUG-gated SettingsBlade dev
+// panel calls setEnabledInstruments to opt them back in for development.
 // ============================================================================
 
 let _tone = null;
 let _unlocked = false;
-// routeId → { sampler, scale, durations } once loaded, or a pending Promise while loading.
+// PROD SHIP LIST — only these instruments play unless a dev build opts more in via
+// setEnabledInstruments (see docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md — SettingsBlade dev
+// section, #if DEBUG-gated on the C# side). This file has no build-time dev/prod variants
+// (plain script, no bundler strip step), so the split is runtime: prod never calls
+// setEnabledInstruments and gets exactly this set; the dev-only SettingsBlade panel calls
+// it on init with the FULL PALETTE instrument list to restore all 6 for development.
+const PROD_INSTRUMENTS = ['pizzicato_strings', 'acoustic_bass', 'acoustic_grand_piano'];
+
+// DEV-ONLY instrument toggle. Slot indices allowed to be selected by _slotIndexForRoute.
+// Starts SCOPED to PROD_INSTRUMENTS (not "all enabled") so prod, which never calls
+// setEnabledInstruments, only ever plays the 3 shipped voices — contrabass/viola/cello
+// stay reachable only once a dev build explicitly re-enables them. Never persisted —
+// in-memory only, reset on page reload.
+let _enabledSlots = null; // populated lazily from PROD_INSTRUMENTS below, once PALETTE exists
+// PALETTE index → { sampler, scale, durations } once loaded, or a pending Promise while
+// loading. Keyed by SLOT, not routeId — every route mapping to the same slot (there are
+// only PALETTE.length of them) shares one Sampler/Filter/Reverb. Keying by routeId instead
+// built a distinct Sampler + Reverb (each with its own decoded-PCM anchors AND its own
+// convolution impulse-response buffer) per ROUTE, which is what drove RAM past even the
+// original ~1.2GB regression on a system with dozens of concurrent routes.
 const _instrumentCache = new Map();
 
 const SOUNDFONT_BASE = 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM';
 
 // C-minor pentatonic across the low octaves used for harmony warmth. These are the
-// PLAYED notes; the Sampler interpolates them from the two anchor samples below.
+// PLAYED notes; the Sampler interpolates them from the anchor samples below.
 const SCALE = ['C2', 'Eb2', 'F2', 'G2', 'Bb2', 'C3', 'Eb3', 'F3', 'G3', 'Bb3'];
 
 // Two anchor notes per instrument — the only MP3s actually fetched + decoded. One low,
 // one high, so the worst-case pitch shift to any SCALE note is ~3 semitones.
 const ANCHORS = { C2: 'C2', C3: 'C3' };
 
-// Three sampled voices cycling across routes: bass → viola → cello → bass …
+// Six sampled voices cycling across routes: pluck → bass → piano → contrabass → viola →
+// cello → pluck … First 3 are the plucked/struck picks from design doc §1/§3. Last 3
+// (contrabass/viola/cello) are the original bowed-string trio from the legacy Sampler
+// build, brought back alongside — not in place of — the newer voices for extra variety.
+// contrabass/viola/cello samples are themselves bowed (arco) recordings — Tone.Sampler
+// only plays back + envelopes a fixed recording, it can't re-synthesize a plucked attack
+// transient from a bowed one. The closest approximation within Sampler's own params:
+// attack ~0 (no fade-in, as fast an onset as the sample allows) + a SHORT release (cuts
+// the bow's natural sustain off quickly after note-off, so it reads as struck/plucked
+// rather than sustained) + short duration tokens (note-off itself comes sooner). This is
+// why the bowed trio's release/durations are deliberately SHORTER than their piano/bass/
+// pluck pairing from the previous tuning pass, not matched to it.
+// volumeDb (optional, defaults to 0 = sample's native recorded loudness) trims a single
+// voice via a per-slot Tone.Volume in the chain — piano's -8dB softens it relative to the
+// other 5 voices, which play at their native level.
 const PALETTE = [
-    { instrument: 'contrabass', scale: SCALE, anchors: ANCHORS, release: 1.2, durations: ['4n', '4n.', '2n'] },
-    { instrument: 'viola',      scale: SCALE, anchors: ANCHORS, release: 0.5, durations: ['8n', '8n.', '4n'] },
-    { instrument: 'cello',      scale: SCALE, anchors: ANCHORS, release: 0.5, durations: ['8n', '8n.', '4n'] },
+    { instrument: 'pizzicato_strings',    scale: SCALE, anchors: ANCHORS, attack: 0,    release: 1.2,  durations: ['4n', '4n.', '2n'] },
+    { instrument: 'acoustic_bass',        scale: SCALE, anchors: ANCHORS, attack: 0,    release: 0.8,  durations: ['8n', '8n.', '4n'] },
+    { instrument: 'acoustic_grand_piano', scale: SCALE, anchors: ANCHORS, attack: 0,    release: 1.0,  durations: ['8n', '8n.', '4n'], volumeDb: -8 },
+    { instrument: 'contrabass',           scale: SCALE, anchors: ANCHORS, attack: 0.005, release: 0.3, durations: ['8n', '8n.', '4n'] },
+    { instrument: 'viola',                scale: SCALE, anchors: ANCHORS, attack: 0.005, release: 0.2, durations: ['16n', '16n.', '8n'] },
+    { instrument: 'cello',                scale: SCALE, anchors: ANCHORS, attack: 0.005, release: 0.25, durations: ['16n', '16n.', '8n'] },
 ];
 
+// Maps PALETTE.instrument names → their slot INDICES (not the names themselves — see
+// _slotIndexForRoute, which filters on index).
+function _slotIndicesForNames(names) {
+    const slots = new Set();
+    PALETTE.forEach((slot, index) => {
+        if (names.includes(slot.instrument)) slots.add(index);
+    });
+    return slots;
+}
+
+// Seeds _enabledSlots to the PROD_INSTRUMENTS ship list. Prod builds never call
+// setEnabledInstruments, so this seed is the ENTIRE prod behavior: only
+// pizzicato_strings/acoustic_bass/acoustic_grand_piano play.
+_enabledSlots = _slotIndicesForNames(PROD_INSTRUMENTS);
+
 // Default Tone Transport tempo is 120 BPM (unchanged in this app):
-//   2n = 1.0s, 4n. = 0.75s, 4n = 0.5s, 8n. = 0.375s, 8n = 0.25s
-const DURATION_SECONDS = { '8n': 0.25, '8n.': 0.375, '4n': 0.5, '4n.': 0.75, '2n': 1.0 };
+//   2n = 1.0s, 4n. = 0.75s, 4n = 0.5s, 8n. = 0.375s, 8n = 0.25s, 16n = 0.125s, 16n. = 0.1875s
+const DURATION_SECONDS = {
+    '16n': 0.125, '16n.': 0.1875,
+    '8n': 0.25, '8n.': 0.375,
+    '4n': 0.5, '4n.': 0.75,
+    '2n': 1.0,
+};
+
+// Reverb parameters — shipped in v1, uniform across all voices (design doc §4/§7).
+const REVERB_DECAY = 0.8;
+const REVERB_PRE_DELAY = 0.01;
+const REVERB_WET = 0.15;
 
 // djb2 hash — deterministic, no crypto needed
 function djb2(s) {
@@ -80,11 +146,27 @@ function djb2(s) {
     return h >>> 0;
 }
 
+// Deterministic route → palette slot INDEX. Cheap (no audio nodes) — used both to pick the
+// duration set (_slotForRoute) and to key the shared Sampler cache (instrumentForSlot).
+// _enabledSlots is ALWAYS populated (seeded to PROD_INSTRUMENTS above; dev builds widen it
+// via setEnabledInstruments) — a route that hashes to a disabled slot deterministically
+// falls forward to the next enabled slot (wrapping), keeping every route's voice stable as
+// OTHER instruments are toggled rather than reshuffling the whole palette assignment.
+function _slotIndexForRoute(routeId) {
+    const base = djb2(String(routeId)) % PALETTE.length;
+    if (!_enabledSlots || _enabledSlots.size === 0) return base; // defensive: never expected
+    for (let i = 0; i < PALETTE.length; i++) {
+        const candidate = (base + i) % PALETTE.length;
+        if (_enabledSlots.has(candidate)) return candidate;
+    }
+    return base; // unreachable given the size===0 guard above, kept for safety
+}
+
 // Deterministic, audio-independent duration token for a vehicle. Shared by triggerNote
 // (audible note) and durationSecondsFor (trail growth) so they always agree. Resolves the
 // route's palette slot so the token comes from that instrument's own duration set.
 function _slotForRoute(routeId) {
-    return PALETTE[djb2(String(routeId)) % PALETTE.length];
+    return PALETTE[_slotIndexForRoute(routeId)];
 }
 
 async function getTone() {
@@ -102,34 +184,46 @@ function buildSampleUrls(instrument, anchors) {
     return urls;
 }
 
-// Lazily builds (and caches) the Sampler for a route. Concurrent callers share the same
-// in-flight Promise so a note never double-loads.
-function instrumentFor(routeId) {
-    const cached = _instrumentCache.get(routeId);
+// Lazily builds (and caches) the Sampler + effects chain for a PALETTE SLOT — shared by
+// every route that hashes to that slot, so there are at most PALETTE.length Samplers/
+// Reverbs resident, never one per route. Concurrent callers (different routes hashing to
+// the same slot, or the same route) share the in-flight Promise so a voice never double-
+// loads. Tone.Reverb has its own async IR-generation cost (`generate()`), built once here,
+// not per note trigger (mirrors the lofi-station/lofi-engine reference recipe — see
+// docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md §4).
+function instrumentForSlot(slotIndex) {
+    const cached = _instrumentCache.get(slotIndex);
     if (cached) return cached;
 
-    const slot = PALETTE[djb2(String(routeId)) % PALETTE.length];
+    const slot = PALETTE[slotIndex];
 
     const loading = getTone().then(T => new Promise((resolve, reject) => {
+        const filter = new T.Filter(3500, 'lowpass');
+        const reverb = new T.Reverb({ decay: REVERB_DECAY, preDelay: REVERB_PRE_DELAY, wet: REVERB_WET });
+        const volume = new T.Volume(slot.volumeDb ?? 0);
         const sampler = new T.Sampler(
             buildSampleUrls(slot.instrument, slot.anchors),
             {
+                attack: slot.attack ?? 0,
                 release: slot.release ?? 1.2,
                 onload: () => {
-                    const entry = { sampler: sampler.toDestination(), scale: slot.scale, durations: slot.durations };
-                    _instrumentCache.set(routeId, entry); // replace the pending Promise with the resolved entry
-                    resolve(entry);
+                    reverb.generate().then(() => {
+                        sampler.chain(filter, volume, reverb, T.Destination);
+                        const entry = { sampler, scale: slot.scale, durations: slot.durations };
+                        _instrumentCache.set(slotIndex, entry); // replace the pending Promise with the resolved entry
+                        resolve(entry);
+                    });
                 },
                 onerror: (err) => {
-                    console.error('[TransitSynth] sampler load failed for routeId=' + routeId + ' instrument=' + slot.instrument, err);
-                    _instrumentCache.delete(routeId); // allow a later retry
+                    console.error('[TransitSynth] sampler load failed for slot=' + slotIndex + ' instrument=' + slot.instrument, err);
+                    _instrumentCache.delete(slotIndex); // allow a later retry
                     reject(err);
                 },
             }
         );
     }));
 
-    _instrumentCache.set(routeId, loading);
+    _instrumentCache.set(slotIndex, loading);
     return loading;
 }
 
@@ -142,7 +236,7 @@ function noteForPosition(scale, triggerIndex, totalTriggers) {
     return scale[scaleIndex];
 }
 
-// LAZY build replaces the old eager preload of every route. Kept as an export (the C#
+// LAZY build replaces eager preload of every route. Kept as an export (the C#
 // PreloadAsync call) but now only warms the Tone.js import so the first real trigger
 // doesn't pay the module-load latency. No samples are fetched until a route first sounds.
 export async function preload(routeIds) {
@@ -183,7 +277,7 @@ export function isUnlocked() {
 export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTriggers = 1) {
     if (!_unlocked) return;
     try {
-        const { sampler, scale, durations } = await instrumentFor(routeId);
+        const { sampler, scale, durations } = await instrumentForSlot(_slotIndexForRoute(routeId));
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
         const duration = durations[djb2(String(vehicleId)) % durations.length];
         sampler.triggerAttackRelease(note, duration);
@@ -202,18 +296,45 @@ export function durationSecondsFor(vehicleId, routeId) {
     return DURATION_SECONDS[tok] ?? 0.25;
 }
 
-// Frees Samplers for routes no longer active so decoded PCM doesn't accumulate across a
-// long session. Callable from the C# side with the current set of routes that have live
-// vehicles; any cached route NOT in that set is disposed.
+// DEV-ONLY: the full list of PALETTE.instrument names, in slot order, for the dev
+// checkbox UI to render without hardcoding instrument names on the C# side.
+export function getInstrumentNames() {
+    return PALETTE.map(slot => slot.instrument);
+}
+
+// DEV-ONLY: restricts which PALETTE instruments _slotIndexForRoute may select. `names` is
+// an array of PALETTE[].instrument strings (e.g. "pizzicato_strings", "cello"); an empty
+// array or omitted/null argument RESETS to PROD_INSTRUMENTS (the ship default), it does
+// NOT mean "unfiltered" — prod builds never call this at all, and dev builds that want
+// "everything" must pass getInstrumentNames() explicitly (the SettingsBlade dev panel does
+// this on init so contrabass/viola/cello are available to toggle back on in dev, while
+// staying unreachable in prod, which never calls this function). Does NOT dispose already-
+// built Samplers for now-disabled slots — a route reassigned away from a slot simply stops
+// picking it; disposeInactiveRoutes still owns eviction. Not persisted across reload by
+// design (see docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md — dev-session-only debug aid, gated
+// #if DEBUG on the C# side).
+export function setEnabledInstruments(names) {
+    const slots = _slotIndicesForNames(Array.isArray(names) ? names : []);
+    // Nothing matched (empty/omitted names, or names that don't exist) — reset to prod default.
+    _enabledSlots = slots.size > 0 ? slots : _slotIndicesForNames(PROD_INSTRUMENTS);
+}
+
+// Frees a slot's Sampler if NO active route hashes to it anymore, so decoded PCM doesn't
+// stay resident once its timbre has gone fully silent. Callable from the C# side with the
+// current set of routes that have live vehicles. Cache is keyed by PALETTE slot (at most
+// PALETTE.length entries, shared across all routes on that slot — see instrumentForSlot),
+// so this translates the route-id set to the slot-index set still in use before evicting.
 export function disposeInactiveRoutes(activeRouteIds) {
-    const active = new Set(Array.isArray(activeRouteIds) ? activeRouteIds.map(String) : []);
-    for (const routeId of [..._instrumentCache.keys()]) {
-        if (active.has(String(routeId))) continue;
-        const entry = _instrumentCache.get(routeId);
+    const activeSlots = new Set(
+        (Array.isArray(activeRouteIds) ? activeRouteIds : []).map(id => _slotIndexForRoute(id))
+    );
+    for (const slotIndex of [..._instrumentCache.keys()]) {
+        if (activeSlots.has(slotIndex)) continue;
+        const entry = _instrumentCache.get(slotIndex);
         // Skip entries still loading (Promises) — don't dispose mid-fetch.
         if (entry && entry.sampler) {
             try { entry.sampler.dispose(); } catch (_) { /* ignore */ }
-            _instrumentCache.delete(routeId);
+            _instrumentCache.delete(slotIndex);
         }
     }
 }
@@ -229,4 +350,4 @@ export async function dispose() {
     _tone = null;
 }
 
-window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes };
+window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes, getInstrumentNames, setEnabledInstruments };

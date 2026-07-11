@@ -32,5 +32,22 @@
                 </MatCheckbox>
             }
         </div>
+
+        @if (_showDevInstrumentToggles)
+        {
+            <p class="settings-title">Dev: Instrument Voices</p>
+            <div class="settings-list">
+                @foreach (var instrumentName in _instrumentNames)
+                {
+                    var isEnabled = _enabledInstruments.Contains(instrumentName);
+
+                    <MatCheckbox TValue="bool"
+                                 Value="@isEnabled"
+                                 ValueChanged="@((bool val) => HandleInstrumentTogglePressed(instrumentName, val))">
+                        @instrumentName
+                    </MatCheckbox>
+                }
+            </div>
+        }
     </ContentFragment>
 </BladeContainer>

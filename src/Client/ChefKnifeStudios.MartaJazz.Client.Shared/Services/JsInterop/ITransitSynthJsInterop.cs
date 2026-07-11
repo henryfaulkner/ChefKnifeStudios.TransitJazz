@@ -18,4 +18,17 @@ public interface ITransitSynthJsInterop : IAsyncDisposable
     /// audio doesn't accumulate across a long session. Pass the routes with live vehicles.
     /// </summary>
     Task DisposeInactiveRoutesAsync(IEnumerable<string> activeRouteIds);
+
+    /// <summary>
+    /// DEV-ONLY. Returns the palette's instrument names (transit-synth.js PALETTE, in slot
+    /// order) so a dev UI can render one checkbox per instrument without hardcoding names.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetInstrumentNamesAsync();
+
+    /// <summary>
+    /// DEV-ONLY. Restricts route→instrument selection to <paramref name="instrumentNames"/>
+    /// (palette instrument names). Empty/omitted means no filter (all instruments enabled).
+    /// In-memory only, not persisted — call again after reload to reapply.
+    /// </summary>
+    Task SetEnabledInstrumentsAsync(IEnumerable<string> instrumentNames);
 }

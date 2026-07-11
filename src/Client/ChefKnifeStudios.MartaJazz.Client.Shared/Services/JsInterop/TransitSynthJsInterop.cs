@@ -98,6 +98,30 @@ public class TransitSynthJsInterop : ITransitSynthJsInterop
         catch (Exception ex) { LogError(ex, nameof(DisposeInactiveRoutesAsync)); }
     }
 
+    public async Task<IReadOnlyList<string>> GetInstrumentNamesAsync()
+    {
+        try
+        {
+            var module = await _moduleTask.Value;
+            return await module.InvokeAsync<string[]>("getInstrumentNames");
+        }
+        catch (Exception ex)
+        {
+            LogError(ex, nameof(GetInstrumentNamesAsync));
+            return Array.Empty<string>();
+        }
+    }
+
+    public async Task SetEnabledInstrumentsAsync(IEnumerable<string> instrumentNames)
+    {
+        try
+        {
+            var module = await _moduleTask.Value;
+            await module.InvokeVoidAsync("setEnabledInstruments", instrumentNames);
+        }
+        catch (Exception ex) { LogError(ex, nameof(SetEnabledInstrumentsAsync)); }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_moduleTask.IsValueCreated)
