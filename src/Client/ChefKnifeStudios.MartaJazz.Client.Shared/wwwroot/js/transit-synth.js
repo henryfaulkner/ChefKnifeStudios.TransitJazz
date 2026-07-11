@@ -1,57 +1,70 @@
 // transit-synth.js — Tone.js synthesis module for 009-transit-soundscape
-// Route → instrument (3-voice pure-synthesis palette)
+// Route → instrument (3-voice sampled palette via Tone.Sampler)
 // Pitch maps trigger position along route → C-minor pentatonic scale degree
 //
 // ============================================================================
-// PURE SYNTHESIS — see docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md for the full
-// rationale. Summary: the previous build used Tone.Sampler over FluidR3
-// soundfont MP3s (bowed strings — contrabass/viola/cello), which decodes each
-// note to a resident AudioBuffer and was the dominant lever on client RAM
-// (~1.2 GB regression, see docs/BROWSER_MEMORY_INVESTIGATION_DESIGN_DOCUMENT.md
-// §3.5). This build uses zero decoded audio — Tone.PluckSynth (Karplus-Strong
-// physical model), Tone.MonoSynth (subtractive sub bass), and Tone.FMSynth
-// (bell/mallet) — so the marginal cost of a voice is a config object, not a
-// sample fetch+decode. Sustained bowed strings are dropped from the palette
-// entirely (design doc §1): synthesis can't fake bow noise / pressure
-// micro-variation, but it's genuinely good at plucked/struck/FM timbres.
-//
-// The old file is preserved, unwired, at transit-synth.legacy.js for
-// reference/rollback (design doc §6) — do not delete it.
+// SAMPLER, NOT PURE SYNTHESIS — see docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md for
+// the pure-synthesis attempt this build replaces. Two problems with the pure
+// synthesis build (PluckSynth/MonoSynth/FMSynth):
+//   1. Those instruments are each a SINGLE monophonic voice. Every route
+//      shares one synth instance (instrumentFor(routeId)), so when two
+//      vehicles on the same route cross near-simultaneously, the second
+//      triggerAttackRelease() steals/retriggers the first note before it
+//      finishes — audibly dropped notes.
+//   2. Tone.Sampler fixes this for free: each triggerAttackRelease() call
+//      gets its own internally-managed voice, so overlapping notes on the
+//      same route no longer cut each other off.
+// Going back to Sampler reopens the RAM regression documented in
+// docs/BROWSER_MEMORY_INVESTIGATION_DESIGN_DOCUMENT.md §3.5 — mitigated with
+// the SAME three levers the legacy build used, PLUS a fourth that turned out to
+// be load-bearing here (an earlier version of this file omitted it and hit
+// ~1.7GB, WORSE than the original ~1.2GB regression):
+//   1. Sparse anchor notes per instrument (not a dense chromatic map) —
+//      Tone.Sampler pitch-shifts between supplied anchors.
+//   2. LAZY load — a slot's Sampler is built on first trigger, never eagerly.
+//   3. dispose-on-inactive — disposeInactiveRoutes() frees a slot's Sampler
+//      once no active route hashes to it anymore.
+//   4. *** SHARE BY PALETTE SLOT, NOT PER ROUTE. *** _instrumentCache is keyed
+//      by slot index (0..PALETTE.length-1), NOT routeId. Every route that
+//      hashes to the same slot reuses ONE Sampler/Filter/Reverb. Keying by
+//      routeId instead builds a DISTINCT Sampler (decoded anchor PCM) and a
+//      DISTINCT Tone.Reverb (its own convolution impulse-response buffer —
+//      also decoded audio) per ROUTE. On a system with dozens of concurrent
+//      routes that's dozens of duplicate instrument+reverb builds instead of
+//      3 — this is what drove RAM to 1.7GB. Do not key this cache by routeId.
+// Samples are FluidR3 GM (https://gleitz.github.io/midi-js-soundfonts,
+// {instrument}-mp3.js per-note base64 MP3s) — same CDN as the legacy build,
+// new instrument picks per docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md §1/§3
+// (plucked/struck families, NOT sustained bowed strings):
+//   pizzicato_strings (pluck), acoustic_bass (sub bass), tubular_bells (bell).
 // ============================================================================
 
 let _tone = null;
 let _unlocked = false;
-// routeId → { synth, scale, durations } once loaded, or a pending Promise while loading.
+// PALETTE index → { sampler, scale, durations } once loaded, or a pending Promise while
+// loading. Keyed by SLOT, not routeId — every route mapping to the same slot (there are
+// only PALETTE.length of them) shares one Sampler/Filter/Reverb. Keying by routeId instead
+// built a distinct Sampler + Reverb (each with its own decoded-PCM anchors AND its own
+// convolution impulse-response buffer) per ROUTE, which is what drove RAM past even the
+// original ~1.2GB regression on a system with dozens of concurrent routes.
 const _instrumentCache = new Map();
 
-// C-minor pentatonic across the low octaves used for harmony warmth. Synthesis has no
-// sample-count constraint, so the full scale is voiced directly (design doc §3).
+const SOUNDFONT_BASE = 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM';
+
+// C-minor pentatonic across the low octaves used for harmony warmth. These are the
+// PLAYED notes; the Sampler interpolates them from the anchor samples below.
 const SCALE = ['C2', 'Eb2', 'F2', 'G2', 'Bb2', 'C3', 'Eb3', 'F3', 'G3', 'Bb3'];
 
-// Three synthesized voices cycling across routes: pluck → sub bass → FM bell → pluck …
-// filterHz tames raw-oscillator harshness on the foreground/melodic signal (design doc §4).
+// Two anchor notes per instrument — the only MP3s actually fetched + decoded. One low,
+// one high, so the worst-case pitch shift to any SCALE note is ~3 semitones.
+const ANCHORS = { C2: 'C2', C3: 'C3' };
+
+// Three sampled voices cycling across routes: pluck → bass → bell → pluck …
+// Plucked/struck families (design doc §1) — NOT the old sustained-bowed-string palette.
 const PALETTE = [
-    {
-        type: 'pluck',
-        release: 1.2,
-        durations: ['4n', '4n.', '2n'],
-        filterHz: 3500,
-        volumeDb: -6,
-    },
-    {
-        type: 'subbass',
-        release: 0.5,
-        durations: ['8n', '8n.', '4n'],
-        filterHz: 3000,
-        volumeDb: -8,
-    },
-    {
-        type: 'fmbell',
-        release: 0.5,
-        durations: ['8n', '8n.', '4n'],
-        filterHz: 4000,
-        volumeDb: -10,
-    },
+    { instrument: 'pizzicato_strings', scale: SCALE, anchors: ANCHORS, release: 1.2, durations: ['4n', '4n.', '2n'] },
+    { instrument: 'acoustic_bass',     scale: SCALE, anchors: ANCHORS, release: 0.8, durations: ['8n', '8n.', '4n'] },
+    { instrument: 'tubular_bells',     scale: SCALE, anchors: ANCHORS, release: 1.0, durations: ['8n', '8n.', '4n'] },
 ];
 
 // Default Tone Transport tempo is 120 BPM (unchanged in this app):
@@ -72,11 +85,17 @@ function djb2(s) {
     return h >>> 0;
 }
 
+// Deterministic route → palette slot INDEX. Cheap (no audio nodes) — used both to pick the
+// duration set (_slotForRoute) and to key the shared Sampler cache (instrumentForSlot).
+function _slotIndexForRoute(routeId) {
+    return djb2(String(routeId)) % PALETTE.length;
+}
+
 // Deterministic, audio-independent duration token for a vehicle. Shared by triggerNote
 // (audible note) and durationSecondsFor (trail growth) so they always agree. Resolves the
 // route's palette slot so the token comes from that instrument's own duration set.
 function _slotForRoute(routeId) {
-    return PALETTE[djb2(String(routeId)) % PALETTE.length];
+    return PALETTE[_slotIndexForRoute(routeId)];
 }
 
 async function getTone() {
@@ -86,61 +105,52 @@ async function getTone() {
     return _tone;
 }
 
-// Builds the Tone.js synth instance for a palette slot's `type`. Each voice type maps to
-// the instrument family design doc §1/§3 identified as a good fit for pure synthesis.
-function buildSynth(T, type) {
-    switch (type) {
-        case 'pluck':
-            // Karplus-Strong physical model — plucked-string stand-in for the old "contrabass" slot.
-            return new T.PluckSynth({ attackNoise: 1, dampening: 4000, resonance: 0.9 });
-        case 'subbass':
-            // Subtractive: sine-ish osc + lowpass filter + short envelope, close to real bass.
-            return new T.MonoSynth({
-                oscillator: { type: 'sine' },
-                envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.8 },
-                filterEnvelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.5, baseFrequency: 200, octaves: 2 },
-            });
-        case 'fmbell':
-            // FM synthesis — brighter, mallet/kalimba-like character; fills the third-voice role.
-            return new T.FMSynth({
-                harmonicity: 3,
-                modulationIndex: 10,
-                envelope: { attack: 0.005, decay: 0.3, sustain: 0.1, release: 0.8 },
-                modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0, release: 0.3 },
-            });
-        default:
-            throw new Error(`[TransitSynth] unknown voice type: ${type}`);
+function buildSampleUrls(instrument, anchors) {
+    const urls = {};
+    for (const note of Object.keys(anchors)) {
+        urls[note] = `${SOUNDFONT_BASE}/${instrument}-mp3/${note}.mp3`;
     }
+    return urls;
 }
 
-// Lazily builds (and caches) the synth + per-voice effects chain for a route. Concurrent
-// callers share the same in-flight Promise so a voice never double-builds. Tone.Reverb has
-// its own async IR-generation cost (`generate()`), so it's built once here, not per note
-// (design doc §4).
-function instrumentFor(routeId) {
-    const cached = _instrumentCache.get(routeId);
+// Lazily builds (and caches) the Sampler + effects chain for a PALETTE SLOT — shared by
+// every route that hashes to that slot, so there are at most PALETTE.length Samplers/
+// Reverbs resident, never one per route. Concurrent callers (different routes hashing to
+// the same slot, or the same route) share the in-flight Promise so a voice never double-
+// loads. Tone.Reverb has its own async IR-generation cost (`generate()`), built once here,
+// not per note trigger (mirrors the lofi-station/lofi-engine reference recipe — see
+// docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md §4).
+function instrumentForSlot(slotIndex) {
+    const cached = _instrumentCache.get(slotIndex);
     if (cached) return cached;
 
-    const slot = PALETTE[djb2(String(routeId)) % PALETTE.length];
+    const slot = PALETTE[slotIndex];
 
-    const loading = getTone().then(async T => {
-        const synth = buildSynth(T, slot.type);
-        const filter = new T.Filter(slot.filterHz, 'lowpass');
+    const loading = getTone().then(T => new Promise((resolve, reject) => {
+        const filter = new T.Filter(3500, 'lowpass');
         const reverb = new T.Reverb({ decay: REVERB_DECAY, preDelay: REVERB_PRE_DELAY, wet: REVERB_WET });
-        const volume = new T.Volume(slot.volumeDb);
-        await reverb.generate();
-        synth.chain(filter, reverb, volume, T.Destination);
+        const sampler = new T.Sampler(
+            buildSampleUrls(slot.instrument, slot.anchors),
+            {
+                release: slot.release ?? 1.2,
+                onload: () => {
+                    reverb.generate().then(() => {
+                        sampler.chain(filter, reverb, T.Destination);
+                        const entry = { sampler, scale: slot.scale, durations: slot.durations };
+                        _instrumentCache.set(slotIndex, entry); // replace the pending Promise with the resolved entry
+                        resolve(entry);
+                    });
+                },
+                onerror: (err) => {
+                    console.error('[TransitSynth] sampler load failed for slot=' + slotIndex + ' instrument=' + slot.instrument, err);
+                    _instrumentCache.delete(slotIndex); // allow a later retry
+                    reject(err);
+                },
+            }
+        );
+    }));
 
-        const entry = { synth, scale: SCALE, durations: slot.durations };
-        _instrumentCache.set(routeId, entry); // replace the pending Promise with the resolved entry
-        return entry;
-    }).catch(err => {
-        console.error('[TransitSynth] synth build failed for routeId=' + routeId + ' type=' + slot.type, err);
-        _instrumentCache.delete(routeId); // allow a later retry
-        throw err;
-    });
-
-    _instrumentCache.set(routeId, loading);
+    _instrumentCache.set(slotIndex, loading);
     return loading;
 }
 
@@ -153,9 +163,9 @@ function noteForPosition(scale, triggerIndex, totalTriggers) {
     return scale[scaleIndex];
 }
 
-// LAZY build — a route's synth + effects chain is built on first trigger, never eagerly for
-// all routes. Kept as an export (the C# PreloadAsync call) but only warms the Tone.js import
-// so the first real trigger doesn't pay the module-load latency.
+// LAZY build replaces eager preload of every route. Kept as an export (the C#
+// PreloadAsync call) but now only warms the Tone.js import so the first real trigger
+// doesn't pay the module-load latency. No samples are fetched until a route first sounds.
 export async function preload(routeIds) {
     await getTone();
 }
@@ -194,10 +204,10 @@ export function isUnlocked() {
 export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTriggers = 1) {
     if (!_unlocked) return;
     try {
-        const { synth, scale, durations } = await instrumentFor(routeId);
+        const { sampler, scale, durations } = await instrumentForSlot(_slotIndexForRoute(routeId));
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
         const duration = durations[djb2(String(vehicleId)) % durations.length];
-        synth.triggerAttackRelease(note, duration);
+        sampler.triggerAttackRelease(note, duration);
     } catch (err) {
         console.warn('[TransitSynth] triggerNote error:', err);
     }
@@ -213,26 +223,30 @@ export function durationSecondsFor(vehicleId, routeId) {
     return DURATION_SECONDS[tok] ?? 0.25;
 }
 
-// Frees synths + effects chains for routes no longer active so the node graph doesn't
-// accumulate across a long session. Callable from the C# side with the current set of
-// routes that have live vehicles; any cached route NOT in that set is disposed.
+// Frees a slot's Sampler if NO active route hashes to it anymore, so decoded PCM doesn't
+// stay resident once its timbre has gone fully silent. Callable from the C# side with the
+// current set of routes that have live vehicles. Cache is keyed by PALETTE slot (at most
+// PALETTE.length entries, shared across all routes on that slot — see instrumentForSlot),
+// so this translates the route-id set to the slot-index set still in use before evicting.
 export function disposeInactiveRoutes(activeRouteIds) {
-    const active = new Set(Array.isArray(activeRouteIds) ? activeRouteIds.map(String) : []);
-    for (const routeId of [..._instrumentCache.keys()]) {
-        if (active.has(String(routeId))) continue;
-        const entry = _instrumentCache.get(routeId);
-        // Skip entries still loading (Promises) — don't dispose mid-build.
-        if (entry && entry.synth) {
-            try { entry.synth.dispose(); } catch (_) { /* ignore */ }
-            _instrumentCache.delete(routeId);
+    const activeSlots = new Set(
+        (Array.isArray(activeRouteIds) ? activeRouteIds : []).map(id => _slotIndexForRoute(id))
+    );
+    for (const slotIndex of [..._instrumentCache.keys()]) {
+        if (activeSlots.has(slotIndex)) continue;
+        const entry = _instrumentCache.get(slotIndex);
+        // Skip entries still loading (Promises) — don't dispose mid-fetch.
+        if (entry && entry.sampler) {
+            try { entry.sampler.dispose(); } catch (_) { /* ignore */ }
+            _instrumentCache.delete(slotIndex);
         }
     }
 }
 
 export async function dispose() {
     for (const entry of _instrumentCache.values()) {
-        if (entry && entry.synth) {
-            try { entry.synth.dispose(); } catch (_) { /* ignore */ }
+        if (entry && entry.sampler) {
+            try { entry.sampler.dispose(); } catch (_) { /* ignore */ }
         }
     }
     _instrumentCache.clear();
