@@ -52,8 +52,22 @@ public class Worker(
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
+            var tickStart = DateTime.UtcNow;
+            // Sampled once per tick and reused verbatim on every row (process-wide, not
+            // partitionable per city — summing across cities would be meaningless, R3).
+            var gcHeapBytes = GC.GetTotalMemory(false);
+            var workingSetBytes = Process.GetCurrentProcess().WorkingSet64;
+
+            var processedCities = new List<string>();
+            var tickHealthOk = true;
+            int tickTonesEmitted = 0, tickVehiclesProcessed = 0;
+            int tickVehicleStateCacheSize = 0, tickCrossingBaselineCacheSize = 0, tickRouteIndexSize = 0, tickRouteTriggerPointCacheSize = 0;
+
             foreach (var city in cities)
             {
+                var cityStart = DateTime.UtcNow;
+                CityTickResult result;
+
                 try
                 {
                     var feed = await city.FetchVehiclesAsync(stoppingToken);
@@ -61,19 +75,110 @@ public class Worker(
                     if (!_routeIndex.TryGetValue(city.Name, out var index) || index == null)
                     {
                         logger.LogWarning("City {City}: route index not ready, skipping tick.", city.Name);
-                        continue;
+                        result = CityTickResult.Unhealthy(city.Name, this);
                     }
-
-                    _routeMode.TryGetValue(city.Name, out var modeMap);
-                    if (feed.Entities.Count > 0)
-                        await ProcessSpatialReconciliationAsync(city, feed, index, modeMap, stoppingToken);
+                    else
+                    {
+                        _routeMode.TryGetValue(city.Name, out var modeMap);
+                        result = feed.Entities.Count > 0
+                            ? await ProcessSpatialReconciliationAsync(city, feed, index, modeMap, stoppingToken)
+                            : CityTickResult.Healthy(city.Name, this, feed.Header?.Timestamp, cityStart);
+                    }
                 }
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "City {City} tick failed; other cities unaffected", city.Name);
+                    result = CityTickResult.Unhealthy(city.Name, this);
+                }
+
+                if (city.EmitsTelemetry)
+                {
+                    var cityEnd = DateTime.UtcNow;
+                    eventNotifications.PostEvent(this, new TelemetryEvent
+                    {
+                        event_type = "PerCityCycle",
+                        event_id = Guid.NewGuid().ToString("N"),
+                        observation_utc = cityEnd,
+                        city_name = result.CityName,
+                        feed_freshness_seconds = result.FeedFreshnessSeconds,
+                        time_taken_seconds = (cityEnd - cityStart).TotalSeconds,
+                        health_ok = result.HealthOk,
+                        tones_emitted = result.TonesEmitted,
+                        vehicles_processed = result.VehiclesProcessed,
+                        gc_heap_bytes = gcHeapBytes,
+                        process_working_set_bytes = workingSetBytes,
+                        vehicle_state_cache_size = result.VehicleStateCacheSize,
+                        crossing_baseline_cache_size = result.CrossingBaselineCacheSize,
+                        route_index_size = result.RouteIndexSize,
+                        route_trigger_point_cache_size = result.RouteTriggerPointCacheSize
+                    });
+
+                    processedCities.Add(city.Name);
+                    tickHealthOk &= result.HealthOk;
+                    tickTonesEmitted += result.TonesEmitted;
+                    tickVehiclesProcessed += result.VehiclesProcessed;
+                    tickVehicleStateCacheSize += result.VehicleStateCacheSize;
+                    tickCrossingBaselineCacheSize += result.CrossingBaselineCacheSize;
+                    tickRouteIndexSize += result.RouteIndexSize;
+                    tickRouteTriggerPointCacheSize += result.RouteTriggerPointCacheSize;
                 }
             }
+
+            if (processedCities.Count > 0)
+            {
+                var tickEnd = DateTime.UtcNow;
+                eventNotifications.PostEvent(this, new TelemetryEvent
+                {
+                    event_type = "FullCycle",
+                    event_id = Guid.NewGuid().ToString("N"),
+                    observation_utc = tickEnd,
+                    cities_processed_count = processedCities.Count,
+                    cities_processed_csv = string.Join(",", processedCities),
+                    time_taken_seconds = (tickEnd - tickStart).TotalSeconds,
+                    health_ok = tickHealthOk,
+                    tones_emitted = tickTonesEmitted,
+                    vehicles_processed = tickVehiclesProcessed,
+                    gc_heap_bytes = gcHeapBytes,
+                    process_working_set_bytes = workingSetBytes,
+                    vehicle_state_cache_size = tickVehicleStateCacheSize,
+                    crossing_baseline_cache_size = tickCrossingBaselineCacheSize,
+                    route_index_size = tickRouteIndexSize,
+                    route_trigger_point_cache_size = tickRouteTriggerPointCacheSize
+                });
+            }
         }
+    }
+
+    /// <summary>Per-city outcome of one tick, surfaced out of <see cref="ProcessSpatialReconciliationAsync"/>
+    /// so the caller can post a PerCityCycle row on every path (healthy, not-ready, and failed) — R2/R5.</summary>
+    readonly record struct CityTickResult(
+        string CityName,
+        bool HealthOk,
+        double? FeedFreshnessSeconds,
+        int TonesEmitted,
+        int VehiclesProcessed,
+        int VehicleStateCacheSize,
+        int CrossingBaselineCacheSize,
+        int RouteIndexSize,
+        int RouteTriggerPointCacheSize)
+    {
+        public static CityTickResult Unhealthy(string cityName, Worker worker) => new(
+            cityName, HealthOk: false, FeedFreshnessSeconds: null, TonesEmitted: 0, VehiclesProcessed: 0,
+            VehicleStateCacheSize: worker.GetVehicleCache(cityName).Count,
+            CrossingBaselineCacheSize: worker.GetCrossingBaselines(cityName).Count,
+            RouteIndexSize: worker._routeIndex.TryGetValue(cityName, out var idx) ? idx.Count : 0,
+            RouteTriggerPointCacheSize: worker._routeTriggerPoints.TryGetValue(cityName, out var tp) ? tp.Count : 0);
+
+        public static CityTickResult Healthy(string cityName, Worker worker, ulong? feedHeaderTs, DateTime observationUtc) => new(
+            cityName, HealthOk: true,
+            FeedFreshnessSeconds: feedHeaderTs.HasValue
+                ? (observationUtc - DateTimeOffset.FromUnixTimeSeconds((long)feedHeaderTs.Value).UtcDateTime).TotalSeconds
+                : null,
+            TonesEmitted: 0, VehiclesProcessed: 0,
+            VehicleStateCacheSize: worker.GetVehicleCache(cityName).Count,
+            CrossingBaselineCacheSize: worker.GetCrossingBaselines(cityName).Count,
+            RouteIndexSize: worker._routeIndex.TryGetValue(cityName, out var idx) ? idx.Count : 0,
+            RouteTriggerPointCacheSize: worker._routeTriggerPoints.TryGetValue(cityName, out var tp) ? tp.Count : 0);
     }
 
     // Partition a flat list of shapes into per-city indexes using RouteShapeProperties.City.
@@ -227,7 +332,7 @@ public class Worker(
         return map;
     }
 
-    async Task ProcessSpatialReconciliationAsync(
+    async Task<CityTickResult> ProcessSpatialReconciliationAsync(
         ITransitCity city,
         FeedMessage feed,
         IReadOnlyDictionary<string, RoutePoint[]> index,
@@ -237,14 +342,10 @@ public class Worker(
         try
         {
             var vehicleStateCache = GetVehicleCache(city.Name);
-            var cycleId = Guid.NewGuid().ToString("N");
-            var cycleStart = DateTime.UtcNow;
 
             var batch = new List<RouteNearestPointBatchEvent.RouteNearestPointRecord>();
             var debugBatch = new List<BatchDebugRecord>();
             int movedCount = 0, unchangedCount = 0, stationaryCount = 0, staleCount = 0, skippedNoRouteId = 0, skippedUnknownRoute = 0;
-            var activeRouteIdSet = new HashSet<string>();
-            var activeVehicleIdSet = new HashSet<string>();
             var crossingRecords = new List<RouteCrossingBatchEvent.RouteCrossingRecord>();
             var baselineMap = GetCrossingBaselines(city.Name);
             _routeCumDist.TryGetValue(city.Name, out var cityCumDist);
@@ -270,9 +371,6 @@ public class Worker(
                         skippedUnknownRoute++;
                         continue;
                     }
-
-                    activeRouteIdSet.Add(routeId);
-                    activeVehicleIdSet.Add(vehicleId);
 
                     double lat = (double)entity.Vehicle.Position.Latitude;
                     double lon = (double)entity.Vehicle.Position.Longitude;
@@ -345,10 +443,6 @@ public class Worker(
 
                         var posDeltaKm = HaversineCalculator.DistanceKm(prior.NearestLat, prior.NearestLon, nearest.Lat, nearest.Lon);
                         var timeDeltaSec = (now - prior.LastUpdated).TotalSeconds;
-                        double? currentSpeed = entity.Vehicle.Position.Speed.HasValue ? (double)entity.Vehicle.Position.Speed.Value : null;
-                        double? currentBearing = entity.Vehicle.Position.Bearing.HasValue ? (double)entity.Vehicle.Position.Bearing.Value : null;
-                        double? priorSpeed = prior.SpeedMetersPerSec.HasValue ? (double)prior.SpeedMetersPerSec.Value : null;
-                        double? priorBearing = prior.Bearing.HasValue ? (double)prior.Bearing.Value : null;
 
                         debugRecord = new BatchDebugRecord(
                             VehicleId: vehicleId,
@@ -376,25 +470,6 @@ public class Worker(
                             Bearing: entity.Vehicle.Position.Bearing
                         );
 
-                        if (!isStale && city.EmitsTelemetry)
-                        {
-                            eventNotifications.PostEvent(this, new LerpEventArgs
-                            {
-                                CycleId = cycleId,
-                                ObservationUtc = now,
-                                VehicleId = vehicleId,
-                                PriorRouteId = prior.RouteId,
-                                PriorSnappedLat = prior.NearestLat,
-                                PriorSnappedLon = prior.NearestLon,
-                                PriorObservationUtc = prior.LastUpdated,
-                                PriorSpeedMps = priorSpeed,
-                                PriorBearingDeg = priorBearing,
-                                PosDeltaKm = posDeltaKm,
-                                SpeedDelta = currentSpeed.HasValue && priorSpeed.HasValue ? currentSpeed.Value - priorSpeed.Value : null,
-                                BearingDelta = currentBearing.HasValue && priorBearing.HasValue ? currentBearing.Value - priorBearing.Value : null,
-                                TimeDeltaSec = timeDeltaSec
-                            });
-                        }
                     }
                     else
                     {
@@ -443,28 +518,6 @@ public class Worker(
                     }
 
                     debugBatch.Add(debugRecord);
-
-                    if (city.EmitsTelemetry)
-                    {
-                        eventNotifications.PostEvent(this, new SnapEventArgs
-                        {
-                            CycleId = cycleId,
-                            ObservationUtc = now,
-                            VehicleId = vehicleId,
-                            RouteId = nearest.RouteId,
-                            SnapOutcome = outcome,
-                            RawLat = lat,
-                            RawLon = lon,
-                            SnappedLat = nearest.Lat,
-                            SnappedLon = nearest.Lon,
-                            SnapDistanceKm = snapValue.DistanceKm,
-                            SnapIndex = snapValue.Index,
-                            RoutePointCount = routePoints.Length,
-                            SpeedMps = entity.Vehicle.Position.Speed.HasValue ? (double)entity.Vehicle.Position.Speed.Value : null,
-                            BearingDeg = entity.Vehicle.Position.Bearing.HasValue ? (double)entity.Vehicle.Position.Bearing.Value : null,
-                            IsStale = isStale
-                        });
-                    }
 
                     if (!isStale)
                     {
@@ -535,30 +588,6 @@ public class Worker(
                 logger.LogInformation(
                     "Sidecar self-health: BufferOccupancy={Occupancy}, DroppedRecords={Dropped}, PersistFailures={Failures}",
                     bufferOccupancy, droppedRecords, persistFailures);
-
-                eventNotifications.PostEvent(this, new CycleEventArgs
-                {
-                    CycleId = cycleId,
-                    CycleStartUtc = cycleStart,
-                    CycleEndUtc = cycleEnd,
-                    CycleExecutionSeconds = (cycleEnd - cycleStart).TotalSeconds,
-                    BusesProcessed = movedCount + unchangedCount + stationaryCount + staleCount,
-                    BusesMoved = movedCount,
-                    BusesUnchanged = unchangedCount,
-                    BusesStationary = stationaryCount,
-                    BusesStale = staleCount,
-                    BusesSkippedNoRouteId = skippedNoRouteId,
-                    BusesSkippedUnknownRoute = skippedUnknownRoute,
-                    FeedHeaderTs = feedTs.HasValue ? (long)feedTs.Value : null,
-                    DuplicateFeed = feedIsDuplicate,
-                    ActiveRouteIds = string.Join(",", activeRouteIdSet.Order()),
-                    ActiveVehicleIds = string.Join(",", activeVehicleIdSet.Order()),
-                    LastUpdateCacheSize = 0,
-                    VehicleStateCacheSize = vehicleStateCache.Count,
-                    SidecarBufferOccupancy = bufferOccupancy,
-                    SidecarDroppedRecords = droppedRecords,
-                    SidecarPersistFailures = persistFailures
-                });
             }
 
             if (batch.Count > 0)
@@ -591,10 +620,26 @@ public class Worker(
                 if (!isBatchPublished)
                     logger.LogWarning("Failed to publish spatial reconciliation batch for city {City}.", city.Name);
             }
+
+            double? feedFreshnessSeconds = feedTs.HasValue
+                ? (cycleEnd - DateTimeOffset.FromUnixTimeSeconds((long)feedTs.Value).UtcDateTime).TotalSeconds
+                : null;
+
+            return new CityTickResult(
+                city.Name,
+                HealthOk: true,
+                FeedFreshnessSeconds: feedFreshnessSeconds,
+                TonesEmitted: crossingRecords.Count,
+                VehiclesProcessed: movedCount + unchangedCount + stationaryCount + staleCount,
+                VehicleStateCacheSize: vehicleStateCache.Count,
+                CrossingBaselineCacheSize: baselineMap.Count,
+                RouteIndexSize: index.Count,
+                RouteTriggerPointCacheSize: cityTriggerPoints?.Count ?? 0);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error in spatial reconciliation for city {City}.", city.Name);
+            return CityTickResult.Unhealthy(city.Name, this);
         }
     }
 

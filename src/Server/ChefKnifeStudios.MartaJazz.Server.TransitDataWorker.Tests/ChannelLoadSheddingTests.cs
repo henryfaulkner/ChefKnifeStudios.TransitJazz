@@ -27,16 +27,12 @@ public class ChannelLoadSheddingTests
         for (int i = 0; i < totalWrites; i++)
         {
             bool wasFull = channel.Reader.CanCount && channel.Reader.Count >= capacity;
-            channel.Writer.TryWrite(new SnapEventArgs
+            channel.Writer.TryWrite(new TelemetryEvent
             {
-                CycleId = $"cycle-{i}",
-                ObservationUtc = DateTime.UtcNow,
-                VehicleId = $"v{i}",
-                RouteId = "R1",
-                SnapOutcome = "Moved",
-                RawLat = 1, RawLon = 1, SnappedLat = 1, SnappedLon = 1,
-                SnapDistanceKm = 0, SnapIndex = 0, RoutePointCount = 10,
-                IsStale = false
+                event_type = "PerCityCycle",
+                event_id = $"event-{i}",
+                observation_utc = DateTime.UtcNow,
+                city_name = "MARTA"
             });
             if (wasFull) Interlocked.Increment(ref droppedCount);
         }
@@ -79,13 +75,12 @@ public class ChannelLoadSheddingTests
         // Post 10 events into a channel of capacity 2 — most should be dropped
         for (int i = 0; i < 10; i++)
         {
-            notifications.PostEvent(this, new SnapEventArgs
+            notifications.PostEvent(this, new TelemetryEvent
             {
-                CycleId = $"c{i}", ObservationUtc = DateTime.UtcNow,
-                VehicleId = "v1", RouteId = "R1", SnapOutcome = "Moved",
-                RawLat = 1, RawLon = 1, SnappedLat = 1, SnappedLon = 1,
-                SnapDistanceKm = 0, SnapIndex = 0, RoutePointCount = 5,
-                IsStale = false
+                event_type = "PerCityCycle",
+                event_id = $"c{i}",
+                observation_utc = DateTime.UtcNow,
+                city_name = "MARTA"
             });
         }
 

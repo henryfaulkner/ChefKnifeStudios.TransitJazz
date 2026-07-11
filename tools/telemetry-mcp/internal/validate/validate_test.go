@@ -6,7 +6,7 @@ import (
 )
 
 // TestFilterValidation covers the contract's accept and reject vectors over the
-// transit datasets (contracts/query_telemetry.tool.md).
+// telemetry dataset (specs/038-telemetry-denormalization/contracts/query-validator.md).
 func TestFilterValidation(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -15,56 +15,58 @@ func TestFilterValidation(t *testing.T) {
 		shouldErr bool
 		contains  string // substring expected in the error message
 	}{
-		// --- Accept vectors A1-A7 ---
-		{name: "A1 snap numeric", dataset: "snap", input: "snap_distance_km > 0.5", shouldErr: false},
-		{name: "A2 cycle numeric + bool", dataset: "cycle", input: "buses_stale > 10 AND duplicate_feed = false", shouldErr: false},
-		{name: "A3 lerp numeric + string", dataset: "lerp", input: "pos_delta_km > 1.0 AND vehicle_id = 'v001'", shouldErr: false},
-		{name: "A4 snap bool true", dataset: "snap", input: "is_stale = true", shouldErr: false},
-		{name: "A5 snap timestamp vs date", dataset: "snap", input: "observation_utc > '2026-06-04'", shouldErr: false},
-		{name: "A6 snap grouped predicate", dataset: "snap", input: "(snap_outcome = 'Moved' OR snap_outcome = 'Stale') AND raw_lat > 33.0", shouldErr: false},
-		{name: "A7 cycle sidecar metric", dataset: "cycle", input: "sidecar_dropped_records > 0", shouldErr: false},
+		// --- Accept vectors ---
+		{name: "event_type PerCityCycle", dataset: "telemetry", input: "event_type = 'PerCityCycle'", shouldErr: false},
+		{name: "event_type FullCycle", dataset: "telemetry", input: "event_type = 'FullCycle'", shouldErr: false},
+		{name: "health_ok false", dataset: "telemetry", input: "health_ok = false", shouldErr: false},
+		{name: "numeric + bool AND", dataset: "telemetry", input: "vehicles_processed > 0 AND health_ok = true", shouldErr: false},
+		{name: "city_name string", dataset: "telemetry", input: "city_name = 'MARTA'", shouldErr: false},
+		{name: "numeric OR", dataset: "telemetry", input: "tones_emitted >= 5 OR feed_freshness_seconds > 60", shouldErr: false},
+		{name: "timestamp vs date", dataset: "telemetry", input: "observation_utc > '2026-07-11'", shouldErr: false},
+		{name: "grouping + numeric", dataset: "telemetry", input: "(event_type = 'FullCycle' OR event_type = 'PerCityCycle') AND gc_heap_bytes > 100000000", shouldErr: false},
+		{name: "new cache-size numeric columns", dataset: "telemetry", input: "route_index_size > 0 AND crossing_baseline_cache_size >= 0", shouldErr: false},
 
 		// extra accept coverage: operators, whitespace, case-insensitive AND/OR/bool
-		{name: "all operators <=", dataset: "snap", input: "snap_distance_km <= 5.0", shouldErr: false},
-		{name: "inequality !=", dataset: "snap", input: "snap_outcome != 'Stale'", shouldErr: false},
-		{name: "whitespace handling", dataset: "cycle", input: "  buses_stale  >  10  ", shouldErr: false},
-		{name: "case insensitive and", dataset: "snap", input: "raw_lat > 33.0 and raw_lon < -84.0", shouldErr: false},
-		{name: "case insensitive bool", dataset: "snap", input: "is_stale = FALSE", shouldErr: false},
-		{name: "negative number", dataset: "snap", input: "bearing_deg > -1.5", shouldErr: false},
+		{name: "all operators <=", dataset: "telemetry", input: "time_taken_seconds <= 5.0", shouldErr: false},
+		{name: "inequality !=", dataset: "telemetry", input: "event_type != 'FullCycle'", shouldErr: false},
+		{name: "whitespace handling", dataset: "telemetry", input: "  vehicles_processed  >  10  ", shouldErr: false},
+		{name: "case insensitive and", dataset: "telemetry", input: "vehicles_processed > 0 and tones_emitted > 0", shouldErr: false},
+		{name: "case insensitive bool", dataset: "telemetry", input: "health_ok = FALSE", shouldErr: false},
+		{name: "negative number", dataset: "telemetry", input: "feed_freshness_seconds > -1.5", shouldErr: false},
 
-		// --- Reject vectors R2-R14 (R1 is ValidateDataset; tested separately) ---
-		{name: "R2 iris column sepal.length", dataset: "snap", input: "sepal.length > 5", shouldErr: true, contains: "unknown column"},
-		{name: "R3 dotted petal.length", dataset: "snap", input: "petal.length > 5", shouldErr: true, contains: "unknown column"},
-		{name: "R4 dotted snap.outcome", dataset: "snap", input: "snap.outcome > 5", shouldErr: true, contains: "unknown column"},
-		{name: "R5 cycle column on snap", dataset: "snap", input: "buses_stale > 10", shouldErr: true, contains: "unknown column"},
-		{name: "R6 bool col with number", dataset: "snap", input: "is_stale = 1", shouldErr: true, contains: "expects bool"},
-		{name: "R7 bool col with quoted", dataset: "snap", input: "is_stale = 'true'", shouldErr: true, contains: "expects bool"},
-		{name: "R8 timestamp col with number", dataset: "snap", input: "observation_utc > 1234567", shouldErr: true, contains: "date string"},
-		{name: "R9 full ISO timestamp colon", dataset: "snap", input: "observation_utc > '2026-06-04T12:00:00'", shouldErr: true, contains: "forbidden character"},
-		{name: "R10 semicolon", dataset: "cycle", input: "buses_stale > 10; DROP TABLE x", shouldErr: true, contains: "forbidden character"},
-		{name: "R11 forbidden keyword SELECT", dataset: "cycle", input: "SELECT * FROM cycle", shouldErr: true, contains: "forbidden keyword"},
-		{name: "R12 comment marker", dataset: "snap", input: "vehicle_id = 'v001' -- x", shouldErr: true, contains: "forbidden comment"},
-		{name: "R13 numeric col with string", dataset: "snap", input: "raw_lat = 'abc'", shouldErr: true, contains: "expects numeric"},
-		{name: "R14 string col with number", dataset: "snap", input: "vehicle_id = 123", shouldErr: true, contains: "expects string"},
+		// --- Reject vectors ---
+		{name: "retired snap column", dataset: "telemetry", input: "snap_distance_km > 0.5", shouldErr: true, contains: "unknown column"},
+		{name: "retired lerp column", dataset: "telemetry", input: "pos_delta_km > 1.0", shouldErr: true, contains: "unknown column"},
+		{name: "dropped dead column", dataset: "telemetry", input: "last_update_cache_size > 0", shouldErr: true, contains: "unknown column"},
+		{name: "bool col with number", dataset: "telemetry", input: "health_ok = 1", shouldErr: true, contains: "expects bool"},
+		{name: "bool col with quoted", dataset: "telemetry", input: "health_ok = 'true'", shouldErr: true, contains: "expects bool"},
+		{name: "string col unquoted", dataset: "telemetry", input: "event_type = PerCityCycle", shouldErr: true},
+		{name: "numeric col with string", dataset: "telemetry", input: "tones_emitted = 'five'", shouldErr: true, contains: "expects numeric"},
+		{name: "full ISO timestamp colon", dataset: "telemetry", input: "observation_utc > '2026-07-11T00:00:00'", shouldErr: true, contains: "forbidden character"},
+		{name: "dotted identifier", dataset: "telemetry", input: "event_type.value = 'x'", shouldErr: true, contains: "unexpected character"},
+		{name: "forbidden keyword SELECT", dataset: "telemetry", input: "SELECT * FROM telemetry", shouldErr: true, contains: "forbidden keyword"},
+		{name: "semicolon", dataset: "telemetry", input: "event_type = 'x'; DROP TABLE t", shouldErr: true, contains: "forbidden character"},
+		{name: "comment marker", dataset: "telemetry", input: "city_name = 'MARTA' -- x", shouldErr: true, contains: "forbidden comment"},
+		{name: "string col with number", dataset: "telemetry", input: "city_name = 123", shouldErr: true, contains: "expects string"},
 
-		// retained security guards over transit columns
-		{name: "pipe char", dataset: "snap", input: "raw_lat > 5 | cat", shouldErr: true, contains: "forbidden character"},
-		{name: "backtick char", dataset: "snap", input: "raw_lat > `cmd`", shouldErr: true, contains: "forbidden character"},
-		{name: "dollar sign", dataset: "snap", input: "raw_lat > $VAR", shouldErr: true, contains: "forbidden character"},
-		{name: "azure url", dataset: "snap", input: "vehicle_id = 'azure://blob'", shouldErr: true, contains: "forbidden data source"},
-		{name: "http url", dataset: "snap", input: "vehicle_id = 'http://example'", shouldErr: true, contains: "forbidden data source"},
-		{name: "unknown column generic", dataset: "snap", input: "password = 'secret'", shouldErr: true, contains: "unknown column"},
+		// retained security guards over telemetry columns
+		{name: "pipe char", dataset: "telemetry", input: "vehicles_processed > 5 | cat", shouldErr: true, contains: "forbidden character"},
+		{name: "backtick char", dataset: "telemetry", input: "vehicles_processed > `cmd`", shouldErr: true, contains: "forbidden character"},
+		{name: "dollar sign", dataset: "telemetry", input: "vehicles_processed > $VAR", shouldErr: true, contains: "forbidden character"},
+		{name: "azure url", dataset: "telemetry", input: "city_name = 'azure://blob'", shouldErr: true, contains: "forbidden data source"},
+		{name: "http url", dataset: "telemetry", input: "city_name = 'http://example'", shouldErr: true, contains: "forbidden data source"},
+		{name: "unknown column generic", dataset: "telemetry", input: "password = 'secret'", shouldErr: true, contains: "unknown column"},
 
 		// structural errors
-		{name: "empty filter", dataset: "snap", input: "", shouldErr: true, contains: "required"},
-		{name: "whitespace only", dataset: "snap", input: "   ", shouldErr: true},
-		{name: "exceeds max length", dataset: "snap", input: strings.Repeat("a", 300), shouldErr: true, contains: "exceeds maximum length"},
-		{name: "unterminated string", dataset: "snap", input: "vehicle_id = 'v001", shouldErr: true, contains: "unterminated string"},
-		{name: "forbidden char in string", dataset: "snap", input: "vehicle_id = 'v@01'", shouldErr: true, contains: "forbidden character"},
-		{name: "missing operator", dataset: "snap", input: "raw_lat 5.0", shouldErr: true, contains: "expected comparison operator"},
-		{name: "missing literal", dataset: "snap", input: "raw_lat >", shouldErr: true, contains: "expected"},
-		{name: "unclosed paren", dataset: "snap", input: "(raw_lat > 5.0", shouldErr: true, contains: "expected closing parenthesis"},
-		{name: "invalid number", dataset: "snap", input: "raw_lat > 5.0.1", shouldErr: true, contains: "unexpected"},
+		{name: "empty filter", dataset: "telemetry", input: "", shouldErr: true, contains: "required"},
+		{name: "whitespace only", dataset: "telemetry", input: "   ", shouldErr: true},
+		{name: "exceeds max length", dataset: "telemetry", input: strings.Repeat("a", 300), shouldErr: true, contains: "exceeds maximum length"},
+		{name: "unterminated string", dataset: "telemetry", input: "city_name = 'MARTA", shouldErr: true, contains: "unterminated string"},
+		{name: "forbidden char in string", dataset: "telemetry", input: "city_name = 'MAR@TA'", shouldErr: true, contains: "forbidden character"},
+		{name: "missing operator", dataset: "telemetry", input: "vehicles_processed 5", shouldErr: true, contains: "expected comparison operator"},
+		{name: "missing literal", dataset: "telemetry", input: "vehicles_processed >", shouldErr: true, contains: "expected"},
+		{name: "unclosed paren", dataset: "telemetry", input: "(vehicles_processed > 5", shouldErr: true, contains: "expected closing parenthesis"},
+		{name: "invalid number", dataset: "telemetry", input: "vehicles_processed > 5.0.1", shouldErr: true, contains: "unexpected"},
 	}
 
 	for _, tt := range tests {
@@ -89,7 +91,7 @@ func TestFilterValidation(t *testing.T) {
 	}
 }
 
-// TestCanonicalForm verifies transit columns re-emit as bare snake_case identifiers
+// TestCanonicalForm verifies telemetry columns re-emit as bare snake_case identifiers
 // (no dot-quoting), and that bool/timestamp literals canonicalize as expected.
 func TestCanonicalForm(t *testing.T) {
 	tests := []struct {
@@ -97,12 +99,12 @@ func TestCanonicalForm(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{dataset: "snap", input: "snap_distance_km > 0.5", expected: "snap_distance_km > 0.5"},
-		{dataset: "cycle", input: "  buses_stale  >  10  ", expected: "buses_stale > 10"},
-		{dataset: "lerp", input: "vehicle_id = 'v001'", expected: "vehicle_id = 'v001'"},
-		{dataset: "snap", input: "is_stale = false", expected: "is_stale = false"},
-		{dataset: "snap", input: "is_stale = FALSE", expected: "is_stale = false"},
-		{dataset: "snap", input: "observation_utc > '2026-06-04'", expected: "observation_utc > '2026-06-04'"},
+		{dataset: "telemetry", input: "tones_emitted > 5", expected: "tones_emitted > 5"},
+		{dataset: "telemetry", input: "  vehicles_processed  >  10  ", expected: "vehicles_processed > 10"},
+		{dataset: "telemetry", input: "city_name = 'MARTA'", expected: "city_name = 'MARTA'"},
+		{dataset: "telemetry", input: "health_ok = false", expected: "health_ok = false"},
+		{dataset: "telemetry", input: "health_ok = FALSE", expected: "health_ok = false"},
+		{dataset: "telemetry", input: "observation_utc > '2026-07-11'", expected: "observation_utc > '2026-07-11'"},
 	}
 
 	for _, tt := range tests {
@@ -118,14 +120,12 @@ func TestCanonicalForm(t *testing.T) {
 	}
 }
 
-// TestValidateDataset covers reject vector R1 and the accept set.
+// TestValidateDataset covers the single-dataset accept/reject set (FR-025).
 func TestValidateDataset(t *testing.T) {
-	for _, d := range []string{"snap", "lerp", "cycle"} {
-		if err := ValidateDataset(d); err != nil {
-			t.Errorf("expected %q to be accepted, got: %v", d, err)
-		}
+	if err := ValidateDataset("telemetry"); err != nil {
+		t.Errorf("expected %q to be accepted, got: %v", "telemetry", err)
 	}
-	for _, d := range []string{"other", "iris", "SNAP", "", "snap "} {
+	for _, d := range []string{"snap", "lerp", "cycle", "other", "iris", "TELEMETRY", "", "telemetry "} {
 		if err := ValidateDataset(d); err == nil {
 			t.Errorf("expected %q to be rejected", d)
 		}

@@ -12,10 +12,13 @@ import (
 
 // Run executes a validated filter against the named dataset/day partition using the
 // underlying tool. The data source is assembled from a constant template filled only
-// with the already-validated dataset and date, so operator input can never redirect it.
+// with the already-validated date, so operator input can never redirect it.
 func Run(ctx context.Context, cfg *config.Config, dataset, date, validatedFilter string) (string, error) {
-	// Build the read source from the fixed template: {StorageURI}/{dataset}/dt={date}/*.parquet
-	sourceGlob := fmt.Sprintf("%s/%s/dt=%s/*.parquet", cfg.StorageURI, dataset, date)
+	// Build the read source from the fixed template: {StorageURI}/dt={date}/*.parquet
+	// No {dataset} segment: StorageURI already points at the "telemetry" container, and
+	// there is only one dataset now (ParquetLoggingService writes dt=.../part-*.parquet
+	// directly under that container, not nested under a per-dataset prefix).
+	sourceGlob := fmt.Sprintf("%s/dt=%s/*.parquet", cfg.StorageURI, date)
 
 	// Build the full SQL query: the data source is fixed, only the filter varies
 	fullQuery := fmt.Sprintf("SELECT * FROM '%s' WHERE %s", sourceGlob, validatedFilter)

@@ -17,21 +17,18 @@ func main() {
 	// Simple stub: just echo a mock table
 	fmt.Println("Fetching and analyzing telemetry data from Azure Blob Storage...")
 
-	// Check that the query references the transit telemetry layout and one of the
-	// three known datasets (mirrors the constant source template the bridge assembles).
+	// Check that the query references the telemetry day-partitioned layout (mirrors
+	// the constant source template the bridge assembles: {StorageURI}/dt={date}/*.parquet).
 	lower := strings.ToLower(query)
-	if !strings.Contains(lower, "telemetry/") ||
-		(!strings.Contains(lower, "snap") &&
-			!strings.Contains(lower, "lerp") &&
-			!strings.Contains(lower, "cycle")) {
+	if !strings.Contains(lower, "telemetry") || !strings.Contains(lower, "dt=") {
 		fmt.Fprintln(os.Stderr, "Query validation error: telemetry dataset reference missing")
 		os.Exit(1)
 	}
 
-	// Return a transit-shaped mock result table.
-	fmt.Println(`+----------+------------+------------------+`)
-	fmt.Println(`| cycle_id | vehicle_id | observation_utc  |`)
-	fmt.Println(`+----------+------------+------------------+`)
-	fmt.Println(`| c-001    | v001       | 2026-06-04       |`)
-	fmt.Println(`+----------+------------+------------------+`)
+	// Return a telemetry-shaped mock result table.
+	fmt.Println(`+----------+-------------+------------------+`)
+	fmt.Println(`| event_id | event_type  | observation_utc  |`)
+	fmt.Println(`+----------+-------------+------------------+`)
+	fmt.Println(`| e-001    | FullCycle   | 2026-06-04       |`)
+	fmt.Println(`+----------+-------------+------------------+`)
 }

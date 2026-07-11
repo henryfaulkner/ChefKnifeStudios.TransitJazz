@@ -43,26 +43,25 @@ func main() {
 	// Define the query_telemetry tool
 	tool := mcp.NewTool(
 		"query_telemetry",
-		mcp.WithDescription("Query the TransitJazz telemetry datasets produced by the logging sidecar. "+
-			"Three datasets are available: "+
-			"snap (one row per per-vehicle snap decision in a reconciliation cycle), "+
-			"lerp (one row per per-vehicle position delta), and "+
-			"cycle (one row per completed reconciliation cycle: counts, timing, health). "+
-			"Supply a read-only filter over that dataset's columns. Only column names, "+
+		mcp.WithDescription("Query the TransitJazz telemetry dataset produced by the logging sidecar. "+
+			"One denormalized dataset is available: telemetry, discriminated by event_type — "+
+			"PerCityCycle (one row per telemetry-emitting city per tick) and "+
+			"FullCycle (one row per worker tick across all cities: counts, timing, health). "+
+			"Supply a read-only filter over the dataset's columns. Only column names, "+
 			"numeric/string/bool literals, comparison operators (<, <=, >, >=, =, !=), and "+
 			"logical connectors (AND, OR) are allowed. Timestamp columns compare against date "+
-			"strings (e.g. observation_utc > '2026-06-04'). Boolean columns compare against "+
-			"true/false (e.g. is_stale = false)."),
+			"strings (e.g. observation_utc > '2026-07-11'). Boolean columns compare against "+
+			"true/false (e.g. health_ok = false)."),
 		mcp.WithString("dataset",
 			mcp.Required(),
-			mcp.Description("Which dataset to query: one of \"snap\", \"lerp\", or \"cycle\"."),
+			mcp.Description("Which dataset to query: \"telemetry\"."),
 		),
 		mcp.WithString("date",
-			mcp.Description("UTC day to query, format YYYY-MM-DD (e.g. 2026-06-04). Optional; defaults to today (UTC)."),
+			mcp.Description("UTC day to query, format YYYY-MM-DD (e.g. 2026-07-11). Optional; defaults to today (UTC)."),
 		),
 		mcp.WithString("filter",
 			mcp.Required(),
-			mcp.Description("A read-only filter condition over the dataset's columns (e.g. 'snap_distance_km > 0.5 AND is_stale = false'). Only column names, numeric/string/bool literals, comparison operators (<, <=, >, >=, =, !=), and logical connectors (AND, OR) are allowed."),
+			mcp.Description("A read-only filter condition over the dataset's columns (e.g. \"event_type = 'FullCycle' AND health_ok = false\"). Only column names, numeric/string/bool literals, comparison operators (<, <=, >, >=, =, !=), and logical connectors (AND, OR) are allowed."),
 		),
 	)
 

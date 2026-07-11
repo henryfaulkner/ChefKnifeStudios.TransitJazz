@@ -27,20 +27,16 @@ public class FailureIsolationTests
         await worker.StartAsync(CancellationToken.None);
 
         // Post one event so there's something to flush
-        notifications.PostEvent(this, new CycleEventArgs
+        notifications.PostEvent(this, new TelemetryEvent
         {
-            CycleId = "cycle-1",
-            CycleStartUtc = DateTime.UtcNow,
-            CycleEndUtc = DateTime.UtcNow,
-            CycleExecutionSeconds = 0.1,
-            BusesProcessed = 0, BusesMoved = 0, BusesUnchanged = 0,
-            BusesStationary = 0, BusesStale = 0,
-            BusesSkippedNoRouteId = 0, BusesSkippedUnknownRoute = 0,
-            DuplicateFeed = false,
-            ActiveRouteIds = "", ActiveVehicleIds = "",
-            LastUpdateCacheSize = 0, VehicleStateCacheSize = 0,
-            SidecarBufferOccupancy = 0, SidecarDroppedRecords = 0,
-            SidecarPersistFailures = 0
+            event_type = "FullCycle",
+            event_id = "event-1",
+            observation_utc = DateTime.UtcNow,
+            cities_processed_count = 0,
+            cities_processed_csv = "",
+            time_taken_seconds = 0.1,
+            health_ok = true,
+            vehicles_processed = 0
         });
 
         // Give the consumer a moment to accumulate
