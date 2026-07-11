@@ -74,6 +74,16 @@ public class TransitSynthJsInterop : ITransitSynthJsInterop
         catch (Exception ex) { LogError(ex, nameof(TriggerNoteAsync)); }
     }
 
+    public async Task SetAudioEnabledAsync(bool enabled)
+    {
+        try
+        {
+            var module = await _moduleTask.Value;
+            await module.InvokeVoidAsync("setAudioEnabled", enabled);
+        }
+        catch (Exception ex) { LogError(ex, nameof(SetAudioEnabledAsync)); }
+    }
+
     public async Task<double> DurationSecondsForAsync(string vehicleId, string? routeId = null)
     {
         try

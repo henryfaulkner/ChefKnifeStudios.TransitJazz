@@ -102,6 +102,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _audioEnabled = settings.IsAudioEnabled;
         _checkpointsVisible = settings.AreCheckpointsVisible;
         _crossingTrailVisible = settings.IsCrossingTrailVisible;
+        _ = TransitSynth.SetAudioEnabledAsync(_audioEnabled);
 
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived += HandleSettingsEventReceived;
@@ -239,6 +240,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         if (e is AudioSettingChangedEventArgs audio)
         {
             _audioEnabled = audio.IsAudioEnabled;
+            _ = TransitSynth.SetAudioEnabledAsync(_audioEnabled);
             return;
         }
 

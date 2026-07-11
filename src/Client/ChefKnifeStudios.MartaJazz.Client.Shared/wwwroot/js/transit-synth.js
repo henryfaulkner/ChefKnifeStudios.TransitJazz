@@ -48,10 +48,33 @@
 // plain script, no bundler strip step) but are excluded by default via _enabledSlots
 // (seeded from PROD_INSTRUMENTS, see below). Only the #if DEBUG-gated SettingsBlade dev
 // panel calls setEnabledInstruments to opt them back in for development.
+//
+// SOFTNESS/TEXTURE PASS (post-anchor-notes tuning, informed by the sibling reference
+// projects lofi-engine and lofi-station): the original chain was
+// sampler → filter(3500Hz) → volume → reverb(wet 0.15) → Destination, per voice, dry and
+// bright, with fully deterministic (unrandomized) note/velocity/timing. Now:
+//   Per-voice: sampler → filter(1800Hz, darker) → StereoWidener(0.4) → volume →
+//              reverb(decay 1.4/wet 0.35, wetter+longer) → shared master bus.
+//   Master bus (built once, shared by all slots — see getMasterBus): Compressor → Filter
+//              (4000Hz) → Destination. A continuous quiet pink-noise bed (lowshelf-filtered,
+//              -38dB) feeds into the same compressor for constant ambient texture instead of
+//              dead silence between notes. The noise generator only STARTS when audio is
+//              enabled (see setAudioEnabled) — it must be silent whenever the app's mute
+//              setting is on, same as every other voice, not just note triggers.
+//   Per-note: triggerAttackRelease now passes a small randomized velocity (0.75-1.0) and a
+//              +/-20ms start-time jitter. Note/duration selection stays djb2-deterministic
+//              (durationSecondsFor must keep agreeing with what's actually played), so only
+//              velocity/timing are humanized, not pitch/duration choice.
 // ============================================================================
 
 let _tone = null;
 let _unlocked = false;
+// Mirrors the C# SettingsBlade "audio enabled" toggle (AudioSettingChangedEventArgs).
+// Gates the continuous noise bed the same way _audioEnabled gates triggerNote on the C#
+// side — the noise must never be audible while the app is muted. Defaults to true so the
+// noise behaves like every other voice until told otherwise; setAudioEnabled(false) is
+// expected to be called during init if the persisted setting is muted (see TransitMap.razor.cs).
+let _audioEnabled = true;
 // PROD SHIP LIST — only these instruments play unless a dev build opts more in via
 // setEnabledInstruments (see docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md — SettingsBlade dev
 // section, #if DEBUG-gated on the C# side). This file has no build-time dev/prod variants
@@ -132,10 +155,38 @@ const DURATION_SECONDS = {
     '2n': 1.0,
 };
 
-// Reverb parameters — shipped in v1, uniform across all voices (design doc §4/§7).
-const REVERB_DECAY = 0.8;
-const REVERB_PRE_DELAY = 0.01;
-const REVERB_WET = 0.15;
+// Reverb parameters — softened from the v1 shipped values (decay 0.8/wet 0.15) toward the
+// lofi-engine/lofi-station reference recipe (~1.5s decay / ~0.8 wet) for more tail/texture.
+const REVERB_DECAY = 1.4;
+const REVERB_PRE_DELAY = 0.02;
+const REVERB_WET = 0.35;
+
+// Per-voice lowpass cutoff — darkened from the original 3500Hz (barely filtered) toward the
+// lofi reference range (1000-2400Hz) for the "muffled"/soft character. Kept above the bowed
+// trio's playable range so contrabass/viola/cello aren't over-darkened.
+const FILTER_CUTOFF_HZ = 1800;
+
+// Per-voice stereo widener amount — 0 = mono/centered (the original had no spatial width at
+// all), matching the ~0.3-0.7 range lofi-engine uses per drum/instrument voice.
+const STEREO_WIDTH = 0.4;
+
+// Master bus (see buildMasterBus) — glue compressor + a second, gentler lowpass over the
+// whole mix, mirroring lofi-engine's Tone.Master.chain(compressor, lpf, volume).
+const MASTER_COMPRESSOR = { threshold: -18, ratio: 3, attack: 0.02, release: 0.25 };
+const MASTER_FILTER_HZ = 4000;
+
+// Continuous pink-noise bed — a quiet, constantly-running texture layer (tape-hiss/vinyl-air
+// surrogate) mixed under every voice via the master bus. Silent transport = no notes, but a
+// faint continuous bed rather than dead air, matching lofi-engine's Noise.ts recipe.
+const NOISE_VOLUME_DB = -38;
+const NOISE_FILTER_HZ = 2000;
+
+// Small per-note humanization bounds. Timing offset only nudges the AUDIBLE trigger time —
+// it must NOT change note/duration selection (djb2-driven, shared with durationSecondsFor
+// for trail-length sync), so only velocity and a tiny start-time jitter are randomized here.
+const HUMANIZE_TIME_JITTER_SEC = 0.02;
+const HUMANIZE_VELOCITY_MIN = 0.75;
+const HUMANIZE_VELOCITY_MAX = 1.0;
 
 // djb2 hash — deterministic, no crypto needed
 function djb2(s) {
@@ -176,6 +227,45 @@ async function getTone() {
     return _tone;
 }
 
+// Shared master bus: every slot's per-voice chain feeds into this instead of straight to
+// T.Destination, plus a constantly-running quiet pink-noise bed for continuous texture.
+// Built once, lazily, on first instrument load. Compressor gives the whole mix glue/cohesion;
+// the second lowpass further softens the combined signal beyond each voice's own filter.
+// The noise node is only STARTED if _audioEnabled is true at build time — see
+// setAudioEnabled, which starts/stops it on later mute toggles.
+let _masterBus = null;
+function getMasterBus(T) {
+    if (_masterBus) return _masterBus;
+    const compressor = new T.Compressor(MASTER_COMPRESSOR);
+    const filter = new T.Filter(MASTER_FILTER_HZ, 'lowpass');
+    compressor.chain(filter, T.Destination);
+
+    const noise = new T.Noise('pink');
+    const noiseFilter = new T.Filter(NOISE_FILTER_HZ, 'lowshelf');
+    const noiseVolume = new T.Volume(NOISE_VOLUME_DB);
+    noise.chain(noiseFilter, noiseVolume, compressor);
+    if (_audioEnabled) noise.start();
+
+    _masterBus = { input: compressor, noise };
+    return _masterBus;
+}
+
+// Mirrors the app's mute/unmute setting into the JS module. Called from C# on init (with the
+// persisted setting) and whenever AudioSettingChangedEventArgs fires. Starts/stops the
+// continuous noise bed immediately; if the master bus hasn't been built yet (no instrument
+// loaded so far), just records the flag so getMasterBus honors it when it IS built. Does NOT
+// touch triggerNote's own _unlocked/_audioEnabled gate on the C# side — that already prevents
+// note triggers while muted, this only covers the always-on noise bed.
+export function setAudioEnabled(enabled) {
+    _audioEnabled = !!enabled;
+    if (!_masterBus || !_masterBus.noise) return;
+    if (_audioEnabled) {
+        if (_masterBus.noise.state !== 'started') _masterBus.noise.start();
+    } else if (_masterBus.noise.state === 'started') {
+        _masterBus.noise.stop();
+    }
+}
+
 function buildSampleUrls(instrument, anchors) {
     const urls = {};
     for (const note of Object.keys(anchors)) {
@@ -198,7 +288,9 @@ function instrumentForSlot(slotIndex) {
     const slot = PALETTE[slotIndex];
 
     const loading = getTone().then(T => new Promise((resolve, reject) => {
-        const filter = new T.Filter(3500, 'lowpass');
+        const bus = getMasterBus(T);
+        const filter = new T.Filter(FILTER_CUTOFF_HZ, 'lowpass');
+        const widener = new T.StereoWidener(STEREO_WIDTH);
         const reverb = new T.Reverb({ decay: REVERB_DECAY, preDelay: REVERB_PRE_DELAY, wet: REVERB_WET });
         const volume = new T.Volume(slot.volumeDb ?? 0);
         const sampler = new T.Sampler(
@@ -208,7 +300,7 @@ function instrumentForSlot(slotIndex) {
                 release: slot.release ?? 1.2,
                 onload: () => {
                     reverb.generate().then(() => {
-                        sampler.chain(filter, volume, reverb, T.Destination);
+                        sampler.chain(filter, widener, volume, reverb, bus.input);
                         const entry = { sampler, scale: slot.scale, durations: slot.durations };
                         _instrumentCache.set(slotIndex, entry); // replace the pending Promise with the resolved entry
                         resolve(entry);
@@ -280,7 +372,11 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
         const { sampler, scale, durations } = await instrumentForSlot(_slotIndexForRoute(routeId));
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
         const duration = durations[djb2(String(vehicleId)) % durations.length];
-        sampler.triggerAttackRelease(note, duration);
+        // Humanize velocity + start time only — note/duration stay hash-deterministic so
+        // durationSecondsFor (trail length) always agrees with what's actually played.
+        const velocity = HUMANIZE_VELOCITY_MIN + Math.random() * (HUMANIZE_VELOCITY_MAX - HUMANIZE_VELOCITY_MIN);
+        const startTime = _tone.now() + (Math.random() * 2 - 1) * HUMANIZE_TIME_JITTER_SEC;
+        sampler.triggerAttackRelease(note, duration, startTime, velocity);
     } catch (err) {
         console.warn('[TransitSynth] triggerNote error:', err);
     }
@@ -346,8 +442,9 @@ export async function dispose() {
         }
     }
     _instrumentCache.clear();
+    _masterBus = null;
     _unlocked = false;
     _tone = null;
 }
 
-window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes, getInstrumentNames, setEnabledInstruments };
+window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes, getInstrumentNames, setEnabledInstruments, setAudioEnabled };
