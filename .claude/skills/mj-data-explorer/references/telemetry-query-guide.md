@@ -1,4 +1,4 @@
-<!-- last verified: 2026-06-11 -->
+<!-- last verified: 2026-07-11 -->
 
 # Telemetry Query Guide
 
@@ -11,31 +11,29 @@ building a filter.
 
 ```
 mcp__telemetry-query-bridge__query_telemetry
-  dataset  (string, required)  one of "snap" | "lerp" | "cycle"
+  dataset  (string, required)  "telemetry"
   date     (string, optional)  UTC day, "YYYY-MM-DD"; default = today (UTC)
-  filter   (string, required)  a predicate over THAT dataset's columns
+  filter   (string, required)  a predicate over the telemetry columns
 ```
 
 It returns the matching rows from exactly one day's partition
-(`{storage}/{dataset}/dt={date}/*.parquet`). It is **read-only and filter-only**:
+(`{storage}/dt={date}/*.parquet`). It is **read-only and filter-only**:
 
 - You cannot select specific columns, aggregate, sort, group, limit, or join.
 - You filter rows; you reason over the returned rows yourself.
 - Output is byte-bounded, so a broad filter on a busy day may be truncated — prefer
   a selective filter and, if needed, narrow further and re-query.
 
-> **Anticipate truncation, especially on `cycle`.** A broad probe like `cycle` /
-> `buses_processed > 0` can blow the token budget instantly — `cycle` rows carry the
-> very wide `active_route_ids` / `active_vehicle_ids` CSV columns, so even a single
-> day's ~30 cycles can exceed the limit (~57K chars). Assume `cycle` is large: lead
-> with the tightest filter that answers the question, or expect the result to spill to
-> a file and go straight to the file-read pattern below.
+> **Lead with `event_type`.** Every row is either `PerCityCycle` or `FullCycle` —
+> scoping on that first (e.g. `event_type = 'FullCycle' AND health_ok = false`) is
+> almost always the right way to narrow a broad question before adding more
+> conditions.
 
 ## Filter grammar (the allow-list)
 
 Allowed, and nothing else:
 
-- **Column names** from the chosen dataset (bare snake_case, no quotes, no dots).
+- **Column names** from the telemetry schema (bare snake_case, no quotes, no dots).
 - **Literals**: numbers (`-?\d+(\.\d+)?`), strings `'...'` (chars `[A-Za-z0-9 _-]`
   only), and bare booleans `true` / `false`.
 - **Comparison operators**: `<`, `<=`, `>`, `>=`, `=`, `!=`.
@@ -44,14 +42,14 @@ Allowed, and nothing else:
 
 Hard rules (a violation is rejected outright, not coerced):
 
-1. The column must exist **in the selected dataset**. A column that's valid in another
-   dataset is still rejected here.
+1. The column must exist in the telemetry schema. Retired per-vehicle snap/lerp
+   columns (`snap_distance_km`, `pos_delta_km`, etc.) are unknown columns now.
 2. The literal kind must match the column kind:
    - numeric column ↔ number
    - string column ↔ `'quoted'`
    - timestamp column ↔ `'YYYY-MM-DD'` date string (date granularity; no `T`/`:`)
    - bool column ↔ bare `true`/`false`
-3. No dotted identifiers (`a.b` → unknown column). No `:` or `T` inside strings.
+3. No dotted identifiers (`a.b` → rejected). No `:` or `T` inside strings.
 4. Forbidden anywhere: `;`, backtick, `$`, `|`, `&`, `\`, comment markers
    (`--`, `#`, `/* */`), SQL keywords (`SELECT`, `FROM`, `WHERE`, `UNION`, `JOIN`,
    `DROP`, `ATTACH`, `COPY`, `INSTALL`, `LOAD`, `SET`, `PRAGMA`, …), and any
@@ -63,43 +61,46 @@ Hard rules (a violation is rejected outright, not coerced):
 
 ## Accept examples
 
-| dataset | filter |
-|---------|--------|
-| `snap` | `snap_distance_km > 0.5` |
-| `snap` | `is_stale = true` |
-| `snap` | `observation_utc > '2026-06-04'` |
-| `snap` | `(snap_outcome = 'Moved' OR snap_outcome = 'Stale') AND raw_lat > 33.0` |
-| `lerp` | `pos_delta_km > 1.0 AND vehicle_id = 'v001'` |
-| `cycle` | `buses_stale > 10 AND duplicate_feed = false` |
-| `cycle` | `sidecar_dropped_records > 0` |
+| filter |
+|--------|
+| `event_type = 'PerCityCycle'` |
+| `event_type = 'FullCycle'` |
+| `health_ok = false` |
+| `vehicles_processed > 0 AND health_ok = true` |
+| `city_name = 'MARTA'` |
+| `tones_emitted >= 5 OR feed_freshness_seconds > 60` |
+| `observation_utc > '2026-07-11'` |
+| `(event_type = 'FullCycle' OR event_type = 'PerCityCycle') AND gc_heap_bytes > 100000000` |
+| `route_index_size > 0 AND crossing_baseline_cache_size >= 0` |
 
 ## Reject examples (and why)
 
-| dataset | filter | Why it fails |
-|---------|--------|--------------|
-| `other` | anything | dataset not in `{snap,lerp,cycle}` |
-| `snap` | `petal.length > 5` | unknown column / `.` not allowed |
-| `snap` | `buses_stale > 10` | cycle column used on snap |
-| `snap` | `is_stale = 1` | bool wants `true`/`false` |
-| `snap` | `is_stale = 'true'` | bool must be unquoted |
-| `snap` | `observation_utc > 1234567` | timestamp wants a date string |
-| `snap` | `observation_utc > '2026-06-04T12:00:00'` | `:`/`T` forbidden in strings |
-| `snap` | `raw_lat = 'abc'` | numeric column wants a number |
-| `snap` | `vehicle_id = 123` | string column wants a quoted string |
-| `cycle` | `SELECT * FROM cycle` | forbidden keyword |
+| filter | Why it fails |
+|--------|--------------|
+| dataset `snap` / `lerp` / `cycle` | those datasets no longer exist — only `telemetry` |
+| `snap_distance_km > 0.5` | retired per-vehicle column → unknown |
+| `pos_delta_km > 1.0` | retired lerp column → unknown |
+| `last_update_cache_size > 0` | dropped dead column → unknown |
+| `health_ok = 1` | bool wants `true`/`false` |
+| `health_ok = 'true'` | bool must be unquoted |
+| `event_type = PerCityCycle` | string wants quotes |
+| `tones_emitted = 'five'` | numeric wants a number |
+| `observation_utc > '2026-07-11T00:00:00'` | `:`/`T` forbidden in strings |
+| `event_type.value = 'x'` | dotted identifier — unexpected character |
+| `SELECT * FROM telemetry` | forbidden keyword |
 
 ## Output format & parsing
 
 The tool returns a **DuckDB ASCII box-drawing table**, not JSON. It looks like:
 
 ```
-┌──────────┬─────────────────┬─ … ─┐
-│ CYCLE ID │ BUSES PROCESSED │ …   │
-├──────────┼─────────────────┼─ … ─┤
-│ 680cc1b6 │ 197             │ …   │
+┌────────────┬────────────┬─ … ─┐
+│ EVENT TYPE │ EVENT ID   │ …   │
+├────────────┼────────────┼─ … ─┤
+│ FullCycle  │ 680cc1b6…  │ …   │
    …
-└──────────┴─────────────────┴─ … ─┘
-2026-06-11 (N rows)
+└────────────┴────────────┴─ … ─┘
+2026-07-11 (N rows)
 ```
 
 Consequences (all learned the hard way — don't rediscover them):
@@ -127,8 +128,8 @@ Consequences (all learned the hard way — don't rediscover them):
   ```powershell
   $sep = [char]0x2502
   $header = $lines[1] -split $sep                  # line 0 is the top border
-  # find a column's index by its header text, e.g. "ACTIVE ROUTE IDS"
-  $col = 0..($header.Count-1) | Where-Object { $header[$_].Trim() -eq "ACTIVE ROUTE IDS" }
+  # find a column's index by its header text, e.g. "CITIES PROCESSED CSV"
+  $col = 0..($header.Count-1) | Where-Object { $header[$_].Trim() -eq "CITIES PROCESSED CSV" }
   foreach ($row in $lines) {
     $cells = $row -split $sep
     if ($cells.Count -ne $header.Count) { continue }   # border / footer / wrapped row
@@ -137,56 +138,56 @@ Consequences (all learned the hard way — don't rediscover them):
   }
   ```
 
-  The `cycle` table has **23 columns**; `snap` and `lerp` have their own fixed counts
-  (derive once from the header, then reuse).
+  The `telemetry` table has **17 columns** (fewer populated per row depending on
+  `event_type` — non-applicable columns come back empty, not absent).
 
 ### Recipe: count distinct values from a CSV column
 
 Because the tool can't aggregate, the core move is **read rows, then reason in script**.
-The `cycle` columns `active_route_ids` / `active_vehicle_ids` are comma-separated sorted
-distinct lists — to answer "how many routes/buses are being processed", split one cell
-on commas and count:
+`cities_processed_csv` (FullCycle rows only) is a comma-separated list — to answer
+"how many cities are being processed", split one cell on commas and count:
 
 ```powershell
 $sep = [char]0x2502
 $lines = [System.IO.File]::ReadAllLines($path, [System.Text.Encoding]::UTF8)
 $header = $lines[1] -split $sep
-$ri = 0..($header.Count-1) | Where-Object { $header[$_].Trim() -eq "ACTIVE ROUTE IDS" }
+$ci = 0..($header.Count-1) | Where-Object { $header[$_].Trim() -eq "CITIES PROCESSED CSV" }
 foreach ($row in $lines) {
   $cells = $row -split $sep
   if ($cells.Count -ne $header.Count) { continue }
-  $routes = $cells[$ri].Trim()
-  $count  = if ($routes -eq "") { 0 } else { ($routes -split ",").Count }
-  "{0}  routes={1}" -f $cells[1].Trim().Substring(0,8), $count
+  $cities = $cells[$ci].Trim()
+  $count  = if ($cities -eq "") { 0 } else { ($cities -split ",").Count }
+  "{0}  cities={1}" -f $cells[1].Trim().Substring(0,8), $count
 }
 ```
 
-Comparing the per-cycle count across the day's cycles also tells you whether the number
-is **stable** or churning (routes flicker in/out as vehicles report), which is usually
-the real answer the user wants — not just a single snapshot.
+Comparing the count across the day's ticks also tells you whether it's **stable** or
+churning, which is usually the real answer the user wants — not just a single
+snapshot.
 
 ## Date handling
 
 - Omit `date` to get today (UTC). Pass `date` explicitly when the user names a day.
 - Format must be strict `YYYY-MM-DD`, zero-padded, a real calendar date
-  (`2026-6-4` and `2026-13-40` are rejected).
+  (`2026-7-1` and `2026-13-40` are rejected).
 - Each call reads exactly one day. To compare days, make one call per day and reason
   across the results.
 
 ## Working effectively
 
-- **Start broad-but-cheap, then narrow.** A first probe like `cycle` /
-  `buses_processed > 0` tells you the day has data and roughly how many cycles ran.
+- **Start broad-but-cheap, then narrow.** A first probe like
+  `event_type = 'FullCycle'` tells you the day has data and roughly how many ticks ran.
 - **Empty result is a signal, not an error** — it often means "no rows matched",
-  which can itself answer a yes/no question (e.g. "any persist failures today?").
+  which can itself answer a yes/no question (e.g. "any unhealthy ticks today?").
 - **To approximate a count/threshold** without aggregation: filter to the condition
   and count the rows that come back (mind output truncation on busy days — tighten the
   filter if you suspect truncation).
-- **Pivot via join keys yourself.** `cycle_id` links `snap`/`lerp` rows to a `cycle`
-  row; `vehicle_id` links a bus across `snap` and `lerp`. Query each dataset
-  separately and correlate in your reasoning.
-- **On a rejection**, fix the filter against the rules above (most often: wrong
-  dataset for the column, or wrong literal kind) — don't retry the same string.
+- **Pivot via `event_id`/`city_name`/time window yourself** — there's no cross-row
+  join key like the old `cycle_id`; each row is independently identified. Correlate
+  `PerCityCycle` and `FullCycle` rows by matching `observation_utc` within the same
+  tick and `city_name` against `cities_processed_csv`.
+- **On a rejection**, fix the filter against the rules above (most often: retired
+  column, or wrong literal kind) — don't retry the same string.
 
 ## Error handling
 

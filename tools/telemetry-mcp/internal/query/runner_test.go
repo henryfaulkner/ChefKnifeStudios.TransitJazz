@@ -37,20 +37,20 @@ func TestRunWithStubTool(t *testing.T) {
 		shouldContain string
 	}{
 		{
-			name:          "valid snap query",
-			dataset:       "snap",
+			name:          "valid telemetry query",
+			dataset:       "telemetry",
 			date:          "2026-06-04",
-			filter:        "snap_distance_km > 0.5",
+			filter:        "event_type = 'PerCityCycle'",
 			shouldErr:     false,
-			shouldContain: "cycle_id",
+			shouldContain: "event_id",
 		},
 		{
-			name:          "valid cycle query",
-			dataset:       "cycle",
+			name:          "valid full-cycle query",
+			dataset:       "telemetry",
 			date:          "2026-06-04",
-			filter:        "buses_stale > 10",
+			filter:        "health_ok = false",
 			shouldErr:     false,
-			shouldContain: "vehicle_id",
+			shouldContain: "event_id",
 		},
 	}
 
@@ -82,7 +82,8 @@ func TestRunWithStubTool(t *testing.T) {
 }
 
 // TestSourceGlobConstruction asserts the read source is assembled from the fixed
-// template {StorageURI}/{dataset}/dt={date}/*.parquet for each dataset, and that the
+// template {StorageURI}/dt={date}/*.parquet (no {dataset} segment: StorageURI already
+// points at the "telemetry" container and there is only one dataset now), and that the
 // filter content never appears before the WHERE clause. This is the structural
 // guarantee that operator input cannot redirect the data source (FR-012 / SC-006).
 func TestSourceGlobConstruction(t *testing.T) {
@@ -101,32 +102,32 @@ func TestSourceGlobConstruction(t *testing.T) {
 		wantInQuery string
 	}{
 		{
-			name:        "snap explicit date",
-			dataset:     "snap",
+			name:        "per-city-cycle explicit date",
+			dataset:     "telemetry",
 			date:        "2026-06-04",
-			filter:      "snap_distance_km > 0.5",
-			wantInQuery: "SELECT * FROM 'azure://telemetry/snap/dt=2026-06-04/*.parquet' WHERE snap_distance_km > 0.5",
+			filter:      "event_type = 'PerCityCycle'",
+			wantInQuery: "SELECT * FROM 'azure://telemetry/dt=2026-06-04/*.parquet' WHERE event_type = 'PerCityCycle'",
 		},
 		{
-			name:        "lerp explicit date",
-			dataset:     "lerp",
+			name:        "full-cycle explicit date",
+			dataset:     "telemetry",
 			date:        "2026-06-04",
-			filter:      "pos_delta_km > 1.0",
-			wantInQuery: "SELECT * FROM 'azure://telemetry/lerp/dt=2026-06-04/*.parquet' WHERE pos_delta_km > 1.0",
+			filter:      "health_ok = false",
+			wantInQuery: "SELECT * FROM 'azure://telemetry/dt=2026-06-04/*.parquet' WHERE health_ok = false",
 		},
 		{
-			name:        "cycle explicit date",
-			dataset:     "cycle",
+			name:        "numeric filter explicit date",
+			dataset:     "telemetry",
 			date:        "2026-06-04",
-			filter:      "buses_stale > 10",
-			wantInQuery: "SELECT * FROM 'azure://telemetry/cycle/dt=2026-06-04/*.parquet' WHERE buses_stale > 10",
+			filter:      "vehicles_processed > 10",
+			wantInQuery: "SELECT * FROM 'azure://telemetry/dt=2026-06-04/*.parquet' WHERE vehicles_processed > 10",
 		},
 		{
 			name:        "defaulted today UTC date",
-			dataset:     "snap",
+			dataset:     "telemetry",
 			date:        time.Now().UTC().Format("2006-01-02"),
-			filter:      "raw_lat > 0",
-			wantInQuery: "azure://telemetry/snap/dt=" + time.Now().UTC().Format("2006-01-02") + "/*.parquet",
+			filter:      "tones_emitted > 0",
+			wantInQuery: "azure://telemetry/dt=" + time.Now().UTC().Format("2006-01-02") + "/*.parquet",
 		},
 	}
 
@@ -177,7 +178,7 @@ func TestTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := Run(ctx, cfg, "snap", "2026-06-04", "snap_distance_km > 5.0")
+	_, err := Run(ctx, cfg, "telemetry", "2026-06-04", "vehicles_processed > 5")
 	if err == nil {
 		t.Error("expected error for nonexistent tool")
 	}

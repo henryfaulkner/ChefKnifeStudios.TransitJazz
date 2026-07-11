@@ -15,9 +15,7 @@ const (
 // validDatasets is the literal set of dataset names this bridge serves. A dataset
 // outside this set is rejected before any filter is parsed (FR-001).
 var validDatasets = map[string]bool{
-	"snap":  true,
-	"lerp":  true,
-	"cycle": true,
+	"telemetry": true,
 }
 
 // dateRegex enforces a strict, zero-padded calendar date. It is structurally
@@ -34,65 +32,34 @@ const (
 	kindBool
 )
 
-// datasetColumns maps each dataset to its column -> value-kind contract. These
-// mirror specs/014-transit-datasets/data-model.md exactly (frozen feature-013
-// snake_case contract). A column belongs to exactly one value kind within a
-// dataset; all numeric parquet types (DOUBLE/INT32/INT64 + nullable variants)
-// collapse to kindNumeric.
+// datasetColumns maps each dataset to its column -> value-kind contract. This
+// mirrors specs/038-telemetry-denormalization/contracts/telemetry-event-schema.md
+// exactly (frozen TelemetryEvent snake_case contract). A column belongs to exactly
+// one value kind within a dataset; all numeric parquet types (DOUBLE/INT32/INT64 +
+// nullable variants) collapse to kindNumeric.
 var datasetColumns = map[string]map[string]valueKind{
-	"snap": {
-		"cycle_id":          kindString,
-		"observation_utc":   kindTimestamp,
-		"vehicle_id":        kindString,
-		"route_id":          kindString,
-		"snap_outcome":      kindString,
-		"raw_lat":           kindNumeric,
-		"raw_lon":           kindNumeric,
-		"snapped_lat":       kindNumeric,
-		"snapped_lon":       kindNumeric,
-		"snap_distance_km":  kindNumeric,
-		"snap_index":        kindNumeric,
-		"route_point_count": kindNumeric,
-		"speed_mps":         kindNumeric,
-		"bearing_deg":       kindNumeric,
-		"is_stale":          kindBool,
-	},
-	"lerp": {
-		"cycle_id":              kindString,
-		"observation_utc":       kindTimestamp,
-		"vehicle_id":            kindString,
-		"prior_route_id":        kindString,
-		"prior_snapped_lat":     kindNumeric,
-		"prior_snapped_lon":     kindNumeric,
-		"prior_observation_utc": kindTimestamp,
-		"prior_speed_mps":       kindNumeric,
-		"prior_bearing_deg":     kindNumeric,
-		"pos_delta_km":          kindNumeric,
-		"speed_delta":           kindNumeric,
-		"bearing_delta":         kindNumeric,
-		"time_delta_sec":        kindNumeric,
-	},
-	"cycle": {
-		"cycle_id":                    kindString,
-		"cycle_start_utc":             kindTimestamp,
-		"cycle_end_utc":               kindTimestamp,
-		"cycle_execution_seconds":     kindNumeric,
-		"buses_processed":             kindNumeric,
-		"buses_moved":                 kindNumeric,
-		"buses_unchanged":             kindNumeric,
-		"buses_stationary":            kindNumeric,
-		"buses_stale":                 kindNumeric,
-		"buses_skipped_no_route_id":   kindNumeric,
-		"buses_skipped_unknown_route": kindNumeric,
-		"feed_header_ts":              kindNumeric,
-		"duplicate_feed":              kindBool,
-		"active_route_ids":            kindString,
-		"active_vehicle_ids":          kindString,
-		"last_update_cache_size":      kindNumeric,
-		"vehicle_state_cache_size":    kindNumeric,
-		"sidecar_buffer_occupancy":    kindNumeric,
-		"sidecar_dropped_records":     kindNumeric,
-		"sidecar_persist_failures":    kindNumeric,
+	"telemetry": {
+		// common
+		"event_type":      kindString,
+		"event_id":        kindString,
+		"observation_utc": kindTimestamp,
+		// per-city only
+		"city_name":               kindString,
+		"feed_freshness_seconds":  kindNumeric,
+		// full-cycle only
+		"cities_processed_count": kindNumeric,
+		"cities_processed_csv":   kindString,
+		// shared
+		"time_taken_seconds":             kindNumeric,
+		"health_ok":                      kindBool,
+		"tones_emitted":                  kindNumeric,
+		"vehicles_processed":             kindNumeric,
+		"gc_heap_bytes":                  kindNumeric,
+		"process_working_set_bytes":      kindNumeric,
+		"vehicle_state_cache_size":       kindNumeric,
+		"crossing_baseline_cache_size":   kindNumeric,
+		"route_index_size":               kindNumeric,
+		"route_trigger_point_cache_size": kindNumeric,
 	},
 }
 
@@ -130,12 +97,12 @@ type Token struct {
 	Value string
 }
 
-// ValidateDataset rejects any dataset name not in the literal set {snap,lerp,cycle}.
+// ValidateDataset rejects any dataset name not in the literal set {telemetry}.
 // It must be called before the filter is parsed so an unknown dataset never reaches
 // SQL (FR-001).
 func ValidateDataset(dataset string) error {
 	if !validDatasets[dataset] {
-		return fmt.Errorf("unknown dataset %q: must be one of snap, lerp, cycle", dataset)
+		return fmt.Errorf("unknown dataset %q: must be one of telemetry", dataset)
 	}
 	return nil
 }
@@ -158,7 +125,7 @@ func ValidateDate(date string) (string, error) {
 func Filter(dataset, input string) (string, error) {
 	columns, ok := datasetColumns[dataset]
 	if !ok {
-		return "", fmt.Errorf("unknown dataset %q: must be one of snap, lerp, cycle", dataset)
+		return "", fmt.Errorf("unknown dataset %q: must be one of telemetry", dataset)
 	}
 
 	if input == "" {

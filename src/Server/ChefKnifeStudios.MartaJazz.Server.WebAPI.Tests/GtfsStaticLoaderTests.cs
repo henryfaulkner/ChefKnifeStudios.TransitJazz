@@ -1,5 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.GtfsStatic;
-using System.IO;
+using ChefKnifeStudios.MartaJazz.Shared.Events;
 using System.IO.Compression;
 using System.Text;
 using Xunit;
@@ -147,12 +147,12 @@ public class GtfsStaticLoaderTests
         var (shuttleName, shuttleColor, _, shuttleMode) = meta["Shuttle-ForestHillsJackson"];
         Assert.Equal("Orange Line Shuttle", shuttleName);
         Assert.Equal("#FFC72C", shuttleColor);
-        Assert.Equal(Shared.TransitMode.Bus, shuttleMode);
+        Assert.Equal(TransitMode.Bus, shuttleMode);
 
         var (_, kingstonColor, kingstonText, kingstonMode) = meta["CR-Kingston"];
         Assert.Equal("#80276C", kingstonColor);
         Assert.Equal("#FFFFFF", kingstonText);
-        Assert.Equal(Shared.TransitMode.Rail, kingstonMode);
+        Assert.Equal(TransitMode.Rail, kingstonMode);
     }
 
     // ── ParseRouteMetadata — MARTA fixture ───────────────────────────────────
@@ -175,7 +175,7 @@ public class GtfsStaticLoaderTests
         Assert.Equal("110", name);
         Assert.Equal("#0E6B4A", color);
         Assert.Equal("#FFFFFF", textColor);
-        Assert.Equal(Shared.TransitMode.Bus, mode);
+        Assert.Equal(TransitMode.Bus, mode);
     }
 
     [Fact]
