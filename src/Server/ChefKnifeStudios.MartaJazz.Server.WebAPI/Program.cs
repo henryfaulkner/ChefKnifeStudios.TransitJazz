@@ -27,6 +27,8 @@ builder.Services.AddProblemDetails();
 
 builder.Services.AddOpenApi();
 
+builder.Services.AddMemoryCache();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Default", policy =>
@@ -141,7 +143,8 @@ app.MapHub<WorkerTransitHub>("/hubs/worker-transit")
 
 app.MapTestEndpoints()
     .MapGtfsEndpoints()
-    .MapTransitEndpoints();
+    .MapTransitEndpoints()
+    .MapTelemetryEndpoints();
 
 app.MapDefaultEndpoints();
 
