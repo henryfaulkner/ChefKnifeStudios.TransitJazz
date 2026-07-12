@@ -8,7 +8,7 @@ public sealed record RouteCrossingBatchEvent(
 {
     public sealed record RouteCrossingRecord(
         string VehicleId,
-        string RouteId,
+        string RouteJoinKey,
         int TriggerIndex,
         int TotalTriggers,
         // Milliseconds into the batch window at which this checkpoint was actually crossed,

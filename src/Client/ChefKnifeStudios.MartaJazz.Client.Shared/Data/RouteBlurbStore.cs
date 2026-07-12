@@ -6,7 +6,7 @@ namespace ChefKnifeStudios.MartaJazz.Client.Shared.Data;
 
 public interface IRouteBlurbStore
 {
-    RouteBlurb GetForRoute(string routeId);
+    RouteBlurb GetForRoute(string routeJoinKey);
 }
 
 public sealed class RouteBlurbStore : IRouteBlurbStore
@@ -23,12 +23,12 @@ public sealed class RouteBlurbStore : IRouteBlurbStore
         _localizer = localizer;
     }
 
-    public RouteBlurb GetForRoute(string routeId)
+    public RouteBlurb GetForRoute(string routeJoinKey)
     {
-        if (_authored.TryGetValue(routeId ?? string.Empty, out var blurb))
+        if (_authored.TryGetValue(routeJoinKey ?? string.Empty, out var blurb))
             return blurb;
 
-        var placeholder = string.Format(_localizer["RouteBlurbPlaceholder"], routeId ?? string.Empty);
-        return new RouteBlurb(routeId ?? string.Empty, placeholder, placeholder, IsPlaceholder: true);
+        var placeholder = string.Format(_localizer["RouteBlurbPlaceholder"], routeJoinKey ?? string.Empty);
+        return new RouteBlurb(routeJoinKey ?? string.Empty, placeholder, placeholder, IsPlaceholder: true);
     }
 }

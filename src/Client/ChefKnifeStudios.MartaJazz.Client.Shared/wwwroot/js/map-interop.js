@@ -286,24 +286,24 @@ window.ChefMap = {
         }
     },
 
-    // Coordinate lookup for pulse targeting — routeId → Feature[].
+    // Coordinate lookup for pulse targeting — routeJoinKey → Feature[].
     // Also pushed to the 'trigger-points' source for the all-checkpoints overlay.
     _triggerPointFeatures: {},
 
-    addTriggerPointMarkers: function (containerDivId, routeId, triggerPoints, coords) {
+    addTriggerPointMarkers: function (containerDivId, routeJoinKey, triggerPoints, coords) {
         var map = ChefMap.maps[containerDivId];
         if (!map) return;
 
-        var routeColor = ChefMap._routeColorsByRouteId[routeId] || '#facc15';
+        var routeColor = ChefMap._routeColorsByRouteJoinKey[routeJoinKey] || '#facc15';
 
         // Accumulate this route's features — do NOT rebuild/flush the combined collection here.
         // flushTriggerPoints() does a single combined setData after all routes are added.
-        ChefMap._triggerPointFeatures[routeId] = triggerPoints.map(function (tp) {
+        ChefMap._triggerPointFeatures[routeJoinKey] = triggerPoints.map(function (tp) {
             var coord = coords[tp.index] || coords[coords.length - 1];
             return {
                 type: 'Feature',
                 geometry: { type: 'Point', coordinates: coord },
-                properties: { routeId: routeId, triggerIndex: tp.index, alongDistanceM: tp.alongDistanceM, color: routeColor }
+                properties: { routeJoinKey: routeJoinKey, triggerIndex: tp.index, alongDistanceM: tp.alongDistanceM, color: routeColor }
             };
         });
 
@@ -364,21 +364,21 @@ window.ChefMap = {
         map.setLayoutProperty('trigger-points-layer', 'visibility', visible ? 'visible' : 'none');
     },
 
-    _routeColorsByRouteId: {},  // routeId → data color, for vehicle dot coloring
+    _routeColorsByRouteJoinKey: {},  // routeJoinKey → data color, for vehicle dot coloring
 
     _applyVehicleRouteColors: function (containerDivId) {
         let map = ChefMap.maps[containerDivId];
         if (!map || !map.getLayer('vehicles-layer')) return;
 
-        let entries = Object.entries(ChefMap._routeColorsByRouteId);
+        let entries = Object.entries(ChefMap._routeColorsByRouteJoinKey);
         if (entries.length === 0) return;
 
-        // Build a MapLibre match expression: ['match', ['get', 'routeId'], id, color, ..., fallback]
-        let matchExpr = ['match', ['get', 'routeId']];
+        // Build a MapLibre match expression: ['match', ['get', 'routeJoinKey'], id, color, ..., fallback]
+        let matchExpr = ['match', ['get', 'routeJoinKey']];
         entries.forEach(function (pair) {
             matchExpr.push(pair[0], pair[1]);
         });
-        matchExpr.push('#6b7280');  // fallback for unknown routeId
+        matchExpr.push('#6b7280');  // fallback for unknown routeJoinKey
 
         map.setPaintProperty('vehicles-layer', 'circle-color', matchExpr);
     },
@@ -391,9 +391,9 @@ window.ChefMap = {
 
         // Build match expressions: selected routes get their route color at full opacity;
         // all others get grey at reduced opacity.
-        let colorExpr = ['match', ['get', 'routeId']];
-        let opacityExpr = ['match', ['get', 'routeId']];
-        Object.entries(ChefMap._routeColorsByRouteId).forEach(function ([rid, color]) {
+        let colorExpr = ['match', ['get', 'routeJoinKey']];
+        let opacityExpr = ['match', ['get', 'routeJoinKey']];
+        Object.entries(ChefMap._routeColorsByRouteJoinKey).forEach(function ([rid, color]) {
             colorExpr.push(rid, selected.has(rid) ? color : '#9ca3af');
             opacityExpr.push(rid, selected.has(rid) ? 0.95 : 0.35);
         });
@@ -404,8 +404,8 @@ window.ChefMap = {
         map.setPaintProperty('routes-layer', 'line-opacity', opacityExpr);
     },
 
-    focusRoute: function (containerDivId, routeId) {
-        ChefMap.focusRoutes(containerDivId, [routeId]);
+    focusRoute: function (containerDivId, routeJoinKey) {
+        ChefMap.focusRoutes(containerDivId, [routeJoinKey]);
     },
 
     clearRouteFocus: function (containerDivId) {
@@ -417,28 +417,28 @@ window.ChefMap = {
         map.setPaintProperty('routes-layer', 'line-opacity', 0.7);
     },
 
-    pulseCheckpoint: async function (containerDivId, routeId, triggerIndex) {
+    pulseCheckpoint: async function (containerDivId, routeJoinKey, triggerIndex) {
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
 
-        let features = ChefMap._triggerPointFeatures[routeId];
+        let features = ChefMap._triggerPointFeatures[routeJoinKey];
         if (!features) {
-            console.warn('[ChefMap] pulseCheckpoint: no trigger features for routeId=' + routeId);
+            console.warn('[ChefMap] pulseCheckpoint: no trigger features for routeJoinKey=' + routeJoinKey);
             return;
         }
         let feature = features.find(function (f) { return f.properties.triggerIndex === triggerIndex; });
         if (!feature) {
-            console.warn('[ChefMap] pulseCheckpoint: triggerIndex ' + triggerIndex + ' not found for routeId=' + routeId);
+            console.warn('[ChefMap] pulseCheckpoint: triggerIndex ' + triggerIndex + ' not found for routeJoinKey=' + routeJoinKey);
             return;
         }
 
-        let color = ChefMap._routeColorsByRouteId[routeId] || '#facc15';
+        let color = ChefMap._routeColorsByRouteJoinKey[routeJoinKey] || '#facc15';
         let coords = feature.geometry.coordinates;
 
         try {
             let pulse = await _getCheckpointPulse();
             pulse.ensureLayer(map);
-            pulse.start(map, routeId, triggerIndex, coords, color);
+            pulse.start(map, routeJoinKey, triggerIndex, coords, color);
         } catch (e) {
             console.error('[ChefMap] pulseCheckpoint: error — ', e);
         }
@@ -456,19 +456,19 @@ window.ChefMap = {
         }
     },
 
-    startCrossingTrail: async function (containerDivId, routeId, vehicleId, triggerIndex, durationSec) {
+    startCrossingTrail: async function (containerDivId, routeJoinKey, vehicleId, triggerIndex, durationSec) {
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
 
         // Anchor: reuse the trigger feature (same lookup as pulseCheckpoint).
-        let features = ChefMap._triggerPointFeatures[routeId];
+        let features = ChefMap._triggerPointFeatures[routeJoinKey];
         if (!features) return;                       // route geometry not loaded yet
         let feature = features.find(function (f) { return f.properties.triggerIndex === triggerIndex; });
         if (!feature) return;
 
         let anchorCoord = feature.geometry.coordinates;
         let anchorDistanceM = feature.properties.alongDistanceM;
-        let color = ChefMap._routeColorsByRouteId[routeId] || '#facc15';   // FR-005
+        let color = ChefMap._routeColorsByRouteJoinKey[routeJoinKey] || '#facc15';   // FR-005
 
         // Speed: read empirical speed from the animator (audio-independent — R5).
         let vstate = ChefMapAnimator.vehicles[vehicleId];
@@ -477,7 +477,7 @@ window.ChefMap = {
         try {
             let trail = await _getCheckpointTrail();
             trail.ensureLayer(map);
-            trail.start(map, routeId, vehicleId, triggerIndex, anchorCoord, anchorDistanceM, color, speedMps, durationSec);
+            trail.start(map, routeJoinKey, vehicleId, triggerIndex, anchorCoord, anchorDistanceM, color, speedMps, durationSec);
         } catch (e) {
             console.error('[ChefMap] startCrossingTrail: error — ', e);
         }
@@ -514,15 +514,15 @@ window.ChefMap = {
 
             let lineColor = route.color || '#6b7280';
 
-            ChefMap._routeColorsByRouteId[route.routeId] = lineColor;
+            ChefMap._routeColorsByRouteJoinKey[route.routeJoinKey] = lineColor;
 
-            ChefMapAnimator.loadRouteGeometry(route.routeId, route.coordinates);
+            ChefMapAnimator.loadRouteGeometry(route.routeJoinKey, route.coordinates);
 
             features.push({
                 type: 'Feature',
-                id: route.routeId,
+                id: route.routeJoinKey,
                 geometry: { type: 'LineString', coordinates: route.coordinates },
-                properties: { routeId: route.routeId, color: lineColor }
+                properties: { routeJoinKey: route.routeJoinKey, color: lineColor }
             });
         });
 

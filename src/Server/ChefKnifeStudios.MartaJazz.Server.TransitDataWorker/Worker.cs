@@ -29,11 +29,11 @@ public class Worker(
     static readonly JsonSerializerOptions _batchJsonOptions = new() { WriteIndented = true };
 
     Dictionary<string, IReadOnlyDictionary<string, RoutePoint[]>> _routeIndex = new(StringComparer.OrdinalIgnoreCase);
-    // per-city routeId→TransitMode, built from GTFS route_type at static-data load time
+    // per-city routeJoinKey→TransitMode, built from GTFS route_type at static-data load time
     Dictionary<string, IReadOnlyDictionary<string, TransitMode>> _routeMode = new(StringComparer.OrdinalIgnoreCase);
-    // per-city routeId→cumulative-distance array (parallel to _routeIndex)
+    // per-city routeJoinKey→cumulative-distance array (parallel to _routeIndex)
     Dictionary<string, IReadOnlyDictionary<string, double[]>> _routeCumDist = new(StringComparer.OrdinalIgnoreCase);
-    // per-city routeId→trigger points (built from shared TriggerPointGenerator)
+    // per-city routeJoinKey→trigger points (built from shared TriggerPointGenerator)
     Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<TriggerPoint>>> _routeTriggerPoints = new(StringComparer.OrdinalIgnoreCase);
     // per-city vehicleId→crossing baseline (mirrors _vehicleStateCaches key structure)
     readonly Dictionary<string, Dictionary<string, CrossingBaseline?>> _crossingBaselines = new(StringComparer.OrdinalIgnoreCase);
@@ -208,7 +208,7 @@ public class Worker(
             // Primary key is the display identifier (short name when available).
             // GTFS-RT feeds can send either route_id or route_short_name depending on the agency,
             // so alias both keys to the same data so index.TryGetValue succeeds either way.
-            var key = shape.Properties.RouteShortName ?? shape.Properties.RouteId;
+            var key = shape.Properties.JoinKey;
             if (!routeGroups.TryGetValue(key, out var points))
                 routeGroups[key] = points = new List<RoutePoint>();
             if (!coordGroups.TryGetValue(key, out var coordList))
@@ -253,7 +253,7 @@ public class Worker(
             var cityCumDist = new Dictionary<string, double[]>(StringComparer.OrdinalIgnoreCase);
             var cityTriggers = new Dictionary<string, IReadOnlyList<TriggerPoint>>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var (routeId, coordList) in coordGroups)
+            foreach (var (routeJoinKey, coordList) in coordGroups)
             {
                 var coords = coordList.ToArray();
                 var cd = new double[coords.Length];
@@ -261,8 +261,8 @@ public class Worker(
                 for (var i = 1; i < coords.Length; i++)
                     cd[i] = cd[i - 1] + HaversineCalculator.DistanceMeters(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
 
-                cityCumDist[routeId] = cd;
-                cityTriggers[routeId] = triggerPointGenerator.Generate(coords, cd);
+                cityCumDist[routeJoinKey] = cd;
+                cityTriggers[routeJoinKey] = triggerPointGenerator.Generate(coords, cd);
             }
 
             cumDistResult[cityName] = cityCumDist;
@@ -345,7 +345,7 @@ public class Worker(
 
             var batch = new List<RouteNearestPointBatchEvent.RouteNearestPointRecord>();
             var debugBatch = new List<BatchDebugRecord>();
-            int movedCount = 0, unchangedCount = 0, stationaryCount = 0, staleCount = 0, skippedNoRouteId = 0, skippedUnknownRoute = 0;
+            int movedCount = 0, unchangedCount = 0, stationaryCount = 0, staleCount = 0, skippedNoJoinKey = 0, skippedUnknownRoute = 0;
             var crossingRecords = new List<RouteCrossingBatchEvent.RouteCrossingRecord>();
             var baselineMap = GetCrossingBaselines(city.Name);
             _routeCumDist.TryGetValue(city.Name, out var cityCumDist);
@@ -358,15 +358,15 @@ public class Worker(
                     if (entity.Vehicle?.Position == null) continue;
 
                     string vehicleId = entity.Vehicle.Vehicle?.Id ?? entity.Id;
-                    string? routeId = entity.Vehicle.Trip?.RouteId;
+                    string? routeJoinKey = entity.Vehicle.Trip?.RouteId;
 
-                    if (string.IsNullOrEmpty(routeId))
+                    if (string.IsNullOrEmpty(routeJoinKey))
                     {
-                        skippedNoRouteId++;
+                        skippedNoJoinKey++;
                         continue;
                     }
 
-                    if (!index.TryGetValue(routeId, out var routePoints))
+                    if (!index.TryGetValue(routeJoinKey, out var routePoints))
                     {
                         skippedUnknownRoute++;
                         continue;
@@ -378,7 +378,7 @@ public class Worker(
 
                     const int SnapWindowSize = 30;
 
-                    var snap = vehicleStateCache.TryGetValue(vehicleId, out var priorForSnap) && priorForSnap.RouteId == routeId
+                    var snap = vehicleStateCache.TryGetValue(vehicleId, out var priorForSnap) && priorForSnap.RouteJoinKey == routeJoinKey
                         ? RouteSnapper.FindNearestInWindow(lat, lon, routePoints, priorForSnap.SnapIndex, SnapWindowSize)
                         : RouteSnapper.FindNearest(lat, lon, routePoints);
                     if (snap == null) continue;
@@ -407,7 +407,7 @@ public class Worker(
 
                         batch.Add(new RouteNearestPointBatchEvent.RouteNearestPointRecord(
                             vehicleId,
-                            nearest.RouteId,
+                            nearest.RouteJoinKey,
                             prior.NearestLat,
                             prior.NearestLon,
                             prior.LastUpdated,
@@ -417,7 +417,7 @@ public class Worker(
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             isStale,
-                            modeMap != null && modeMap.TryGetValue(routeId, out var m) ? m : TransitMode.Bus
+                            modeMap != null && modeMap.TryGetValue(routeJoinKey, out var m) ? m : TransitMode.Bus
                         ));
 
                         if (isStale)
@@ -446,7 +446,7 @@ public class Worker(
 
                         debugRecord = new BatchDebugRecord(
                             VehicleId: vehicleId,
-                            RouteId: nearest.RouteId,
+                            RouteJoinKey: nearest.RouteJoinKey,
                             Outcome: outcome,
                             RawLat: lat,
                             RawLon: lon,
@@ -460,7 +460,7 @@ public class Worker(
                             PriorSnappedLat: prior.NearestLat,
                             PriorSnappedLon: prior.NearestLon,
                             PriorSnapDistanceKm: prior.LastSnapDistanceKm,
-                            PriorRouteId: prior.RouteId,
+                            PriorRouteJoinKey: prior.RouteJoinKey,
                             PriorObservationUtc: prior.LastUpdated,
                             ObservationUtc: now,
                             DeltaFromPriorSnapKm: posDeltaKm,
@@ -475,7 +475,7 @@ public class Worker(
                     {
                         batch.Add(new RouteNearestPointBatchEvent.RouteNearestPointRecord(
                             vehicleId,
-                            nearest.RouteId,
+                            nearest.RouteJoinKey,
                             nearest.Lat,
                             nearest.Lon,
                             now,
@@ -485,14 +485,14 @@ public class Worker(
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             false,
-                            modeMap != null && modeMap.TryGetValue(routeId, out var m2) ? m2 : TransitMode.Bus
+                            modeMap != null && modeMap.TryGetValue(routeJoinKey, out var m2) ? m2 : TransitMode.Bus
                         ));
                         outcome = "FirstObservation";
                         movedCount++;
 
                         debugRecord = new BatchDebugRecord(
                             VehicleId: vehicleId,
-                            RouteId: nearest.RouteId,
+                            RouteJoinKey: nearest.RouteJoinKey,
                             Outcome: outcome,
                             RawLat: lat,
                             RawLon: lon,
@@ -506,7 +506,7 @@ public class Worker(
                             PriorSnappedLat: null,
                             PriorSnappedLon: null,
                             PriorSnapDistanceKm: null,
-                            PriorRouteId: null,
+                            PriorRouteJoinKey: null,
                             PriorObservationUtc: null,
                             ObservationUtc: now,
                             DeltaFromPriorSnapKm: null,
@@ -525,7 +525,7 @@ public class Worker(
                             nearest.Lat,
                             nearest.Lon,
                             now,
-                            nearest.RouteId,
+                            nearest.RouteJoinKey,
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             snapValue.DistanceKm,
@@ -536,8 +536,8 @@ public class Worker(
 
                         // Crossing detection: run for every non-stale snapped vehicle
                         if (cityCumDist != null && cityTriggerPoints != null
-                            && cityCumDist.TryGetValue(routeId, out var routeCumDist)
-                            && cityTriggerPoints.TryGetValue(routeId, out var routeTriggers)
+                            && cityCumDist.TryGetValue(routeJoinKey, out var routeCumDist)
+                            && cityTriggerPoints.TryGetValue(routeJoinKey, out var routeTriggers)
                             && routeTriggers.Count > 0)
                         {
                             var currentDistM = routeCumDist[snapValue.Index];
@@ -550,7 +550,7 @@ public class Worker(
                                 ? (now - priorObservationUtc.Value).TotalMilliseconds
                                 : CrossingDetector.DefaultSpreadMs;
                             var spreadMs = Math.Clamp(elapsedMs, 0, CrossingDetector.DefaultSpreadMs);
-                            var detected = CrossingDetector.Detect(vehicleId, routeId, currentDistM, routeTriggers, ref baseline, spreadMs);
+                            var detected = CrossingDetector.Detect(vehicleId, routeJoinKey, currentDistM, routeTriggers, ref baseline, spreadMs);
                             baselineMap[vehicleId] = baseline;
                             crossingRecords.AddRange(detected);
                         }
@@ -576,8 +576,8 @@ public class Worker(
             var cycleEnd = DateTime.UtcNow;
 
             logger.LogInformation(
-                "City {City} spatial reconciliation: {Moved} moved, {Unchanged} unchanged, {Stationary} stationary, {Stale} stale, {SkippedNoRouteId} skippedNoRouteId, {SkippedUnknownRoute} skippedUnknownRoute, {CrossingsEmitted} crossingsEmitted. FeedHeaderTs={FeedHeaderTs} DuplicateFeed={DuplicateFeed}",
-                city.Name, movedCount, unchangedCount, stationaryCount, staleCount, skippedNoRouteId, skippedUnknownRoute, crossingRecords.Count, feedTs, feedIsDuplicate);
+                "City {City} spatial reconciliation: {Moved} moved, {Unchanged} unchanged, {Stationary} stationary, {Stale} stale, {SkippedNoJoinKey} skippedNoJoinKey, {SkippedUnknownRoute} skippedUnknownRoute, {CrossingsEmitted} crossingsEmitted. FeedHeaderTs={FeedHeaderTs} DuplicateFeed={DuplicateFeed}",
+                city.Name, movedCount, unchangedCount, stationaryCount, staleCount, skippedNoJoinKey, skippedUnknownRoute, crossingRecords.Count, feedTs, feedIsDuplicate);
 
             if (city.EmitsTelemetry)
             {
@@ -606,7 +606,7 @@ public class Worker(
                 if (crossingRecords.Count > 0)
                 {
                     var sorted = crossingRecords
-                        .OrderBy(r => r.RouteId, StringComparer.Ordinal)
+                        .OrderBy(r => r.RouteJoinKey, StringComparer.Ordinal)
                         .ThenBy(r => r.VehicleId, StringComparer.Ordinal)
                         .ThenBy(r => r.TriggerIndex)
                         .ToList();

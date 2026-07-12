@@ -7,7 +7,7 @@ namespace ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
 /// <param name="NearestLat">Latitude of the nearest route point in degrees.</param>
 /// <param name="NearestLon">Longitude of the nearest route point in degrees.</param>
 /// <param name="LastUpdated">UTC timestamp of the last state update, used for out-of-order guards and stale pruning.</param>
-/// <param name="RouteId">The GTFS route identifier the vehicle is currently snapped to.</param>
+/// <param name="RouteJoinKey">The route join key (see RouteShapeProperties.JoinKey) the vehicle is currently snapped to.</param>
 /// <param name="SpeedMetersPerSec">Vehicle speed from the GTFS-RT feed, if available.</param>
 /// <param name="Bearing">Vehicle bearing in degrees from the GTFS-RT feed, if available.</param>
 /// <param name="LastSnapDistanceKm">Haversine distance (km) from the vehicle's raw GPS to its nearest route point at the time the state was recorded. Carried for debug output only.</param>
@@ -19,7 +19,7 @@ public record VehicleState(
     double NearestLat,
     double NearestLon,
     DateTime LastUpdated,
-    string RouteId,
+    string RouteJoinKey,
     float? SpeedMetersPerSec,
     float? Bearing,
     double LastSnapDistanceKm,

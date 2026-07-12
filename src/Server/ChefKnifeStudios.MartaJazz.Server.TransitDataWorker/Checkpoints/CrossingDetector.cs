@@ -6,12 +6,12 @@ namespace ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Checkpoints;
 
 public sealed class CrossingBaseline
 {
-    public string RouteId { get; set; }
+    public string RouteJoinKey { get; set; }
     public double LastCrossedAlongDistanceM { get; set; }
 
-    public CrossingBaseline(string routeId, double lastCrossedAlongDistanceM)
+    public CrossingBaseline(string routeJoinKey, double lastCrossedAlongDistanceM)
     {
-        RouteId = routeId;
+        RouteJoinKey = routeJoinKey;
         LastCrossedAlongDistanceM = lastCrossedAlongDistanceM;
     }
 }
@@ -29,7 +29,7 @@ public static class CrossingDetector
 
     public static IReadOnlyList<RouteCrossingBatchEvent.RouteCrossingRecord> Detect(
         string vehicleId,
-        string routeId,
+        string routeJoinKey,
         double currentDistM,
         IReadOnlyList<TriggerPoint> triggerPoints,
         ref CrossingBaseline? baseline,
@@ -38,14 +38,14 @@ public static class CrossingDetector
         if (baseline is null)
         {
             // FR-007: first observation — seed baseline, emit nothing
-            baseline = new CrossingBaseline(routeId, currentDistM);
+            baseline = new CrossingBaseline(routeJoinKey, currentDistM);
             return [];
         }
 
-        if (baseline.RouteId != routeId)
+        if (baseline.RouteJoinKey != routeJoinKey)
         {
             // FR-010: route transfer — reset, emit nothing
-            baseline.RouteId = routeId;
+            baseline.RouteJoinKey = routeJoinKey;
             baseline.LastCrossedAlongDistanceM = currentDistM;
             return [];
         }
@@ -80,7 +80,7 @@ public static class CrossingDetector
                 var frac = (tp.AlongDistanceM - windowStart) / windowSpan;
                 var offsetMs = frac * spreadMs;
                 records.Add(new RouteCrossingBatchEvent.RouteCrossingRecord(
-                    vehicleId, routeId, tp.Index, totalTriggers, offsetMs));
+                    vehicleId, routeJoinKey, tp.Index, totalTriggers, offsetMs));
             }
         }
 

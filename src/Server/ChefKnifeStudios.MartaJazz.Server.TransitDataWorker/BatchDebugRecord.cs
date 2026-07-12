@@ -6,7 +6,7 @@ namespace ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
 /// the outputs (snap result, classification) so the snap decision can be verified offline.
 /// </summary>
 /// <param name="VehicleId">GTFS vehicle identifier.</param>
-/// <param name="RouteId">Route the vehicle is currently snapped to.</param>
+/// <param name="RouteJoinKey">Route join key (see RouteShapeProperties.JoinKey) the vehicle is currently snapped to.</param>
 /// <param name="Outcome">Classification of this observation: FirstObservation, Moved, or Unchanged.</param>
 /// <param name="RawLat">Vehicle latitude reported by the GTFS-RT feed this tick.</param>
 /// <param name="RawLon">Vehicle longitude reported by the GTFS-RT feed this tick.</param>
@@ -20,7 +20,7 @@ namespace ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
 /// <param name="PriorSnappedLat">Nearest route point latitude recorded on the prior tick. Null for FirstObservation.</param>
 /// <param name="PriorSnappedLon">Nearest route point longitude recorded on the prior tick. Null for FirstObservation.</param>
 /// <param name="PriorSnapDistanceKm">Snap distance recorded on the prior tick. Null for FirstObservation.</param>
-/// <param name="PriorRouteId">Route the vehicle was snapped to on the prior tick. Null for FirstObservation.</param>
+/// <param name="PriorRouteJoinKey">Route join key the vehicle was snapped to on the prior tick. Null for FirstObservation.</param>
 /// <param name="PriorObservationUtc">UTC timestamp of the prior observation. Null for FirstObservation.</param>
 /// <param name="ObservationUtc">UTC timestamp of this observation (the value passed to the publish record).</param>
 /// <param name="DeltaFromPriorSnapKm">Haversine distance (km) between the prior and current snap points. Null for FirstObservation. Useful for spotting bogus jumps.</param>
@@ -30,7 +30,7 @@ namespace ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
 /// <param name="Bearing">Vehicle bearing reported this tick, if available.</param>
 public sealed record BatchDebugRecord(
     string VehicleId,
-    string RouteId,
+    string RouteJoinKey,
     string Outcome,
     double RawLat,
     double RawLon,
@@ -44,7 +44,7 @@ public sealed record BatchDebugRecord(
     double? PriorSnappedLat,
     double? PriorSnappedLon,
     double? PriorSnapDistanceKm,
-    string? PriorRouteId,
+    string? PriorRouteJoinKey,
     DateTime? PriorObservationUtc,
     DateTime ObservationUtc,
     double? DeltaFromPriorSnapKm,

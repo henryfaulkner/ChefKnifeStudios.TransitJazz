@@ -19,14 +19,14 @@ public class CrossingDetectorTests
     ];
 
     static System.Collections.Generic.IReadOnlyList<RouteCrossingBatchEvent.RouteCrossingRecord> Detect(
-        string vehicleId, string routeId,
+        string vehicleId, string routeJoinKey,
         double[] cumDist,
         System.Collections.Generic.IReadOnlyList<TriggerPoint> triggers,
         ref CrossingBaseline? baseline,
         int snapIndex)
     {
         double currentDistM = cumDist[snapIndex];
-        return CrossingDetector.Detect(vehicleId, routeId, currentDistM, triggers, ref baseline);
+        return CrossingDetector.Detect(vehicleId, routeJoinKey, currentDistM, triggers, ref baseline);
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class CrossingDetectorTests
         CrossingBaseline? baseline = new CrossingBaseline("74", 200); // was on route 74
         var result = CrossingDetector.Detect("v1", "9X", 600, TriggerPoints, ref baseline); // now on route 9X
         Assert.Empty(result);
-        Assert.Equal("9X", baseline!.RouteId);
+        Assert.Equal("9X", baseline!.RouteJoinKey);
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class CrossingDetectorTests
         var result = Detect("v1", "74", CumDist, TriggerPoints, ref baseline, snapIndex: 3);
         Assert.Single(result);
         Assert.Equal("v1", result[0].VehicleId);
-        Assert.Equal("74", result[0].RouteId);
+        Assert.Equal("74", result[0].RouteJoinKey);
     }
 
     [Fact]

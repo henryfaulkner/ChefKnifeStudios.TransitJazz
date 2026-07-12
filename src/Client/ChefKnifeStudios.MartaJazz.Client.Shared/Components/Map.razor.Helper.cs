@@ -56,27 +56,27 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Logger.LogError(ex, "[Map] AddAllRoutes failed"); }
     }
 
-    public async Task AddTriggerPointMarkersAsync(string routeId, object[] triggerPoints, double[][] coords)
+    public async Task AddTriggerPointMarkersAsync(string routeJoinKey, object[] triggerPoints, double[][] coords)
     {
         try
         {
-            await JsRuntime.InvokeVoidAsync("ChefMap.addTriggerPointMarkers", ElementId, routeId, triggerPoints, coords);
+            await JsRuntime.InvokeVoidAsync("ChefMap.addTriggerPointMarkers", ElementId, routeJoinKey, triggerPoints, coords);
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "[Map] AddTriggerPointMarkers failed for routeId={RouteId}", routeId);
+            Logger.LogError(ex, "[Map] AddTriggerPointMarkers failed for routeJoinKey={RouteJoinKey}", routeJoinKey);
         }
     }
 
-    public async Task FocusRouteAsync(string routeId)
+    public async Task FocusRouteAsync(string routeJoinKey)
     {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.focusRoute", ElementId, routeId); }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] FocusRoute failed for routeId={RouteId}", routeId); }
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.focusRoute", ElementId, routeJoinKey); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] FocusRoute failed for routeJoinKey={RouteJoinKey}", routeJoinKey); }
     }
 
-    public async Task FocusRoutesAsync(IEnumerable<string> routeIds)
+    public async Task FocusRoutesAsync(IEnumerable<string> routeJoinKeys)
     {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.focusRoutes", ElementId, routeIds); }
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.focusRoutes", ElementId, routeJoinKeys); }
         catch (Exception ex) { Logger.LogError(ex, "[Map] FocusRoutes failed"); }
     }
 
@@ -86,16 +86,16 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Logger.LogError(ex, "[Map] SetCheckpointVisibility failed"); }
     }
 
-    public async Task PulseCheckpointAsync(string routeId, int triggerIndex)
+    public async Task PulseCheckpointAsync(string routeJoinKey, int triggerIndex)
     {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.pulseCheckpoint", ElementId, routeId, triggerIndex); }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] PulseCheckpoint failed for routeId={RouteId} triggerIndex={TriggerIndex}", routeId, triggerIndex); }
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.pulseCheckpoint", ElementId, routeJoinKey, triggerIndex); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] PulseCheckpoint failed for routeJoinKey={RouteJoinKey} triggerIndex={TriggerIndex}", routeJoinKey, triggerIndex); }
     }
 
-    public async Task StartCrossingTrailAsync(string routeId, string vehicleId, int triggerIndex, double durationSeconds)
+    public async Task StartCrossingTrailAsync(string routeJoinKey, string vehicleId, int triggerIndex, double durationSeconds)
     {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.startCrossingTrail", ElementId, routeId, vehicleId, triggerIndex, durationSeconds); }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] StartCrossingTrail failed for routeId={RouteId} triggerIndex={TriggerIndex}", routeId, triggerIndex); }
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.startCrossingTrail", ElementId, routeJoinKey, vehicleId, triggerIndex, durationSeconds); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] StartCrossingTrail failed for routeJoinKey={RouteJoinKey} triggerIndex={TriggerIndex}", routeJoinKey, triggerIndex); }
     }
 
     public async Task SetCrossingTrailVisibilityAsync(bool visible)
