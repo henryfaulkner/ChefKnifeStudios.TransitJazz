@@ -18,7 +18,7 @@ public sealed record RouteNearestPointBatchEvent(
     /// A single vehicle's transition from one nearest route point to another.
     /// </summary>
     /// <param name="VehicleId">GTFS vehicle identifier.</param>
-    /// <param name="RouteId">The route the vehicle is currently snapped to.</param>
+    /// <param name="RouteJoinKey">The route join key (see RouteShapeProperties.JoinKey) the vehicle is currently snapped to.</param>
     /// <param name="PriorNearestLat">Latitude of the previous nearest route point.</param>
     /// <param name="PriorNearestLon">Longitude of the previous nearest route point.</param>
     /// <param name="PriorUtcNow">UTC timestamp when the previous nearest point was recorded.</param>
@@ -30,7 +30,7 @@ public sealed record RouteNearestPointBatchEvent(
     /// <param name="IsStale">True when this record reflects an upstream GTFS-RT sample whose per-vehicle timestamp matches the prior observation — i.e. the feed delivered the same GPS reading twice. Clients should keep extrapolating from the last empirical speed but should NOT append this snap to their motion history.</param>
     public sealed record RouteNearestPointRecord(
         string VehicleId,
-        string RouteId,
+        string RouteJoinKey,
         double PriorNearestLat,
         double PriorNearestLon,
         DateTime PriorUtcNow,

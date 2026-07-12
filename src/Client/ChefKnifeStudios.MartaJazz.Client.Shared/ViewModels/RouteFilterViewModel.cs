@@ -13,7 +13,7 @@ namespace ChefKnifeStudios.MartaJazz.Client.Shared.Components;
 
 public class RouteItem
 {
-    public string RouteId { get; init; }
+    public string RouteJoinKey { get; init; }
     public string Label { get; init; }
     public string Color { get; init; }
     public bool IsSelected { get; set; }
@@ -29,9 +29,9 @@ public interface IRouteFilterViewModel : IViewModel, IDisposable
     public bool HasSelection { get; }
     bool HasSelectionFor(TransitMode mode);
     public bool IsSingleSelection { get; }
-    public string? SelectedRouteId { get; }
-    public IReadOnlyCollection<string> SelectedRouteIds { get; }
-    public string? HoveredRouteId { get; }
+    public string? SelectedRouteJoinKey { get; }
+    public IReadOnlyCollection<string> SelectedRouteJoinKeys { get; }
+    public string? HoveredRouteJoinKey { get; }
     public int ActiveBusCount { get; }
     public int ActiveRailCount { get; }
 }
@@ -41,8 +41,8 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(IsSingleSelection))]
-    [NotifyPropertyChangedFor(nameof(SelectedRouteId))]
-    [NotifyPropertyChangedFor(nameof(SelectedRouteIds))]
+    [NotifyPropertyChangedFor(nameof(SelectedRouteJoinKey))]
+    [NotifyPropertyChangedFor(nameof(SelectedRouteJoinKeys))]
     IEnumerable<RouteItem> _routeItems = [];
 
     [ObservableProperty]
@@ -52,7 +52,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     int _activeRailCount;
 
     [ObservableProperty]
-    string? _hoveredRouteId;
+    string? _hoveredRouteJoinKey;
 
     readonly ILogger<RouteFilterViewModel> _logger;
     readonly IToastService _toastService;
@@ -116,11 +116,11 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             sawAnyBatchEvent = true;
             foreach (var record in batchEvent.BatchRecords)
             {
-                if (string.IsNullOrEmpty(record.RouteId)) continue;
+                if (string.IsNullOrEmpty(record.RouteJoinKey)) continue;
                 seenThisBatch.Add(record.VehicleId);
                 if (record.IsStale) continue;
-                if (!_routeVehicles.TryGetValue(record.RouteId, out var vehicles))
-                    _routeVehicles[record.RouteId] = vehicles = new HashSet<string>(StringComparer.Ordinal);
+                if (!_routeVehicles.TryGetValue(record.RouteJoinKey, out var vehicles))
+                    _routeVehicles[record.RouteJoinKey] = vehicles = new HashSet<string>(StringComparer.Ordinal);
                 changed |= vehicles.Add(record.VehicleId);
                 if (record.TransitMode == TransitMode.Rail)
                     _railVehicleIds.Add(record.VehicleId);
@@ -136,7 +136,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
         if (!changed) return Task.CompletedTask;
 
         RouteItems = RouteItems
-            .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteId, out var v) ? v.Count : 0)
+            .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteJoinKey, out var v) ? v.Count : 0)
             .ToList();
 
         RecomputeActiveTransitCounts();
@@ -183,8 +183,8 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 
     void RecomputeActiveTransitCounts()
     {
-        var selected = SelectedRouteIds;
-        var hovered = HoveredRouteId;
+        var selected = SelectedRouteJoinKeys;
+        var hovered = HoveredRouteJoinKey;
 
         // Build the effective emphasis set: union of persistent selection and hover.
         // Empty set means unscoped (all vehicles).
@@ -219,20 +219,20 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 
     void BuildRouteItems()
     {
-        var previouslySelected = SelectedRouteIds;
+        var previouslySelected = SelectedRouteJoinKeys;
 
         RouteItems = _applicationViewModel.RouteShapes
             .Select(x => x.Value)
             .Where(x => !string.IsNullOrEmpty(x.Properties.RouteShortName) || !string.IsNullOrEmpty(x.Properties.RouteId))
             .Select(x => new RouteItem
             {
-                RouteId = x.Properties.RouteShortName ?? x.Properties.RouteId!,
-                Label = x.Properties.RouteShortName ?? x.Properties.RouteId!,
+                RouteJoinKey = x.Properties.JoinKey,
+                Label = x.Properties.JoinKey,
                 Color = IsVisibleColor(x.Properties.Color) ? x.Properties.Color! : "#CC0000",
-                IsSelected = previouslySelected.Contains(x.Properties.RouteShortName ?? x.Properties.RouteId!),
+                IsSelected = previouslySelected.Contains(x.Properties.JoinKey),
                 Mode = x.Properties.Mode,
             })
-            .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteId, out var v) ? v.Count : 0)
+            .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteJoinKey, out var v) ? v.Count : 0)
             .ToList();
 
         _logger.LogDebug("RouteFilterViewModel.BuildRouteItems: built {Count} route items", RouteItems.Count());
@@ -245,10 +245,10 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
         RouteItems = RouteItems
             .Select(x => new RouteItem
             {
-                RouteId = x.RouteId,
+                RouteJoinKey = x.RouteJoinKey,
                 Label = x.Label,
                 Color = x.Color,
-                IsSelected = x.RouteId == routeItem.RouteId ? !x.IsSelected : x.IsSelected,
+                IsSelected = x.RouteJoinKey == routeItem.RouteJoinKey ? !x.IsSelected : x.IsSelected,
                 Mode = x.Mode,
             })
             .ToList();
@@ -258,14 +258,14 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     public void ClearSelection(TransitMode mode)
     {
         RouteItems = RouteItems
-            .Select(x => new RouteItem { RouteId = x.RouteId, Label = x.Label, Color = x.Color, IsSelected = x.Mode == mode ? false : x.IsSelected, Mode = x.Mode, })
+            .Select(x => new RouteItem { RouteJoinKey = x.RouteJoinKey, Label = x.Label, Color = x.Color, IsSelected = x.Mode == mode ? false : x.IsSelected, Mode = x.Mode, })
             .ToList();
         RecomputeActiveTransitCounts();
     }
 
     public void SetHoveredRoute(RouteItem? routeItem)
     {
-        HoveredRouteId = routeItem?.RouteId;
+        HoveredRouteJoinKey = routeItem?.RouteJoinKey;
         RecomputeActiveTransitCounts();
     }
 
@@ -280,12 +280,12 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 
     public bool HasSelectionFor(TransitMode mode) => RouteItems.Any(x => x.IsSelected && x.Mode == mode);
 
-    public bool IsSingleSelection => SelectedRouteIds.Count == 1;
+    public bool IsSingleSelection => SelectedRouteJoinKeys.Count == 1;
 
-    public IReadOnlyCollection<string> SelectedRouteIds =>
-        RouteItems.Where(x => x.IsSelected).Select(x => x.RouteId).ToList();
+    public IReadOnlyCollection<string> SelectedRouteJoinKeys =>
+        RouteItems.Where(x => x.IsSelected).Select(x => x.RouteJoinKey).ToList();
 
-    public string? SelectedRouteId => IsSingleSelection ? SelectedRouteIds.First() : null;
+    public string? SelectedRouteJoinKey => IsSingleSelection ? SelectedRouteJoinKeys.First() : null;
 
     public void Dispose()
     {

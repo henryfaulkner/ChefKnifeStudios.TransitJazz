@@ -64,12 +64,12 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _checkpointsVisible = false;
     bool _crossingTrailVisible = true;
 
-    // routeId → GeoJSON string (client-side cache, lives for page lifetime)
+    // routeJoinKey → GeoJSON string (client-side cache, lives for page lifetime)
     readonly Dictionary<string, RouteShapeFeature> _routeShapeCache = new(StringComparer.Ordinal);
     bool _routesLoaded;
     bool _routesRendered;
 
-    // routeId → consecutive batches with no live vehicle. A route's audio Sampler is
+    // routeJoinKey → consecutive batches with no live vehicle. A route's audio Sampler is
     // disposed once it's been absent this many batches in a row (~tolerates brief feed
     // gaps so we don't re-fetch+decode a route that flickers out for one cycle).
     readonly Dictionary<string, int> _routeAbsenceBatches = new(StringComparer.Ordinal);
@@ -154,15 +154,15 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         // Capture the route-filter snapshot at batch-receipt time so the gate reflects what
         // was selected when the crossings arrived, not whatever changes during the spread.
-        var selected = RouteFilterViewModel.SelectedRouteIds;
-        var hovered = RouteFilterViewModel.HoveredRouteId;
+        var selected = RouteFilterViewModel.SelectedRouteJoinKeys;
+        var hovered = RouteFilterViewModel.HoveredRouteJoinKey;
         var effectiveIds = selected.Count > 0 || hovered is not null
             ? selected.Concat(hovered is not null ? [hovered] : []).ToHashSet(StringComparer.Ordinal)
             : null;
 
         foreach (var crossing in crossings)
         {
-            if (effectiveIds is not null && !effectiveIds.Contains(crossing.RouteId)) continue;
+            if (effectiveIds is not null && !effectiveIds.Contains(crossing.RouteJoinKey)) continue;
 
             // Server stamps each crossing with where in the cycle window it was actually
             // crossed (OffsetMs). Fire each on its own delayed continuation so a burst of
@@ -186,8 +186,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             // Pulse (expanding ring) is gated on its own checkpoint-visibility setting.
             if (_checkpointsVisible && _map is not null)
             {
-                try { await _map.PulseCheckpointAsync(crossing.RouteId, crossing.TriggerIndex); }
-                catch (Exception ex) { Logger.LogWarning(ex, "PulseCheckpointAsync failed for {RouteId}/{Idx}", crossing.RouteId, crossing.TriggerIndex); }
+                try { await _map.PulseCheckpointAsync(crossing.RouteJoinKey, crossing.TriggerIndex); }
+                catch (Exception ex) { Logger.LogWarning(ex, "PulseCheckpointAsync failed for {RouteJoinKey}/{Idx}", crossing.RouteJoinKey, crossing.TriggerIndex); }
             }
 
             // Trail is gated on its own setting, independent of the pulse AND of audio
@@ -196,21 +196,21 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             {
                 try
                 {
-                    var durationSec = await TransitSynth.DurationSecondsForAsync(crossing.VehicleId, crossing.RouteId);
-                    await _map.StartCrossingTrailAsync(crossing.RouteId, crossing.VehicleId, crossing.TriggerIndex, durationSec);
+                    var durationSec = await TransitSynth.DurationSecondsForAsync(crossing.VehicleId, crossing.RouteJoinKey);
+                    await _map.StartCrossingTrailAsync(crossing.RouteJoinKey, crossing.VehicleId, crossing.TriggerIndex, durationSec);
                 }
-                catch (Exception ex) { Logger.LogWarning(ex, "StartCrossingTrailAsync failed for {RouteId}/{Idx}", crossing.RouteId, crossing.TriggerIndex); }
+                catch (Exception ex) { Logger.LogWarning(ex, "StartCrossingTrailAsync failed for {RouteJoinKey}/{Idx}", crossing.RouteJoinKey, crossing.TriggerIndex); }
             }
 
             if (_audioEnabled)
             {
-                try { await TransitSynth.TriggerNoteAsync(crossing.RouteId, crossing.VehicleId, crossing.TriggerIndex, crossing.TotalTriggers); }
-                catch (Exception ex) { Logger.LogWarning(ex, "TransitMap.OnCrossingsAsync: TriggerNoteAsync failed for vehicle {VehicleId} on route {RouteId}", crossing.VehicleId, crossing.RouteId); }
+                try { await TransitSynth.TriggerNoteAsync(crossing.RouteJoinKey, crossing.VehicleId, crossing.TriggerIndex, crossing.TotalTriggers); }
+                catch (Exception ex) { Logger.LogWarning(ex, "TransitMap.OnCrossingsAsync: TriggerNoteAsync failed for vehicle {VehicleId} on route {RouteJoinKey}", crossing.VehicleId, crossing.RouteJoinKey); }
             }
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "TransitMap.FireCrossingDelayedAsync: failed for vehicle {VehicleId} on route {RouteId}", crossing.VehicleId, crossing.RouteId);
+            Logger.LogWarning(ex, "TransitMap.FireCrossingDelayedAsync: failed for vehicle {VehicleId} on route {RouteJoinKey}", crossing.VehicleId, crossing.RouteJoinKey);
         }
     }
 
@@ -348,7 +348,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         if (e.PropertyName is not (nameof(IRouteFilterViewModel.RouteItems)
                                 or nameof(IRouteFilterViewModel.HasSelection)
-                                or nameof(IRouteFilterViewModel.HoveredRouteId)))
+                                or nameof(IRouteFilterViewModel.HoveredRouteJoinKey)))
             return;
 
         if (!_mapReady || _map is null) return;
@@ -360,8 +360,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         if (_map is null) return;
 
-        var selected = RouteFilterViewModel.SelectedRouteIds;
-        var hovered = RouteFilterViewModel.HoveredRouteId;
+        var selected = RouteFilterViewModel.SelectedRouteJoinKeys;
+        var hovered = RouteFilterViewModel.HoveredRouteJoinKey;
 
         if (hovered is null && selected.Count == 0)
         {
@@ -414,7 +414,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             .Where(kvp => kvp.Value.Geometry?.Coordinates is { Length: > 0 })
             .Select(kvp => (object)new
             {
-                routeId = kvp.Key,
+                routeJoinKey = kvp.Key,
                 color = kvp.Value.Properties?.Color ?? "#6b7280",
                 coordinates = kvp.Value.Geometry!.Coordinates
             })
@@ -429,13 +429,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     async Task ConfigureAllTrackersAsync()
     {
         await Task.Yield();
-        foreach (var (routeId, feature) in _routeShapeCache)
-            await ConfigureTrackerForRouteAsync(routeId, feature);
+        foreach (var (routeJoinKey, feature) in _routeShapeCache)
+            await ConfigureTrackerForRouteAsync(routeJoinKey, feature);
         if (_map is not null)
             await _map.FlushTriggerPointsAsync();
     }
 
-    async Task ConfigureTrackerForRouteAsync(string routeId, RouteShapeFeature feature)
+    async Task ConfigureTrackerForRouteAsync(string routeJoinKey, RouteShapeFeature feature)
     {
         try
         {
@@ -448,17 +448,17 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 cumDist[i] = cumDist[i - 1] + HaversineCalculator.DistanceMeters(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
 
             var triggerPoints = TriggerPointGenerator.Generate(coords, cumDist);
-            Logger.LogDebug("TransitMap: route {RouteId} → {Count} trigger points", routeId, triggerPoints.Count);
+            Logger.LogDebug("TransitMap: route {RouteJoinKey} → {Count} trigger points", routeJoinKey, triggerPoints.Count);
 
             if (_map is not null)
             {
                 var jsPoints = triggerPoints.Select(p => (object)new { index = p.Index, alongDistanceM = p.AlongDistanceM }).ToArray();
-                await _map.AddTriggerPointMarkersAsync(routeId, jsPoints, coords);
+                await _map.AddTriggerPointMarkersAsync(routeJoinKey, jsPoints, coords);
             }
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "TransitMap: failed to configure tracker for route {RouteId}", routeId);
+            Logger.LogError(ex, "TransitMap: failed to configure tracker for route {RouteJoinKey}", routeJoinKey);
         }
     }
 
@@ -487,11 +487,11 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             if (envelope.Payload is not RouteNearestPointBatchEvent e) continue;
             foreach (var r in e.BatchRecords)
             {
-                activeRoutes.Add(r.RouteId);
+                activeRoutes.Add(r.RouteJoinKey);
                 records.Add(new
                 {
                     vehicleId = r.VehicleId,
-                    routeId = r.RouteId,
+                    routeJoinKey = r.RouteJoinKey,
                     priorLon = r.PriorNearestLon,
                     priorLat = r.PriorNearestLat,
                     currentLon = r.CurrentNearestLon,
@@ -516,7 +516,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             .Select(e => e.Payload)
             .OfType<RouteCrossingBatchEvent>()
             .SelectMany(e => e.BatchRecords)
-            .Select(r => new CrossingEventDto(r.VehicleId, r.RouteId, r.TriggerIndex, r.TotalTriggers, r.OffsetMs))
+            .Select(r => new CrossingEventDto(r.VehicleId, r.RouteJoinKey, r.TriggerIndex, r.TotalTriggers, r.OffsetMs))
             .ToArray();
 
         if (crossings.Length > 0)
@@ -530,15 +530,15 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     // in a row before eviction, so a one-cycle feed gap doesn't force a re-fetch+decode.
     async Task EvictInactiveRouteAudioAsync(HashSet<string> activeRoutes)
     {
-        foreach (var routeId in activeRoutes)
-            _routeAbsenceBatches.Remove(routeId);
+        foreach (var routeJoinKey in activeRoutes)
+            _routeAbsenceBatches.Remove(routeJoinKey);
 
         var stale = false;
-        foreach (var routeId in _routeShapeCache.Keys)
+        foreach (var routeJoinKey in _routeShapeCache.Keys)
         {
-            if (activeRoutes.Contains(routeId)) continue;
-            var count = _routeAbsenceBatches.GetValueOrDefault(routeId) + 1;
-            _routeAbsenceBatches[routeId] = count;
+            if (activeRoutes.Contains(routeJoinKey)) continue;
+            var count = _routeAbsenceBatches.GetValueOrDefault(routeJoinKey) + 1;
+            _routeAbsenceBatches[routeJoinKey] = count;
             if (count >= RouteAudioEvictAfterBatches) stale = true;
         }
 
@@ -573,9 +573,9 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _routeShapeCache.Clear();
         foreach (var routeShapeFeature in allFeatures)
         {
-            var key = routeShapeFeature.Properties?.RouteShortName ?? routeShapeFeature.Properties?.RouteId ?? "(null)";
+            var key = routeShapeFeature.Properties?.JoinKey ?? "(null)";
             _routeShapeCache[key] = routeShapeFeature;
-            Logger.LogDebug("TransitMap.LoadRoutesAsync: cached key={Key} RouteId={RouteId} CoordCount={CoordCount} Geometry={GeomNull}",
+            Logger.LogDebug("TransitMap.LoadRoutesAsync: cached key={Key} RouteJoinKey={RouteJoinKey} CoordCount={CoordCount} Geometry={GeomNull}",
                 key,
                 routeShapeFeature.Properties?.RouteId,
                 routeShapeFeature.Geometry?.Coordinates?.Length ?? -1,
@@ -591,5 +591,5 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _ = TransitSynth.PreloadAsync(_routeShapeCache.Keys);
     }
 
-    public record CrossingEventDto(string VehicleId, string RouteId, int TriggerIndex, int TotalTriggers, double OffsetMs);
+    public record CrossingEventDto(string VehicleId, string RouteJoinKey, int TriggerIndex, int TotalTriggers, double OffsetMs);
 }

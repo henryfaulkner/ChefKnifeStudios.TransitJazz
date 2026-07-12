@@ -17,7 +17,7 @@
             @onmouseout="(args) => HandleMouseOut(args, routeItem)"
         >
             <div
-                class="route-filters__route-filter-circle @((RouteFilterViewModel.HasSelection || RouteFilterViewModel.HoveredRouteId != null) && !routeItem.IsSelected && routeItem.RouteId != RouteFilterViewModel.HoveredRouteId ? "route-filters__route-filter-disabled" : string.Empty)"
+                class="route-filters__route-filter-circle @((RouteFilterViewModel.HasSelection || RouteFilterViewModel.HoveredRouteJoinKey != null) && !routeItem.IsSelected && routeItem.RouteJoinKey != RouteFilterViewModel.HoveredRouteJoinKey ? "route-filters__route-filter-disabled" : string.Empty)"
                 style="--route-filter-color: @routeItem.Color"
             >
                 <span class="route-filters__route-filter-label">

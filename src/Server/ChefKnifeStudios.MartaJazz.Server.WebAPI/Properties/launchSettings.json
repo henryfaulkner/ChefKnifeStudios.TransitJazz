@@ -3,6 +3,7 @@
     "ChefKnifeStudios.MartaJazz.Server.WebAPI": {
       "commandName": "Project",
       "launchBrowser": true,
+      "launchUrl": "scalar",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "WMATA_API_KEY": "fe06d6246fa3494d9c545990487a87d3"

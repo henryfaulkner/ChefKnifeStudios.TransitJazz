@@ -1,0 +1,128 @@
+@page "/telemetry"
+@inject ITelemetryEndpointsService TelemetryEndpointsService
+@inject ILogger<Telemetry> Logger
+@using ChefKnifeStudios.MartaJazz.Client.Core.Services.EndpointsServices
+@using ChefKnifeStudios.MartaJazz.Shared.TelemetryData
+@using Microsoft.Extensions.Logging
+
+<PageTitle>Telemetry</PageTitle>
+
+<div class="telemetry-page">
+    <h2>Telemetry — Today (UTC)</h2>
+
+    @if (_loading)
+    {
+        <p>Loading…</p>
+    }
+    else if (_error is not null)
+    {
+        <p class="telemetry-error">@_error</p>
+    }
+    else
+    {
+        @if (_fullCycleTable is not null)
+        {
+            <TelemetryTable Title="Full Cycle" EventType="FullCycle" City="@((string?)null)" Columns="_fullCycleColumns">
+                <RowContent Context="row">
+                    <td>@row.ObservationUtc.ToString("HH:mm:ss MM-dd")</td>
+                    <td>@row.EventId</td>
+                    <td>@row.CitiesProcessedCount</td>
+                    <td>@row.CitiesProcessedCsv</td>
+                    <td>@row.TimeTakenSeconds</td>
+                    <td>@row.HealthOk</td>
+                    <td>@row.TonesEmitted</td>
+                    <td>@row.VehiclesProcessed</td>
+                    <td>@row.GcHeapBytes</td>
+                    <td>@row.ProcessWorkingSetBytes</td>
+                </RowContent>
+            </TelemetryTable>
+        }
+
+        @foreach (var city in _perCityCycleCities)
+        {
+            <TelemetryTable Title="@($"Per City Cycle — {city}")" EventType="PerCityCycle" City="@city" Columns="_perCityCycleColumns">
+                <RowContent Context="row">
+                    <td>@row.ObservationUtc.ToString("HH:mm:ss MM-dd")</td>
+                    <td>@row.EventId</td>
+                    <td>@row.FeedFreshnessSeconds</td>
+                    <td>@row.TimeTakenSeconds</td>
+                    <td>@row.HealthOk</td>
+                    <td>@row.TonesEmitted</td>
+                    <td>@row.VehiclesProcessed</td>
+                    <td>@row.VehicleStateCacheSize</td>
+                    <td>@row.CrossingBaselineCacheSize</td>
+                    <td>@row.RouteIndexSize</td>
+                    <td>@row.RouteTriggerPointCacheSize</td>
+                </RowContent>
+            </TelemetryTable>
+        }
+    }
+</div>
+
+<style>
+    .telemetry-page { padding: 1.5rem; font-family: sans-serif; }
+    .telemetry-error { color: #b00020; }
+</style>
+
+@code {
+    static readonly IReadOnlyList<TelemetryColumn> _fullCycleColumns =
+    [
+        new("Observation (UTC)", TelemetrySortColumn.ObservationUtc),
+        new("Event Id", TelemetrySortColumn.EventId),
+        new("Cities Processed", TelemetrySortColumn.CitiesProcessedCount),
+        new("Cities", TelemetrySortColumn.CitiesProcessedCsv),
+        new("Time Taken (s)", TelemetrySortColumn.TimeTakenSeconds),
+        new("Health OK", TelemetrySortColumn.HealthOk),
+        new("Tones Emitted", TelemetrySortColumn.TonesEmitted),
+        new("Vehicles Processed", TelemetrySortColumn.VehiclesProcessed),
+        new("GC Heap (bytes)", TelemetrySortColumn.GcHeapBytes),
+        new("Working Set (bytes)", TelemetrySortColumn.ProcessWorkingSetBytes),
+    ];
+
+    static readonly IReadOnlyList<TelemetryColumn> _perCityCycleColumns =
+    [
+        new("Observation (UTC)", TelemetrySortColumn.ObservationUtc),
+        new("Event Id", TelemetrySortColumn.EventId),
+        new("Feed Freshness (s)", TelemetrySortColumn.FeedFreshnessSeconds),
+        new("Time Taken (s)", TelemetrySortColumn.TimeTakenSeconds),
+        new("Health OK", TelemetrySortColumn.HealthOk),
+        new("Tones Emitted", TelemetrySortColumn.TonesEmitted),
+        new("Vehicles Processed", TelemetrySortColumn.VehiclesProcessed),
+        new("Vehicle Cache", TelemetrySortColumn.VehicleStateCacheSize),
+        new("Crossing Cache", TelemetrySortColumn.CrossingBaselineCacheSize),
+        new("Route Index", TelemetrySortColumn.RouteIndexSize),
+        new("Trigger Point Cache", TelemetrySortColumn.RouteTriggerPointCacheSize),
+    ];
+
+    bool _loading = true;
+    string? _error;
+
+    TelemetryTableSummaryDto? _fullCycleTable;
+    List<string> _perCityCycleCities = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await TelemetryEndpointsService.GetTodaySummary();
+
+        if (!result.IsSuccess)
+        {
+            _error = "Failed to load telemetry.";
+            Logger.LogWarning("Telemetry page: GetTodaySummary failed — Status={Status} Errors={Errors}",
+                result.Status, string.Join("; ", result.Errors));
+            _loading = false;
+            return;
+        }
+
+        var tables = result.Value?.Tables ?? [];
+
+        _fullCycleTable = tables.FirstOrDefault(t => t.EventType == "FullCycle");
+
+        _perCityCycleCities = tables
+            .Where(t => t.EventType == "PerCityCycle" && t.CityName is not null)
+            .Select(t => t.CityName!)
+            .OrderBy(c => c)
+            .ToList();
+
+        _loading = false;
+    }
+}

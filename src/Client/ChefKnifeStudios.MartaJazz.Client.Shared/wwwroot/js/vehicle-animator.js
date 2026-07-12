@@ -98,7 +98,7 @@ window.ChefMapAnimator = {
         var hist = state.history;
         if (!hist || hist.length < 2) return state.speed || 0;
 
-        var routeData = this.routeGeometry[state.routeId];
+        var routeData = this.routeGeometry[state.routeJoinKey];
         if (!routeData) {
             // No polyline — fall back to straight-line distance through history.
             var firstSL = hist[0];
@@ -124,7 +124,7 @@ window.ChefMapAnimator = {
     },
 
     extrapolateAlongRoute: function (state, elapsedMs) {
-        var routeData = this.routeGeometry[state.routeId];
+        var routeData = this.routeGeometry[state.routeJoinKey];
         if (!routeData) return state.currentPos;
 
         var speed = state.empiricalSpeed != null ? state.empiricalSpeed : (state.speed || 0);
@@ -150,10 +150,10 @@ window.ChefMapAnimator = {
         return routeData.coords[routeData.coords.length - 1];
     },
 
-    loadRouteGeometry: function (routeId, coordinates) {
+    loadRouteGeometry: function (routeJoinKey, coordinates) {
         var cumDist = this.buildCumulativeDistances(coordinates);
-        this.routeGeometry[routeId] = { coords: coordinates, cumDist: cumDist };
-        this._log('debug', 'loadRouteGeometry: ' + routeId + ' (' + coordinates.length + ' coords, ' + Math.round(cumDist[cumDist.length - 1]) + 'm total)');
+        this.routeGeometry[routeJoinKey] = { coords: coordinates, cumDist: cumDist };
+        this._log('debug', 'loadRouteGeometry: ' + routeJoinKey + ' (' + coordinates.length + ' coords, ' + Math.round(cumDist[cumDist.length - 1]) + 'm total)');
     },
 
     start: function () {
@@ -242,7 +242,7 @@ window.ChefMapAnimator = {
                 properties: {
                     vehicleId: state.vehicleId,
                     pinIcon: 'stop-pin-green',
-                    routeId: state.routeId,
+                    routeJoinKey: state.routeJoinKey,
                     transitMode: state.transitMode,
                     bearing: state.bearing
                 }
@@ -303,8 +303,8 @@ window.ChefMapAnimator = {
             if (existingState) existingState.lastSeenMs = now;
 
             // Route transfer — teleport, don't animate
-            if (existingState && existingState.routeId !== rec.routeId) {
-                this._log('debug', 'vehicle ' + rec.vehicleId + ': route transfer ' + existingState.routeId + ' → ' + rec.routeId + ', teleporting');
+            if (existingState && existingState.routeJoinKey !== rec.routeJoinKey) {
+                this._log('debug', 'vehicle ' + rec.vehicleId + ': route transfer ' + existingState.routeJoinKey + ' → ' + rec.routeJoinKey + ', teleporting');
                 teleportedVehicles++;
                 existingState = null;
             }
@@ -336,7 +336,7 @@ window.ChefMapAnimator = {
                 var staleStartPos = [rec.currentLon, rec.currentLat];
                 this.vehicles[rec.vehicleId] = {
                     vehicleId: rec.vehicleId,
-                    routeId: rec.routeId,
+                    routeJoinKey: rec.routeJoinKey,
                     subPath: [staleStartPos],
                     subPathCumDist: [0],
                     totalDistance: 0,
@@ -379,14 +379,14 @@ window.ChefMapAnimator = {
                 continue;
             }
 
-            var routeData = this.routeGeometry[rec.routeId];
+            var routeData = this.routeGeometry[rec.routeJoinKey];
             var subPath, subPathCumDist, totalDistance;
             var duration = rec.durationMs || 10000;
 
             if (routeData) {
                 var startIdx = this.findNearestIndex(routeData.coords, [rec.priorLon, rec.priorLat]);
                 var endIdx = this.findNearestIndex(routeData.coords, [rec.currentLon, rec.currentLat]);
-                this._log('debug', 'vehicle ' + rec.vehicleId + ': route=' + rec.routeId + ' startIdx=' + startIdx + ' endIdx=' + endIdx);
+                this._log('debug', 'vehicle ' + rec.vehicleId + ': route=' + rec.routeJoinKey + ' startIdx=' + startIdx + ' endIdx=' + endIdx);
                 subPath = this.extractSubPath(routeData.coords, startIdx, endIdx);
                 subPathCumDist = this.buildCumulativeDistances(subPath);
                 totalDistance = subPathCumDist[subPathCumDist.length - 1];
@@ -421,7 +421,7 @@ window.ChefMapAnimator = {
             // GTFS-RT speed field and lets us extrapolate forward smoothly even on
             // "unchanged snap" batches.
             var tempState = {
-                routeId: rec.routeId,
+                routeJoinKey: rec.routeJoinKey,
                 speed: rec.speed || 0,
                 history: history
             };
@@ -456,7 +456,7 @@ window.ChefMapAnimator = {
 
             this.vehicles[rec.vehicleId] = {
                 vehicleId: rec.vehicleId,
-                routeId: rec.routeId,
+                routeJoinKey: rec.routeJoinKey,
                 transitMode: rec.transitMode || 'bus',
                 subPath: subPath,
                 subPathCumDist: subPathCumDist,

@@ -23,7 +23,7 @@ public interface IApplicationViewModel : IViewModel
     /// </summary>
     Task PublishBatch(List<EventEnvelope> batch);
 
-    /// <summary>routeId (short name or id) → route shape, loaded once for the app lifetime.</summary>
+    /// <summary>routeJoinKey → route shape, loaded once for the app lifetime.</summary>
     IReadOnlyDictionary<string, RouteShapeFeature> RouteShapes { get; }
 
     bool IsConnected { get; }
@@ -128,10 +128,10 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
         _routeShapes.Clear();
         foreach (var feature in res.Value ?? [])
         {
-            var key = feature.Properties?.RouteShortName ?? feature.Properties?.RouteId;
+            var key = feature.Properties?.JoinKey;
             if (string.IsNullOrEmpty(key))
             {
-                _logger.LogWarning("ApplicationViewModel.LoadRoutesAsync: skipping feature with no RouteShortName or RouteId");
+                _logger.LogWarning("ApplicationViewModel.LoadRoutesAsync: skipping feature with no RouteShortName or RouteId to derive a join key from");
                 continue;
             }
 

@@ -1,0 +1,136 @@
+@inject ITelemetryEndpointsService TelemetryEndpointsService
+@inject ILogger<TelemetryTable> Logger
+@using ChefKnifeStudios.MartaJazz.Client.Core.Services.EndpointsServices
+@using ChefKnifeStudios.MartaJazz.Shared.TelemetryData
+@using Microsoft.Extensions.Logging
+
+<section class="telemetry-table-section">
+    <h3>@Title (@_totalCount)</h3>
+
+    @if (_loading)
+    {
+        <p>Loading…</p>
+    }
+    else if (_error is not null)
+    {
+        <p class="telemetry-error">@_error</p>
+    }
+    else
+    {
+        <MatTable Items="@_items" ShowPaging="false" Striped="true">
+            <MatTableHeader>
+                @foreach (var column in Columns)
+                {
+                    @if (column.SortColumn is { } sortColumn)
+                    {
+                        <th class="telemetry-sortable-header" @onclick="() => SetSortAsync(sortColumn)">
+                            @column.Label
+                            @if (_sortBy == sortColumn)
+                            {
+                                <span class="telemetry-sort-indicator">@(_sortDesc ? "▼" : "▲")</span>
+                            }
+                        </th>
+                    }
+                    else
+                    {
+                        <th>@column.Label</th>
+                    }
+                }
+            </MatTableHeader>
+            <MatTableRow Context="row">
+                @RowContent(row)
+            </MatTableRow>
+        </MatTable>
+
+        <div class="telemetry-pager">
+            <button @onclick="PreviousPageAsync" disabled="@(_page <= 1)">Prev</button>
+            <span>Page @_page of @_pageCount</span>
+            <button @onclick="NextPageAsync" disabled="@(_page >= _pageCount)">Next</button>
+        </div>
+    }
+</section>
+
+<style>
+    .telemetry-table-section { margin-bottom: 2rem; }
+    .telemetry-error { color: #b00020; }
+
+    .telemetry-sortable-header { cursor: pointer; user-select: none; white-space: nowrap; }
+    .telemetry-sortable-header:hover { text-decoration: underline; }
+    .telemetry-sort-indicator { margin-left: 0.25rem; font-size: 0.75em; }
+
+    .telemetry-pager { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem; font-size: 0.875rem; }
+    .telemetry-pager button { padding: 0.25rem 0.75rem; cursor: pointer; }
+    .telemetry-pager button:disabled { cursor: not-allowed; opacity: 0.5; }
+</style>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string EventType { get; set; } = "";
+    [Parameter] public string? City { get; set; }
+    [Parameter] public int PageSize { get; set; } = 25;
+    [Parameter, EditorRequired] public IReadOnlyList<TelemetryColumn> Columns { get; set; } = [];
+    [Parameter, EditorRequired] public RenderFragment<TelemetryEventDto> RowContent { get; set; } = default!;
+
+    bool _loading = true;
+    string? _error;
+    int _page = 1;
+    int _totalCount;
+    TelemetrySortColumn _sortBy = TelemetrySortColumn.ObservationUtc;
+    bool _sortDesc = true;
+    List<TelemetryEventDto> _items = [];
+
+    int _pageCount => Math.Max(1, (int)Math.Ceiling(_totalCount / (double)PageSize));
+
+    protected override Task OnInitializedAsync() => LoadPageAsync();
+
+    async Task LoadPageAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var result = await TelemetryEndpointsService.GetToday(EventType, City, _page, PageSize, _sortBy, _sortDesc);
+
+        if (!result.IsSuccess)
+        {
+            _error = "Failed to load telemetry.";
+            Logger.LogWarning("TelemetryTable ({EventType}/{City}): GetToday failed — Status={Status} Errors={Errors}",
+                EventType, City, result.Status, string.Join("; ", result.Errors));
+            _loading = false;
+            StateHasChanged();
+            return;
+        }
+
+        _items = result.Value?.Items.ToList() ?? [];
+        _totalCount = result.Value?.TotalCount ?? 0;
+        _loading = false;
+        StateHasChanged();
+    }
+
+    Task SetSortAsync(TelemetrySortColumn column)
+    {
+        if (_sortBy == column)
+            _sortDesc = !_sortDesc;
+        else
+        {
+            _sortBy = column;
+            _sortDesc = true;
+        }
+
+        _page = 1;
+        return LoadPageAsync();
+    }
+
+    Task PreviousPageAsync()
+    {
+        if (_page <= 1) return Task.CompletedTask;
+        _page--;
+        return LoadPageAsync();
+    }
+
+    Task NextPageAsync()
+    {
+        if (_page >= _pageCount) return Task.CompletedTask;
+        _page++;
+        return LoadPageAsync();
+    }
+}
