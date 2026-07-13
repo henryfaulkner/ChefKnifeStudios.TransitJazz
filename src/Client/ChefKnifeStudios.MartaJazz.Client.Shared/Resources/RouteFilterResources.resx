@@ -208,19 +208,19 @@
     <value>Every dot is a real MBTA vehicle, pulled live and turned into sound. Buses and trains — including the Red, Orange, and Blue lines — move through Greater Boston in real time, and the map plays what they're doing right now.</value>
   </data>
   <data name="NymtaAudioOverlayHeader" xml:space="preserve">
-    <value>NYCT Subway - New York, NY, USA</value>
+    <value>NYCT - New York, NY, USA</value>
   </data>
   <data name="NymtaAudioOverlayParagraph1" xml:space="preserve">
-    <value>Every dot is a real subway train. Hundreds of them, threaded beneath a city that never stops moving. They follow the numbered and lettered lines — the 7 curling through Queens, the A racing express down Manhattan's west side — through tunnels bored under a hundred years of traffic.</value>
+    <value>Every dot is a real NYCT vehicle, thousands of them, running the two systems this city actually moves on. The 7 curls through Queens, the A runs express down Manhattan's west side, the Bx12 crosses the Bronx along Fordham Road, the Q44 runs Main Street into Flushing, the B41 covers Flatbush from the bridge down to the water — trains under the boroughs, buses across every block a tunnel skips.</value>
   </data>
   <data name="NymtaAudioOverlayParagraph2" xml:space="preserve">
-    <value>The subway never broadcasts exactly where a train is between stations, so the harmony is inferred — pinned precisely at each platform, drifting along the drawn track in between. A note lands where a train is arriving, holds where one is stopped, and glides where one is running. What is playing right now has not played before.</value>
+    <value>A subway car never says exactly where it is between stations, so the note is inferred — pinned at each platform, drifting along the drawn track until the next one. A bus reports its own GPS, block by block, so its note tracks precisely: waiting at Atlantic Avenue, turning onto Northern Boulevard, working the SBS stops down Nostrand. Underground and surface run on the same clock. What is playing right now has not played before.</value>
   </data>
   <data name="NymtaAudioOverlayParagraph3" xml:space="preserve">
-    <value>The subway runs all night, every night, the only system in this project that never sleeps. This is the music inside that motion.</value>
+    <value>The trains run all night, every night — the only lines in this project that never sleep — and the buses hold the surface down through the hours the platforms empty out. Between them, something is always crossing the city. This is the music inside that motion.</value>
   </data>
   <data name="NymtaOverlayParagraph1" xml:space="preserve">
-    <value>Every dot is a real NYCT subway train, pulled live and turned into sound. Trains move beneath New York City in real time, and the map plays what they're doing right now.</value>
+    <value>Every dot is a real NYCT subway train or bus, pulled live and turned into sound. Both systems move through New York City in real time, and the map plays what they're doing right now.</value>
   </data>
   <data name="AudioOverlayButton" xml:space="preserve">
     <value>Enter Experience</value>
