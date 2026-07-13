@@ -1,6 +1,7 @@
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
+using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -29,6 +30,7 @@ public class GtfsStaticLoader(
     const double SimplifyToleranceMeters = 10.0;
     const double DefaultRefreshHours = 24.0;
     public const string ReadyKey = "__gtfs_static_ready__";
+    public const string SubwayOffsetsKeySuffix = "__subway_offsets__";
 
     // Fallback MARTA URL for backwards compat when no Cities: config exists
     const string MartaFallbackZipUrl = "https://itsmarta.com/google_transit_feed/google_transit.zip";
@@ -150,6 +152,8 @@ public class GtfsStaticLoader(
         var allRouteToShape = new Dictionary<string, string>();
         var allShapes = new Dictionary<string, List<(double Lat, double Lon, int Seq)>>();
         var allMeta = new Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, TransitMode Mode)>();
+        var subwayOffsets = new List<SubwayStopOffsetSet>();
+        var isSubwayCity = city.Name == CityNames.Nymta;
 
         foreach (var zipUrl in city.StaticZipUrls)
         {
@@ -159,12 +163,20 @@ public class GtfsStaticLoader(
                 var zipBytes = await client.GetByteArrayAsync(fetchUrl, ct);
                 using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
 
-                foreach (var (k, v) in ParseRouteToShapeMap(archive))
+                var routeToShape = ParseRouteToShapeMap(archive);
+                var shapes = ParseShapes(archive);
+
+                foreach (var (k, v) in routeToShape)
                     allRouteToShape.TryAdd(k, v);
-                foreach (var (k, v) in ParseShapes(archive))
+                foreach (var (k, v) in shapes)
                     allShapes.TryAdd(k, v);
                 foreach (var (k, v) in ParseRouteMetadata(archive))
                     allMeta.TryAdd(k, v);
+
+                // FR-011/012/013 — only the subway city derives the stop→shape-offset
+                // table; stop_times.txt is parsed once here and never leaves this method.
+                if (isSubwayCity)
+                    subwayOffsets.AddRange(SubwayStopOffsetBuilder.Build(archive, shapes, routeToShape));
             }
             catch (Exception ex)
             {
@@ -192,10 +204,16 @@ public class GtfsStaticLoader(
             fresh[$"{city.Name}:{routeId}"] = geoJson;
         }
 
+        if (isSubwayCity && subwayOffsets.Count > 0)
+        {
+            var offsetsKey = $"{city.Name}:{SubwayOffsetsKeySuffix}";
+            fresh[offsetsKey] = JsonSerializer.Serialize(subwayOffsets, Shared.JsonOptions.Get());
+        }
+
         return fresh;
     }
 
-    static Dictionary<string, string> ParseRouteToShapeMap(ZipArchive archive)
+    internal static Dictionary<string, string> ParseRouteToShapeMap(ZipArchive archive)
     {
         var result = new Dictionary<string, string>();
         var entry = archive.GetEntry("trips.txt");
@@ -222,7 +240,7 @@ public class GtfsStaticLoader(
         return result;
     }
 
-    static Dictionary<string, List<(double Lat, double Lon, int Seq)>> ParseShapes(ZipArchive archive)
+    internal static Dictionary<string, List<(double Lat, double Lon, int Seq)>> ParseShapes(ZipArchive archive)
     {
         var result = new Dictionary<string, List<(double, double, int)>>();
         var entry = archive.GetEntry("shapes.txt");

@@ -2,6 +2,7 @@ using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
+using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Services;
 
@@ -25,6 +26,14 @@ builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
 
 // Build city registry from Cities: config array
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
+
+var nymtaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase));
+builder.Services.Configure<SubwaySynthesisOptions>(o =>
+{
+    o.GtfsRtUrls = nymtaConfig?.GtfsRtUrls ?? [];
+});
+builder.Services.AddSingleton<NymtaCity>();
+
 builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
 {
     var cities = new List<ITransitCity>();
@@ -36,6 +45,10 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
         if (string.Equals(cfg.Name, CityNames.Marta, StringComparison.OrdinalIgnoreCase))
         {
             cities.Add(sp.GetRequiredService<MartaCity>());
+        }
+        else if (string.Equals(cfg.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase))
+        {
+            cities.Add(sp.GetRequiredService<NymtaCity>());
         }
         else
         {

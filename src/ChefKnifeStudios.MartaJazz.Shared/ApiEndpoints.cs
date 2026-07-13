@@ -12,6 +12,7 @@ public static class ApiEndpoints
         public const string GetRouteShape = "/gtfs/routes/{routeId}/shape";
         public const string GetAllRouteShapes = "/gtfs/routes/shapes";
         public const string GetAllRoutes = "/gtfs/routes";
+        public const string GetSubwayStopOffsets = "/gtfs/subway/stop-offsets";
     }
 
     public static class Transit
