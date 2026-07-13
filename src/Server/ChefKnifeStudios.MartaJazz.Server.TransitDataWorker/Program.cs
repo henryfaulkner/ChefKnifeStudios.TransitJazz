@@ -2,8 +2,10 @@ using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
+using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Services;
+using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -25,6 +27,32 @@ builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
 
 // Build city registry from Cities: config array
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
+
+var nymtaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase));
+builder.Services.Configure<SubwaySynthesisOptions>(o =>
+{
+    o.GtfsRtUrls = nymtaConfig?.GtfsRtUrls ?? [];
+});
+builder.Services.AddSingleton(sp =>
+{
+    // NYC rail + bus are one city (nymta): GtfsRtUrls feed the subway synthesizer above,
+    // BusGtfsRtUrls feed NymtaCity's internal GtfsRtCity for real-GPS bus positions.
+    var busConfig = new CityConfig
+    {
+        Name = CityNames.Nymta,
+        GtfsRtUrls = nymtaConfig?.BusGtfsRtUrls ?? [],
+        ApiKeyEnvVar = nymtaConfig?.ApiKeyEnvVar,
+        ApiKeyQueryParam = nymtaConfig?.ApiKeyQueryParam ?? "api_key",
+        RouteIdNormalization = nymtaConfig?.RouteIdNormalization ?? [],
+    };
+    return new NymtaCity(
+        sp.GetRequiredService<IHttpClientFactory>(),
+        sp.GetRequiredService<IOptions<SubwaySynthesisOptions>>(),
+        busConfig,
+        sp.GetRequiredService<ILogger<NymtaCity>>(),
+        sp.GetRequiredService<ILogger<GtfsRtCity>>());
+});
+
 builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
 {
     var cities = new List<ITransitCity>();
@@ -36,6 +64,10 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
         if (string.Equals(cfg.Name, CityNames.Marta, StringComparison.OrdinalIgnoreCase))
         {
             cities.Add(sp.GetRequiredService<MartaCity>());
+        }
+        else if (string.Equals(cfg.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase))
+        {
+            cities.Add(sp.GetRequiredService<NymtaCity>());
         }
         else
         {

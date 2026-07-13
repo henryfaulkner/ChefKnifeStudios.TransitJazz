@@ -10,7 +10,7 @@
         <AudioUnlockOverlay OnEnable="EnableAudioAsync" />
     }
 
-    <div id="@_accordionElementId" class="transit-map__accordion @(_isMobile ? "transit-map__accordion-mobile" : "")">
+    <div id="@_accordionElementId" class="transit-map__accordion @(_isMobile ? "transit-map__accordion-mobile" : "") @(_audioUnlocked ? "transit-map__accordion-unlocked" : "")">
         <MatAccordion Class="">
             <MatExpansionPanel @bind-Expanded="_accordionExpanded">
                 <MatExpansionPanelSummary>
@@ -56,6 +56,10 @@
 
     .transit-map__accordion-mobile {
         width: 100%;
+    }
+
+    .transit-map__accordion-unlocked {
+        z-index: 80;
     }
 
     .transit-map__top-text {

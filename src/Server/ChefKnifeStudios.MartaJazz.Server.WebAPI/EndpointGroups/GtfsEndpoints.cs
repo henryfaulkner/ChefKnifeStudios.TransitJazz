@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -97,7 +98,9 @@ public static class GtfsEndpoints
             var prefix = city is not null ? $"{city.ToLowerInvariant()}:" : null;
 
             var features = allShapesResult.Value
-                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey && (prefix is null || kvp.Key.StartsWith(prefix)))
+                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey
+                    && !kvp.Key.EndsWith(GtfsStaticLoader.SubwayOffsetsKeySuffix)
+                    && (prefix is null || kvp.Key.StartsWith(prefix)))
                 .Select(kvp => JsonSerializer.Deserialize<RouteShapeFeature>(kvp.Value, Shared.JsonOptions.Get()))
                 .Where(f => f is not null)
                 .ToList();
@@ -106,6 +109,34 @@ public static class GtfsEndpoints
         })
         .WithName(nameof(ApiEndpoints.Gtfs.GetAllRouteShapes))
         .Produces<IEnumerable<RouteShapeFeature>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status503ServiceUnavailable);
+
+        group.MapGet(ApiEndpoints.Gtfs.GetSubwayStopOffsets, async (
+            [FromQuery] string? city,
+            [FromServices] IKeyValueRepository<string> repo,
+            [FromServices] ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
+            var cityKey = (city ?? CityNames.Nymta).ToLowerInvariant();
+
+            var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);
+            if (!readyResult.IsSuccess)
+            {
+                logger.LogWarning("GtfsEndpoints: GTFS Static data not yet loaded.");
+                return Results.StatusCode(503);
+            }
+
+            var kvKey = $"{cityKey}:{GtfsStaticLoader.SubwayOffsetsKeySuffix}";
+            var offsetsResult = await repo.GetAsync(kvKey, ct);
+            if (!offsetsResult.IsSuccess)
+                return Results.Ok(Array.Empty<SubwayStopOffsetSet>());
+
+            var sets = JsonSerializer.Deserialize<SubwayStopOffsetSet[]>(offsetsResult.Value, Shared.JsonOptions.Get());
+            return Results.Ok(sets ?? []);
+        })
+        .WithName(nameof(ApiEndpoints.Gtfs.GetSubwayStopOffsets))
+        .Produces<IEnumerable<SubwayStopOffsetSet>>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status503ServiceUnavailable);
 
         group.MapGet(ApiEndpoints.Gtfs.GetAllRoutes, async (
@@ -133,7 +164,9 @@ public static class GtfsEndpoints
             }
 
             var featureProperties = allShapesResult.Value
-                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey && kvp.Key.StartsWith(prefix))
+                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey
+                    && !kvp.Key.EndsWith(GtfsStaticLoader.SubwayOffsetsKeySuffix)
+                    && kvp.Key.StartsWith(prefix))
                 .Select(kvp => JsonSerializer.Deserialize<RouteShapeFeature>(kvp.Value, Shared.JsonOptions.Get()))
                 .Select(x => x?.Properties)
                 .Where(f => f is not null)

@@ -140,4 +140,53 @@ public class CrossingDetectorTests
         Assert.Equal(2, result.Count);
         Assert.True(result[0].OffsetMs < result[1].OffsetMs);
     }
+
+    // ── Effective spread scaling for large batches (burst-then-quiet fix) ─────────────
+
+    [Fact]
+    public void ManyTriggersInOneBatch_SpreadWindowStretchesBeyondCallerSpreadMs()
+    {
+        // 40 trigger points at 40m spacing (0..1560m, under the 2000m teleport cap); default
+        // spreadMs=8000, but 40 crossings * 250ms/crossing = 10000ms > 8000ms, so the window
+        // should stretch.
+        var manyTriggers = Enumerable.Range(0, 40)
+            .Select(i => new TriggerPoint(i, i * 40.0))
+            .ToList();
+
+        CrossingBaseline? baseline = new CrossingBaseline("7", -20); // before all triggers
+        var result = CrossingDetector.Detect("v1", "7", 1580, manyTriggers, ref baseline);
+
+        Assert.Equal(40, result.Count);
+        // Last trigger's offset reflects a stretched window (> what 8000ms alone would give).
+        var last = result[^1];
+        Assert.True(last.OffsetMs > 8000.0, $"expected stretched window, got last offset {last.OffsetMs}ms");
+    }
+
+    [Fact]
+    public void ManyTriggersInOneBatch_SpreadWindowCappedAtMaxMultiplier()
+    {
+        // An extreme batch (200 crossings) must still cap at 2x the caller's spreadMs,
+        // not grow unbounded.
+        var manyTriggers = Enumerable.Range(0, 200)
+            .Select(i => new TriggerPoint(i, i * 10.0))
+            .ToList();
+
+        CrossingBaseline? baseline = new CrossingBaseline("7", -5);
+        var result = CrossingDetector.Detect("v1", "7", 1995, manyTriggers, ref baseline, spreadMs: 8000);
+
+        var last = result[^1];
+        Assert.True(last.OffsetMs <= 16000.0 + 0.001, $"expected cap at 2x spreadMs (16000ms), got {last.OffsetMs}ms");
+    }
+
+    [Fact]
+    public void FewTriggersInOneBatch_SpreadWindowUnchanged()
+    {
+        // Below the stretch threshold — behaves exactly as before (existing
+        // OffsetMs_ProportionalToPositionInWindow already covers the 2-trigger/9000ms case;
+        // this documents the boundary explicitly for the caller-supplied spreadMs).
+        CrossingBaseline? baseline = new CrossingBaseline("74", 100);
+        var result = CrossingDetector.Detect("v1", "74", 1000, TriggerPoints, ref baseline, spreadMs: 9000);
+
+        Assert.Equal(9000.0 * (800 - 100) / 900, result[1].OffsetMs, 3);
+    }
 }

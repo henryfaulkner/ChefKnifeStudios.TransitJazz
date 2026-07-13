@@ -203,4 +203,92 @@ public class GtfsStaticLoaderTests
                 Assert.Matches(@"^#[0-9A-F]{3}([0-9A-F]{3})?$", textColor);
         }
     }
+
+    // ── BuildZipRouteFeatures — cross-zip route_id collision (nymta: NYCT + Bus Co) ────
+
+    // Reproduces the BX41 bug: two zips from different publishers can independently mint
+    // the same numeric route_id for two entirely different routes. A flat cross-zip merge
+    // keyed on bare route_id would let the first zip's route silently shadow the second's.
+    // BuildZipRouteFeatures must key on route_short_name (falling back to route_id only
+    // when no short name exists), so both zips' merge results (via caller-side TryAdd on
+    // the per-zip dictionaries) keep their own distinctly-named route.
+    [Fact]
+    public void BuildZipRouteFeatures_KeysByShortName_NotRawRouteId()
+    {
+        // Zip A (e.g. an NYCT borough zip): route_id "41" happens to be some local route.
+        var routeToShapeA = new Dictionary<string, string> { ["41"] = "shapeA" };
+        var shapesA = new Dictionary<string, List<(double, double, int)>>
+        {
+            ["shapeA"] = [(40.80, -73.90, 0), (40.81, -73.91, 1)]
+        };
+        var metaA = new Dictionary<string, (string?, string?, string?, TransitMode)>
+        {
+            ["41"] = ("Bx41", null, null, TransitMode.Bus)
+        };
+
+        // Zip B (MTA Bus Company): a DIFFERENT route also happens to use route_id "41".
+        var routeToShapeB = new Dictionary<string, string> { ["41"] = "shapeB" };
+        var shapesB = new Dictionary<string, List<(double, double, int)>>
+        {
+            ["shapeB"] = [(40.60, -73.95, 0), (40.61, -73.96, 1)]
+        };
+        var metaB = new Dictionary<string, (string?, string?, string?, TransitMode)>
+        {
+            ["41"] = ("BX41", null, null, TransitMode.Bus)
+        };
+
+        var featuresA = GtfsStaticLoader.BuildZipRouteFeatures("nymta", routeToShapeA, shapesA, metaA);
+        var featuresB = GtfsStaticLoader.BuildZipRouteFeatures("nymta", routeToShapeB, shapesB, metaB);
+
+        // Simulate BuildCityShapeSetAsync's caller-side merge across zips.
+        var fresh = new Dictionary<string, string>();
+        foreach (var (k, v) in featuresA) fresh.TryAdd(k, v);
+        foreach (var (k, v) in featuresB) fresh.TryAdd(k, v);
+
+        Assert.True(fresh.ContainsKey("nymta:Bx41"), "zip A's route should be present under its own short name");
+        Assert.True(fresh.ContainsKey("nymta:BX41"), "zip B's route (BX41) must not be shadowed by zip A's route_id=41");
+    }
+
+    [Fact]
+    public void BuildZipRouteFeatures_NoShortName_FallsBackToRouteId()
+    {
+        var routeToShape = new Dictionary<string, string> { ["shuttle-1"] = "shapeX" };
+        var shapes = new Dictionary<string, List<(double, double, int)>>
+        {
+            ["shapeX"] = [(40.0, -74.0, 0), (40.01, -74.01, 1)]
+        };
+        var meta = new Dictionary<string, (string?, string?, string?, TransitMode)>();
+
+        var features = GtfsStaticLoader.BuildZipRouteFeatures("nymta", routeToShape, shapes, meta);
+
+        Assert.True(features.ContainsKey("nymta:shuttle-1"));
+    }
+
+    [Fact]
+    public void BuildZipRouteFeatures_DuplicateShortNameWithinZip_FirstWins()
+    {
+        // Same short name reachable via two different route_ids in the same zip
+        // (e.g. direction-split route_ids sharing one display name) — dedup within
+        // one zip is still expected, first occurrence wins.
+        var routeToShape = new Dictionary<string, string>
+        {
+            ["41-north"] = "shapeA",
+            ["41-south"] = "shapeB"
+        };
+        var shapes = new Dictionary<string, List<(double, double, int)>>
+        {
+            ["shapeA"] = [(40.0, -74.0, 0), (40.01, -74.01, 1)],
+            ["shapeB"] = [(41.0, -75.0, 0), (41.01, -75.01, 1)]
+        };
+        var meta = new Dictionary<string, (string?, string?, string?, TransitMode)>
+        {
+            ["41-north"] = ("41", null, null, TransitMode.Bus),
+            ["41-south"] = ("41", null, null, TransitMode.Bus)
+        };
+
+        var features = GtfsStaticLoader.BuildZipRouteFeatures("marta", routeToShape, shapes, meta);
+
+        Assert.Single(features);
+        Assert.True(features.ContainsKey("marta:41"));
+    }
 }
