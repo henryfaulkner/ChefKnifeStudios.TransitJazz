@@ -1,19 +1,5 @@
 {
-  "routes": [
-    {
-      "route": "www.transitjazz.com/*",
-      "redirect": "www.martajazz.com",
-      "statusCode": 301
-    },
-    {
-      "route": "transitjazz.com/*",
-      "redirect": "www.martajazz.com",
-      "statusCode": 301
-    },
-    {
-      "route": "martajazz.com/*",
-      "redirect": "www.martajazz.com",
-      "statusCode": 301
-    }
-  ]
+  "navigationFallback": {
+    "rewrite": "/index.html"
+  }
 }
