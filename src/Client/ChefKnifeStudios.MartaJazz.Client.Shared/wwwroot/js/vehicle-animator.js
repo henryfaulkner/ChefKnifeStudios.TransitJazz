@@ -6,6 +6,14 @@ window.ChefMapAnimator = {
     _animFrameId: null,
     _running: false,
     _lastFrameLogTime: 0,
+    _lastRenderMs: 0,
+
+    // Cap the FeatureCollection rebuild + setData upload at ~15fps. Position math still
+    // runs every RAF frame (~60fps), so motion stays continuous and exact; we just stop
+    // re-uploading the whole vehicles source 60×/s. Transit dots move slowly enough that
+    // 15fps reads as smooth gliding, and at NYMTA scale (~5k vehicles) the full-source
+    // setData is the dominant per-frame cost — throttling it is what unblocks the jank.
+    RENDER_INTERVAL_MS: 1000 / 15,
 
     HISTORY_SIZE: 4,
     MAX_EXTRAPOLATION_MS: 30000,
@@ -188,7 +196,12 @@ window.ChefMapAnimator = {
         var extrapolatingCount = 0;
         var idleCount = 0;
 
-        var features = [];
+        // Gate the render (FeatureCollection rebuild + setData) to ~15fps. Position math
+        // below still runs every frame so state.currentPos is always current; we only skip
+        // the expensive full-source upload — and the per-vehicle feature allocation — on
+        // frames between render intervals.
+        var shouldRender = (now - this._lastRenderMs) >= this.RENDER_INTERVAL_MS;
+        var features = shouldRender ? [] : null;
 
         for (var i = 0; i < vehicleIds.length; i++) {
             var state = this.vehicles[vehicleIds[i]];
@@ -235,22 +248,28 @@ window.ChefMapAnimator = {
                 state.currentPos = newPos;
             }
 
-            features.push({
-                type: 'Feature',
-                id: 'vehicle-' + state.vehicleId,
-                geometry: { type: 'Point', coordinates: newPos },
-                properties: {
-                    vehicleId: state.vehicleId,
-                    pinIcon: 'stop-pin-green',
-                    routeJoinKey: state.routeJoinKey,
-                    transitMode: state.transitMode,
-                    bearing: state.bearing
-                }
-            });
+            if (shouldRender) {
+                features.push({
+                    type: 'Feature',
+                    id: 'vehicle-' + state.vehicleId,
+                    geometry: { type: 'Point', coordinates: newPos },
+                    properties: {
+                        vehicleId: state.vehicleId,
+                        pinIcon: 'stop-pin-green',
+                        routeJoinKey: state.routeJoinKey,
+                        transitMode: state.transitMode,
+                        bearing: state.bearing
+                    }
+                });
+            }
         }
 
-        // Single setData call per RAF tick — the MapLibre source update strategy (R1)
-        this._source.setData({ type: 'FeatureCollection', features: features });
+        // Single setData call per render interval (~15fps) rather than every RAF frame —
+        // the full-source upload is the dominant per-frame cost at scale (R1).
+        if (shouldRender) {
+            this._lastRenderMs = now;
+            this._source.setData({ type: 'FeatureCollection', features: features });
+        }
 
         if (now - this._lastFrameLogTime >= 1000) {
             this._lastFrameLogTime = now;
