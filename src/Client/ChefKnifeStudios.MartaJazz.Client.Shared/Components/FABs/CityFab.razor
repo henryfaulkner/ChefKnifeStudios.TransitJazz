@@ -17,13 +17,13 @@
                 <MatButton Label="Atlanta, GA" Mini="true" @onclick="HandleMartaClicked" Disabled="@(CurrentCity == CityNames.Marta)" />
             </MatListItem>
             <MatListItem>
-                <MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked"  Disabled="@(CurrentCity == CityNames.Wmata)" />
-            </MatListItem>
-            <MatListItem>
                 <MatButton Label="Boston, MA" Mini="true" @onclick="HandleMbtaClicked" Disabled="@(CurrentCity == CityNames.Mbta)" />
             </MatListItem>
             <MatListItem>
                 <MatButton Label="New York, NY" Mini="true" @onclick="HandleNymtaClicked" Disabled="@(CurrentCity == CityNames.Nymta)" />
+            </MatListItem>
+            <MatListItem>
+                <MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked"  Disabled="@(CurrentCity == CityNames.Wmata)" />
             </MatListItem>
         </MatList>
     </MatMenu>
