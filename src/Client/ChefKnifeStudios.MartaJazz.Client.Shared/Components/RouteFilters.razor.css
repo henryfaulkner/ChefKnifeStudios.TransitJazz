@@ -51,6 +51,15 @@
     margin: 0 !important;
 }
 
+::deep .route-filters__section-label--clickable {
+    cursor: pointer;
+    user-select: none;
+}
+
+::deep .route-filters__section-label--clickable:hover {
+    text-decoration: underline;
+}
+
 .route-filters__route-filter {
     padding: 1px 2px;
     cursor: pointer;

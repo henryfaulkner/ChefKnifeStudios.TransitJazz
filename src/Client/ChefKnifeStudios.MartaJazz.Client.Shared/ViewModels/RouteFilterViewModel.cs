@@ -24,6 +24,7 @@ public interface IRouteFilterViewModel : IViewModel, IDisposable
 {
     IEnumerable<RouteItem> RouteItems { get; }
     void SelectRoute(RouteItem routeItem);
+    void SelectAll(TransitMode mode);
     void ClearSelection(TransitMode mode);
     void SetHoveredRoute(RouteItem? routeItem);
     public bool HasSelection { get; }
@@ -251,6 +252,14 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 IsSelected = x.RouteJoinKey == routeItem.RouteJoinKey ? !x.IsSelected : x.IsSelected,
                 Mode = x.Mode,
             })
+            .ToList();
+        RecomputeActiveTransitCounts();
+    }
+
+    public void SelectAll(TransitMode mode)
+    {
+        RouteItems = RouteItems
+            .Select(x => new RouteItem { RouteJoinKey = x.RouteJoinKey, Label = x.Label, Color = x.Color, IsSelected = x.Mode == mode ? true : x.IsSelected, Mode = x.Mode, })
             .ToList();
         RecomputeActiveTransitCounts();
     }

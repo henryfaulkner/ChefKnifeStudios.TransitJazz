@@ -22,6 +22,16 @@
     }
 }
 
+/* RouteFilters lives inside MatExpansionPanelDetails, which MatBlazor renders as
+   .mat-expansion-panel__content outside the RouteFilters scoped-CSS tree, so ::deep
+   can't reach it. Scoped to the transit-map accordion so other expansion panels
+   in the app are unaffected. */
+.transit-map__accordion .mat-expansion-panel__content {
+    max-height: 60vh;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+}
+
 .mdc-button {
   border-radius: 4px;
 }

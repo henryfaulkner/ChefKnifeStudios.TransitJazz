@@ -30,7 +30,7 @@
 @{
     RenderFragment<TransitMode> SectionLabel = mode =>
         @<div class="route-filters__section-header @(mode == TransitMode.Rail ? "route-filters__section-header--rail" : "")">
-            <MatSubtitle1 Class="route-filters__section-label">@Loc[mode == TransitMode.Rail ? "Rail" : "Buses"]</MatSubtitle1>
+            <MatSubtitle1 Class="route-filters__section-label route-filters__section-label--clickable" @onclick="() => HandleSelectAll(mode)">@Loc[mode == TransitMode.Rail ? "Rail" : "Buses"]</MatSubtitle1>
             @if (RouteFilterViewModel.HasSelectionFor(mode))
             {
                 <MatIconButton
