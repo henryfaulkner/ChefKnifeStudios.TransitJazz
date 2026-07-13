@@ -102,12 +102,13 @@ public class SubwaySynthesisTests
         Assert.False(result.Placed);
     }
 
-    // ── US2: in-transit drift ────────────────────────────────────────────────
+    // ── US2: in-transit drift — first sighting still places exactly at target/prev ────
+    // (no lastKnownDistanceM/lastSynthesizedAtUtc supplied ⇒ nothing to bound movement
+    // from, same as the StoppedAt no-history case above)
 
     [Fact]
-    public void Synthesize_InTransit_FracZero_ReturnsExactPrevStationCoord()
+    public void Synthesize_InTransit_NoHistory_ReturnsExactTargetStationCoord()
     {
-        // INV-A1 (FR-006, SC-002): elapsed 0 -> frac 0 -> exactly the prev station coord.
         var table = BuildTable();
         var now = DateTimeOffset.UtcNow;
         var result = ShapeInterpolator.Synthesize(
@@ -116,41 +117,9 @@ public class SubwaySynthesisTests
 
         Assert.True(result.Placed);
         Assert.Equal(40.75, result.Lat, 6);
-        Assert.Equal(-73.99, result.Lon, 6);
-        Assert.Equal(SynthesisOutcome.InTransit, result.Outcome);
-    }
-
-    [Fact]
-    public void Synthesize_InTransit_FracOne_ReturnsExactTargetStationCoord()
-    {
-        // INV-A1 (FR-006, SC-002): elapsed >= NominalRunSeconds -> frac 1 -> exactly target coord.
-        var table = BuildTable();
-        var now = DateTimeOffset.UtcNow;
-        var tstamp = (ulong)now.AddSeconds(-90).ToUnixTimeSeconds();
-        var result = ShapeInterpolator.Synthesize(
-            table, route: "7", target: "702N", status: VehicleStopStatus.InTransitTo,
-            timestampUnix: tstamp, now: now, nominalRunSeconds: 90);
-
-        Assert.True(result.Placed);
-        Assert.Equal(40.75, result.Lat, 6);
         Assert.Equal(-73.97, result.Lon, 6);
         Assert.Equal(SynthesisOutcome.InTransit, result.Outcome);
-    }
-
-    [Fact]
-    public void Synthesize_InTransit_ElapsedFarExceedsNominal_ClampsToTarget()
-    {
-        // INV-A6 (FR-004): elapsed >> NominalRunSeconds clamps to target, no overshoot.
-        var table = BuildTable();
-        var now = DateTimeOffset.UtcNow;
-        var tstamp = (ulong)now.AddSeconds(-9000).ToUnixTimeSeconds();
-        var result = ShapeInterpolator.Synthesize(
-            table, route: "7", target: "702N", status: VehicleStopStatus.InTransitTo,
-            timestampUnix: tstamp, now: now, nominalRunSeconds: 90);
-
-        Assert.True(result.Placed);
-        Assert.Equal(40.75, result.Lat, 6);
-        Assert.Equal(-73.97, result.Lon, 6);
+        Assert.Equal(1857.0, result.DistanceAlongShapeMeters, 3);
     }
 
     [Fact]
@@ -166,11 +135,109 @@ public class SubwaySynthesisTests
         Assert.True(result.Placed);
         Assert.Equal(40.75, result.Lat, 6);
         Assert.Equal(-73.99, result.Lon, 6);
-        Assert.Equal(SynthesisOutcome.Stopped, result.Outcome);
+    }
+
+    // ── Bounded, wall-clock-paced movement across ticks (the actual burst/silence fix) ──
+    // Pacing now comes ENTIRELY from (now - lastSynthesizedAtUtc) — our own tick cadence —
+    // never from the RT feed's timestampUnix. Passing a stale/irrelevant timestampUnix
+    // below is deliberate: it proves pacing no longer depends on it.
+
+    [Fact]
+    public void Synthesize_WithHistory_ZeroElapsedSinceOurLastTick_StaysPut()
+    {
+        var table = BuildTable();
+        var now = DateTimeOffset.UtcNow;
+        var result = ShapeInterpolator.Synthesize(
+            table, route: "7", target: "702N", status: VehicleStopStatus.InTransitTo,
+            timestampUnix: (ulong)now.AddSeconds(-9000).ToUnixTimeSeconds(), // deliberately stale
+            now: now, nominalRunSeconds: 90,
+            lastKnownDistanceM: 0, lastSynthesizedAtUtc: now); // 0 seconds since OUR last tick
+
+        Assert.True(result.Placed);
+        Assert.Equal(0.0, result.DistanceAlongShapeMeters, 3);
+        Assert.Equal(-73.99, result.Lon, 6); // still at 701N, not teleported
     }
 
     [Fact]
-    public void Synthesize_InTransit_MidFrac_OnCurvedPolyline_LiesOffTheChord()
+    public void Synthesize_WithHistory_OneTickElapsed_AdvancesBoundedDistance()
+    {
+        // Leg = 701N(0m) -> 702N(1857m) over nominalRunSeconds=90 -> speed = 20.633 m/s.
+        // One Worker tick (10s) later: expected advance = 10 * 20.633 = 206.33m.
+        var table = BuildTable();
+        var lastAt = DateTimeOffset.UtcNow;
+        var now = lastAt.AddSeconds(10);
+        var result = ShapeInterpolator.Synthesize(
+            table, route: "7", target: "702N", status: VehicleStopStatus.InTransitTo,
+            timestampUnix: (ulong)now.AddSeconds(-9000).ToUnixTimeSeconds(), // irrelevant
+            now: now, nominalRunSeconds: 90,
+            lastKnownDistanceM: 0, lastSynthesizedAtUtc: lastAt);
+
+        Assert.True(result.Placed);
+        Assert.Equal(206.33, result.DistanceAlongShapeMeters, 1);
+    }
+
+    [Fact]
+    public void Synthesize_StatusFlipsToStoppedAt_ContinuesEasingFromLastKnown_NoTeleport()
+    {
+        // The actual bug: status flips InTransitTo -> StoppedAt for the SAME target, with a
+        // stale RT timestamp that would have collapsed any elapsed-based ease instantly.
+        // Movement must still be bounded by our own 10s tick, landing well short of the
+        // station, not snapped to it.
+        // Leg speed = 1857m / 90s = 20.633 m/s; one 10s tick advances at most 206.33m —
+        // starting 1000m short of the target guarantees the tick can't fully close the gap.
+        var table = BuildTable();
+        var lastAt = DateTimeOffset.UtcNow;
+        var now = lastAt.AddSeconds(10);
+        var result = ShapeInterpolator.Synthesize(
+            table, route: "7", target: "702N", status: VehicleStopStatus.StoppedAt,
+            timestampUnix: (ulong)now.AddSeconds(-9000).ToUnixTimeSeconds(), // stale feed timestamp
+            now: now, nominalRunSeconds: 90,
+            lastKnownDistanceM: 857, lastSynthesizedAtUtc: lastAt); // 1000m short of 702N (1857m)
+
+        Assert.True(result.Placed);
+        Assert.Equal(SynthesisOutcome.Stopped, result.Outcome);
+        Assert.NotEqual(-73.97, result.Lon); // NOT snapped to 702N's exact coord
+        Assert.True(result.DistanceAlongShapeMeters > 857 && result.DistanceAlongShapeMeters < 1857,
+            $"expected bounded advance toward target, got {result.DistanceAlongShapeMeters}m");
+    }
+
+    [Fact]
+    public void Synthesize_ManyTicksElapsed_ClampsExactlyAtTarget_NoOvershoot()
+    {
+        var table = BuildTable();
+        var lastAt = DateTimeOffset.UtcNow;
+        var now = lastAt.AddSeconds(9000); // far more than enough to finish the leg
+        var result = ShapeInterpolator.Synthesize(
+            table, route: "7", target: "702N", status: VehicleStopStatus.InTransitTo,
+            timestampUnix: null, now: now, nominalRunSeconds: 90,
+            lastKnownDistanceM: 0, lastSynthesizedAtUtc: lastAt);
+
+        Assert.True(result.Placed);
+        Assert.Equal(40.75, result.Lat, 6);
+        Assert.Equal(-73.97, result.Lon, 6);
+        Assert.Equal(1857.0, result.DistanceAlongShapeMeters, 3);
+    }
+
+    [Fact]
+    public void Synthesize_AlreadyAtOrPastTarget_StaysExactlyAtTarget()
+    {
+        // lastKnownDistanceM already >= targetDist (e.g. status lagged an already-completed
+        // approach) — nothing further to synthesize, no backward motion either.
+        var table = BuildTable();
+        var lastAt = DateTimeOffset.UtcNow;
+        var now = lastAt.AddSeconds(10);
+        var result = ShapeInterpolator.Synthesize(
+            table, route: "7", target: "702N", status: VehicleStopStatus.StoppedAt,
+            timestampUnix: null, now: now, nominalRunSeconds: 90,
+            lastKnownDistanceM: 1857.0, lastSynthesizedAtUtc: lastAt);
+
+        Assert.True(result.Placed);
+        Assert.Equal(-73.97, result.Lon, 6);
+        Assert.Equal(1857.0, result.DistanceAlongShapeMeters, 3);
+    }
+
+    [Fact]
+    public void Synthesize_MidLeg_OnCurvedPolyline_LiesOffTheChord()
     {
         // INV-A2 (FR-005, US2 AS4): a curved test polyline places the train ON the
         // polyline, not on the straight chord between the two stations.
@@ -189,11 +256,12 @@ public class SubwaySynthesisTests
         var set = new SubwayStopOffsetSet("7", "N", coordinates, cumDist, stops);
         var table = new StopOffsetTable([set]);
 
-        var now = DateTimeOffset.UtcNow;
-        var tstamp = (ulong)now.AddSeconds(-45).ToUnixTimeSeconds(); // frac 0.5
+        var lastAt = DateTimeOffset.UtcNow;
+        var now = lastAt.AddSeconds(45); // half of nominalRunSeconds=90 -> halfway along the leg
         var result = ShapeInterpolator.Synthesize(
             table, route: "7", target: "702N", status: VehicleStopStatus.InTransitTo,
-            timestampUnix: tstamp, now: now, nominalRunSeconds: 90);
+            timestampUnix: null, now: now, nominalRunSeconds: 90,
+            lastKnownDistanceM: 0, lastSynthesizedAtUtc: lastAt);
 
         Assert.True(result.Placed);
 

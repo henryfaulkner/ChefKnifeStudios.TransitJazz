@@ -27,6 +27,16 @@ public class NymtaCity(
 
     readonly GtfsRtCity _busCity = new(busConfig, httpClientFactory, busLogger);
 
+    // Per-train last synthesized distance-along-shape + OUR wall-clock time of that
+    // synthesis, so movement is paced by our own tick cadence rather than the RT feed's
+    // timestamp (see ShapeInterpolator's doc comment — the feed's timestamp doesn't refresh
+    // every poll, so pacing off it could still collapse to a teleport on the first tick a
+    // target/status changes). Keyed by the same trainId used to build the synthesized
+    // FeedEntity below. Unbounded growth is not a concern at NYC subway's train count (~500
+    // in service); entries for trains that stop reporting simply go stale and are naturally
+    // overwritten if the ID is reused, never read otherwise.
+    readonly Dictionary<string, (double DistanceM, DateTimeOffset AtUtc)> _lastSynthesized = new(StringComparer.Ordinal);
+
     volatile StopOffsetTable? _table;
     DateTime _fetchedAtUtc;
 
@@ -108,14 +118,20 @@ public class NymtaCity(
         if (string.IsNullOrEmpty(route) || string.IsNullOrEmpty(target))
             return (null, SynthesisOutcome.SkippedUnknownStation);
 
+        var trainId = entity.Vehicle?.Vehicle?.Id ?? entity.Id;
         var status = entity.Vehicle?.CurrentStatus;
+        var now = DateTimeOffset.UtcNow;
+        var hasPrior = _lastSynthesized.TryGetValue(trainId, out var prior);
         var result = ShapeInterpolator.Synthesize(
             table, route, target, status, entity.Vehicle?.Timestamp,
-            DateTimeOffset.UtcNow, nominalRunSeconds);
+            now, nominalRunSeconds,
+            lastKnownDistanceM: hasPrior ? prior.DistanceM : null,
+            lastSynthesizedAtUtc: hasPrior ? prior.AtUtc : null);
 
         if (!result.Placed) return (null, result.Outcome);
 
-        var trainId = entity.Vehicle?.Vehicle?.Id ?? entity.Id;
+        _lastSynthesized[trainId] = (result.DistanceAlongShapeMeters, now);
+
         var synthesized = new FeedEntity
         {
             Id = trainId,

@@ -11,16 +11,32 @@ public enum SynthesisOutcome
     SkippedUnknownRoute,
 }
 
-public readonly record struct SynthesisResult(bool Placed, double Lat, double Lon, SynthesisOutcome Outcome)
+public readonly record struct SynthesisResult(bool Placed, double Lat, double Lon, SynthesisOutcome Outcome, double DistanceAlongShapeMeters = 0)
 {
     public static SynthesisResult Drop(SynthesisOutcome outcome) => new(false, 0, 0, outcome);
-    public static SynthesisResult At(double lat, double lon, SynthesisOutcome outcome) => new(true, lat, lon, outcome);
+    public static SynthesisResult At(double lat, double lon, SynthesisOutcome outcome, double distanceAlongShapeMeters) =>
+        new(true, lat, lon, outcome, distanceAlongShapeMeters);
 }
 
-// Per-entity synthesis: given a subway RT entity's route/target-stop/status/timestamp,
-// produces a Position by snapping to the target station (stopped/arriving) or walking
-// the route's shape polyline between stations (in-transit). Pure function over
-// StopOffsetTable — deterministic given the same inputs (except `now`).
+// Per-entity synthesis: given a subway RT entity's route/target-stop/status, produces a
+// Position by walking the route's shape polyline toward `target` at a bounded speed.
+//
+// Movement pacing deliberately does NOT use the RT feed's own `vehicle.timestamp` for
+// `frac`/elapsed math anymore. MTA's subway feed does not refresh that timestamp every
+// poll — `Worker.cs`'s own `isStale` check (comparing consecutive timestamps) exists
+// because of this. That meant the first tick we observed a target/status change could
+// already see a large `now - timestampUnix`, collapsing any elapsed-based ease to near
+// zero real ticks and reproducing the exact teleport this synthesizer exists to avoid.
+//
+// Instead, pacing is driven entirely by OUR OWN wall-clock cadence: the caller supplies
+// `lastKnownDistanceM` + `lastSynthesizedAtUtc` (this method's own output from whenever it
+// was last called for this vehicle — normally ~10s ago, one Worker tick). Each call moves
+// the train at most `legDistanceM / nominalRunSeconds` meters per second of OUR elapsed
+// time, toward `target`, regardless of what status or timestamp the feed reports. A status
+// flip (InTransitTo -> StoppedAt/IncomingAt, or a new target) is invisible to the pacing —
+// it's just a new target to keep converging on smoothly, one bounded step per tick. First
+// observation (no lastKnownDistanceM/lastSynthesizedAtUtc) has nothing to move from and
+// places exactly at the target — there's no discontinuity to smooth on first sighting.
 public static class ShapeInterpolator
 {
     public static SynthesisResult Synthesize(
@@ -30,7 +46,9 @@ public static class ShapeInterpolator
         VehicleStopStatus? status,
         ulong? timestampUnix,
         DateTimeOffset now,
-        double nominalRunSeconds)
+        double nominalRunSeconds,
+        double? lastKnownDistanceM = null,
+        DateTimeOffset? lastSynthesizedAtUtc = null)
     {
         var targetCoord = table.TryStation(target);
         if (targetCoord is null)
@@ -44,44 +62,37 @@ public static class ShapeInterpolator
         if (set is null)
             return SynthesisResult.Drop(SynthesisOutcome.SkippedUnknownRoute);
 
-        return (status ?? VehicleStopStatus.StoppedAt) switch
-        {
-            VehicleStopStatus.StoppedAt or VehicleStopStatus.IncomingAt =>
-                SynthesisResult.At(targetCoord.Value.Lat, targetCoord.Value.Lon, SynthesisOutcome.Stopped),
-
-            VehicleStopStatus.InTransitTo =>
-                SynthesizeInTransit(table, route, direction, target, targetCoord.Value, timestampUnix, now, nominalRunSeconds),
-
-            _ => SynthesisResult.At(targetCoord.Value.Lat, targetCoord.Value.Lon, SynthesisOutcome.Stopped),
-        };
-    }
-
-    static SynthesisResult SynthesizeInTransit(
-        StopOffsetTable table,
-        string route,
-        string direction,
-        string target,
-        (double Lat, double Lon) targetCoord,
-        ulong? timestampUnix,
-        DateTimeOffset now,
-        double nominalRunSeconds)
-    {
-        var prev = table.StationBefore(target, route, direction);
-        if (prev is null)
-            return SynthesisResult.At(targetCoord.Lat, targetCoord.Lon, SynthesisOutcome.Stopped);
-
-        var set = table.TryGetSet(route, direction)!;
         var targetStop = Array.Find(set.Stops, s => s.StopId == target);
-        var targetDist = targetStop is null ? prev.DistanceAlongShapeMeters : targetStop.DistanceAlongShapeMeters;
+        if (targetStop is null)
+            // Station exists globally (TryStation succeeded above) but not on this specific
+            // route+direction's stop list — no distance-along-shape to anchor to.
+            return SynthesisResult.At(targetCoord.Value.Lat, targetCoord.Value.Lon, SynthesisOutcome.Stopped, 0);
+        var targetDist = targetStop.DistanceAlongShapeMeters;
 
-        var elapsed = timestampUnix.HasValue
-            ? Math.Max(0, now.ToUnixTimeSeconds() - (long)timestampUnix.Value)
-            : 0;
-        var frac = Math.Clamp(elapsed / nominalRunSeconds, 0, 1);
+        var outcome = status is VehicleStopStatus.InTransitTo ? SynthesisOutcome.InTransit : SynthesisOutcome.Stopped;
 
-        var dCurr = prev.DistanceAlongShapeMeters + frac * (targetDist - prev.DistanceAlongShapeMeters);
+        if (lastKnownDistanceM is null || lastSynthesizedAtUtc is null)
+            // First sighting of this vehicle — nothing to bound movement from.
+            return SynthesisResult.At(targetCoord.Value.Lat, targetCoord.Value.Lon, outcome, targetDist);
+
+        if (lastKnownDistanceM.Value >= targetDist)
+            // Already at/past the target from a prior leg (e.g. status lagged behind an
+            // already-completed approach) — nothing further to synthesize toward.
+            return SynthesisResult.At(targetCoord.Value.Lat, targetCoord.Value.Lon, outcome, targetDist);
+
+        var prev = table.StationBefore(target, route, direction);
+        var legDistanceM = prev is not null ? Math.Max(1, targetDist - prev.DistanceAlongShapeMeters) : Math.Max(1, targetDist - lastKnownDistanceM.Value);
+        var assumedSpeedMps = legDistanceM / nominalRunSeconds;
+
+        var ourElapsedSec = Math.Max(0, (now - lastSynthesizedAtUtc.Value).TotalSeconds);
+        var maxAdvanceM = ourElapsedSec * assumedSpeedMps;
+
+        var dCurr = Math.Min(lastKnownDistanceM.Value + maxAdvanceM, targetDist);
+        if (dCurr >= targetDist)
+            return SynthesisResult.At(targetCoord.Value.Lat, targetCoord.Value.Lon, outcome, targetDist);
+
         var (lat, lon) = table.PointOnShapeAtDistance(route, direction, dCurr);
-        return SynthesisResult.At(lat, lon, SynthesisOutcome.InTransit);
+        return SynthesisResult.At(lat, lon, outcome, dCurr);
     }
 
     static string? DirectionFromStopId(string stopId)
