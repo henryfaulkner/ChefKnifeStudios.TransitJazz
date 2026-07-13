@@ -148,12 +148,15 @@ public class GtfsStaticLoader(
             ? Environment.GetEnvironmentVariable(city.ApiKeyEnvVar)
             : null;
 
-        // Merge all zip archives for this city into one shape set (multi-zip per city, Q4)
-        var allRouteToShape = new Dictionary<string, string>();
-        var allShapes = new Dictionary<string, List<(double Lat, double Lon, int Seq)>>();
-        var allMeta = new Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, TransitMode Mode)>();
         var subwayOffsets = new List<SubwayStopOffsetSet>();
-        var isSubwayCity = city.Name == CityNames.Nymta;
+        // Keyed by route_short_name when present (else route_id) — the same JoinKey the
+        // client caches routes by. route_id/shape_id are only unique WITHIN a single zip's
+        // trips.txt/shapes.txt; a flat cross-zip merge on bare route_id silently drops
+        // routes whose numeric id happens to collide with a different route from an
+        // earlier-processed zip (e.g. NYCT borough zips vs. the separately-published MTA
+        // Bus Company zip both mint their own route_id numbering). Processing each zip as
+        // its own self-contained unit and deduping on the display key avoids that.
+        var fresh = new Dictionary<string, string>();
 
         foreach (var zipUrl in city.StaticZipUrls)
         {
@@ -165,17 +168,15 @@ public class GtfsStaticLoader(
 
                 var routeToShape = ParseRouteToShapeMap(archive);
                 var shapes = ParseShapes(archive);
+                var meta = ParseRouteMetadata(archive);
 
-                foreach (var (k, v) in routeToShape)
-                    allRouteToShape.TryAdd(k, v);
-                foreach (var (k, v) in shapes)
-                    allShapes.TryAdd(k, v);
-                foreach (var (k, v) in ParseRouteMetadata(archive))
-                    allMeta.TryAdd(k, v);
+                foreach (var (key, geoJson) in BuildZipRouteFeatures(city.Name, routeToShape, shapes, meta))
+                    fresh.TryAdd(key, geoJson);
 
-                // FR-011/012/013 — only the subway city derives the stop→shape-offset
-                // table; stop_times.txt is parsed once here and never leaves this method.
-                if (isSubwayCity)
+                // FR-011/012/013 — only the subway zip (nymta now merges subway + bus zips
+                // under one city) derives the stop→shape-offset table; stop_times.txt is
+                // parsed once here and never leaves this method.
+                if (city.Name == CityNames.Nymta && zipUrl.Contains("/subway/", StringComparison.OrdinalIgnoreCase))
                     subwayOffsets.AddRange(SubwayStopOffsetBuilder.Build(archive, shapes, routeToShape));
             }
             catch (Exception ex)
@@ -184,33 +185,53 @@ public class GtfsStaticLoader(
             }
         }
 
-        var fresh = new Dictionary<string, string>();
-        foreach (var (routeId, shapeId) in allRouteToShape)
-        {
-            if (!allShapes.TryGetValue(shapeId, out var points) || points.Count == 0) continue;
-
-            string? shortName = null, color = null, textColor = null;
-            var mode = TransitMode.Bus;
-            if (allMeta.TryGetValue(routeId, out var meta))
-            {
-                shortName = meta.RouteShortName;
-                color = meta.RouteColor;
-                textColor = meta.TextColor;
-                mode = meta.Mode;
-            }
-
-            var simplified = Simplify(points, SimplifyToleranceMeters);
-            var geoJson = BuildLineStringFeature(routeId, shortName, simplified, color, textColor, mode, city.Name);
-            fresh[$"{city.Name}:{routeId}"] = geoJson;
-        }
-
-        if (isSubwayCity && subwayOffsets.Count > 0)
+        if (subwayOffsets.Count > 0)
         {
             var offsetsKey = $"{city.Name}:{SubwayOffsetsKeySuffix}";
             fresh[offsetsKey] = JsonSerializer.Serialize(subwayOffsets, Shared.JsonOptions.Get());
         }
 
         return fresh;
+    }
+
+    // Builds this single zip's route shape features, keyed by "{city}:{displayKey}" where
+    // displayKey is route_short_name when present (else route_id) — the same key the client
+    // caches routes by (RouteShapeFeature.JoinKey). Deduping within one zip on that key (not
+    // caller-side on raw route_id) is what lets BuildCityShapeSetAsync merge multiple zips
+    // — including zips from different publishers with independently-numbered route_ids,
+    // e.g. NYCT boroughs vs. MTA Bus Company — without one zip's route silently shadowing
+    // an unrelated route from another zip that happens to reuse the same numeric route_id.
+    internal static Dictionary<string, string> BuildZipRouteFeatures(
+        string cityName,
+        Dictionary<string, string> routeToShape,
+        Dictionary<string, List<(double Lat, double Lon, int Seq)>> shapes,
+        Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, TransitMode Mode)> meta)
+    {
+        var result = new Dictionary<string, string>();
+
+        foreach (var (routeId, shapeId) in routeToShape)
+        {
+            if (!shapes.TryGetValue(shapeId, out var points) || points.Count == 0) continue;
+
+            string? shortName = null, color = null, textColor = null;
+            var mode = TransitMode.Bus;
+            if (meta.TryGetValue(routeId, out var m))
+            {
+                shortName = m.RouteShortName;
+                color = m.RouteColor;
+                textColor = m.TextColor;
+                mode = m.Mode;
+            }
+
+            var displayKey = shortName ?? routeId;
+            var key = $"{cityName}:{displayKey}";
+            if (result.ContainsKey(key)) continue;
+
+            var simplified = Simplify(points, SimplifyToleranceMeters);
+            result[key] = BuildLineStringFeature(routeId, shortName, simplified, color, textColor, mode, cityName);
+        }
+
+        return result;
     }
 
     internal static Dictionary<string, string> ParseRouteToShapeMap(ZipArchive archive)

@@ -9,24 +9,48 @@ using System.Text.Json;
 
 namespace ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Cities;
 
-// Bespoke ITransitCity for NYC subway (sibling of MartaCity). NYC subway GTFS-RT never
-// carries Position.lat/lon — this adapter synthesizes one per train from the stop-arrival
-// fields (route/stop_id/current_status/timestamp) before the entity ever reaches Worker,
-// so the shared loop and every downstream stage treat it exactly like a bus.
+// Bespoke ITransitCity for NYC — one city, two GTFS-RT feeds merged into a single tick.
+// Subway GTFS-RT never carries Position.lat/lon, so line-group feeds are synthesized from
+// stop-arrival fields (route/stop_id/current_status/timestamp) via ShapeInterpolator. Bus
+// GTFS-RT is ordinary real-GPS protobuf, fetched/normalized via an internal GtfsRtCity built
+// from the bus half of CityConfig. Both feeds' entities land in one merged FeedMessage before
+// the shared loop and every downstream stage ever sees them — NYC rail and bus are not
+// separate cities.
 public class NymtaCity(
     IHttpClientFactory httpClientFactory,
     IOptions<SubwaySynthesisOptions> options,
-    ILogger<NymtaCity> logger) : ITransitCity
+    CityConfig busConfig,
+    ILogger<NymtaCity> logger,
+    ILogger<GtfsRtCity> busLogger) : ITransitCity
 {
     static readonly TimeSpan TableTtl = TimeSpan.FromHours(24);
+
+    readonly GtfsRtCity _busCity = new(busConfig, httpClientFactory, busLogger);
 
     volatile StopOffsetTable? _table;
     DateTime _fetchedAtUtc;
 
     public string Name => CityNames.Nymta;
-    public bool EmitsTelemetry => false;
+    public bool EmitsTelemetry => true;
 
     public async Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)
+    {
+        var merged = await FetchAndSynthesizeSubwayAsync(ct);
+
+        try
+        {
+            var busFeed = await _busCity.FetchVehiclesAsync(ct);
+            merged.Entities.AddRange(busFeed.Entities);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "NymtaCity: failed to fetch bus GTFS-RT.");
+        }
+
+        return merged;
+    }
+
+    async Task<FeedMessage> FetchAndSynthesizeSubwayAsync(CancellationToken ct)
     {
         await EnsureTableAsync(ct);
 

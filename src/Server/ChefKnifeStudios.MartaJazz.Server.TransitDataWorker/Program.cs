@@ -5,6 +5,7 @@ using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.MartaJazz.Shared;
 using ChefKnifeStudios.MartaJazz.Shared.Services;
+using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -32,7 +33,25 @@ builder.Services.Configure<SubwaySynthesisOptions>(o =>
 {
     o.GtfsRtUrls = nymtaConfig?.GtfsRtUrls ?? [];
 });
-builder.Services.AddSingleton<NymtaCity>();
+builder.Services.AddSingleton(sp =>
+{
+    // NYC rail + bus are one city (nymta): GtfsRtUrls feed the subway synthesizer above,
+    // BusGtfsRtUrls feed NymtaCity's internal GtfsRtCity for real-GPS bus positions.
+    var busConfig = new CityConfig
+    {
+        Name = CityNames.Nymta,
+        GtfsRtUrls = nymtaConfig?.BusGtfsRtUrls ?? [],
+        ApiKeyEnvVar = nymtaConfig?.ApiKeyEnvVar,
+        ApiKeyQueryParam = nymtaConfig?.ApiKeyQueryParam ?? "api_key",
+        RouteIdNormalization = nymtaConfig?.RouteIdNormalization ?? [],
+    };
+    return new NymtaCity(
+        sp.GetRequiredService<IHttpClientFactory>(),
+        sp.GetRequiredService<IOptions<SubwaySynthesisOptions>>(),
+        busConfig,
+        sp.GetRequiredService<ILogger<NymtaCity>>(),
+        sp.GetRequiredService<ILogger<GtfsRtCity>>());
+});
 
 builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
 {

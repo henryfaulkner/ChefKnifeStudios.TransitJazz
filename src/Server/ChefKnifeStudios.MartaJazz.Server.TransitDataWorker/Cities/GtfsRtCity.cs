@@ -35,13 +35,14 @@ public class GtfsRtCity(
         }
 
         ApplyRailRouteIdMap(merged);
+        ApplyRouteIdNormalization(merged);
         return merged;
     }
 
     async Task<FeedMessage?> FetchFeedAsync(string url, string? apiKey, CancellationToken ct)
     {
         var client = httpClientFactory.CreateClient();
-        var requestUrl = apiKey is not null ? $"{url}?api_key={apiKey}" : url;
+        var requestUrl = apiKey is not null ? $"{url}?{config.ApiKeyQueryParam}={apiKey}" : url;
         var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("TransitJazz", "1.0"));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
@@ -66,6 +67,17 @@ public class GtfsRtCity(
             if (entity.Vehicle?.Trip?.RouteId is not null
                 && config.RailRouteIdMap.TryGetValue(entity.Vehicle.Trip.RouteId, out var mapped))
                 entity.Vehicle.Trip.RouteId = mapped;
+        }
+    }
+
+    void ApplyRouteIdNormalization(FeedMessage feed)
+    {
+        if (config.RouteIdNormalization is not { Length: > 0 }) return;
+
+        foreach (var entity in feed.Entities)
+        {
+            if (entity.Vehicle?.Trip?.RouteId is not null)
+                entity.Vehicle.Trip.RouteId = RouteIdNormalizer.Apply(entity.Vehicle.Trip.RouteId, config.RouteIdNormalization);
         }
     }
 }
