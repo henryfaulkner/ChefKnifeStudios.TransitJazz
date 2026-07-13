@@ -2,6 +2,7 @@ using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Checkpoints;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.MartaJazz.Shared;
+using ChefKnifeStudios.MartaJazz.Shared.Collections;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.Geospatial;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
@@ -343,10 +344,15 @@ public class Worker(
         {
             var vehicleStateCache = GetVehicleCache(city.Name);
 
-            var batch = new List<RouteNearestPointBatchEvent.RouteNearestPointRecord>();
-            var debugBatch = new List<BatchDebugRecord>();
+            // Short-lived per-tick accumulators sized to the current vehicle feed. Backed by
+            // ArrayPool via RecyclableList so the backing arrays are recycled instead of allocated
+            // (and LOH-pressured) on every 10s tick. Pre-sized to the entity count so no mid-fill
+            // rental happens. Disposed at method scope — safe because SignalR serializes the payload
+            // synchronously inside the PublishBatchAsync await, before these go out of scope.
+            using var batch = new RecyclableList<RouteNearestPointBatchEvent.RouteNearestPointRecord>(feed.Entities.Count);
+            using var debugBatch = new RecyclableList<BatchDebugRecord>(feed.Entities.Count);
             int movedCount = 0, unchangedCount = 0, stationaryCount = 0, staleCount = 0, skippedNoJoinKey = 0, skippedUnknownRoute = 0;
-            var crossingRecords = new List<RouteCrossingBatchEvent.RouteCrossingRecord>();
+            using var crossingRecords = new RecyclableList<RouteCrossingBatchEvent.RouteCrossingRecord>();
             var baselineMap = GetCrossingBaselines(city.Name);
             _routeCumDist.TryGetValue(city.Name, out var cityCumDist);
             _routeTriggerPoints.TryGetValue(city.Name, out var cityTriggerPoints);
@@ -712,7 +718,7 @@ public class Worker(
     }
 
 #if DEBUG
-    async Task WriteBatchToDiskAsync(List<BatchDebugRecord> batch, CancellationToken ct)
+    async Task WriteBatchToDiskAsync(IReadOnlyList<BatchDebugRecord> batch, CancellationToken ct)
     {
         try
         {
