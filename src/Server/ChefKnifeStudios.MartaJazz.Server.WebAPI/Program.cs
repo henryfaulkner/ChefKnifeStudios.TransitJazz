@@ -46,9 +46,15 @@ builder.Services.AddCors(options =>
 builder.Services.AddSignalR(options =>
     {
         options.EnableDetailedErrors = true;
-        options.MaximumReceiveMessageSize = 1024 * 1024; // 1MB
+        // 5 MB: NYMTA's full-fleet batch (~5k+ vehicles) rides a raised ceiling even after
+        // field-thinning (feature 040). MessagePack (below) shrinks the wire further, but the
+        // ceiling stays generous for peak fleets + the next large city.
+        options.MaximumReceiveMessageSize = 5 * 1024 * 1024; // 5MB
     })
-    .AddJsonProtocol(options => JsonSettings.ApplyTo(options.PayloadSerializerOptions));
+    // MessagePack for both hubs (worker→WorkerTransitHub and TransitHub→browser). Polymorphic
+    // payloads are handled by [Union]/[Key] on the Shared contracts. Every SignalR peer must
+    // speak MessagePack — there is no JSON fallback registered, so a JSON client is rejected.
+    .AddMessagePackProtocol();
 
 builder.Services.ConfigureHttpJsonOptions(static options =>
 {

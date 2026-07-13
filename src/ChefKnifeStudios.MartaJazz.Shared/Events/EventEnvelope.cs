@@ -1,9 +1,11 @@
 using System;
+using MessagePack;
 
 namespace ChefKnifeStudios.MartaJazz.Shared.Events;
 
+[MessagePackObject]
 public sealed record EventEnvelope(
-    string EventType,
-    DateTimeOffset Timestamp,
-    ISignalREvent Payload
+    [property: Key(0)] string EventType,
+    [property: Key(1)] DateTimeOffset Timestamp,
+    [property: Key(2)] ISignalREvent Payload
 );

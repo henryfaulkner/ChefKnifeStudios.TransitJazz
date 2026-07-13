@@ -497,7 +497,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                     priorLat = r.PriorNearestLat,
                     currentLon = r.CurrentNearestLon,
                     currentLat = r.CurrentNearestLat,
-                    durationMs = (r.CurrentUtcNow - r.PriorUtcNow).TotalMilliseconds,
+                    durationMs = r.DurationMs,
                     speed = r.SpeedMetersPerSec,
                     bearing = r.Bearing,
                     isStale = r.IsStale,

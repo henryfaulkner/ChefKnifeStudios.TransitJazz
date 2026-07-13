@@ -17,16 +17,16 @@ public class LastBatchCacheTests
             new RouteNearestPointBatchEvent(new[]
             {
                 new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-                    id, "74", 33.75, -84.39, DateTime.UtcNow,
-                    33.751, -84.389, DateTime.UtcNow, null, null, false)
+                    id, "74", 33.75, -84.39,
+                    33.751, -84.389, 10000, null, null, false)
             })
         )).ToList();
 
     static RouteNearestPointBatchEvent.RouteNearestPointRecord MakeRecord(
         string vehicleId, double currentLat, double currentLon, bool isStale)
         => new(
-            vehicleId, "74", 33.75, -84.39, DateTime.UtcNow,
-            currentLat, currentLon, DateTime.UtcNow, null, null, isStale);
+            vehicleId, "74", 33.75, -84.39,
+            currentLat, currentLon, 10000, null, null, isStale);
 
     static List<EventEnvelope> MakeBatch(string city, params RouteNearestPointBatchEvent.RouteNearestPointRecord[] records)
         => new()
