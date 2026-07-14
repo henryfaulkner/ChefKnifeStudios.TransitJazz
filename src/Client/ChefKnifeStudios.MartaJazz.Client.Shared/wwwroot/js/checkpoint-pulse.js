@@ -14,6 +14,13 @@ const O_START = 0.6;
 // keyed "{routeId}::{triggerIndex}" → { coordinates, color, startTimeMs }
 const _activePulses = new Map();
 let _rafHandle = null;
+let _lastRenderMs = 0;
+
+// Gate the FeatureCollection rebuild + setData to ~15fps. At NYMTA scale a crossing burst
+// can stack hundreds of concurrent pulses, and re-tiling the whole source 60×/s (once here,
+// again in the trail loop, again in the vehicle animator) stalls the main thread. The eased
+// radius/opacity is a pure function of `now`, so 15fps looks identical for a 600ms ring.
+const RENDER_INTERVAL_MS = 1000 / 15;
 
 function _easeOutCubic(t) {
     return 1 - Math.pow(1 - t, 3);
@@ -21,31 +28,43 @@ function _easeOutCubic(t) {
 
 function _tick(map) {
     const now = performance.now();
-    const features = [];
+    const shouldRender = (now - _lastRenderMs) >= RENDER_INTERVAL_MS;
 
-    for (const [key, pulse] of _activePulses) {
-        const t = Math.min(1, (now - pulse.startTimeMs) / DURATION_MS);
+    // Expiry runs every frame (cheap) so the loop terminates promptly when the last pulse
+    // ends; only the expensive feature build + setData is gated to the render interval.
+    if (shouldRender) {
+        _lastRenderMs = now;
+        const features = [];
 
-        if (t >= 1) {
-            _activePulses.delete(key);
-            continue;
+        for (const [key, pulse] of _activePulses) {
+            const t = Math.min(1, (now - pulse.startTimeMs) / DURATION_MS);
+
+            if (t >= 1) {
+                _activePulses.delete(key);
+                continue;
+            }
+
+            const eased = _easeOutCubic(t);
+            const radius = R_START + eased * (R_END - R_START);
+            const opacity = O_START * (1 - t);
+
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: pulse.coordinates },
+                properties: { radius, color: pulse.color, opacity }
+            });
         }
 
-        const eased = _easeOutCubic(t);
-        const radius = R_START + eased * (R_END - R_START);
-        const opacity = O_START * (1 - t);
-
-        features.push({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: pulse.coordinates },
-            properties: { radius, color: pulse.color, opacity }
-        });
+        try {
+            const src = map.getSource(SOURCE_ID);
+            if (src) src.setData({ type: 'FeatureCollection', features });
+        } catch (_) { }
+    } else {
+        // Non-render frame: still expire finished pulses so the loop can stop on time.
+        for (const [key, pulse] of _activePulses) {
+            if ((now - pulse.startTimeMs) / DURATION_MS >= 1) _activePulses.delete(key);
+        }
     }
-
-    try {
-        const src = map.getSource(SOURCE_ID);
-        if (src) src.setData({ type: 'FeatureCollection', features });
-    } catch (_) { }
 
     if (_activePulses.size > 0) {
         _rafHandle = requestAnimationFrame(() => _tick(map));
@@ -105,6 +124,7 @@ export function start(map, routeId, triggerIndex, coordinates, color) {
 
 export function reset(map) {
     _activePulses.clear();
+    _lastRenderMs = 0; // next start() renders on its first frame
     if (_rafHandle !== null) {
         cancelAnimationFrame(_rafHandle);
         _rafHandle = null;
