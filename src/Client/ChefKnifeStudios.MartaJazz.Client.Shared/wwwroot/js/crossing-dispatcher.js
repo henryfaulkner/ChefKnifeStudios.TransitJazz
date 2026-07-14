@@ -14,6 +14,32 @@
 
 let _synthModule = null;
 
+// TEMP DIAGNOSTIC (feature 040) — crossing-timing bug. Every fired crossing is buffered into
+// window.__crossingDiag (see _fireOne). Call window.__crossingDiagDump() in the console after a
+// run to download it as CSV (correlate with server-crossing-diag.csv by veh+tpIndex). Remove
+// with the bug fix.
+if (typeof window !== 'undefined' && !window.__crossingDiagDump) {
+    window.__crossingDiagDump = function () {
+        var rows = window.__crossingDiag || [];
+        if (rows.length === 0) { console.warn('[CrossingDiag] nothing buffered yet'); return; }
+        var cols = ['utc', 'veh', 'route', 'tpIndex', 'frac', 'delayMs', 'tpAlongM', 'dotDistM',
+            'gapM', 'phase', 'elapsedMs', 'durationMs', 'empSpeed'];
+        var csv = cols.join(',') + '\n' + rows.map(function (r) {
+            return cols.map(function (k) {
+                var v = r[k];
+                return (v == null) ? '' : String(v);
+            }).join(',');
+        }).join('\n') + '\n';
+        var blob = new Blob([csv], { type: 'text/csv' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'client-crossing-diag.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        console.log('[CrossingDiag] downloaded ' + rows.length + ' rows');
+    };
+}
+
 // Lazily import the transit-synth ES module once; reused across batches. ChefMap is a global
 // (window.ChefMap), so no import needed for pulse/trail.
 async function _getSynth() {
@@ -45,9 +71,11 @@ async function _fireOne(elementId, c, flags, synth) {
         var dot = window.ChefMapAnimator
             && window.ChefMapAnimator.diagDotDistanceAlongRoute(c.vehicleId, c.routeJoinKey);
         var gapM = (dot && tpAlongM != null) ? (dot.dotDistM - tpAlongM) : null;
-        console.log('[CrossingDiag/CLIENT] fire', {
+        var row = {
+            utc: new Date().toISOString(),
             veh: c.vehicleId, route: c.routeJoinKey, tpIndex: c.triggerIndex,
-            offsetMs: Math.round(c.offsetMs),
+            frac: (typeof c.frac === 'number') ? Number(c.frac).toFixed(4) : null,
+            delayMs: Math.round(_delayForCrossing(c)), // frac × durationMs — the NEW timing
             tpAlongM: tpAlongM != null ? Math.round(tpAlongM) : null,
             dotDistM: dot ? Math.round(dot.dotDistM) : null,
             gapM: gapM != null ? Math.round(gapM) : null, // <0 = tone LEADS dot (dot hasn't arrived)
@@ -55,7 +83,9 @@ async function _fireOne(elementId, c, flags, synth) {
             elapsedMs: dot ? dot.elapsedMs : null,
             durationMs: dot ? dot.durationMs : null,
             empSpeed: dot ? Number(dot.empiricalSpeed).toFixed(2) : null
-        });
+        };
+        console.log('[CrossingDiag/CLIENT] fire', row);
+        (window.__crossingDiag || (window.__crossingDiag = [])).push(row);
     } catch (e) { console.warn('[CrossingDiag/CLIENT] diag failed', e); }
 
     if (flags.checkpointsVisible && window.ChefMap) {
@@ -74,7 +104,26 @@ async function _fireOne(elementId, c, flags, synth) {
     }
 }
 
-// C# entry point. crossings: [{ routeJoinKey, vehicleId, triggerIndex, totalTriggers, offsetMs }].
+// Default animation duration (ms) when the animator has no state yet for a vehicle — mirrors
+// vehicle-animator's own `rec.durationMs || 10000` fallback.
+const DEFAULT_DURATION_MS = 10000;
+
+// Delay (ms) at which this crossing's tone/pulse should fire: the fraction of the travel span
+// where the checkpoint sits (frac, from the server), rescaled onto the DOT'S ACTUAL animation
+// duration. This is the fix for the tone-leads-dot bug (feature 040): the dot animates over
+// `duration` (typically ~30s of subway interpolation, sometimes minutes), while the server's
+// old pre-baked OffsetMs was keyed to an ~8s spread window — a different clock — so tones fired
+// far ahead of the dot. frac × duration puts the tone exactly where the dot is at that fraction
+// of its animation. frac is in [0,1], so delay never exceeds the animation duration.
+function _delayForCrossing(c) {
+    var anim = window.ChefMapAnimator;
+    var state = anim && anim.vehicles && anim.vehicles[c.vehicleId];
+    var duration = (state && state.duration > 0) ? state.duration : DEFAULT_DURATION_MS;
+    var frac = (typeof c.frac === 'number' && c.frac > 0) ? Math.min(c.frac, 1) : 0;
+    return frac * duration;
+}
+
+// C# entry point. crossings: [{ routeJoinKey, vehicleId, triggerIndex, totalTriggers, frac }].
 // flags: { checkpointsVisible, crossingTrailVisible, audioEnabled } captured at batch-receipt time.
 export async function dispatchCrossings(elementId, crossings, flags) {
     // TEMP DIAGNOSTIC (feature 040 desync fix) — remove once confirmed working.
@@ -97,7 +146,7 @@ export async function dispatchCrossings(elementId, crossings, flags) {
 
     for (let i = 0; i < crossings.length; i++) {
         const c = crossings[i];
-        const delay = c.offsetMs > 0 ? c.offsetMs : 0;
+        const delay = _delayForCrossing(c);
         // One timer per crossing, but all in JS off the browser's timer queue — not thousands of
         // marshaled C# continuations. Each timer fires all three effects together.
         setTimeout(() => { _fireOne(elementId, c, flags, synth); }, delay);

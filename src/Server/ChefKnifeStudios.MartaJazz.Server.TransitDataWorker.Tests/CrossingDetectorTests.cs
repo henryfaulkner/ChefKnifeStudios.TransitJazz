@@ -122,71 +122,67 @@ public class CrossingDetectorTests
     }
 
     [Fact]
-    public void OffsetMs_ProportionalToPositionInWindow()
+    public void Frac_ProportionalToPositionInWindow()
     {
-        // Window 100m → 1000m (span 900m), trigger at 400m. frac = (400-100)/900 = 1/3.
+        // Window 100m → 1000m (span 900m). frac is the pure distance-fraction of each trigger
+        // along the travel span, independent of any spread/duration — the client rescales it
+        // onto the dot's animation duration (frac × durationMs). spreadMs no longer affects
+        // the emitted value, so it isn't passed.
         CrossingBaseline? baseline = new CrossingBaseline("74", 100);
-        var result = CrossingDetector.Detect("v1", "74", 1000, TriggerPoints, ref baseline, spreadMs: 9000);
+        var result = CrossingDetector.Detect("v1", "74", 1000, TriggerPoints, ref baseline);
         Assert.Equal(2, result.Count);
-        Assert.Equal(9000.0 * (400 - 100) / 900, result[0].OffsetMs, 3); // trigger at 400m
-        Assert.Equal(9000.0 * (800 - 100) / 900, result[1].OffsetMs, 3); // trigger at 800m
+        Assert.Equal((400 - 100) / 900.0, result[0].Frac, 4); // trigger at 400m → 1/3
+        Assert.Equal((800 - 100) / 900.0, result[1].Frac, 4); // trigger at 800m → 7/9
     }
 
     [Fact]
-    public void OffsetMs_MonotonicallyIncreasingWithTriggerOrder()
+    public void Frac_InUnitInterval()
+    {
+        // frac is a fraction of the travel span, so always in [0,1] — the invariant the client
+        // relies on to guarantee frac × durationMs never exceeds the animation duration.
+        CrossingBaseline? baseline = new CrossingBaseline("74", 0);
+        var result = CrossingDetector.Detect("v1", "74", 1000, TriggerPoints, ref baseline);
+        Assert.All(result, r => Assert.InRange(r.Frac, 0.0, 1.0));
+    }
+
+    [Fact]
+    public void Frac_MonotonicallyIncreasingWithTriggerOrder()
     {
         CrossingBaseline? baseline = new CrossingBaseline("74", 0);
         var result = CrossingDetector.Detect("v1", "74", 1000, TriggerPoints, ref baseline);
         Assert.Equal(2, result.Count);
-        Assert.True(result[0].OffsetMs < result[1].OffsetMs);
-    }
-
-    // ── Effective spread scaling for large batches (burst-then-quiet fix) ─────────────
-
-    [Fact]
-    public void ManyTriggersInOneBatch_SpreadWindowStretchesBeyondCallerSpreadMs()
-    {
-        // 40 trigger points at 40m spacing (0..1560m, under the 2000m teleport cap); default
-        // spreadMs=8000, but 40 crossings * 250ms/crossing = 10000ms > 8000ms, so the window
-        // should stretch.
-        var manyTriggers = Enumerable.Range(0, 40)
-            .Select(i => new TriggerPoint(i, i * 40.0))
-            .ToList();
-
-        CrossingBaseline? baseline = new CrossingBaseline("7", -20); // before all triggers
-        var result = CrossingDetector.Detect("v1", "7", 1580, manyTriggers, ref baseline);
-
-        Assert.Equal(40, result.Count);
-        // Last trigger's offset reflects a stretched window (> what 8000ms alone would give).
-        var last = result[^1];
-        Assert.True(last.OffsetMs > 8000.0, $"expected stretched window, got last offset {last.OffsetMs}ms");
+        Assert.True(result[0].Frac < result[1].Frac);
     }
 
     [Fact]
-    public void ManyTriggersInOneBatch_SpreadWindowCappedAtMaxMultiplier()
+    public void Frac_TriggerAtWindowEnd_IsOne()
     {
-        // An extreme batch (200 crossings) must still cap at 2x the caller's spreadMs,
-        // not grow unbounded.
-        var manyTriggers = Enumerable.Range(0, 200)
-            .Select(i => new TriggerPoint(i, i * 10.0))
-            .ToList();
-
-        CrossingBaseline? baseline = new CrossingBaseline("7", -5);
-        var result = CrossingDetector.Detect("v1", "7", 1995, manyTriggers, ref baseline, spreadMs: 8000);
-
-        var last = result[^1];
-        Assert.True(last.OffsetMs <= 16000.0 + 0.001, $"expected cap at 2x spreadMs (16000ms), got {last.OffsetMs}ms");
+        // A checkpoint exactly at currentDistM sits at the very end of the travel span → frac=1.
+        // This is the upper boundary the client's `Math.min(c.frac, 1)` guard and its "delay
+        // never exceeds durationMs" invariant depend on. Window 0→800, trigger at 800.
+        var triggers = new System.Collections.Generic.List<TriggerPoint> { new(4, 800) };
+        CrossingBaseline? baseline = new CrossingBaseline("74", 0);
+        var result = CrossingDetector.Detect("v1", "74", 800, triggers, ref baseline);
+        Assert.Single(result);
+        Assert.Equal(1.0, result[0].Frac, 4);
     }
 
     [Fact]
-    public void FewTriggersInOneBatch_SpreadWindowUnchanged()
+    public void Frac_TriggerJustPastWindowStart_NearZero()
     {
-        // Below the stretch threshold — behaves exactly as before (existing
-        // OffsetMs_ProportionalToPositionInWindow already covers the 2-trigger/9000ms case;
-        // this documents the boundary explicitly for the caller-supplied spreadMs).
-        CrossingBaseline? baseline = new CrossingBaseline("74", 100);
-        var result = CrossingDetector.Detect("v1", "74", 1000, TriggerPoints, ref baseline, spreadMs: 9000);
-
-        Assert.Equal(9000.0 * (800 - 100) / 900, result[1].OffsetMs, 3);
+        // The window is (windowStart, currentDistM] — a checkpoint just past the start sits near
+        // the beginning → frac→0, so the client fires it almost immediately. Window 400→1200
+        // (span 800), trigger at 400.001 (just inside the exclusive start).
+        var triggers = new System.Collections.Generic.List<TriggerPoint> { new(2, 400.001) };
+        CrossingBaseline? baseline = new CrossingBaseline("74", 400);
+        var result = CrossingDetector.Detect("v1", "74", 1200, triggers, ref baseline);
+        Assert.Single(result);
+        Assert.InRange(result[0].Frac, 0.0, 0.001);
     }
+
+    // NOTE: the server-side spread-window stretch (effectiveSpreadMs / MinMsPerCrossing /
+    // MaxSpreadMultiplier) no longer influences playback — the client now owns timing via
+    // frac × the dot's animation duration — so the former OffsetMs stretch/cap tests were
+    // removed. The stretch code remains only to feed the TEMP crossing-timing diagnostic and
+    // should be deleted with it once the fix is verified in the browser.
 }

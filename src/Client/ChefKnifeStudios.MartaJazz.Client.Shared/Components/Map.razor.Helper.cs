@@ -102,7 +102,8 @@ public partial class Map : ComponentBase
     IJSObjectReference? _crossingDispatcherModule;
 
     // Hand an entire crossing batch to the JS dispatcher in ONE interop call. The dispatcher owns
-    // the per-crossing timers (offsetMs) and fires each crossing's pulse + trail + note together,
+    // the per-crossing timers (frac × the dot's animation duration) and fires each crossing's
+    // pulse + trail + note together,
     // so effects can't desync from each other and the interop cost stays O(1) per batch regardless
     // of fleet size — replacing the old per-crossing Task.Delay + 4-interop fan-out.
     public async Task DispatchCrossingsAsync(object crossings, object flags)

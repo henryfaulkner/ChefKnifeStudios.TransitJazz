@@ -164,9 +164,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             : null;
 
         // Project to the dispatcher's payload shape (camelCase → JS). The server stamps each
-        // crossing with OffsetMs — where in the cycle window it was actually crossed; the JS
-        // dispatcher owns the timers and fires each crossing's pulse+trail+note TOGETHER off a
-        // single setTimeout. One interop call for the whole batch replaces the old per-crossing
+        // crossing with Frac — the fraction of this cycle's travel span where the checkpoint
+        // sits; the JS dispatcher rescales it to the dot's own animation duration (frac ×
+        // durationMs) and fires each crossing's pulse+trail+note TOGETHER off a single
+        // setTimeout. One interop call for the whole batch replaces the old per-crossing
         // Task.Delay + 4-interop fan-out that queued on WASM's single thread and desynced at scale.
         var payload = new List<object>(crossings.Length);
         foreach (var crossing in crossings)
@@ -178,7 +179,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 vehicleId = crossing.VehicleId,
                 triggerIndex = crossing.TriggerIndex,
                 totalTriggers = crossing.TotalTriggers,
-                offsetMs = crossing.OffsetMs
+                frac = crossing.Frac
             });
         }
 
@@ -499,7 +500,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             .Select(e => e.Payload)
             .OfType<RouteCrossingBatchEvent>()
             .SelectMany(e => e.BatchRecords)
-            .Select(r => new CrossingEventDto(r.VehicleId, r.RouteJoinKey, r.TriggerIndex, r.TotalTriggers, r.OffsetMs))
+            .Select(r => new CrossingEventDto(r.VehicleId, r.RouteJoinKey, r.TriggerIndex, r.TotalTriggers, r.Frac))
             .ToArray();
 
         if (crossings.Length > 0)
@@ -574,5 +575,5 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _ = TransitSynth.PreloadAsync(_routeShapeCache.Keys);
     }
 
-    public record CrossingEventDto(string VehicleId, string RouteJoinKey, int TriggerIndex, int TotalTriggers, double OffsetMs);
+    public record CrossingEventDto(string VehicleId, string RouteJoinKey, int TriggerIndex, int TotalTriggers, double Frac);
 }
