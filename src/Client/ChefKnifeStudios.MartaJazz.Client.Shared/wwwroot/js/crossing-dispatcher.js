@@ -22,7 +22,7 @@ if (typeof window !== 'undefined' && !window.__crossingDiagDump) {
     window.__crossingDiagDump = function () {
         var rows = window.__crossingDiag || [];
         if (rows.length === 0) { console.warn('[CrossingDiag] nothing buffered yet'); return; }
-        var cols = ['utc', 'veh', 'route', 'tpIndex', 'frac', 'delayMs', 'tpAlongM', 'dotDistM',
+        var cols = ['utc', 'veh', 'route', 'tpIndex', 'tpAlongM', 'dotDistM',
             'gapM', 'phase', 'elapsedMs', 'durationMs', 'empSpeed'];
         var csv = cols.join(',') + '\n' + rows.map(function (r) {
             return cols.map(function (k) {
@@ -61,21 +61,16 @@ async function _fireOne(elementId, c, flags, synth) {
     // feature). If dotDistM < tpAlongM the tone LEADS the dot; the gap quantifies it. Pair this
     // with the [CrossingDiag/SERVER] line for the same veh+tpIndex. Remove with the bug fix.
     try {
-        var tpAlongM = null;
-        var feats = window.ChefMap && window.ChefMap._triggerPointFeatures
-            && window.ChefMap._triggerPointFeatures[c.routeJoinKey];
-        if (feats) {
-            var f = feats.find(function (x) { return x.properties.triggerIndex === c.triggerIndex; });
-            if (f) tpAlongM = f.properties.alongDistanceM;
-        }
+        // Checkpoint distance is the server-sent alongDistanceM (the stable identity) — do NOT
+        // look it up by triggerIndex, which collides on sparse polylines and gave frozen/wrong
+        // values in earlier runs.
+        var tpAlongM = (typeof c.alongDistanceM === 'number') ? c.alongDistanceM : null;
         var dot = window.ChefMapAnimator
             && window.ChefMapAnimator.diagDotDistanceAlongRoute(c.vehicleId, c.routeJoinKey);
         var gapM = (dot && tpAlongM != null) ? (dot.dotDistM - tpAlongM) : null;
         var row = {
             utc: new Date().toISOString(),
             veh: c.vehicleId, route: c.routeJoinKey, tpIndex: c.triggerIndex,
-            frac: (typeof c.frac === 'number') ? Number(c.frac).toFixed(4) : null,
-            delayMs: Math.round(_delayForCrossing(c)), // frac × durationMs — the NEW timing
             tpAlongM: tpAlongM != null ? Math.round(tpAlongM) : null,
             dotDistM: dot ? Math.round(dot.dotDistM) : null,
             gapM: gapM != null ? Math.round(gapM) : null, // <0 = tone LEADS dot (dot hasn't arrived)
@@ -89,13 +84,13 @@ async function _fireOne(elementId, c, flags, synth) {
     } catch (e) { console.warn('[CrossingDiag/CLIENT] diag failed', e); }
 
     if (flags.checkpointsVisible && window.ChefMap) {
-        try { window.ChefMap.pulseCheckpoint(elementId, c.routeJoinKey, c.triggerIndex); } catch (_) { }
+        try { window.ChefMap.pulseCheckpoint(elementId, c.routeJoinKey, c.triggerIndex, c.alongDistanceM); } catch (_) { }
     }
 
     if (flags.crossingTrailVisible && window.ChefMap) {
         try {
             const durationSec = await synth.durationSecondsFor(c.vehicleId, c.routeJoinKey);
-            window.ChefMap.startCrossingTrail(elementId, c.routeJoinKey, c.vehicleId, c.triggerIndex, durationSec);
+            window.ChefMap.startCrossingTrail(elementId, c.routeJoinKey, c.vehicleId, c.triggerIndex, durationSec, c.alongDistanceM);
         } catch (_) { }
     }
 
@@ -104,23 +99,20 @@ async function _fireOne(elementId, c, flags, synth) {
     }
 }
 
-// Default animation duration (ms) when the animator has no state yet for a vehicle — mirrors
-// vehicle-animator's own `rec.durationMs || 10000` fallback.
-const DEFAULT_DURATION_MS = 10000;
-
-// Delay (ms) at which this crossing's tone/pulse should fire: the fraction of the travel span
-// where the checkpoint sits (frac, from the server), rescaled onto the DOT'S ACTUAL animation
-// duration. This is the fix for the tone-leads-dot bug (feature 040): the dot animates over
-// `duration` (typically ~30s of subway interpolation, sometimes minutes), while the server's
-// old pre-baked OffsetMs was keyed to an ~8s spread window — a different clock — so tones fired
-// far ahead of the dot. frac × duration puts the tone exactly where the dot is at that fraction
-// of its animation. frac is in [0,1], so delay never exceeds the animation duration.
+// Delay (ms) at which this crossing's tone/pulse should fire. The server sends the checkpoint's
+// absolute along-route distance (alongDistanceM); the animator computes how long until the DOT
+// actually reaches it, against the dot's own motion model (extrapolation at empirical speed, or
+// interpolation along its subPath). This is the tone-leads-dot fix (feature 040): timing tracks
+// the animated dot exactly, eliminating both the ~8s-spread mismatch and the speed-scaled
+// residual lead that a server-baked frac/offset left behind. Falls back to 0 (fire immediately)
+// when the animator has no usable state for the vehicle yet.
 function _delayForCrossing(c) {
     var anim = window.ChefMapAnimator;
-    var state = anim && anim.vehicles && anim.vehicles[c.vehicleId];
-    var duration = (state && state.duration > 0) ? state.duration : DEFAULT_DURATION_MS;
-    var frac = (typeof c.frac === 'number' && c.frac > 0) ? Math.min(c.frac, 1) : 0;
-    return frac * duration;
+    if (anim && typeof anim.crossingDelayMsFor === 'function') {
+        var d = anim.crossingDelayMsFor(c.vehicleId, c.routeJoinKey, c.alongDistanceM);
+        if (typeof d === 'number' && d >= 0) return d;
+    }
+    return 0;
 }
 
 // C# entry point. crossings: [{ routeJoinKey, vehicleId, triggerIndex, totalTriggers, frac }].

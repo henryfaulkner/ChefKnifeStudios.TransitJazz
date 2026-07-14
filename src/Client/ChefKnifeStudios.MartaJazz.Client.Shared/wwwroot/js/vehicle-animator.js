@@ -168,6 +168,56 @@ window.ChefMapAnimator = {
         return routeData.coords[routeData.coords.length - 1];
     },
 
+    // Milliseconds from NOW until the animated dot reaches distance `tpAlongM` along its route,
+    // computed against the DOT'S OWN motion model rather than the server's snapped span — so a
+    // crossing tone/pulse fires exactly when the dot arrives at the checkpoint (feature 040
+    // residual-lead fix). Returns null when the vehicle/route is unknown so the caller can fall
+    // back. Meant to be called at batch receipt, when state is freshly anchored (startTime≈now,
+    // currentPos = the dot's position this cycle).
+    //
+    // - extrapolating (the common case): the dot advances at empiricalSpeed along the route, so
+    //   time-to-checkpoint = (tpAlongM − dotDistNow) / speed. Independent of duration and of the
+    //   server snap, which is what removes the speed-scaled residual lead.
+    // - interpolating: the dot walks subPath over `duration`; distance maps to t via
+    //   subPathCumDist, so t_arrival = (dist into subPath)/totalDistance and delay = t·duration.
+    // - idle / no speed: null (caller fires immediately or falls back).
+    crossingDelayMsFor: function (vehicleId, routeJoinKey, tpAlongM) {
+        var state = this.vehicles[vehicleId];
+        if (!state) return null;
+        var routeData = this.routeGeometry[routeJoinKey];
+        if (!routeData) return null;
+
+        var now = performance.now();
+        var dotIdx = this.findNearestIndex(routeData.coords, state.currentPos);
+        var dotDistNow = routeData.cumDist[dotIdx];
+
+        if (state.phase === 'extrapolating') {
+            var speed = state.empiricalSpeed != null ? state.empiricalSpeed : (state.speed || 0);
+            if (speed <= 0) return null;
+            // The dot has already been extrapolating for (now - startTime); dotDistNow already
+            // reflects that, so the remaining distance is simply checkpoint − current.
+            var remainingM = tpAlongM - dotDistNow;
+            if (remainingM <= 0) return 0; // dot already at/past the checkpoint → fire now
+            return (remainingM / speed) * 1000;
+        }
+
+        if (state.phase === 'interpolating' && state.totalDistance > 0) {
+            // Map the checkpoint's absolute along-route distance into the subPath the dot walks.
+            // subPath starts at the dot's cycle-start position; its cumulative distances are
+            // relative to that start. Convert tpAlongM (absolute) to a distance into the subPath.
+            var subStartIdx = this.findNearestIndex(routeData.coords, state.subPath[0]);
+            var subStartAbs = routeData.cumDist[subStartIdx];
+            var distIntoSub = tpAlongM - subStartAbs;
+            if (distIntoSub <= 0) return 0;
+            var tArrival = Math.min(distIntoSub / state.totalDistance, 1);
+            var elapsed = now - state.startTime;
+            var delay = tArrival * state.duration - elapsed;
+            return delay > 0 ? delay : 0;
+        }
+
+        return null; // idle / no usable motion → caller decides
+    },
+
     // TEMP DIAGNOSTIC (feature 040) — where is the dot RIGHT NOW along its route, in meters?
     // Snaps the dot's current animated position onto the route polyline and returns the
     // cumulative distance at that vertex, plus the dot's phase/elapsed. Lets the crossing

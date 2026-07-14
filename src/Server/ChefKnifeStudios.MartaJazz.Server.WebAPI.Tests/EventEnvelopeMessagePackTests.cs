@@ -68,7 +68,7 @@ public class EventEnvelopeMessagePackTests
     [Fact]
     public void RouteCrossingRecord_RoundTrips_AllFields()
     {
-        var original = new RouteCrossingBatchEvent.RouteCrossingRecord("v9", "N", 2, 5, 0.4660); // Frac (0..1)
+        var original = new RouteCrossingBatchEvent.RouteCrossingRecord("v9", "N", 2, 5, 23200.5); // AlongDistanceM
         var batch = new List<EventEnvelope>
         {
             new("RouteCrossingBatchEvent", DateTimeOffset.UnixEpoch,

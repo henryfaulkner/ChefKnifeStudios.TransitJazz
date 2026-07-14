@@ -141,17 +141,17 @@ public static class CrossingDetector
         var records = new List<RouteCrossingBatchEvent.RouteCrossingRecord>(crossed.Count);
         foreach (var tp in crossed)
         {
-            // Fraction of the travel span at which this checkpoint was crossed. The CLIENT
-            // rescales this onto the dot's actual animation duration (frac × durationMs) so the
-            // tone fires when the dot arrives. Trigger points are distance-ordered, so fracs
-            // come out monotonically increasing. NOTE: with the client owning the timing, the
-            // server-side spread machinery below (spreadMs/effectiveSpreadMs) no longer affects
-            // playback — it is retained only to feed the TEMP diagnostic and can be deleted
-            // with it once the fix is verified.
-            var frac = (tp.AlongDistanceM - windowStart) / windowSpan;
-            var offsetMs = frac * effectiveSpreadMs; // diagnostic only now
+            // Send the checkpoint's absolute along-route distance; the CLIENT derives the tone's
+            // fire delay from it against the dot's own animated motion (time-to-reach =
+            // (AlongDistanceM − dotDistanceNow) / empiricalSpeed), so timing tracks the dot and
+            // not this server-side snap. NOTE: with the client owning timing entirely, the
+            // server spread machinery below (spreadMs/effectiveSpreadMs/frac/offsetMs) no longer
+            // affects playback — it is retained only to feed the TEMP diagnostic and can be
+            // deleted with it once the fix is verified.
+            var frac = (tp.AlongDistanceM - windowStart) / windowSpan; // diagnostic only now
+            var offsetMs = frac * effectiveSpreadMs;                   // diagnostic only now
             records.Add(new RouteCrossingBatchEvent.RouteCrossingRecord(
-                vehicleId, routeJoinKey, tp.Index, totalTriggers, frac));
+                vehicleId, routeJoinKey, tp.Index, totalTriggers, tp.AlongDistanceM));
 
             // TEMP DIAGNOSTIC (feature 040) — server side of the crossing-timing bug. Logs
             // both spread models so we can compare against the client dot's actual arrival.
