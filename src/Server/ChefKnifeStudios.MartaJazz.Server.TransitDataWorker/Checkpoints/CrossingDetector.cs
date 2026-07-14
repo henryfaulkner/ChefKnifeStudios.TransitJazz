@@ -1,6 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.Models;
-using System;
 using System.Collections.Generic;
 
 namespace ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Checkpoints;
@@ -21,29 +20,12 @@ public static class CrossingDetector
 {
     const double TeleportDistM = 2000.0;
 
-    // Cap on the span over which a cycle's crossings are spread on the client, in ms. The
-    // caller normally passes the REAL elapsed time since the vehicle's prior observation;
-    // this bounds it just under the ~10s poll cadence so a burst finishes before the next
-    // batch's notes begin (and a long feed gap can't stretch it). Also the fallback when no
-    // prior observation time is available.
-    public const double DefaultSpreadMs = 8000.0;
-
-    // A window this wide per crossing keeps notes from a big batch audibly distinct rather
-    // than clustering near-simultaneously when many trigger points fall in one tick (e.g. a
-    // synthesized position that jumps a long span in one update). Only stretches the window
-    // — never shrinks it below the caller-supplied spreadMs — and is capped at
-    // MaxSpreadMultiplier so a very large batch still finishes well before the next tick's
-    // notes would begin.
-    const double MinMsPerCrossing = 250.0;
-    const double MaxSpreadMultiplier = 2.0;
-
     public static IReadOnlyList<RouteCrossingBatchEvent.RouteCrossingRecord> Detect(
         string vehicleId,
         string routeJoinKey,
         double currentDistM,
         IReadOnlyList<TriggerPoint> triggerPoints,
-        ref CrossingBaseline? baseline,
-        double spreadMs = DefaultSpreadMs)
+        ref CrossingBaseline? baseline)
     {
         if (baseline is null)
         {
@@ -76,7 +58,6 @@ public static class CrossingDetector
         // FR-011: normal forward — collect all in-window trigger points
         var crossed = new List<TriggerPoint>();
         var windowStart = baseline.LastCrossedAlongDistanceM;
-        var windowSpan = currentDistM - windowStart; // > 0 (delta > 0 checked above)
 
         foreach (var tp in triggerPoints)
         {
@@ -87,24 +68,17 @@ public static class CrossingDetector
         baseline.LastCrossedAlongDistanceM = currentDistM;
         if (crossed.Count == 0) return [];
 
-        // Stretch the window when a lot of crossings landed in one call (e.g. a synthesized
-        // position that jumped a long span this tick) so notes stay audibly spaced instead
-        // of clustering — never shrinks below the caller's spreadMs.
-        var effectiveSpreadMs = Math.Min(
-            Math.Max(spreadMs, crossed.Count * MinMsPerCrossing),
-            spreadMs * MaxSpreadMultiplier);
-
         var totalTriggers = triggerPoints.Count;
         var records = new List<RouteCrossingBatchEvent.RouteCrossingRecord>(crossed.Count);
         foreach (var tp in crossed)
         {
-            // Fraction of the travel span at which this checkpoint was crossed → its
-            // timing offset within the client's spread window. Trigger points are ordered
-            // by distance, so offsets come out monotonically increasing.
-            var frac = (tp.AlongDistanceM - windowStart) / windowSpan;
-            var offsetMs = frac * effectiveSpreadMs;
+            // Send the checkpoint's absolute along-route distance; the CLIENT derives the tone's
+            // fire delay from it against the dot's own animated motion (time-to-reach =
+            // (AlongDistanceM − dotDistanceNow) / empiricalSpeed), so timing tracks the animated
+            // dot rather than a server-side snapped span. Trigger points are distance-ordered, so
+            // records come out in crossing order.
             records.Add(new RouteCrossingBatchEvent.RouteCrossingRecord(
-                vehicleId, routeJoinKey, tp.Index, totalTriggers, offsetMs));
+                vehicleId, routeJoinKey, tp.Index, totalTriggers, tp.AlongDistanceM));
         }
 
         return records;

@@ -2,6 +2,7 @@ using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Checkpoints;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.MartaJazz.Shared;
+using ChefKnifeStudios.MartaJazz.Shared.Collections;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.Geospatial;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
@@ -26,7 +27,6 @@ public class Worker(
     readonly Dictionary<string, ConcurrentDictionary<string, VehicleState>> _vehicleStateCaches = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ulong?> _lastFeedHeaderTimestamps = new(StringComparer.OrdinalIgnoreCase);
     readonly string _batchOutputDir = Path.Combine(AppContext.BaseDirectory, "event-batches");
-    static readonly JsonSerializerOptions _batchJsonOptions = new() { WriteIndented = true };
 
     Dictionary<string, IReadOnlyDictionary<string, RoutePoint[]>> _routeIndex = new(StringComparer.OrdinalIgnoreCase);
     // per-city routeJoinKey→TransitMode, built from GTFS route_type at static-data load time
@@ -343,10 +343,14 @@ public class Worker(
         {
             var vehicleStateCache = GetVehicleCache(city.Name);
 
-            var batch = new List<RouteNearestPointBatchEvent.RouteNearestPointRecord>();
-            var debugBatch = new List<BatchDebugRecord>();
+            // Short-lived per-tick accumulators sized to the current vehicle feed. Backed by
+            // ArrayPool via RecyclableList so the backing arrays are recycled instead of allocated
+            // (and LOH-pressured) on every 10s tick. Pre-sized to the entity count so no mid-fill
+            // rental happens. Disposed at method scope — safe because SignalR serializes the payload
+            // synchronously inside the PublishBatchAsync await, before these go out of scope.
+            using var batch = new RecyclableList<RouteNearestPointBatchEvent.RouteNearestPointRecord>(feed.Entities.Count);
             int movedCount = 0, unchangedCount = 0, stationaryCount = 0, staleCount = 0, skippedNoJoinKey = 0, skippedUnknownRoute = 0;
-            var crossingRecords = new List<RouteCrossingBatchEvent.RouteCrossingRecord>();
+            using var crossingRecords = new RecyclableList<RouteCrossingBatchEvent.RouteCrossingRecord>();
             var baselineMap = GetCrossingBaselines(city.Name);
             _routeCumDist.TryGetValue(city.Name, out var cityCumDist);
             _routeTriggerPoints.TryGetValue(city.Name, out var cityTriggerPoints);
@@ -385,21 +389,13 @@ public class Worker(
 
                     var snapValue = snap.Value;
                     var nearest = snapValue.Point;
-                    string outcome;
-                    BatchDebugRecord debugRecord;
 
                     var currentVehicleTimestamp = entity.Vehicle.Timestamp;
                     bool isStale = false;
-                    // Captured for crossing-offset timing below (the `prior` binding itself
-                    // goes out of scope before the detection block).
-                    DateTime? priorObservationUtc = null;
-
                     if (vehicleStateCache.TryGetValue(vehicleId, out var prior))
                     {
                         if (prior.LastUpdated > now)
                             continue;
-
-                        priorObservationUtc = prior.LastUpdated;
 
                         isStale = currentVehicleTimestamp.HasValue
                             && prior.VehicleTimestamp.HasValue
@@ -408,12 +404,11 @@ public class Worker(
                         batch.Add(new RouteNearestPointBatchEvent.RouteNearestPointRecord(
                             vehicleId,
                             nearest.RouteJoinKey,
-                            prior.NearestLat,
-                            prior.NearestLon,
-                            prior.LastUpdated,
-                            nearest.Lat,
-                            nearest.Lon,
-                            now,
+                            Math.Round(prior.NearestLat, 5),
+                            Math.Round(prior.NearestLon, 5),
+                            Math.Round(nearest.Lat, 5),
+                            Math.Round(nearest.Lon, 5),
+                            (int)(now - prior.LastUpdated).TotalMilliseconds,
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             isStale,
@@ -422,102 +417,38 @@ public class Worker(
 
                         if (isStale)
                         {
-                            outcome = "Stale";
                             staleCount++;
                         }
                         else if (prior.NearestLat != nearest.Lat || prior.NearestLon != nearest.Lon)
                         {
-                            outcome = "Moved";
                             movedCount++;
                         }
                         else if ((entity.Vehicle.Position.Speed ?? 0f) == 0f)
                         {
-                            outcome = "Stationary";
                             stationaryCount++;
                         }
                         else
                         {
-                            outcome = "Unchanged";
                             unchangedCount++;
                         }
-
-                        var posDeltaKm = HaversineCalculator.DistanceKm(prior.NearestLat, prior.NearestLon, nearest.Lat, nearest.Lon);
-                        var timeDeltaSec = (now - prior.LastUpdated).TotalSeconds;
-
-                        debugRecord = new BatchDebugRecord(
-                            VehicleId: vehicleId,
-                            RouteJoinKey: nearest.RouteJoinKey,
-                            Outcome: outcome,
-                            RawLat: lat,
-                            RawLon: lon,
-                            SnappedLat: nearest.Lat,
-                            SnappedLon: nearest.Lon,
-                            SnapDistanceKm: snapValue.DistanceKm,
-                            SnapIndex: snapValue.Index,
-                            RoutePointCount: routePoints.Length,
-                            PriorRawLat: prior.LastRawLat,
-                            PriorRawLon: prior.LastRawLon,
-                            PriorSnappedLat: prior.NearestLat,
-                            PriorSnappedLon: prior.NearestLon,
-                            PriorSnapDistanceKm: prior.LastSnapDistanceKm,
-                            PriorRouteJoinKey: prior.RouteJoinKey,
-                            PriorObservationUtc: prior.LastUpdated,
-                            ObservationUtc: now,
-                            DeltaFromPriorSnapKm: posDeltaKm,
-                            DeltaFromPriorRawKm: HaversineCalculator.DistanceKm(prior.LastRawLat, prior.LastRawLon, lat, lon),
-                            SecondsSincePriorObservation: timeDeltaSec,
-                            SpeedMetersPerSec: entity.Vehicle.Position.Speed,
-                            Bearing: entity.Vehicle.Position.Bearing
-                        );
-
                     }
                     else
                     {
                         batch.Add(new RouteNearestPointBatchEvent.RouteNearestPointRecord(
                             vehicleId,
                             nearest.RouteJoinKey,
-                            nearest.Lat,
-                            nearest.Lon,
-                            now,
-                            nearest.Lat,
-                            nearest.Lon,
-                            now,
+                            Math.Round(nearest.Lat, 5),
+                            Math.Round(nearest.Lon, 5),
+                            Math.Round(nearest.Lat, 5),
+                            Math.Round(nearest.Lon, 5),
+                            0, // first observation: no prior, client snaps into place instantly
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             false,
                             modeMap != null && modeMap.TryGetValue(routeJoinKey, out var m2) ? m2 : TransitMode.Bus
                         ));
-                        outcome = "FirstObservation";
                         movedCount++;
-
-                        debugRecord = new BatchDebugRecord(
-                            VehicleId: vehicleId,
-                            RouteJoinKey: nearest.RouteJoinKey,
-                            Outcome: outcome,
-                            RawLat: lat,
-                            RawLon: lon,
-                            SnappedLat: nearest.Lat,
-                            SnappedLon: nearest.Lon,
-                            SnapDistanceKm: snapValue.DistanceKm,
-                            SnapIndex: snapValue.Index,
-                            RoutePointCount: routePoints.Length,
-                            PriorRawLat: null,
-                            PriorRawLon: null,
-                            PriorSnappedLat: null,
-                            PriorSnappedLon: null,
-                            PriorSnapDistanceKm: null,
-                            PriorRouteJoinKey: null,
-                            PriorObservationUtc: null,
-                            ObservationUtc: now,
-                            DeltaFromPriorSnapKm: null,
-                            DeltaFromPriorRawKm: null,
-                            SecondsSincePriorObservation: null,
-                            SpeedMetersPerSec: entity.Vehicle.Position.Speed,
-                            Bearing: entity.Vehicle.Position.Bearing
-                        );
                     }
-
-                    debugBatch.Add(debugRecord);
 
                     if (!isStale)
                     {
@@ -542,15 +473,7 @@ public class Worker(
                         {
                             var currentDistM = routeCumDist[snapValue.Index];
                             CrossingBaseline? baseline = baselineMap.TryGetValue(vehicleId, out var b) ? b : null;
-                            // Spread this cycle's crossings over the REAL elapsed time since the
-                            // prior observation, so a slow vehicle's notes pace out over the
-                            // actual ~10s it took and a fast one's stay tight — capped so a long
-                            // feed gap can't stretch a burst across the next batch's window.
-                            var elapsedMs = priorObservationUtc.HasValue
-                                ? (now - priorObservationUtc.Value).TotalMilliseconds
-                                : CrossingDetector.DefaultSpreadMs;
-                            var spreadMs = Math.Clamp(elapsedMs, 0, CrossingDetector.DefaultSpreadMs);
-                            var detected = CrossingDetector.Detect(vehicleId, routeJoinKey, currentDistM, routeTriggers, ref baseline, spreadMs);
+                            var detected = CrossingDetector.Detect(vehicleId, routeJoinKey, currentDistM, routeTriggers, ref baseline);
                             baselineMap[vehicleId] = baseline;
                             crossingRecords.AddRange(detected);
                         }
@@ -592,9 +515,6 @@ public class Worker(
 
             if (batch.Count > 0)
             {
-#if DEBUG
-                await WriteBatchToDiskAsync(debugBatch, ct);
-#endif
                 var envelope = new EventEnvelope(
                     nameof(RouteNearestPointBatchEvent),
                     DateTimeOffset.UtcNow,
@@ -712,25 +632,4 @@ public class Worker(
             }
         }
     }
-
-#if DEBUG
-    async Task WriteBatchToDiskAsync(List<BatchDebugRecord> batch, CancellationToken ct)
-    {
-        try
-        {
-            Directory.CreateDirectory(_batchOutputDir);
-            var fileName = $"route-nearest-point-batch_{DateTime.UtcNow:yyyyMMdd_HHmmss_fff}.json";
-            var filePath = Path.Combine(_batchOutputDir, fileName);
-
-            await using var stream = File.Create(filePath);
-            await JsonSerializer.SerializeAsync(stream, batch, _batchJsonOptions, ct);
-
-            logger.LogInformation("Wrote spatial reconciliation batch to {FilePath} ({Count} records).", filePath, batch.Count);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to write spatial reconciliation batch to disk.");
-        }
-    }
-#endif
 }

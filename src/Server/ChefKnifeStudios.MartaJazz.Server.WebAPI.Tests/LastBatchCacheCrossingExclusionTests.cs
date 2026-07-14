@@ -14,8 +14,8 @@ public class LastBatchCacheCrossingExclusionTests
         var positionEvent = new RouteNearestPointBatchEvent(new[]
         {
             new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-                "v1", "74", 33.75, -84.39, DateTime.UtcNow,
-                33.751, -84.389, DateTime.UtcNow, null, null, false)
+                "v1", "74", 33.75, -84.39,
+                33.751, -84.389, 10000, null, null, false)
         });
 
         var crossingEvent = new RouteCrossingBatchEvent(new[]

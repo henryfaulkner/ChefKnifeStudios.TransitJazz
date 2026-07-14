@@ -86,16 +86,28 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Logger.LogError(ex, "[Map] SetCheckpointVisibility failed"); }
     }
 
-    public async Task PulseCheckpointAsync(string routeJoinKey, int triggerIndex)
-    {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.pulseCheckpoint", ElementId, routeJoinKey, triggerIndex); }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] PulseCheckpoint failed for routeJoinKey={RouteJoinKey} triggerIndex={TriggerIndex}", routeJoinKey, triggerIndex); }
-    }
+    // NOTE: the former PulseCheckpointAsync / StartCrossingTrailAsync C# wrappers were removed —
+    // they were the old per-crossing interop path (deleted with FireCrossingDelayedAsync). The
+    // crossing-dispatcher JS module now calls ChefMap.pulseCheckpoint / startCrossingTrail
+    // directly, resolving the checkpoint by alongDistanceM (see crossing-dispatcher.js).
 
-    public async Task StartCrossingTrailAsync(string routeJoinKey, string vehicleId, int triggerIndex, double durationSeconds)
+    // Lazily-imported crossing-dispatcher ES module, reused across batches.
+    IJSObjectReference? _crossingDispatcherModule;
+
+    // Hand an entire crossing batch to the JS dispatcher in ONE interop call. The dispatcher owns
+    // the per-crossing timers (each delay = time for the animated dot to reach the checkpoint's
+    // AlongDistanceM) and fires each crossing's pulse + trail + note together,
+    // so effects can't desync from each other and the interop cost stays O(1) per batch regardless
+    // of fleet size — replacing the old per-crossing Task.Delay + 4-interop fan-out.
+    public async Task DispatchCrossingsAsync(object crossings, object flags)
     {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.startCrossingTrail", ElementId, routeJoinKey, vehicleId, triggerIndex, durationSeconds); }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] StartCrossingTrail failed for routeJoinKey={RouteJoinKey} triggerIndex={TriggerIndex}", routeJoinKey, triggerIndex); }
+        try
+        {
+            _crossingDispatcherModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>(
+                "import", "./_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/crossing-dispatcher.js");
+            await _crossingDispatcherModule.InvokeVoidAsync("dispatchCrossings", ElementId, crossings, flags);
+        }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] DispatchCrossings failed"); }
     }
 
     public async Task SetCrossingTrailVisibilityAsync(bool visible)

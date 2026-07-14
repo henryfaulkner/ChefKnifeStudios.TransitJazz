@@ -6,6 +6,24 @@ window.ChefMapAnimator = {
     _animFrameId: null,
     _running: false,
     _lastFrameLogTime: 0,
+    _lastRenderMs: 0,
+
+    // Persistent render objects (B1): one Feature per vehicle, reused across renders and
+    // mutated in place, plus one array handed to setData every time. This eliminates the
+    // ~5k-objects-per-render allocation/GC churn — the geojson source still re-tiles on
+    // setData, but we no longer generate garbage feeding it. Keyed by vehicleId.
+    _featureById: {},
+    _featuresArray: [],
+    // Rebuilt from _featureById only when the vehicle SET changes (add/evict), not every
+    // frame. Coordinate/property mutation happens in place every render regardless.
+    _featureArrayDirty: false,
+
+    // Cap the FeatureCollection rebuild + setData upload at ~15fps. Position math still
+    // runs every RAF frame (~60fps), so motion stays continuous and exact; we just stop
+    // re-uploading the whole vehicles source 60×/s. Transit dots move slowly enough that
+    // 15fps reads as smooth gliding, and at NYMTA scale (~5k vehicles) the full-source
+    // setData is the dominant per-frame cost — throttling it is what unblocks the jank.
+    RENDER_INTERVAL_MS: 1000 / 15,
 
     HISTORY_SIZE: 4,
     MAX_EXTRAPOLATION_MS: 30000,
@@ -150,6 +168,76 @@ window.ChefMapAnimator = {
         return routeData.coords[routeData.coords.length - 1];
     },
 
+    // Milliseconds from NOW until the animated dot reaches distance `tpAlongM` along its route,
+    // computed against the DOT'S OWN motion model rather than the server's snapped span — so a
+    // crossing tone/pulse fires exactly when the dot arrives at the checkpoint (feature 040
+    // residual-lead fix). Returns null when the vehicle/route is unknown so the caller can fall
+    // back. Meant to be called at batch receipt, when state is freshly anchored (startTime≈now,
+    // currentPos = the dot's position this cycle).
+    //
+    // - extrapolating (the common case): the dot advances at empiricalSpeed along the route, so
+    //   time-to-checkpoint = (tpAlongM − dotDistNow) / speed. Independent of duration and of the
+    //   server snap, which is what removes the speed-scaled residual lead.
+    // - interpolating: the dot walks subPath over `duration`; distance maps to t via
+    //   subPathCumDist, so t_arrival = (dist into subPath)/totalDistance and delay = t·duration.
+    // - idle / no speed: null (caller fires immediately or falls back).
+    crossingDelayMsFor: function (vehicleId, routeJoinKey, tpAlongM) {
+        var state = this.vehicles[vehicleId];
+        if (!state) return null;
+        var routeData = this.routeGeometry[routeJoinKey];
+        if (!routeData) return null;
+
+        var now = performance.now();
+        var dotIdx = this.findNearestIndex(routeData.coords, state.currentPos);
+        var dotDistNow = routeData.cumDist[dotIdx];
+
+        if (state.phase === 'extrapolating') {
+            var speed = state.empiricalSpeed != null ? state.empiricalSpeed : (state.speed || 0);
+            if (speed <= 0) return null;
+            // The dot has already been extrapolating for (now - startTime); dotDistNow already
+            // reflects that, so the remaining distance is simply checkpoint − current.
+            var remainingM = tpAlongM - dotDistNow;
+            if (remainingM <= 0) return 0; // dot already at/past the checkpoint → fire now
+            return (remainingM / speed) * 1000;
+        }
+
+        if (state.phase === 'interpolating' && state.totalDistance > 0) {
+            // Map the checkpoint's absolute along-route distance into the subPath the dot walks.
+            // subPath starts at the dot's cycle-start position; its cumulative distances are
+            // relative to that start. Convert tpAlongM (absolute) to a distance into the subPath.
+            var subStartIdx = this.findNearestIndex(routeData.coords, state.subPath[0]);
+            var subStartAbs = routeData.cumDist[subStartIdx];
+            var distIntoSub = tpAlongM - subStartAbs;
+            if (distIntoSub <= 0) return 0;
+            var tArrival = Math.min(distIntoSub / state.totalDistance, 1);
+            var elapsed = now - state.startTime;
+            var delay = tArrival * state.duration - elapsed;
+            return delay > 0 ? delay : 0;
+        }
+
+        return null; // idle / no usable motion → caller decides
+    },
+
+    // TEMP DIAGNOSTIC (feature 040) — where is the dot RIGHT NOW along its route, in meters?
+    // Snaps the dot's current animated position onto the route polyline and returns the
+    // cumulative distance at that vertex, plus the dot's phase/elapsed. Lets the crossing
+    // dispatcher compare the dot's actual arrival against the server's checkpoint offset.
+    // Returns null if the vehicle or its route geometry is unknown. Remove with the bug fix.
+    diagDotDistanceAlongRoute: function (vehicleId, routeJoinKey) {
+        var state = this.vehicles[vehicleId];
+        if (!state) return null;
+        var routeData = this.routeGeometry[routeJoinKey];
+        if (!routeData) return null;
+        var idx = this.findNearestIndex(routeData.coords, state.currentPos);
+        return {
+            dotDistM: routeData.cumDist[idx],
+            phase: state.phase,
+            elapsedMs: Math.round(performance.now() - state.startTime),
+            durationMs: Math.round(state.duration),
+            empiricalSpeed: state.empiricalSpeed
+        };
+    },
+
     loadRouteGeometry: function (routeJoinKey, coordinates) {
         var cumDist = this.buildCumulativeDistances(coordinates);
         this.routeGeometry[routeJoinKey] = { coords: coordinates, cumDist: cumDist };
@@ -188,7 +276,11 @@ window.ChefMapAnimator = {
         var extrapolatingCount = 0;
         var idleCount = 0;
 
-        var features = [];
+        // Gate the render (FeatureCollection rebuild + setData) to ~15fps. Position math
+        // below still runs every frame so state.currentPos is always current; we only skip
+        // the expensive full-source upload — and the per-vehicle feature allocation — on
+        // frames between render intervals.
+        var shouldRender = (now - this._lastRenderMs) >= this.RENDER_INTERVAL_MS;
 
         for (var i = 0; i < vehicleIds.length; i++) {
             var state = this.vehicles[vehicleIds[i]];
@@ -198,6 +290,10 @@ window.ChefMapAnimator = {
             // unbounded across a long session.
             if (state.lastSeenMs != null && (now - state.lastSeenMs) > this.EVICT_AFTER_MS) {
                 delete this.vehicles[vehicleIds[i]];
+                if (this._featureById[vehicleIds[i]]) {
+                    delete this._featureById[vehicleIds[i]];
+                    this._featureArrayDirty = true; // vehicle set changed → rebuild array
+                }
                 continue;
             }
 
@@ -235,22 +331,52 @@ window.ChefMapAnimator = {
                 state.currentPos = newPos;
             }
 
-            features.push({
-                type: 'Feature',
-                id: 'vehicle-' + state.vehicleId,
-                geometry: { type: 'Point', coordinates: newPos },
-                properties: {
-                    vehicleId: state.vehicleId,
-                    pinIcon: 'stop-pin-green',
-                    routeJoinKey: state.routeJoinKey,
-                    transitMode: state.transitMode,
-                    bearing: state.bearing
+            if (shouldRender) {
+                // Reuse this vehicle's persistent Feature, mutating geometry/properties in
+                // place instead of allocating a fresh object every render (B1). New vehicle →
+                // create once and mark the array dirty so it gets rebuilt below.
+                var feature = this._featureById[state.vehicleId];
+                if (!feature) {
+                    feature = {
+                        type: 'Feature',
+                        id: 'vehicle-' + state.vehicleId,
+                        geometry: { type: 'Point', coordinates: newPos },
+                        properties: {
+                            vehicleId: state.vehicleId,
+                            pinIcon: 'stop-pin-green',
+                            routeJoinKey: state.routeJoinKey,
+                            transitMode: state.transitMode,
+                            bearing: state.bearing
+                        }
+                    };
+                    this._featureById[state.vehicleId] = feature;
+                    this._featureArrayDirty = true;
+                } else {
+                    feature.geometry.coordinates = newPos;
+                    // Properties can change between batches (route transfer, bearing), so
+                    // keep them current — cheap primitive assignment, no allocation.
+                    var p = feature.properties;
+                    p.routeJoinKey = state.routeJoinKey;
+                    p.transitMode = state.transitMode;
+                    p.bearing = state.bearing;
                 }
-            });
+            }
         }
 
-        // Single setData call per RAF tick — the MapLibre source update strategy (R1)
-        this._source.setData({ type: 'FeatureCollection', features: features });
+        // Single setData call per render interval (~15fps) rather than every RAF frame —
+        // the full-source upload is the dominant per-frame cost at scale (R1). The array and
+        // its Feature objects are persistent (B1); we only rebuild the array when the vehicle
+        // set changed, and setData reads the mutated-in-place coordinates.
+        if (shouldRender) {
+            this._lastRenderMs = now;
+            if (this._featureArrayDirty) {
+                this._featuresArray = Object.keys(this._featureById).map(function (id) {
+                    return this._featureById[id];
+                }, this);
+                this._featureArrayDirty = false;
+            }
+            this._source.setData({ type: 'FeatureCollection', features: this._featuresArray });
+        }
 
         if (now - this._lastFrameLogTime >= 1000) {
             this._lastFrameLogTime = now;

@@ -27,6 +27,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChefKnifeStudios.MartaJazz.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests", "Server\ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests\ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests.csproj", "{B8F72642-A324-4CC5-831D-AA14D5E64A3B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChefKnifeStudios.MartaJazz.Shared.Tests", "ChefKnifeStudios.MartaJazz.Shared.Tests\ChefKnifeStudios.MartaJazz.Shared.Tests.csproj", "{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -157,6 +159,18 @@ Global
 		{B8F72642-A324-4CC5-831D-AA14D5E64A3B}.Release|x64.Build.0 = Release|Any CPU
 		{B8F72642-A324-4CC5-831D-AA14D5E64A3B}.Release|x86.ActiveCfg = Release|Any CPU
 		{B8F72642-A324-4CC5-831D-AA14D5E64A3B}.Release|x86.Build.0 = Release|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Debug|x64.Build.0 = Debug|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Debug|x86.Build.0 = Debug|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Release|x64.ActiveCfg = Release|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Release|x64.Build.0 = Release|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Release|x86.ActiveCfg = Release|Any CPU
+		{DCC990EF-3E0F-40CA-9826-EC2991E58B3C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

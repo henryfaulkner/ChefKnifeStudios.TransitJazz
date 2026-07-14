@@ -20,8 +20,8 @@ public class WorkerTransitHubTests
             new RouteNearestPointBatchEvent(new[]
             {
                 new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-                    id, "74", 33.75, -84.39, DateTime.UtcNow,
-                    33.751, -84.389, DateTime.UtcNow, null, null, false)
+                    id, "74", 33.75, -84.39,
+                    33.751, -84.389, 10000, null, null, false)
             })
         )).ToList();
 
@@ -84,11 +84,11 @@ public class WorkerTransitHubTests
                 new RouteNearestPointBatchEvent(new[]
                 {
                     new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-                        "v1", "74", 33.75, -84.39, DateTime.UtcNow,
-                        33.751, -84.389, DateTime.UtcNow, null, null, false),
+                        "v1", "74", 33.75, -84.39,
+                        33.751, -84.389, 10000, null, null, false),
                     new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-                        "v2", "74", 33.75, -84.39, DateTime.UtcNow,
-                        33.760, -84.380, DateTime.UtcNow, null, null, true)
+                        "v2", "74", 33.75, -84.39,
+                        33.760, -84.380, 10000, null, null, true)
                 }))
         };
 

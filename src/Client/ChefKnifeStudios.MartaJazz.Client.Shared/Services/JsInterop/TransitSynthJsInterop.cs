@@ -16,8 +16,11 @@ public class TransitSynthJsInterop : ITransitSynthJsInterop
         ILogger<TransitSynthJsInterop> logger)
     {
         _logger = logger;
+        // NO ?g=<guid> cache-buster here: the crossing-dispatcher module imports this same URL to
+        // reach the SAME module instance (shared _unlocked / _audioEnabled state). A guid would make
+        // the dispatcher's import a DIFFERENT instance whose triggerNote never unlocks (feature 040).
         _moduleTask = new(() => jsRuntime.InvokeAsync<IJSObjectReference>(
-            "import", $"./_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/transit-synth.js?g={Guid.NewGuid().ToString().ToLower()}").AsTask());
+            "import", "./_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/transit-synth.js").AsTask());
     }
 
     public async Task PreloadAsync(IEnumerable<string> routeIds)

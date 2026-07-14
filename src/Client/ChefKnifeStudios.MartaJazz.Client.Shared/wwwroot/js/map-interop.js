@@ -290,16 +290,70 @@ window.ChefMap = {
     // Also pushed to the 'trigger-points' source for the all-checkpoints overlay.
     _triggerPointFeatures: {},
 
+    // --- Checkpoint geometry helpers (place/identify checkpoints by along-route distance) ---
+
+    _haversineM: function (p1, p2) {
+        var R = 6371000, toRad = Math.PI / 180;
+        var dLat = (p2[1] - p1[1]) * toRad, dLon = (p2[0] - p1[0]) * toRad;
+        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(p1[1] * toRad) * Math.cos(p2[1] * toRad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    },
+
+    _cumulativeDistances: function (coords) {
+        var cum = [0];
+        for (var i = 1; i < coords.length; i++) cum.push(cum[i - 1] + ChefMap._haversineM(coords[i - 1], coords[i]));
+        return cum;
+    },
+
+    // Point at `targetDistM` along the polyline (interpolated within the containing segment).
+    _interpolateAlongCoords: function (coords, cumDist, targetDistM) {
+        if (coords.length === 0) return null;
+        if (targetDistM <= 0) return coords[0];
+        var total = cumDist[cumDist.length - 1];
+        if (targetDistM >= total) return coords[coords.length - 1];
+        var lo = 0, hi = cumDist.length - 1;
+        while (lo < hi - 1) {
+            var mid = (lo + hi) >> 1;
+            if (cumDist[mid] <= targetDistM) lo = mid; else hi = mid;
+        }
+        var segLen = cumDist[hi] - cumDist[lo];
+        var f = segLen > 0 ? (targetDistM - cumDist[lo]) / segLen : 0;
+        return [coords[lo][0] + (coords[hi][0] - coords[lo][0]) * f,
+                coords[lo][1] + (coords[hi][1] - coords[lo][1]) * f];
+    },
+
+    // Resolve a checkpoint feature by its along-route distance — the STABLE identity, unlike
+    // triggerIndex which collides on sparse polylines. Tolerance absorbs float round-trip
+    // (server sends metres; checkpoints are spaced far wider than 1m).
+    _findCheckpointFeature: function (routeJoinKey, alongDistanceM) {
+        var features = ChefMap._triggerPointFeatures[routeJoinKey];
+        if (!features) return null;
+        var best = null, bestDelta = Infinity;
+        for (var i = 0; i < features.length; i++) {
+            var delta = Math.abs(features[i].properties.alongDistanceM - alongDistanceM);
+            if (delta < bestDelta) { bestDelta = delta; best = features[i]; }
+        }
+        return (best && bestDelta <= 1.0) ? best : null;
+    },
+
     addTriggerPointMarkers: function (containerDivId, routeJoinKey, triggerPoints, coords) {
         var map = ChefMap.maps[containerDivId];
         if (!map) return;
 
         var routeColor = ChefMap._routeColorsByRouteJoinKey[routeJoinKey] || '#facc15';
 
+        // Cumulative distance along the polyline, so each checkpoint can be placed at its TRUE
+        // along-route distance. tp.index is the nearest polyline VERTEX, which collides when the
+        // shape is sparse (many 400m checkpoints snap to one vertex → identical coords + a
+        // non-unique key). Interpolating by alongDistanceM gives every checkpoint a distinct
+        // position and lets alongDistanceM serve as the stable identity for pulse/trail lookups.
+        var cumDist = ChefMap._cumulativeDistances(coords);
+
         // Accumulate this route's features — do NOT rebuild/flush the combined collection here.
         // flushTriggerPoints() does a single combined setData after all routes are added.
         ChefMap._triggerPointFeatures[routeJoinKey] = triggerPoints.map(function (tp) {
-            var coord = coords[tp.index] || coords[coords.length - 1];
+            var coord = ChefMap._interpolateAlongCoords(coords, cumDist, tp.alongDistanceM);
             return {
                 type: 'Feature',
                 geometry: { type: 'Point', coordinates: coord },
@@ -417,18 +471,16 @@ window.ChefMap = {
         map.setPaintProperty('routes-layer', 'line-opacity', 0.7);
     },
 
-    pulseCheckpoint: async function (containerDivId, routeJoinKey, triggerIndex) {
+    // Checkpoints are identified by alongDistanceM (stable geometry), NOT triggerIndex, which
+    // collides when multiple checkpoints snap to one sparse-polyline vertex. triggerIndex is
+    // still passed through as the pulse's internal per-checkpoint state key.
+    pulseCheckpoint: async function (containerDivId, routeJoinKey, triggerIndex, alongDistanceM) {
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
 
-        let features = ChefMap._triggerPointFeatures[routeJoinKey];
-        if (!features) {
-            console.warn('[ChefMap] pulseCheckpoint: no trigger features for routeJoinKey=' + routeJoinKey);
-            return;
-        }
-        let feature = features.find(function (f) { return f.properties.triggerIndex === triggerIndex; });
+        let feature = ChefMap._findCheckpointFeature(routeJoinKey, alongDistanceM);
         if (!feature) {
-            console.warn('[ChefMap] pulseCheckpoint: triggerIndex ' + triggerIndex + ' not found for routeJoinKey=' + routeJoinKey);
+            console.warn('[ChefMap] pulseCheckpoint: no checkpoint at alongDistanceM=' + alongDistanceM + ' for routeJoinKey=' + routeJoinKey);
             return;
         }
 
@@ -456,14 +508,12 @@ window.ChefMap = {
         }
     },
 
-    startCrossingTrail: async function (containerDivId, routeJoinKey, vehicleId, triggerIndex, durationSec) {
+    startCrossingTrail: async function (containerDivId, routeJoinKey, vehicleId, triggerIndex, durationSec, alongDistanceM) {
         let map = ChefMap.maps[containerDivId];
         if (!map) return;
 
-        // Anchor: reuse the trigger feature (same lookup as pulseCheckpoint).
-        let features = ChefMap._triggerPointFeatures[routeJoinKey];
-        if (!features) return;                       // route geometry not loaded yet
-        let feature = features.find(function (f) { return f.properties.triggerIndex === triggerIndex; });
+        // Anchor by alongDistanceM (same stable identity as pulseCheckpoint), not triggerIndex.
+        let feature = ChefMap._findCheckpointFeature(routeJoinKey, alongDistanceM);
         if (!feature) return;
 
         let anchorCoord = feature.geometry.coordinates;

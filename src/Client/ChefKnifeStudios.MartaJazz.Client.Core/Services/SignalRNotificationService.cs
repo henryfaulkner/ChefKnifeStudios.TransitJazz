@@ -82,10 +82,10 @@ public class SignalRNotificationService(
                     {
                         logging.SetMinimumLevel(LogLevel.Debug);
                     })
-                    .AddJsonProtocol(options =>
-                    {
-                        JsonSettings.ApplyTo(options.PayloadSerializerOptions);
-                    })
+                    // MessagePack must match the hub — the server registers ONLY MessagePack,
+                    // so a JSON client would be rejected at negotiation. Polymorphic payloads
+                    // ride the [Union]/[Key] contracts in Shared/Events.
+                    .AddMessagePackProtocol()
                     .Build();
 
                 logger.LogInformation("Connecting to SignalR hub: {host}", baseUri.Host);

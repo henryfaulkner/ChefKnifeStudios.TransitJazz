@@ -18,6 +18,14 @@ const LAYER_ID = 'crossing-trail-layer';
 // keyed "{vehicleId}::{triggerIndex}::{startTimeMs}" → { routeId, color, anchorDistanceM, finalLengthM, durationMs, startTimeMs }
 const _activeTrails = new Map();
 let _rafHandle = null;
+let _lastRenderMs = 0;
+
+// Gate the rebuild + setData to ~15fps. This loop is the heaviest of the three: _tick rebuilds
+// a LineString per active trail, and _buildLineCoords walks the ENTIRE route polyline each time
+// (O(active_trails × route_vertices)). At NYMTA scale a crossing burst stacks many trails on
+// long subway lines, so throttling to 15fps cuts that O(n) walk 4× for free. The head-distance
+// is a pure function of `now`, so a growing line looks identical at 15fps.
+const RENDER_INTERVAL_MS = 1000 / 15;
 
 function clamp(v, lo, hi) {
     return Math.min(hi, Math.max(lo, v));
@@ -57,40 +65,57 @@ function _buildLineCoords(coords, cumDist, tailDistM, headDistM) {
 
 function _tick(map) {
     const now = performance.now();
-    const features = [];
+    const shouldRender = (now - _lastRenderMs) >= RENDER_INTERVAL_MS;
 
-    for (const [key, trail] of _activeTrails) {
-        const t = clamp((now - trail.startTimeMs) / trail.durationMs, 0, 1);
+    if (shouldRender) {
+        _lastRenderMs = now;
+        const features = [];
 
-        // Immediate removal when the note ends (FR-004 / SC-002) — next setData excludes it.
-        if (t >= 1) {
-            _activeTrails.delete(key);
-            continue;
+        for (const [key, trail] of _activeTrails) {
+            const t = clamp((now - trail.startTimeMs) / trail.durationMs, 0, 1);
+
+            // Immediate removal when the note ends (FR-004 / SC-002) — next setData excludes it.
+            if (t >= 1) {
+                _activeTrails.delete(key);
+                continue;
+            }
+
+            const routeData = ChefMapAnimator.routeGeometry[trail.routeId];
+            if (!routeData) continue;
+
+            const routeTotalLengthM = routeData.cumDist[routeData.cumDist.length - 1];
+            const headDistanceM = Math.min(trail.anchorDistanceM + trail.finalLengthM * t, routeTotalLengthM);
+            const lineCoords = _buildLineCoords(routeData.coords, routeData.cumDist, trail.anchorDistanceM, headDistanceM);
+
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: lineCoords },
+                properties: { color: trail.color }
+            });
         }
 
-        const routeData = ChefMapAnimator.routeGeometry[trail.routeId];
-        if (!routeData) continue;
-
-        const routeTotalLengthM = routeData.cumDist[routeData.cumDist.length - 1];
-        const headDistanceM = Math.min(trail.anchorDistanceM + trail.finalLengthM * t, routeTotalLengthM);
-        const lineCoords = _buildLineCoords(routeData.coords, routeData.cumDist, trail.anchorDistanceM, headDistanceM);
-
-        features.push({
-            type: 'Feature',
-            geometry: { type: 'LineString', coordinates: lineCoords },
-            properties: { color: trail.color }
-        });
+        try {
+            const src = map.getSource(SOURCE_ID);
+            if (src) src.setData({ type: 'FeatureCollection', features });
+        } catch (_) { }
+    } else {
+        // Non-render frame: still expire finished trails so the loop can stop on time.
+        for (const [key, trail] of _activeTrails) {
+            if (clamp((now - trail.startTimeMs) / trail.durationMs, 0, 1) >= 1) _activeTrails.delete(key);
+        }
     }
-
-    try {
-        const src = map.getSource(SOURCE_ID);
-        if (src) src.setData({ type: 'FeatureCollection', features });
-    } catch (_) { }
 
     if (_activeTrails.size > 0) {
         _rafHandle = requestAnimationFrame(() => _tick(map));
     } else {
         _rafHandle = null;
+        // Final clear: the last trail may have expired on a NON-render frame (throttle gate),
+        // leaving its last-drawn line frozen on the map because that frame skipped setData.
+        // Force one empty setData so no stale trail persists after the loop stops.
+        try {
+            const src = map.getSource(SOURCE_ID);
+            if (src) src.setData({ type: 'FeatureCollection', features: [] });
+        } catch (_) { }
     }
 }
 
@@ -150,6 +175,7 @@ export function start(map, routeId, vehicleId, triggerIndex, anchorCoord, anchor
 
 export function reset(map) {
     _activeTrails.clear();
+    _lastRenderMs = 0; // next start() renders on its first frame
     if (_rafHandle !== null) {
         cancelAnimationFrame(_rafHandle);
         _rafHandle = null;

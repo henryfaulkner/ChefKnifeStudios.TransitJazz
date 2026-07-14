@@ -28,11 +28,11 @@ public sealed class SignalRHubPublisher : ITransitHubPublisher, IAsyncDisposable
                 // opts.AccessTokenProvider = async () => await tokenProvider.GetAccessTokenAsync() ?? string.Empty;
             })
             .WithAutomaticReconnect()
-            .AddJsonProtocol(options =>
-            {
-                JsonSettings.ApplyTo(options.PayloadSerializerOptions);
-                options.PayloadSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
-            })
+            // MessagePack instead of JSON: the polymorphic payload is handled by [Union] on
+            // ISignalREvent + [Key] on every contract (see Shared/Events). All three hops
+            // (this worker, the hub, the WASM client) MUST use MessagePack — a MessagePack
+            // producer cannot talk to a JSON consumer, so deploy them together.
+            .AddMessagePackProtocol()
             .Build();
 
         _connection.Reconnecting += ex =>
