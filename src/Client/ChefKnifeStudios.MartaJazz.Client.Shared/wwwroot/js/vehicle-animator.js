@@ -8,6 +8,16 @@ window.ChefMapAnimator = {
     _lastFrameLogTime: 0,
     _lastRenderMs: 0,
 
+    // Persistent render objects (B1): one Feature per vehicle, reused across renders and
+    // mutated in place, plus one array handed to setData every time. This eliminates the
+    // ~5k-objects-per-render allocation/GC churn — the geojson source still re-tiles on
+    // setData, but we no longer generate garbage feeding it. Keyed by vehicleId.
+    _featureById: {},
+    _featuresArray: [],
+    // Rebuilt from _featureById only when the vehicle SET changes (add/evict), not every
+    // frame. Coordinate/property mutation happens in place every render regardless.
+    _featureArrayDirty: false,
+
     // Cap the FeatureCollection rebuild + setData upload at ~15fps. Position math still
     // runs every RAF frame (~60fps), so motion stays continuous and exact; we just stop
     // re-uploading the whole vehicles source 60×/s. Transit dots move slowly enough that
@@ -201,7 +211,6 @@ window.ChefMapAnimator = {
         // the expensive full-source upload — and the per-vehicle feature allocation — on
         // frames between render intervals.
         var shouldRender = (now - this._lastRenderMs) >= this.RENDER_INTERVAL_MS;
-        var features = shouldRender ? [] : null;
 
         for (var i = 0; i < vehicleIds.length; i++) {
             var state = this.vehicles[vehicleIds[i]];
@@ -211,6 +220,10 @@ window.ChefMapAnimator = {
             // unbounded across a long session.
             if (state.lastSeenMs != null && (now - state.lastSeenMs) > this.EVICT_AFTER_MS) {
                 delete this.vehicles[vehicleIds[i]];
+                if (this._featureById[vehicleIds[i]]) {
+                    delete this._featureById[vehicleIds[i]];
+                    this._featureArrayDirty = true; // vehicle set changed → rebuild array
+                }
                 continue;
             }
 
@@ -249,26 +262,50 @@ window.ChefMapAnimator = {
             }
 
             if (shouldRender) {
-                features.push({
-                    type: 'Feature',
-                    id: 'vehicle-' + state.vehicleId,
-                    geometry: { type: 'Point', coordinates: newPos },
-                    properties: {
-                        vehicleId: state.vehicleId,
-                        pinIcon: 'stop-pin-green',
-                        routeJoinKey: state.routeJoinKey,
-                        transitMode: state.transitMode,
-                        bearing: state.bearing
-                    }
-                });
+                // Reuse this vehicle's persistent Feature, mutating geometry/properties in
+                // place instead of allocating a fresh object every render (B1). New vehicle →
+                // create once and mark the array dirty so it gets rebuilt below.
+                var feature = this._featureById[state.vehicleId];
+                if (!feature) {
+                    feature = {
+                        type: 'Feature',
+                        id: 'vehicle-' + state.vehicleId,
+                        geometry: { type: 'Point', coordinates: newPos },
+                        properties: {
+                            vehicleId: state.vehicleId,
+                            pinIcon: 'stop-pin-green',
+                            routeJoinKey: state.routeJoinKey,
+                            transitMode: state.transitMode,
+                            bearing: state.bearing
+                        }
+                    };
+                    this._featureById[state.vehicleId] = feature;
+                    this._featureArrayDirty = true;
+                } else {
+                    feature.geometry.coordinates = newPos;
+                    // Properties can change between batches (route transfer, bearing), so
+                    // keep them current — cheap primitive assignment, no allocation.
+                    var p = feature.properties;
+                    p.routeJoinKey = state.routeJoinKey;
+                    p.transitMode = state.transitMode;
+                    p.bearing = state.bearing;
+                }
             }
         }
 
         // Single setData call per render interval (~15fps) rather than every RAF frame —
-        // the full-source upload is the dominant per-frame cost at scale (R1).
+        // the full-source upload is the dominant per-frame cost at scale (R1). The array and
+        // its Feature objects are persistent (B1); we only rebuild the array when the vehicle
+        // set changed, and setData reads the mutated-in-place coordinates.
         if (shouldRender) {
             this._lastRenderMs = now;
-            this._source.setData({ type: 'FeatureCollection', features: features });
+            if (this._featureArrayDirty) {
+                this._featuresArray = Object.keys(this._featureById).map(function (id) {
+                    return this._featureById[id];
+                }, this);
+                this._featureArrayDirty = false;
+            }
+            this._source.setData({ type: 'FeatureCollection', features: this._featuresArray });
         }
 
         if (now - this._lastFrameLogTime >= 1000) {
