@@ -159,10 +159,8 @@ public class CrossingDetectorTests
         Assert.Equal(800.0, result[0].AlongDistanceM, 4);
     }
 
-    // NOTE: the server-side spread-window stretch (effectiveSpreadMs / MinMsPerCrossing /
-    // MaxSpreadMultiplier) and the frac/offsetMs math no longer influence playback — the client
-    // now owns timing entirely, computing each fire delay from AlongDistanceM against the dot's
-    // own animated motion — so the former OffsetMs stretch/cap tests were removed. That server
-    // code remains only to feed the TEMP crossing-timing diagnostic and should be deleted with
-    // it once the fix is verified in the browser.
+    // NOTE: the client owns crossing timing entirely, computing each fire delay from
+    // AlongDistanceM against the dot's own animated motion. The former server-side spread-window
+    // machinery (spreadMs/effectiveSpreadMs/frac/offsetMs) and its OffsetMs stretch/cap tests were
+    // removed along with it — Detect now just emits each crossed checkpoint's AlongDistanceM.
 }

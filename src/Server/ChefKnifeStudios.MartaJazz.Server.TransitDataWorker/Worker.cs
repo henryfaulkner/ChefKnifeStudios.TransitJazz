@@ -42,11 +42,6 @@ public class Worker(
     {
         logger.LogInformation("TransitDataWorker started.");
 
-        // TEMP DIAGNOSTIC (feature 040) — crossing-timing bug. Server appends one CSV row per
-        // crossing here; pair with the client's window.__crossingDiagDump(). Remove with fix.
-        CrossingDetector.DiagCsvPath = Path.Combine(_batchOutputDir, "server-crossing-diag.csv");
-        logger.LogWarning("[CrossingDiag] writing server CSV to {Path}", CrossingDetector.DiagCsvPath);
-
         await transitHubPublisher.StartAsync(stoppingToken);
         await InitializeRouteIndexAsync(stoppingToken);
 
@@ -397,16 +392,10 @@ public class Worker(
 
                     var currentVehicleTimestamp = entity.Vehicle.Timestamp;
                     bool isStale = false;
-                    // Captured for crossing-offset timing below (the `prior` binding itself
-                    // goes out of scope before the detection block).
-                    DateTime? priorObservationUtc = null;
-
                     if (vehicleStateCache.TryGetValue(vehicleId, out var prior))
                     {
                         if (prior.LastUpdated > now)
                             continue;
-
-                        priorObservationUtc = prior.LastUpdated;
 
                         isStale = currentVehicleTimestamp.HasValue
                             && prior.VehicleTimestamp.HasValue
@@ -484,15 +473,7 @@ public class Worker(
                         {
                             var currentDistM = routeCumDist[snapValue.Index];
                             CrossingBaseline? baseline = baselineMap.TryGetValue(vehicleId, out var b) ? b : null;
-                            // Spread this cycle's crossings over the REAL elapsed time since the
-                            // prior observation, so a slow vehicle's notes pace out over the
-                            // actual ~10s it took and a fast one's stay tight — capped so a long
-                            // feed gap can't stretch a burst across the next batch's window.
-                            var elapsedMs = priorObservationUtc.HasValue
-                                ? (now - priorObservationUtc.Value).TotalMilliseconds
-                                : CrossingDetector.DefaultSpreadMs;
-                            var spreadMs = Math.Clamp(elapsedMs, 0, CrossingDetector.DefaultSpreadMs);
-                            var detected = CrossingDetector.Detect(vehicleId, routeJoinKey, currentDistM, routeTriggers, ref baseline, spreadMs, logger);
+                            var detected = CrossingDetector.Detect(vehicleId, routeJoinKey, currentDistM, routeTriggers, ref baseline);
                             baselineMap[vehicleId] = baseline;
                             crossingRecords.AddRange(detected);
                         }
