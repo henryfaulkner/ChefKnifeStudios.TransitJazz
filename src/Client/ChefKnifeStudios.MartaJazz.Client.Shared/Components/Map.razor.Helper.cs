@@ -98,6 +98,24 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Logger.LogError(ex, "[Map] StartCrossingTrail failed for routeJoinKey={RouteJoinKey} triggerIndex={TriggerIndex}", routeJoinKey, triggerIndex); }
     }
 
+    // Lazily-imported crossing-dispatcher ES module, reused across batches.
+    IJSObjectReference? _crossingDispatcherModule;
+
+    // Hand an entire crossing batch to the JS dispatcher in ONE interop call. The dispatcher owns
+    // the per-crossing timers (offsetMs) and fires each crossing's pulse + trail + note together,
+    // so effects can't desync from each other and the interop cost stays O(1) per batch regardless
+    // of fleet size — replacing the old per-crossing Task.Delay + 4-interop fan-out.
+    public async Task DispatchCrossingsAsync(object crossings, object flags)
+    {
+        try
+        {
+            _crossingDispatcherModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>(
+                "import", "./_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/crossing-dispatcher.js");
+            await _crossingDispatcherModule.InvokeVoidAsync("dispatchCrossings", ElementId, crossings, flags);
+        }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] DispatchCrossings failed"); }
+    }
+
     public async Task SetCrossingTrailVisibilityAsync(bool visible)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.setCrossingTrailVisibility", ElementId, visible); }

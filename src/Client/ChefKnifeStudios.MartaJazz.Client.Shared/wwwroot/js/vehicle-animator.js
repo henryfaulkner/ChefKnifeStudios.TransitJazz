@@ -168,6 +168,26 @@ window.ChefMapAnimator = {
         return routeData.coords[routeData.coords.length - 1];
     },
 
+    // TEMP DIAGNOSTIC (feature 040) — where is the dot RIGHT NOW along its route, in meters?
+    // Snaps the dot's current animated position onto the route polyline and returns the
+    // cumulative distance at that vertex, plus the dot's phase/elapsed. Lets the crossing
+    // dispatcher compare the dot's actual arrival against the server's checkpoint offset.
+    // Returns null if the vehicle or its route geometry is unknown. Remove with the bug fix.
+    diagDotDistanceAlongRoute: function (vehicleId, routeJoinKey) {
+        var state = this.vehicles[vehicleId];
+        if (!state) return null;
+        var routeData = this.routeGeometry[routeJoinKey];
+        if (!routeData) return null;
+        var idx = this.findNearestIndex(routeData.coords, state.currentPos);
+        return {
+            dotDistM: routeData.cumDist[idx],
+            phase: state.phase,
+            elapsedMs: Math.round(performance.now() - state.startTime),
+            durationMs: Math.round(state.duration),
+            empiricalSpeed: state.empiricalSpeed
+        };
+    },
+
     loadRouteGeometry: function (routeJoinKey, coordinates) {
         var cumDist = this.buildCumulativeDistances(coordinates);
         this.routeGeometry[routeJoinKey] = { coords: coordinates, cumDist: cumDist };

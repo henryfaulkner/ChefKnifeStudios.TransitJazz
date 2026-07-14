@@ -151,8 +151,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
     }
 
-    public Task OnCrossingsAsync(CrossingEventDto[] crossings)
+    public async Task OnCrossingsAsync(CrossingEventDto[] crossings)
     {
+        if (_map is null) return;
+
         // Capture the route-filter snapshot at batch-receipt time so the gate reflects what
         // was selected when the crossings arrived, not whatever changes during the spread.
         var selected = RouteFilterViewModel.SelectedRouteJoinKeys;
@@ -161,58 +163,38 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             ? selected.Concat(hovered is not null ? [hovered] : []).ToHashSet(StringComparer.Ordinal)
             : null;
 
+        // Project to the dispatcher's payload shape (camelCase → JS). The server stamps each
+        // crossing with OffsetMs — where in the cycle window it was actually crossed; the JS
+        // dispatcher owns the timers and fires each crossing's pulse+trail+note TOGETHER off a
+        // single setTimeout. One interop call for the whole batch replaces the old per-crossing
+        // Task.Delay + 4-interop fan-out that queued on WASM's single thread and desynced at scale.
+        var payload = new List<object>(crossings.Length);
         foreach (var crossing in crossings)
         {
             if (effectiveIds is not null && !effectiveIds.Contains(crossing.RouteJoinKey)) continue;
-
-            // Server stamps each crossing with where in the cycle window it was actually
-            // crossed (OffsetMs). Fire each on its own delayed continuation so a burst of
-            // checkpoints spreads out in true crossing order instead of sounding all at once.
-            // Fire-and-forget: we must not block the SignalR batch handler for ~8s.
-            var c = crossing;
-            _ = FireCrossingDelayedAsync(c);
+            payload.Add(new
+            {
+                routeJoinKey = crossing.RouteJoinKey,
+                vehicleId = crossing.VehicleId,
+                triggerIndex = crossing.TriggerIndex,
+                totalTriggers = crossing.TotalTriggers,
+                offsetMs = crossing.OffsetMs
+            });
         }
 
-        return Task.CompletedTask;
-    }
+        if (payload.Count == 0) return;
 
-    async Task FireCrossingDelayedAsync(CrossingEventDto crossing)
-    {
-        try
+        // Gating flags captured now; each is honored per-effect in JS (pulse ← checkpoints,
+        // trail ← trail setting, note ← audio). A setting flipping mid-spread is an accepted
+        // trade for collapsing thousands of timers into one interop call.
+        var flags = new
         {
-            if (crossing.OffsetMs > 0)
-                await Task.Delay(TimeSpan.FromMilliseconds(crossing.OffsetMs));
+            checkpointsVisible = _checkpointsVisible,
+            crossingTrailVisible = _crossingTrailVisible,
+            audioEnabled = _audioEnabled
+        };
 
-            // Re-check live settings at fire time (a setting may have flipped mid-spread).
-            // Pulse (expanding ring) is gated on its own checkpoint-visibility setting.
-            if (_checkpointsVisible && _map is not null)
-            {
-                try { await _map.PulseCheckpointAsync(crossing.RouteJoinKey, crossing.TriggerIndex); }
-                catch (Exception ex) { Logger.LogWarning(ex, "PulseCheckpointAsync failed for {RouteJoinKey}/{Idx}", crossing.RouteJoinKey, crossing.TriggerIndex); }
-            }
-
-            // Trail is gated on its own setting, independent of the pulse AND of audio
-            // mute/lock state (FR-001).
-            if (_crossingTrailVisible && _map is not null)
-            {
-                try
-                {
-                    var durationSec = await TransitSynth.DurationSecondsForAsync(crossing.VehicleId, crossing.RouteJoinKey);
-                    await _map.StartCrossingTrailAsync(crossing.RouteJoinKey, crossing.VehicleId, crossing.TriggerIndex, durationSec);
-                }
-                catch (Exception ex) { Logger.LogWarning(ex, "StartCrossingTrailAsync failed for {RouteJoinKey}/{Idx}", crossing.RouteJoinKey, crossing.TriggerIndex); }
-            }
-
-            if (_audioEnabled)
-            {
-                try { await TransitSynth.TriggerNoteAsync(crossing.RouteJoinKey, crossing.VehicleId, crossing.TriggerIndex, crossing.TotalTriggers); }
-                catch (Exception ex) { Logger.LogWarning(ex, "TransitMap.OnCrossingsAsync: TriggerNoteAsync failed for vehicle {VehicleId} on route {RouteJoinKey}", crossing.VehicleId, crossing.RouteJoinKey); }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "TransitMap.FireCrossingDelayedAsync: failed for vehicle {VehicleId} on route {RouteJoinKey}", crossing.VehicleId, crossing.RouteJoinKey);
-        }
+        await _map.DispatchCrossingsAsync(payload, flags);
     }
 
     // Unlocks the Web Audio context from a real user gesture (required by mobile

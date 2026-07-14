@@ -109,6 +109,13 @@ function _tick(map) {
         _rafHandle = requestAnimationFrame(() => _tick(map));
     } else {
         _rafHandle = null;
+        // Final clear: the last trail may have expired on a NON-render frame (throttle gate),
+        // leaving its last-drawn line frozen on the map because that frame skipped setData.
+        // Force one empty setData so no stale trail persists after the loop stops.
+        try {
+            const src = map.getSource(SOURCE_ID);
+            if (src) src.setData({ type: 'FeatureCollection', features: [] });
+        } catch (_) { }
     }
 }
 
