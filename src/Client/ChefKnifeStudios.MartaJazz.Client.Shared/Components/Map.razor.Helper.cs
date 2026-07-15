@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace ChefKnifeStudios.MartaJazz.Client.Shared.Components;
@@ -108,6 +109,22 @@ public partial class Map : ComponentBase
             await _crossingDispatcherModule.InvokeVoidAsync("dispatchCrossings", ElementId, crossings, flags);
         }
         catch (Exception ex) { Logger.LogError(ex, "[Map] DispatchCrossings failed"); }
+    }
+
+    // Push the current effective route filter (selection ∪ hover) to the dispatcher so its
+    // already-scheduled timers re-check it at fire time. Pass null/empty to clear the filter
+    // (all routes pass). This is what makes a filter change take effect immediately instead of
+    // after the ~10s scheduling horizon drains — crossings queued before the change are silenced
+    // the instant their timer fires if their route is no longer selected.
+    public async Task SetCrossingFilterAsync(IEnumerable<string>? routeJoinKeys)
+    {
+        try
+        {
+            _crossingDispatcherModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>(
+                "import", "./_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/crossing-dispatcher.js");
+            await _crossingDispatcherModule.InvokeVoidAsync("setActiveFilter", routeJoinKeys?.ToArray());
+        }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingFilter failed"); }
     }
 
     public async Task SetCrossingTrailVisibilityAsync(bool visible)

@@ -347,6 +347,16 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         var selected = RouteFilterViewModel.SelectedRouteJoinKeys;
         var hovered = RouteFilterViewModel.HoveredRouteJoinKey;
 
+        // Keep the crossing dispatcher's live filter in sync with the current selection ∪ hover so
+        // its already-scheduled timers re-check it at fire time (immediate filtering, no ~10s lag).
+        // null when nothing is selected/hovered → dispatcher lets all routes through.
+        var effectiveIds = hovered is null && selected.Count == 0
+            ? null
+            : hovered is null || selected.Contains(hovered)
+                ? (IEnumerable<string>)selected
+                : selected.Concat([hovered]).ToList();
+        InvokeAsync(() => _map.SetCrossingFilterAsync(effectiveIds));
+
         if (hovered is null && selected.Count == 0)
         {
             InvokeAsync(() => _map.ClearRouteFocusAsync());

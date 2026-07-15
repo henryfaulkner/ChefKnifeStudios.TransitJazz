@@ -69,11 +69,13 @@
 
 let _tone = null;
 let _unlocked = false;
-// Mirrors the C# SettingsBlade "audio enabled" toggle (AudioSettingChangedEventArgs).
-// Gates the continuous noise bed the same way _audioEnabled gates triggerNote on the C#
-// side — the noise must never be audible while the app is muted. Defaults to true so the
-// noise behaves like every other voice until told otherwise; setAudioEnabled(false) is
-// expected to be called during init if the persisted setting is muted (see TransitMap.razor.cs).
+// Mirrors the C# SettingsBlade "audio enabled" toggle (AudioSettingChangedEventArgs), kept
+// current by setAudioEnabled on every toggle. This is the LIVE, fire-time mute gate for both
+// the continuous noise bed AND triggerNote — the crossing dispatcher captures an audioEnabled
+// flag once per batch and schedules notes up to a cycle out, so triggerNote must re-check this
+// at fire time or a mid-batch mute would still sound every queued note. Defaults to true so
+// audio behaves normally until told otherwise; setAudioEnabled(false) is called during init if
+// the persisted setting is muted (see TransitMap.razor.cs).
 let _audioEnabled = true;
 // PROD SHIP LIST — only these instruments play unless a dev build opts more in via
 // setEnabledInstruments (see docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md — SettingsBlade dev
@@ -251,11 +253,10 @@ function getMasterBus(T) {
 }
 
 // Mirrors the app's mute/unmute setting into the JS module. Called from C# on init (with the
-// persisted setting) and whenever AudioSettingChangedEventArgs fires. Starts/stops the
-// continuous noise bed immediately; if the master bus hasn't been built yet (no instrument
-// loaded so far), just records the flag so getMasterBus honors it when it IS built. Does NOT
-// touch triggerNote's own _unlocked/_audioEnabled gate on the C# side — that already prevents
-// note triggers while muted, this only covers the always-on noise bed.
+// persisted setting) and whenever AudioSettingChangedEventArgs fires. Updates _audioEnabled —
+// the live gate triggerNote re-reads at fire time — and starts/stops the continuous noise bed
+// immediately. If the master bus hasn't been built yet (no instrument loaded so far), the flag
+// is still recorded so both getMasterBus (noise bed) and triggerNote honor it once audio runs.
 export function setAudioEnabled(enabled) {
     _audioEnabled = !!enabled;
     if (!_masterBus || !_masterBus.noise) return;
@@ -368,6 +369,12 @@ export function isUnlocked() {
 // 0/1 so the C# interop path (which omits them) still plays without error.
 export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTriggers = 1) {
     if (!_unlocked) return;
+    // Live mute gate — read at FIRE time, not batch-capture time. The crossing dispatcher
+    // schedules each note on a setTimeout up to a full cycle (~10s) out and closes over the
+    // audioEnabled flag captured when the batch arrived; a mute that lands after scheduling
+    // would otherwise still sound every already-queued note (the AudioFAB "not toggling"
+    // symptom). _audioEnabled mirrors the live setting via setAudioEnabled on every toggle.
+    if (!_audioEnabled) return;
     try {
         const { sampler, scale, durations } = await instrumentForSlot(_slotIndexForRoute(routeId));
         const note = noteForPosition(scale, triggerIndex, totalTriggers);

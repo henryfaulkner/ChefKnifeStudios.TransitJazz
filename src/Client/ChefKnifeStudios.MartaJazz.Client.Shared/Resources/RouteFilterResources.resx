@@ -178,7 +178,7 @@
     <value>Every dot is a real bus. Dozens of them, maybe more, moving through a city that never agreed on a grid. They follow Peachtree and Cascade and Memorial Drive, routes drawn around what Atlanta actually is rather than what a planner imagined.</value>
   </data>
   <data name="AudioOverlayParagraph2" xml:space="preserve">
-    <value>The harmony is slow and syncopated. A note lands where the bus happens to be along its route — deep in Vine City, crossing the connector, idling at Edgewood-Candler Park. Morning fills the piece with movement; after midnight the map goes quiet and the notes stretch out. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony is slow and syncopated. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — deep in Vine City, crossing the connector, idling at Edgewood-Candler Park. Morning fills the piece with movement; after midnight the map goes quiet and the notes stretch out. What is playing right now has not played before.</value>
   </data>
   <data name="AudioOverlayParagraph3" xml:space="preserve">
     <value>MARTA runs on faith. You wait, and then it comes. This is the music inside that waiting.</value>
@@ -190,7 +190,7 @@
     <value>Every dot is a real bus or train. Hundreds of them, spread across a city that was planned on a diagonal and then grew past every boundary. They follow Wisconsin and Georgia and Benning Road, and the Red Line arcing through Bethesda, routes drawn around three jurisdictions that never quite agreed on anything.</value>
   </data>
   <data name="WmataAudioOverlayParagraph2" xml:space="preserve">
-    <value>The harmony shifts with the system. A note lands where the vehicle happens to be along its route — transferring at Metro Center, crossing the Anacostia, moving through Silver Spring at rush hour. Commuter peaks fill the piece with density; late nights thin it out to something sparse and unhurried. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony shifts with the system. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — transferring at Metro Center, crossing the Anacostia, moving through Silver Spring at rush hour. Commuter peaks fill the piece with density; late nights thin it out to something sparse and unhurried. What is playing right now has not played before.</value>
   </data>
   <data name="WmataAudioOverlayParagraph3" xml:space="preserve">
     <value>WMATA connects a capital to itself. Across DC, Maryland, and Virginia, something is always moving. This is the music inside that motion.</value>
@@ -199,7 +199,7 @@
     <value>Every dot is a real bus or train. Hundreds of them, spread across a region that grew outward from a harbor and never stopped. They follow Massachusetts Avenue and Blue Hill and the Riverside Line, routes drawn around Boston, Cambridge, Somerville, and the towns reaching out to Providence and Newburyport.</value>
   </data>
   <data name="MbtaAudioOverlayParagraph2" xml:space="preserve">
-    <value>The harmony follows the system. A note lands where the vehicle happens to be along its route — surfacing at Park Street, crossing the Charles, moving through Roxbury at rush hour. The Red, Orange, and Blue lines weave through the piece alongside hundreds of buses. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony follows the system. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — surfacing at Park Street, crossing the Charles, moving through Roxbury at rush hour. The Red, Orange, and Blue lines weave through the piece alongside hundreds of buses. What is playing right now has not played before.</value>
   </data>
   <data name="MbtaAudioOverlayParagraph3" xml:space="preserve">
     <value>The T is the oldest subway in America. It carries the city forward on the same lines it always has. This is the music inside that motion.</value>
@@ -211,19 +211,22 @@
     <value>NYCT - New York, NY, USA</value>
   </data>
   <data name="NymtaAudioOverlayParagraph1" xml:space="preserve">
-    <value>Every dot is a real NYCT vehicle, thousands of them, running the two systems this city actually moves on. The 7 curls through Queens, the A runs express down Manhattan's west side, the Bx12 crosses the Bronx along Fordham Road, the Q44 runs Main Street into Flushing, the B41 covers Flatbush from the bridge down to the water — trains under the boroughs, buses across every block a tunnel skips.</value>
+    <value>Every dot is a real NYCT vehicle, thousands of them, and most of them are trains. The 7 curls above Queens toward Flushing, the A runs express down Manhattan's west side into Far Rockaway, the 2 and 3 climb through Harlem, the L cuts straight across 14th Street and under the river into Brooklyn, the F swings out over the Culver viaduct. Under all of it, buses fill in every block a tunnel skips — but this is a subway city, and the subway carries it.</value>
   </data>
   <data name="NymtaAudioOverlayParagraph2" xml:space="preserve">
-    <value>A subway car never says exactly where it is between stations, so the note is inferred — pinned at each platform, drifting along the drawn track until the next one. A bus reports its own GPS, block by block, so its note tracks precisely: waiting at Atlantic Avenue, turning onto Northern Boulevard, working the SBS stops down Nostrand. Underground and surface run on the same clock. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — but a subway car never says exactly where it is between stations, so its note is inferred, pinned at each platform and drifting along the drawn track until the next one. Express trains skip local stops and their notes leap ahead; the local fills the spaces between. Buses report their own GPS block by block and thread through underneath. What is playing right now has not played before.</value>
   </data>
   <data name="NymtaAudioOverlayParagraph3" xml:space="preserve">
-    <value>The trains run all night, every night — the only lines in this project that never sleep — and the buses hold the surface down through the hours the platforms empty out. Between them, something is always crossing the city. This is the music inside that motion.</value>
+    <value>The trains run all night, every night — the only lines in this project that never sleep. When the streets go quiet, the subway is still down there moving under them. This is the music inside that motion.</value>
   </data>
   <data name="NymtaOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real NYCT subway train or bus, pulled live and turned into sound. Both systems move through New York City in real time, and the map plays what they're doing right now.</value>
   </data>
   <data name="AudioOverlayButton" xml:space="preserve">
     <value>Enter Experience</value>
+  </data>
+  <data name="AudioOverlayExperienceBadge" xml:space="preserve">
+    <value>Audio Experience</value>
   </data>
   <data name="SelectAllRoutes" xml:space="preserve">
     <value>Select all</value>

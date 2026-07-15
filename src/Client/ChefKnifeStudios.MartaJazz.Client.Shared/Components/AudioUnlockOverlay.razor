@@ -14,14 +14,25 @@
 @inject NavigationManager NavigationManager
 
 <div class="audio-unlock-overlay @(_isDark ? "audio-unlock-overlay--dark" : "")">
+    <div class="audio-unlock-overlay__badge">
+        <span class="audio-unlock-overlay__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 14v-2a9 9 0 0 1 18 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                <path d="M21 15.5a2.5 2.5 0 0 1-2.5 2.5H18a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h.5A2.5 2.5 0 0 1 21 14.5v1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+                <path d="M3 15.5A2.5 2.5 0 0 0 5.5 18H6a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1h-.5A2.5 2.5 0 0 0 3 14.5v1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+            </svg>
+        </span>
+        <span class="audio-unlock-overlay__badge-text">@Loc["AudioOverlayExperienceBadge"]</span>
+    </div>
+
     <div class="audio-unlock-overlay__inner">
         <div class="audio-unlock-overlay__header">
             <p>@Loc[_prefix + "Header"]</p>
         </div>
         <div class="audio-unlock-overlay__body">
-            <p>@Loc[_prefix + "Paragraph1"]</p>
-            <p>@Loc[_prefix + "Paragraph2"]</p>
-            <p>@Loc[_prefix + "Paragraph3"]</p>
+            <p>@((MarkupString)Loc[_prefix + "Paragraph1"].Value)</p>
+            <p>@((MarkupString)Loc[_prefix + "Paragraph2"].Value)</p>
+            <p>@((MarkupString)Loc[_prefix + "Paragraph3"].Value)</p>
         </div>
         <button type="button" id="@_buttonId" class="audio-unlock-overlay__button" @onclick="OnEnable">
             @Loc["AudioOverlayButton"]
@@ -59,6 +70,73 @@
         gap: 2rem;
         width: 100%;
         max-width: 34rem;
+    }
+
+    .audio-unlock-overlay__badge {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 20px;
+        position: absolute;
+        top: 20px;
+        left: 20px;
+    }
+
+    @@media (max-width: 639.98px) {
+        .audio-unlock-overlay__badge {
+            display: none;
+        }
+    }
+
+    .audio-unlock-overlay__icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 84px;
+        height: 84px;
+        border-radius: 9999px;
+        border: 2px solid rgba(0, 0, 0, 0.9);
+        color: rgba(0, 0, 0, 0.9);
+        animation: audio-unlock-pulse 2s ease-in-out infinite;
+    }
+
+    .audio-unlock-overlay__icon svg {
+        width: 44px;
+        height: 44px;
+    }
+
+    @@keyframes audio-unlock-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.18); }
+        100% { box-shadow: 0 0 0 14px rgba(0, 0, 0, 0); }
+    }
+
+    .audio-unlock-overlay__badge-text {
+        font-family: monospace;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: rgba(0, 0, 0, 0.9);
+    }
+
+    @@media (min-width: 640px) {
+        .audio-unlock-overlay__icon {
+            width: 32px;
+            height: 32px;
+        }
+        .audio-unlock-overlay__icon svg {
+            width: 24px;
+            height: 24px;
+        }
+        .audio-unlock-overlay__badge-text {
+            font-size: 20px;
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .audio-unlock-overlay__icon {
+            animation: none;
+        }
     }
 
     .audio-unlock-overlay__header {
@@ -146,8 +224,20 @@
         background: #1A1C1E;
     }
     .audio-unlock-overlay--dark .audio-unlock-overlay__header,
-    .audio-unlock-overlay--dark .audio-unlock-overlay__body p {
+    .audio-unlock-overlay--dark .audio-unlock-overlay__body p,
+    .audio-unlock-overlay--dark .audio-unlock-overlay__badge-text {
         color: rgba(226, 226, 230, 0.9);
+    }
+    .audio-unlock-overlay--dark .audio-unlock-overlay__icon {
+        color: rgba(226, 226, 230, 0.9);
+        border-color: rgba(226, 226, 230, 0.9);
+    }
+    .audio-unlock-overlay--dark .audio-unlock-overlay__icon {
+        animation-name: audio-unlock-pulse-dark;
+    }
+    @@keyframes audio-unlock-pulse-dark {
+        0% { box-shadow: 0 0 0 0 rgba(226, 226, 230, 0.22); }
+        100% { box-shadow: 0 0 0 14px rgba(226, 226, 230, 0); }
     }
     .audio-unlock-overlay--dark .audio-unlock-overlay__button {
         color: rgba(226, 226, 230, 0.9);

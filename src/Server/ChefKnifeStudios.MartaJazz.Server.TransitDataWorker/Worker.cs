@@ -473,7 +473,13 @@ public class Worker(
                         {
                             var currentDistM = routeCumDist[snapValue.Index];
                             CrossingBaseline? baseline = baselineMap.TryGetValue(vehicleId, out var b) ? b : null;
-                            var detected = CrossingDetector.Detect(vehicleId, routeJoinKey, currentDistM, routeTriggers, ref baseline);
+                            // Stamp crossings with the RESOLVED join key (short-name-based), the same
+                            // value the nearest-point records carry and the client's RouteItems /
+                            // SelectedRouteJoinKeys use. The raw local `routeJoinKey` is the GTFS-RT
+                            // Trip.RouteId, which differs from JoinKey whenever a short name exists —
+                            // stamping that made the client's route-filter gate never match, so tone /
+                            // checkpoint-pulse filtering silently broke for those agencies.
+                            var detected = CrossingDetector.Detect(vehicleId, nearest.RouteJoinKey, currentDistM, routeTriggers, ref baseline);
                             baselineMap[vehicleId] = baseline;
                             crossingRecords.AddRange(detected);
                         }

@@ -15,6 +15,24 @@
 
 let _synthModule = null;
 
+// Live route-filter snapshot, pushed from C# whenever the selection/hover changes. null means
+// "no filter — everything passes". A non-null Set holds the effective route keys (selection ∪
+// hover). Timers re-check THIS at fire time, so deselecting a route silences its already-scheduled
+// crossings within the frame instead of after the ~10s scheduling horizon drains.
+let _activeFilter = null;
+
+// C# pushes the current effective filter here on every selection/hover change (and at dispatch).
+// Pass null/empty to clear the filter (all routes pass).
+export function setActiveFilter(keys) {
+    _activeFilter = (keys && keys.length > 0) ? new Set(keys) : null;
+}
+
+// A crossing is allowed to fire iff there is no active filter or its route is in the filter.
+// Evaluated at FIRE time against the live _activeFilter, not at schedule time.
+function _passesFilter(routeJoinKey) {
+    return _activeFilter === null || _activeFilter.has(routeJoinKey);
+}
+
 // Lazily import the transit-synth ES module once; reused across batches. ChefMap is a global
 // (window.ChefMap), so no import needed for pulse/trail.
 async function _getSynth() {
@@ -30,6 +48,11 @@ async function _getSynth() {
 // Fire one crossing's three effects together. Duration is resolved in-JS (no interop round-trip)
 // only when the trail is actually going to be drawn.
 async function _fireOne(elementId, c, flags, synth) {
+    // Re-check the live route filter at fire time. A crossing scheduled up to a cycle ago must
+    // NOT fire if its route has since been deselected — this is what makes filter changes take
+    // effect immediately instead of after the scheduling horizon drains (~10s).
+    if (!_passesFilter(c.routeJoinKey)) return;
+
     if (flags.checkpointsVisible && window.ChefMap) {
         try { window.ChefMap.pulseCheckpoint(elementId, c.routeJoinKey, c.triggerIndex, c.alongDistanceM); } catch (_) { }
     }
