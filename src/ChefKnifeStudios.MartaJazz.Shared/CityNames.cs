@@ -6,6 +6,7 @@ public static class CityNames
     public const string Wmata = "wmata";
     public const string Mbta = "mbta";
     public const string Nymta = "nymta";
+    public const string Ttc = "ttc";
 }
 
 public static class HubMethods

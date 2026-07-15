@@ -25,6 +25,9 @@
             <MatListItem>
                 <MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked"  Disabled="@(CurrentCity == CityNames.Wmata)" />
             </MatListItem>
+            <MatListItem>
+                <MatButton Label="Toronto, ON" Mini="true" @onclick="HandleTtcClicked" Disabled="@(CurrentCity == CityNames.Ttc)" />
+            </MatListItem>
         </MatList>
     </MatMenu>
 </div>
@@ -54,6 +57,11 @@
     async Task HandleNymtaClicked()
     {
         await JS.InvokeVoidAsync("eval", $"location.hash='nymta';location.reload()");
+    }
+
+    async Task HandleTtcClicked()
+    {
+        await JS.InvokeVoidAsync("eval", $"location.hash='ttc';location.reload()");
     }
 
     MatFAB Button2;
