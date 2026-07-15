@@ -207,6 +207,18 @@
   <data name="MbtaOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real MBTA vehicle, pulled live and turned into sound. Buses and trains — including the Red, Orange, and Blue lines — move through Greater Boston in real time, and the map plays what they're doing right now.</value>
   </data>
+  <data name="TtcAudioOverlayHeader" xml:space="preserve">
+    <value>TTC - Toronto, ON, Canada</value>
+  </data>
+  <data name="TtcAudioOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real bus or streetcar. Hundreds of them, threading a city built on a grid until the ravines cut through it. They follow King and Queen and Dundas and Spadina — the streetcar lines Toronto never gave up — and Eglinton and Jane and Bathurst further out, where the grid finally wins.</value>
+  </data>
+  <data name="TtcAudioOverlayParagraph2" xml:space="preserve">
+    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony rides low and steady, streetcar tracks worn into it like the rails themselves. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — turning onto Spadina, running the Queen line end to end, waiting out a light on King. Rush hour thickens the piece into something dense and overlapping; late at night it thins to a single streetcar bell in the quiet. What is playing right now has not played before.</value>
+  </data>
+  <data name="TtcAudioOverlayParagraph3" xml:space="preserve">
+    <value>Toronto runs the largest streetcar network in the Americas, and it still owns the old downtown lines outright. The subway draws its shape on the map but keeps its own counsel here — the surface is where this city actually speaks. This is the music inside that motion.</value>
+  </data>
   <data name="NymtaAudioOverlayHeader" xml:space="preserve">
     <value>NYCT - New York, NY, USA</value>
   </data>
@@ -222,11 +234,14 @@
   <data name="NymtaOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real NYCT subway train or bus, pulled live and turned into sound. Both systems move through New York City in real time, and the map plays what they're doing right now.</value>
   </data>
+  <data name="TtcOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real TTC vehicle, pulled live and turned into sound. Buses and streetcars move through Toronto in real time, and the map plays what they're doing right now.</value>
+  </data>
   <data name="AudioOverlayButton" xml:space="preserve">
     <value>Enter Experience</value>
   </data>
   <data name="AudioOverlayExperienceBadge" xml:space="preserve">
-    <value>Audio Experience</value>
+    <value>Turn Audio On</value>
   </data>
   <data name="SelectAllRoutes" xml:space="preserve">
     <value>Select all</value>
