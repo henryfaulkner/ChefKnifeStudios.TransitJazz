@@ -4,8 +4,6 @@ using MessagePack;
 
 namespace ChefKnifeStudios.MartaJazz.Shared.Events;
 
-public enum TransitMode { Bus = 0, Rail = 1 }
-
 /// <summary>
 /// SignalR event containing a batch of vehicles that moved to a different nearest route point.
 /// Emitted once per poll cycle by the V2 spatial reconciliation pass.
@@ -29,6 +27,7 @@ public sealed record RouteNearestPointBatchEvent(
     /// <param name="SpeedMetersPerSec">Vehicle speed from the GTFS-RT feed, if available.</param>
     /// <param name="Bearing">Vehicle bearing in degrees (0-360) from the GTFS-RT feed, if available.</param>
     /// <param name="IsStale">True when this record reflects an upstream GTFS-RT sample whose per-vehicle timestamp matches the prior observation — i.e. the feed delivered the same GPS reading twice. Clients should keep extrapolating from the last empirical speed but should NOT append this snap to their motion history.</param>
+    /// <param name="Category">The vehicle's per-city category key (e.g. "bus", "rail", "streetcar", "unknown"), classified by WebAPI from GTFS route_type and carried transitively through the Worker's route index.</param>
     [MessagePackObject]
     public sealed record RouteNearestPointRecord(
         [property: Key(0)] string VehicleId,
@@ -41,6 +40,6 @@ public sealed record RouteNearestPointBatchEvent(
         [property: Key(7)] float? SpeedMetersPerSec,
         [property: Key(8)] float? Bearing,
         [property: Key(9)] bool IsStale,
-        [property: Key(10)] TransitMode TransitMode = TransitMode.Bus
+        [property: Key(10)] string Category = "bus"
     );
 }

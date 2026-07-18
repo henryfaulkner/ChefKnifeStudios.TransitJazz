@@ -14,12 +14,7 @@
     color: #888;
 }
 
-.route-filters__buses {
-    display: flex;
-    flex-wrap: wrap;
-}
-
-.route-filters__rail {
+.route-filters__pills {
     display: flex;
     flex-wrap: wrap;
 }
@@ -31,8 +26,14 @@
     margin: 4px 0 2px;
 }
 
-.route-filters__section-header--rail {
+.route-filters__section:first-child .route-filters__section-header {
     margin-top: 0;
+}
+
+/* Neutral default for any category without bespoke styling (D10/D11) — same
+   appearance in both themes as the pre-044 rail/bus sections. */
+.route-filters__section[data-category] {
+    display: contents;
 }
 
 ::deep .route-filters__clear-btn {

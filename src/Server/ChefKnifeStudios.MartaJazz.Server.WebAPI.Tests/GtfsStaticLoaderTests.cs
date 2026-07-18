@@ -1,5 +1,4 @@
 using ChefKnifeStudios.MartaJazz.Server.WebAPI.GtfsStatic;
-using ChefKnifeStudios.MartaJazz.Shared.Events;
 using System.IO.Compression;
 using System.Text;
 using Xunit;
@@ -117,7 +116,7 @@ public class GtfsStaticLoaderTests
         var meta = GtfsStaticLoader.ParseRouteMetadata(archive);
 
         Assert.True(meta.ContainsKey("47"), "route 47 should be present");
-        var (_, color, textColor, _) = meta["47"];
+        var (_, color, textColor, _, _) = meta["47"];
 
         Assert.Equal("#FFC72C", color);
         Assert.Equal("#000000", textColor);
@@ -129,7 +128,7 @@ public class GtfsStaticLoaderTests
         using var archive = MakeZip("routes.txt", MbtaRoutesTxt);
         var meta = GtfsStaticLoader.ParseRouteMetadata(archive);
 
-        foreach (var (routeId, (_, color, textColor, _)) in meta)
+        foreach (var (routeId, (_, color, textColor, _, _)) in meta)
         {
             if (color is not null)
                 Assert.Matches(@"^#[0-9A-F]{3}([0-9A-F]{3})?$", color);
@@ -144,15 +143,15 @@ public class GtfsStaticLoaderTests
         using var archive = MakeZip("routes.txt", MbtaRoutesTxt);
         var meta = GtfsStaticLoader.ParseRouteMetadata(archive);
 
-        var (shuttleName, shuttleColor, _, shuttleMode) = meta["Shuttle-ForestHillsJackson"];
+        var (shuttleName, shuttleColor, _, shuttleCategory, _) = meta["Shuttle-ForestHillsJackson"];
         Assert.Equal("Orange Line Shuttle", shuttleName);
         Assert.Equal("#FFC72C", shuttleColor);
-        Assert.Equal(TransitMode.Bus, shuttleMode);
+        Assert.Equal("bus", shuttleCategory);
 
-        var (_, kingstonColor, kingstonText, kingstonMode) = meta["CR-Kingston"];
+        var (_, kingstonColor, kingstonText, kingstonCategory, _) = meta["CR-Kingston"];
         Assert.Equal("#80276C", kingstonColor);
         Assert.Equal("#FFFFFF", kingstonText);
-        Assert.Equal(TransitMode.Rail, kingstonMode);
+        Assert.Equal("rail", kingstonCategory);
     }
 
     // ── ParseRouteMetadata — MARTA fixture ───────────────────────────────────
@@ -171,11 +170,11 @@ public class GtfsStaticLoaderTests
         using var archive = MakeZip("routes.txt", MartaRoutesTxt);
         var meta = GtfsStaticLoader.ParseRouteMetadata(archive);
 
-        var (name, color, textColor, mode) = meta["110"];
+        var (name, color, textColor, category, _) = meta["110"];
         Assert.Equal("110", name);
         Assert.Equal("#0E6B4A", color);
         Assert.Equal("#FFFFFF", textColor);
-        Assert.Equal(TransitMode.Bus, mode);
+        Assert.Equal("bus", category);
     }
 
     [Fact]
@@ -184,7 +183,7 @@ public class GtfsStaticLoaderTests
         using var archive = MakeZip("routes.txt", MartaRoutesTxt);
         var meta = GtfsStaticLoader.ParseRouteMetadata(archive);
 
-        var (_, color, textColor, _) = meta["104"];
+        var (_, color, textColor, _, _) = meta["104"];
         Assert.Null(color);
         Assert.Null(textColor);
     }
@@ -195,7 +194,7 @@ public class GtfsStaticLoaderTests
         using var archive = MakeZip("routes.txt", MartaRoutesTxt);
         var meta = GtfsStaticLoader.ParseRouteMetadata(archive);
 
-        foreach (var (_, (_, color, textColor, _)) in meta)
+        foreach (var (_, (_, color, textColor, _, _)) in meta)
         {
             if (color is not null)
                 Assert.Matches(@"^#[0-9A-F]{3}([0-9A-F]{3})?$", color);
@@ -221,9 +220,9 @@ public class GtfsStaticLoaderTests
         {
             ["shapeA"] = [(40.80, -73.90, 0), (40.81, -73.91, 1)]
         };
-        var metaA = new Dictionary<string, (string?, string?, string?, TransitMode)>
+        var metaA = new Dictionary<string, (string?, string?, string?, string, int)>
         {
-            ["41"] = ("Bx41", null, null, TransitMode.Bus)
+            ["41"] = ("Bx41", null, null, "bus", 3)
         };
 
         // Zip B (MTA Bus Company): a DIFFERENT route also happens to use route_id "41".
@@ -232,9 +231,9 @@ public class GtfsStaticLoaderTests
         {
             ["shapeB"] = [(40.60, -73.95, 0), (40.61, -73.96, 1)]
         };
-        var metaB = new Dictionary<string, (string?, string?, string?, TransitMode)>
+        var metaB = new Dictionary<string, (string?, string?, string?, string, int)>
         {
-            ["41"] = ("BX41", null, null, TransitMode.Bus)
+            ["41"] = ("BX41", null, null, "bus", 3)
         };
 
         var featuresA = GtfsStaticLoader.BuildZipRouteFeatures("nymta", routeToShapeA, shapesA, metaA);
@@ -257,7 +256,7 @@ public class GtfsStaticLoaderTests
         {
             ["shapeX"] = [(40.0, -74.0, 0), (40.01, -74.01, 1)]
         };
-        var meta = new Dictionary<string, (string?, string?, string?, TransitMode)>();
+        var meta = new Dictionary<string, (string?, string?, string?, string, int)>();
 
         var features = GtfsStaticLoader.BuildZipRouteFeatures("nymta", routeToShape, shapes, meta);
 
@@ -280,10 +279,10 @@ public class GtfsStaticLoaderTests
             ["shapeA"] = [(40.0, -74.0, 0), (40.01, -74.01, 1)],
             ["shapeB"] = [(41.0, -75.0, 0), (41.01, -75.01, 1)]
         };
-        var meta = new Dictionary<string, (string?, string?, string?, TransitMode)>
+        var meta = new Dictionary<string, (string?, string?, string?, string, int)>
         {
-            ["41-north"] = ("41", null, null, TransitMode.Bus),
-            ["41-south"] = ("41", null, null, TransitMode.Bus)
+            ["41-north"] = ("41", null, null, "bus", 3),
+            ["41-south"] = ("41", null, null, "bus", 3)
         };
 
         var features = GtfsStaticLoader.BuildZipRouteFeatures("marta", routeToShape, shapes, meta);

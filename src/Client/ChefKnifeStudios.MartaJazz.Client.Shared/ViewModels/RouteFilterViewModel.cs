@@ -17,24 +17,25 @@ public class RouteItem
     public string Label { get; init; }
     public string Color { get; init; }
     public bool IsSelected { get; set; }
-    public TransitMode Mode { get; init; }
+    public string Category { get; init; }
+    public int RouteType { get; init; }
 }
 
 public interface IRouteFilterViewModel : IViewModel, IDisposable
 {
     IEnumerable<RouteItem> RouteItems { get; }
     void SelectRoute(RouteItem routeItem);
-    void SelectAll(TransitMode mode);
-    void ClearSelection(TransitMode mode);
+    void SelectAll(string category);
+    void ClearSelection(string category);
     void SetHoveredRoute(RouteItem? routeItem);
     public bool HasSelection { get; }
-    bool HasSelectionFor(TransitMode mode);
+    bool HasSelectionFor(string category);
     public bool IsSingleSelection { get; }
     public string? SelectedRouteJoinKey { get; }
     public IReadOnlyCollection<string> SelectedRouteJoinKeys { get; }
     public string? HoveredRouteJoinKey { get; }
-    public int ActiveBusCount { get; }
-    public int ActiveRailCount { get; }
+    public IReadOnlyList<string> CategoryOrder { get; }
+    public IReadOnlyDictionary<string, int> ActiveCountsByCategory { get; }
 }
 
 public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
@@ -47,13 +48,13 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     IEnumerable<RouteItem> _routeItems = [];
 
     [ObservableProperty]
-    int _activeBusCount;
-
-    [ObservableProperty]
-    int _activeRailCount;
+    IReadOnlyDictionary<string, int> _activeCountsByCategory = new Dictionary<string, int>(StringComparer.Ordinal);
 
     [ObservableProperty]
     string? _hoveredRouteJoinKey;
+
+    IReadOnlyList<string> _categoryOrder = [];
+    public IReadOnlyList<string> CategoryOrder => _categoryOrder;
 
     readonly ILogger<RouteFilterViewModel> _logger;
     readonly IToastService _toastService;
@@ -64,8 +65,8 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     // the running count reflects all known vehicles, not just the ones that moved this cycle.
     // An empty/all-stale batch adds nothing, so the count holds its last value.
     readonly Dictionary<string, HashSet<string>> _routeVehicles = new(StringComparer.Ordinal);
-    // Tracks which vehicle IDs are rail so counts can be split without re-examining route names.
-    readonly HashSet<string> _railVehicleIds = new(StringComparer.Ordinal);
+    // vehicleId → category, so counts can be split per category without re-examining route names.
+    readonly Dictionary<string, string> _vehicleCategory = new(StringComparer.Ordinal);
     // vehicleId → consecutive batches in which the vehicle was absent from the feed. Reset to 0
     // every batch the vehicle appears in (stale OR live — a stale record still proves it's in the
     // feed). Once a vehicle is absent this many batches in a row it's evicted from the counts, so
@@ -123,8 +124,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 if (!_routeVehicles.TryGetValue(record.RouteJoinKey, out var vehicles))
                     _routeVehicles[record.RouteJoinKey] = vehicles = new HashSet<string>(StringComparer.Ordinal);
                 changed |= vehicles.Add(record.VehicleId);
-                if (record.TransitMode == TransitMode.Rail)
-                    _railVehicleIds.Add(record.VehicleId);
+                _vehicleCategory[record.VehicleId] = record.Category;
             }
         }
 
@@ -175,9 +175,11 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
         var evictSet = new HashSet<string>(toEvict, StringComparer.Ordinal);
         foreach (var vehicles in _routeVehicles.Values)
             vehicles.RemoveWhere(evictSet.Contains);
-        _railVehicleIds.RemoveWhere(evictSet.Contains);
         foreach (var vehicleId in toEvict)
+        {
+            _vehicleCategory.Remove(vehicleId);
             _vehicleAbsenceBatches.Remove(vehicleId);
+        }
 
         return true;
     }
@@ -207,33 +209,47 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             ? effectiveIds.SelectMany(id => _routeVehicles.TryGetValue(id, out var v) ? v : [])
             : _routeVehicles.Values.SelectMany(v => v);
 
-        int busCount = 0, railCount = 0;
+        // Freshly-built and reassigned (never mutated in place) — a mutated dict
+        // would not raise PropertyChanged, leaving TransitRunningLabel stale.
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var id in vehicleIds)
         {
-            if (_railVehicleIds.Contains(id)) railCount++;
-            else busCount++;
+            if (!_vehicleCategory.TryGetValue(id, out var category)) continue;
+            counts[category] = counts.GetValueOrDefault(category) + 1;
         }
 
-        ActiveBusCount = busCount;
-        ActiveRailCount = railCount;
+        ActiveCountsByCategory = counts;
     }
 
     void BuildRouteItems()
     {
         var previouslySelected = SelectedRouteJoinKeys;
 
-        RouteItems = _applicationViewModel.RouteShapes
+        var shapes = _applicationViewModel.RouteShapes
             .Select(x => x.Value)
             .Where(x => !string.IsNullOrEmpty(x.Properties.RouteShortName) || !string.IsNullOrEmpty(x.Properties.RouteId))
+            .ToList();
+
+        RouteItems = shapes
             .Select(x => new RouteItem
             {
                 RouteJoinKey = x.Properties.JoinKey,
                 Label = x.Properties.JoinKey,
                 Color = IsVisibleColor(x.Properties.Color) ? x.Properties.Color! : "#CC0000",
                 IsSelected = previouslySelected.Contains(x.Properties.JoinKey),
-                Mode = x.Properties.Mode,
+                Category = x.Properties.Category,
+                RouteType = x.Properties.RouteType,
             })
             .OrderByDescending(x => _routeVehicles.TryGetValue(x.RouteJoinKey, out var v) ? v.Count : 0)
+            .ToList();
+
+        // Display order: ascending min(RouteType) per category, ordinal tie-break (D8).
+        _categoryOrder = shapes
+            .GroupBy(x => x.Properties.Category, StringComparer.Ordinal)
+            .Select(g => (Category: g.Key, MinRouteType: g.Min(x => x.Properties.RouteType)))
+            .OrderBy(g => g.MinRouteType)
+            .ThenBy(g => g.Category, StringComparer.Ordinal)
+            .Select(g => g.Category)
             .ToList();
 
         _logger.LogDebug("RouteFilterViewModel.BuildRouteItems: built {Count} route items", RouteItems.Count());
@@ -250,24 +266,25 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 Label = x.Label,
                 Color = x.Color,
                 IsSelected = x.RouteJoinKey == routeItem.RouteJoinKey ? !x.IsSelected : x.IsSelected,
-                Mode = x.Mode,
+                Category = x.Category,
+                RouteType = x.RouteType,
             })
             .ToList();
         RecomputeActiveTransitCounts();
     }
 
-    public void SelectAll(TransitMode mode)
+    public void SelectAll(string category)
     {
         RouteItems = RouteItems
-            .Select(x => new RouteItem { RouteJoinKey = x.RouteJoinKey, Label = x.Label, Color = x.Color, IsSelected = x.Mode == mode ? true : x.IsSelected, Mode = x.Mode, })
+            .Select(x => new RouteItem { RouteJoinKey = x.RouteJoinKey, Label = x.Label, Color = x.Color, IsSelected = x.Category == category ? true : x.IsSelected, Category = x.Category, RouteType = x.RouteType, })
             .ToList();
         RecomputeActiveTransitCounts();
     }
 
-    public void ClearSelection(TransitMode mode)
+    public void ClearSelection(string category)
     {
         RouteItems = RouteItems
-            .Select(x => new RouteItem { RouteJoinKey = x.RouteJoinKey, Label = x.Label, Color = x.Color, IsSelected = x.Mode == mode ? false : x.IsSelected, Mode = x.Mode, })
+            .Select(x => new RouteItem { RouteJoinKey = x.RouteJoinKey, Label = x.Label, Color = x.Color, IsSelected = x.Category == category ? false : x.IsSelected, Category = x.Category, RouteType = x.RouteType, })
             .ToList();
         RecomputeActiveTransitCounts();
     }
@@ -287,7 +304,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 
     public bool HasSelection => RouteItems.Any(x => x.IsSelected);
 
-    public bool HasSelectionFor(TransitMode mode) => RouteItems.Any(x => x.IsSelected && x.Mode == mode);
+    public bool HasSelectionFor(string category) => RouteItems.Any(x => x.IsSelected && x.Category == category);
 
     public bool IsSingleSelection => SelectedRouteJoinKeys.Count == 1;
 

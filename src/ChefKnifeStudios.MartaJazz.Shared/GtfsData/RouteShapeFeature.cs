@@ -1,5 +1,3 @@
-using ChefKnifeStudios.MartaJazz.Shared.Events;
-
 namespace ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 
 public sealed record RouteShapeFeature(
@@ -18,7 +16,8 @@ public sealed record RouteShapeProperties(
     string? RouteShortName,
     string? Color,
     string? TextColor,
-    TransitMode Mode = TransitMode.Bus,   // from GTFS route_type
+    string Category = "bus",   // from GTFS route_type, via WebAPI's per-city classifier
+    int RouteType = 3,         // raw GTFS route_type; drives client category display order
     string? City = null)
 {
     /// <summary>

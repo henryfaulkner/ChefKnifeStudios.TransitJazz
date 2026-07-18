@@ -495,7 +495,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                     speed = r.SpeedMetersPerSec,
                     bearing = r.Bearing,
                     isStale = r.IsStale,
-                    transitMode = r.TransitMode.ToString().ToLowerInvariant()
+                    category = r.Category
                 });
             }
         }

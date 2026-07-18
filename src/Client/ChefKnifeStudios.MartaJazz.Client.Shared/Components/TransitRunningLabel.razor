@@ -11,21 +11,17 @@
 @inject IStringLocalizer<RouteFilterResources> Loc
 
 <div class="transit-running-label @(_isDark ? "transit-running-label--dark" : "")">
-    @if (RouteFilterViewModel.ActiveRailCount > 0)
+    @foreach (var category in RouteFilterViewModel.CategoryOrder)
     {
-        <div class="transit-running-label__row">
-            <MatBody2 class="transit-running-label__icon transit-running-label__icon--rail"></MatBody2>
-            <MatBody2 class="transit-running-label__count">@RouteFilterViewModel.ActiveRailCount</MatBody2>
-            <MatBody2 class="transit-running-label__text">@Loc["NumTrainsRunning"]</MatBody2>
-        </div>
-    }
-    @if (RouteFilterViewModel.ActiveBusCount > 0)
-    {
-        <div class="transit-running-label__row">
-            <MatBody2 class="transit-running-label__icon transit-running-label__icon--bus"></MatBody2>
-            <MatBody2 class="transit-running-label__count">@RouteFilterViewModel.ActiveBusCount</MatBody2>
-            <MatBody2 class="transit-running-label__text">@Loc["NumBusesRunning"]</MatBody2>
-        </div>
+        var count = RouteFilterViewModel.ActiveCountsByCategory.GetValueOrDefault(category);
+        @if (count > 0)
+        {
+            <div class="transit-running-label__row">
+                <MatBody2 class="transit-running-label__icon" data-category="@category"></MatBody2>
+                <MatBody2 class="transit-running-label__count">@count</MatBody2>
+                <MatBody2 class="transit-running-label__text">@RunningNoun(category)</MatBody2>
+            </div>
+        }
     }
 </div>
 
@@ -52,12 +48,21 @@
         border-radius: 64px;
     }
 
-    .transit-running-label__icon--rail {
+    /* Neutral default for any category without bespoke styling (D11) */
+    .transit-running-label__icon[data-category] {
+        background-color: #616161;
+    }
+
+    .transit-running-label__icon[data-category="rail"] {
         background-color: #1a237e;
     }
 
-    .transit-running-label__icon--bus {
+    .transit-running-label__icon[data-category="bus"] {
         background-color: darkgreen;
+    }
+
+    .transit-running-label__icon[data-category="streetcar"] {
+        background-color: #b71c1c;
     }
 
     .transit-running-label__count, .transit-running-label__text {
@@ -71,12 +76,20 @@
         color: rgba(226, 226, 230, 0.9);
     }
 
-    .transit-running-label--dark .transit-running-label__icon--rail {
+    .transit-running-label--dark .transit-running-label__icon[data-category] {
+        background-color: #9e9e9e;
+    }
+
+    .transit-running-label--dark .transit-running-label__icon[data-category="rail"] {
         background-color: #7986cb;
     }
 
-    .transit-running-label--dark .transit-running-label__icon--bus {
+    .transit-running-label--dark .transit-running-label__icon[data-category="bus"] {
         background-color: #66bb6a;
+    }
+
+    .transit-running-label--dark .transit-running-label__icon[data-category="streetcar"] {
+        background-color: #e57373;
     }
 </style>
 
@@ -101,8 +114,16 @@
 
     void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(IRouteFilterViewModel.ActiveBusCount) or nameof(IRouteFilterViewModel.ActiveRailCount))
+        if (e.PropertyName is nameof(IRouteFilterViewModel.ActiveCountsByCategory))
             InvokeAsync(StateHasChanged);
+    }
+
+    string RunningNoun(string category)
+    {
+        var noun = Loc[$"RunningNoun_{category}"];
+        return noun.ResourceNotFound
+            ? string.Format(Loc["VehiclesRunningTemplate"], Loc[category])
+            : noun.Value;
     }
 
     public void Dispose()

@@ -29,8 +29,8 @@ public class Worker(
     readonly string _batchOutputDir = Path.Combine(AppContext.BaseDirectory, "event-batches");
 
     Dictionary<string, IReadOnlyDictionary<string, RoutePoint[]>> _routeIndex = new(StringComparer.OrdinalIgnoreCase);
-    // per-city routeJoinKey→TransitMode, built from GTFS route_type at static-data load time
-    Dictionary<string, IReadOnlyDictionary<string, TransitMode>> _routeMode = new(StringComparer.OrdinalIgnoreCase);
+    // per-city routeJoinKey→category, built from the WebAPI-classified shape catalog at static-data load time
+    Dictionary<string, IReadOnlyDictionary<string, string>> _routeMode = new(StringComparer.OrdinalIgnoreCase);
     // per-city routeJoinKey→cumulative-distance array (parallel to _routeIndex)
     Dictionary<string, IReadOnlyDictionary<string, double[]>> _routeCumDist = new(StringComparer.OrdinalIgnoreCase);
     // per-city routeJoinKey→trigger points (built from shared TriggerPointGenerator)
@@ -184,13 +184,13 @@ public class Worker(
     // Partition a flat list of shapes into per-city indexes using RouteShapeProperties.City.
     // A single HTTP call to /gtfs/routes/shapes returns all cities (INV-S2, Q4).
     (Dictionary<string, IReadOnlyDictionary<string, RoutePoint[]>> index,
-     Dictionary<string, IReadOnlyDictionary<string, TransitMode>> mode,
+     Dictionary<string, IReadOnlyDictionary<string, string>> mode,
      Dictionary<string, IReadOnlyDictionary<string, double[]>> cumDist,
      Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<TriggerPoint>>> triggerPoints)
         BuildRouteIndex(List<RouteShapeFeature> shapes)
     {
         var perCityPoints = new Dictionary<string, Dictionary<string, List<RoutePoint>>>(StringComparer.OrdinalIgnoreCase);
-        var perCityMode = new Dictionary<string, Dictionary<string, TransitMode>>(StringComparer.OrdinalIgnoreCase);
+        var perCityMode = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
         // also need per-city per-route raw coords for cumDist + triggerPoint build
         var perCityCoords = new Dictionary<string, Dictionary<string, List<double[]>>>(StringComparer.OrdinalIgnoreCase);
 
@@ -201,7 +201,7 @@ public class Worker(
             if (!perCityPoints.TryGetValue(cityName, out var routeGroups))
                 perCityPoints[cityName] = routeGroups = new Dictionary<string, List<RoutePoint>>();
             if (!perCityMode.TryGetValue(cityName, out var modeMap))
-                perCityMode[cityName] = modeMap = new Dictionary<string, TransitMode>();
+                perCityMode[cityName] = modeMap = new Dictionary<string, string>();
             if (!perCityCoords.TryGetValue(cityName, out var coordGroups))
                 perCityCoords[cityName] = coordGroups = new Dictionary<string, List<double[]>>();
 
@@ -220,7 +220,7 @@ public class Worker(
                 coordList.Add(coord); // [lon, lat]
             }
 
-            modeMap[key] = shape.Properties.Mode;
+            modeMap[key] = shape.Properties.Category;
 
             // Alias raw route_id → primary key so GTFS-RT lookups hit regardless of which value
             // the agency sends (e.g. MARTA sends short name "95"; WMATA sends route_id "RED").
@@ -229,7 +229,7 @@ public class Worker(
             {
                 routeGroups.TryAdd(rawId, points);
                 coordGroups.TryAdd(rawId, coordList);
-                modeMap.TryAdd(rawId, shape.Properties.Mode);
+                modeMap.TryAdd(rawId, shape.Properties.Category);
             }
         }
 
@@ -241,7 +241,7 @@ public class Worker(
 
         var modeResult = perCityMode.ToDictionary(
             kvp => kvp.Key,
-            kvp => (IReadOnlyDictionary<string, TransitMode>)kvp.Value,
+            kvp => (IReadOnlyDictionary<string, string>)kvp.Value,
             StringComparer.OrdinalIgnoreCase);
 
         // Build cumDist and triggerPoints for each city/route
@@ -332,11 +332,17 @@ public class Worker(
         return map;
     }
 
+    // The seam a route-join failure falls back to "unknown", never "bus" (D6, FR-005,
+    // SC-006) — an unmatched route is a visible data-quality signal, not silently
+    // absorbed into the bus count. Extracted so both call sites below share one rule.
+    internal static string ResolveCategory(IReadOnlyDictionary<string, string>? categoryMap, string routeJoinKey) =>
+        categoryMap != null && categoryMap.TryGetValue(routeJoinKey, out var category) ? category : "unknown";
+
     async Task<CityTickResult> ProcessSpatialReconciliationAsync(
         ITransitCity city,
         FeedMessage feed,
         IReadOnlyDictionary<string, RoutePoint[]> index,
-        IReadOnlyDictionary<string, TransitMode>? modeMap,
+        IReadOnlyDictionary<string, string>? modeMap,
         CancellationToken ct)
     {
         try
@@ -412,7 +418,7 @@ public class Worker(
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             isStale,
-                            modeMap != null && modeMap.TryGetValue(routeJoinKey, out var m) ? m : TransitMode.Bus
+                            ResolveCategory(modeMap, routeJoinKey)
                         ));
 
                         if (isStale)
@@ -445,7 +451,7 @@ public class Worker(
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             false,
-                            modeMap != null && modeMap.TryGetValue(routeJoinKey, out var m2) ? m2 : TransitMode.Bus
+                            ResolveCategory(modeMap, routeJoinKey)
                         ));
                         movedCount++;
                     }

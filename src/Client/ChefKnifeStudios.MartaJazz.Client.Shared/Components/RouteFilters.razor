@@ -28,40 +28,35 @@
 }
 
 @{
-    RenderFragment<TransitMode> SectionLabel = mode =>
-        @<div class="route-filters__section-header @(mode == TransitMode.Rail ? "route-filters__section-header--rail" : "")">
-            <MatSubtitle1 Class="route-filters__section-label route-filters__section-label--clickable" @onclick="() => HandleSelectAll(mode)">@Loc[mode == TransitMode.Rail ? "Rail" : "Buses"]</MatSubtitle1>
-            @if (RouteFilterViewModel.HasSelectionFor(mode))
+    RenderFragment<string> SectionLabel = category =>
+        @<div class="route-filters__section-header">
+            <MatSubtitle1 Class="route-filters__section-label route-filters__section-label--clickable" @onclick="() => HandleSelectAll(category)">@Loc[category]</MatSubtitle1>
+            @if (RouteFilterViewModel.HasSelectionFor(category))
             {
                 <MatIconButton
                     Icon="close"
                     Class="route-filters__clear-btn"
-                    @onclick="() => HandleClearSelections(mode)"
+                    @onclick="() => HandleClearSelections(category)"
                 />
             }
         </div>;
 }
 
 <div class="route-filters @(_isDark ? "route-filters--dark" : "")">
-    @if (RouteFilterViewModel.RouteItems.Any(r => r.Mode == TransitMode.Rail))
+    @foreach (var category in RouteFilterViewModel.CategoryOrder)
     {
-        @SectionLabel(TransitMode.Rail)
-        <div class="route-filters__rail">
-            @foreach (var routeItem in RouteFilterViewModel.RouteItems.Where(r => r.Mode == TransitMode.Rail))
-            {
-                @RoutePill(routeItem)
-            }
-        </div>
-    }
-    @if (RouteFilterViewModel.RouteItems.Any(r => r.Mode == TransitMode.Bus))
-    {
-        @SectionLabel(TransitMode.Bus)
-        <div class="route-filters__buses">
-            @foreach (var routeItem in RouteFilterViewModel.RouteItems.Where(r => r.Mode == TransitMode.Bus))
-            {
-                @RoutePill(routeItem)
-            }
-        </div>
+        @if (RouteFilterViewModel.RouteItems.Any(r => r.Category == category))
+        {
+            <div class="route-filters__section" data-category="@category">
+                @SectionLabel(category)
+                <div class="route-filters__pills" data-category="@category">
+                    @foreach (var routeItem in RouteFilterViewModel.RouteItems.Where(r => r.Category == category))
+                    {
+                        @RoutePill(routeItem)
+                    }
+                </div>
+            </div>
+        }
     }
 </div>
 

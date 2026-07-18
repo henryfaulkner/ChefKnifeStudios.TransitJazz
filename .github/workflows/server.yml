@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 044-dynamic-vehicle-categories]
 
 env:
   REGISTRY: chefknife.azurecr.io
