@@ -410,12 +410,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             {
                 routeJoinKey = kvp.Key,
                 color = kvp.Value.Properties?.Color ?? "#6b7280",
+                category = kvp.Value.Properties?.Category ?? "bus",
                 coordinates = kvp.Value.Geometry!.Coordinates
             })
             .ToArray();
 
         if (_map is not null)
-            await _map.AddAllRoutesAsync(payload);
+            await _map.AddAllRoutesAsync(payload, SettingsService.GetSettings().IsDarkModeEnabled);
 
         Logger.LogDebug("TransitMap.RenderRoutesAsync: route geometry push complete");
     }

@@ -51,9 +51,9 @@ public partial class Map : ComponentBase
         }
     }
 
-    public async Task AddAllRoutesAsync(object payload)
+    public async Task AddAllRoutesAsync(object payload, bool isDarkMode = false)
     {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.addAllRoutes", ElementId, payload); }
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.addAllRoutes", ElementId, payload, isDarkMode); }
         catch (Exception ex) { Logger.LogError(ex, "[Map] AddAllRoutes failed"); }
     }
 
