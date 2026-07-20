@@ -60,6 +60,12 @@ var datasetColumns = map[string]map[string]valueKind{
 		"crossing_baseline_cache_size":   kindNumeric,
 		"route_index_size":               kindNumeric,
 		"route_trigger_point_cache_size": kindNumeric,
+		// crossing-suppression attribution (feature 045, D3) — see
+		// specs/045-time-to-first-note/contracts/telemetry-schema.md
+		"crossings_suppressed_first_seen": kindNumeric,
+		"crossings_suppressed_delta_leq0": kindNumeric,
+		"crossings_suppressed_teleport":   kindNumeric,
+		"crossings_suppressed_transfer":   kindNumeric,
 	},
 }
 

@@ -14,7 +14,9 @@ public class TelemetryEventSchemaTests
         "time_taken_seconds", "health_ok", "tones_emitted", "vehicles_processed",
         "gc_heap_bytes", "process_working_set_bytes",
         "vehicle_state_cache_size", "crossing_baseline_cache_size",
-        "route_index_size", "route_trigger_point_cache_size"
+        "route_index_size", "route_trigger_point_cache_size",
+        "crossings_suppressed_first_seen", "crossings_suppressed_delta_leq0",
+        "crossings_suppressed_teleport", "crossings_suppressed_transfer"
     ];
 
     static TelemetryEvent PerCityCycleRow(DateTime now) => new()
@@ -33,7 +35,11 @@ public class TelemetryEventSchemaTests
         vehicle_state_cache_size = 120,
         crossing_baseline_cache_size = 120,
         route_index_size = 30,
-        route_trigger_point_cache_size = 60
+        route_trigger_point_cache_size = 60,
+        crossings_suppressed_first_seen = 2,
+        crossings_suppressed_delta_leq0 = 80,
+        crossings_suppressed_teleport = 1,
+        crossings_suppressed_transfer = 0
     };
 
     static TelemetryEvent FullCycleRow(DateTime now) => new()
@@ -52,11 +58,15 @@ public class TelemetryEventSchemaTests
         vehicle_state_cache_size = 120,
         crossing_baseline_cache_size = 120,
         route_index_size = 30,
-        route_trigger_point_cache_size = 60
+        route_trigger_point_cache_size = 60,
+        crossings_suppressed_first_seen = 2,
+        crossings_suppressed_delta_leq0 = 80,
+        crossings_suppressed_teleport = 1,
+        crossings_suppressed_transfer = 0
     };
 
     [Fact]
-    public async Task Schema_ContainsAllSeventeenColumns_WithContractNames()
+    public async Task Schema_ContainsAllExpectedColumns_WithContractNames()
     {
         var now = new DateTime(2026, 6, 4, 12, 0, 0, DateTimeKind.Utc);
         var rows = new List<TelemetryEvent> { PerCityCycleRow(now), FullCycleRow(now) };
@@ -88,6 +98,10 @@ public class TelemetryEventSchemaTests
         Assert.Equal(3.5, row.feed_freshness_seconds);
         Assert.Null(row.cities_processed_count);
         Assert.Null(row.cities_processed_csv);
+        Assert.Equal(2, row.crossings_suppressed_first_seen);
+        Assert.Equal(80, row.crossings_suppressed_delta_leq0);
+        Assert.Equal(1, row.crossings_suppressed_teleport);
+        Assert.Equal(0, row.crossings_suppressed_transfer);
     }
 
     [Fact]

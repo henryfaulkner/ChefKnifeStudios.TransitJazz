@@ -2,7 +2,7 @@ name: TransitJazz Client CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 045-time-to-first-note]
 
 jobs:
   build:
@@ -16,6 +16,11 @@ jobs:
 
       - name: Install WASM tools
         run: dotnet workload install wasm-tools
+
+      - name: Stamp TTFN probe version (feature 045)
+        run: |
+          sed -i "s/SET-PER-DEPLOY/${GITHUB_SHA::7}/" \
+            src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/transit-synth.js
 
       - name: Publish Blazor app
         run: |

@@ -37,5 +37,13 @@ public sealed record TelemetryEvent : IEventArgs
     public int?    crossing_baseline_cache_size { get; init; }    // summed on FullCycle
     public int?    route_index_size { get; init; }               // summed on FullCycle
     public int?    route_trigger_point_cache_size { get; init; }   // summed on FullCycle
+
+    // ── Crossing-suppression attribution (feature 045, D3) — PerCityCycle-only, summed on
+    // FullCycle. See specs/045-time-to-first-note/contracts/telemetry-schema.md — MUST stay
+    // in sync with tools/telemetry-mcp/internal/validate/validate.go's kindNumeric allow-list.
+    public int?    crossings_suppressed_first_seen { get; init; }   // summed on FullCycle
+    public int?    crossings_suppressed_delta_leq0 { get; init; }   // summed on FullCycle
+    public int?    crossings_suppressed_teleport { get; init; }     // summed on FullCycle
+    public int?    crossings_suppressed_transfer { get; init; }     // summed on FullCycle
 }
 #pragma warning restore IDE1006

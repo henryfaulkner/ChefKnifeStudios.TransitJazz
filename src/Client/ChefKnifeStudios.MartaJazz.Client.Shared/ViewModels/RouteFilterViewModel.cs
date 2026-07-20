@@ -253,6 +253,15 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             .Select(g => g.Category)
             .ToList();
 
+        // Counts may already have been seeded by the JoinCity replay BEFORE the shapes
+        // arrived (the SignalR connect and the shape fetch race at startup). That recompute
+        // fired while CategoryOrder was still empty, so TransitRunningLabel painted nothing —
+        // and nothing would repaint it until a future batch happened to add a NEW vehicle
+        // (the replay already seeded them all, so that can take minutes). Recompute now that
+        // categories exist: the fresh dict reassignment always raises PropertyChanged, which
+        // is the label's only re-render trigger.
+        RecomputeActiveTransitCounts();
+
         _logger.LogDebug("RouteFilterViewModel.BuildRouteItems: built {Count} route items", RouteItems.Count());
     }
 

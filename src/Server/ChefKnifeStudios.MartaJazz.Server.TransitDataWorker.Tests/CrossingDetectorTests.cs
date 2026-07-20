@@ -18,7 +18,7 @@ public class CrossingDetectorTests
         new TriggerPoint(4, 800),
     ];
 
-    static System.Collections.Generic.IReadOnlyList<RouteCrossingBatchEvent.RouteCrossingRecord> Detect(
+    static CrossingDetectResult Detect(
         string vehicleId, string routeJoinKey,
         double[] cumDist,
         System.Collections.Generic.IReadOnlyList<TriggerPoint> triggers,
@@ -34,7 +34,8 @@ public class CrossingDetectorTests
     {
         CrossingBaseline? baseline = null;
         var result = Detect("v1", "74", CumDist, TriggerPoints, ref baseline, snapIndex: 3);
-        Assert.Empty(result);
+        Assert.Empty(result.Records);
+        Assert.Equal(CrossingSuppressionReason.FirstSeen, result.Reason);
         Assert.NotNull(baseline);
     }
 
@@ -43,8 +44,10 @@ public class CrossingDetectorTests
     {
         CrossingBaseline? baseline = new CrossingBaseline("74", 200); // last crossed at 200m
         var result = Detect("v1", "74", CumDist, TriggerPoints, ref baseline, snapIndex: 3); // at 600m
-        Assert.Single(result);
-        Assert.Equal(2, result[0].TriggerIndex); // trigger at 400m (index 2)
+        Assert.Single(result.Records);
+        Assert.Equal(CrossingSuppressionReason.None, result.Reason);
+        Assert.Equal(2, result.Records[0].TriggerIndex); // trigger at 400m (index 2)
+        Assert.Equal(CrossingDirection.Forward, baseline!.Direction);
     }
 
     [Fact]
@@ -52,37 +55,43 @@ public class CrossingDetectorTests
     {
         CrossingBaseline? baseline = new CrossingBaseline("74", 100); // before any trigger
         var result = Detect("v1", "74", CumDist, TriggerPoints, ref baseline, snapIndex: 5); // at 1000m
-        Assert.Equal(2, result.Count);
-        Assert.Equal(2, result[0].TriggerIndex);
-        Assert.Equal(4, result[1].TriggerIndex);
+        Assert.Equal(2, result.Records.Count);
+        Assert.Equal(2, result.Records[0].TriggerIndex);
+        Assert.Equal(4, result.Records[1].TriggerIndex);
     }
 
     [Fact]
-    public void Backward_EmitsNothing()
-    {
-        CrossingBaseline? baseline = new CrossingBaseline("74", 600); // was at 600m
-        var result = Detect("v1", "74", CumDist, TriggerPoints, ref baseline, snapIndex: 1); // at 200m
-        Assert.Empty(result);
-    }
-
-    [Fact]
-    public void NoMovement_EmitsNothing()
+    public void NoMovement_EmitsNothing_ReasonDeltaLeqZero()
     {
         CrossingBaseline? baseline = new CrossingBaseline("74", 600);
         var result = Detect("v1", "74", CumDist, TriggerPoints, ref baseline, snapIndex: 3); // same 600m
-        Assert.Empty(result);
+        Assert.Empty(result.Records);
+        Assert.Equal(CrossingSuppressionReason.DeltaLeqZero, result.Reason);
     }
 
     [Fact]
     public void Teleport_Over2000m_EmitsNothing_ResetsBaseline()
     {
         CrossingBaseline? baseline = new CrossingBaseline("74", 0);
-        // CumDist[9] = 1800m, so teleport from 0 to 1800m = delta 1800 — not > 2000
-        // Make a custom scenario: large cumDist
         var bigCumDist = Enumerable.Range(0, 10).Select(i => (double)(i * 500)).ToArray(); // 0..4500m
         var result = CrossingDetector.Detect("v1", "74", bigCumDist[9], TriggerPoints, ref baseline); // at 4500m, delta=4500 > 2000
-        Assert.Empty(result);
+        Assert.Empty(result.Records);
+        Assert.Equal(CrossingSuppressionReason.Teleport, result.Reason);
         Assert.Equal(4500, baseline!.LastCrossedAlongDistanceM);
+        Assert.Equal(CrossingDirection.Unknown, baseline.Direction);
+    }
+
+    [Fact]
+    public void Teleport_NegativeOver2000m_EmitsNothing_NotReverseEmit()
+    {
+        // An out-and-back snap-flip can jump backward by more than the teleport threshold too —
+        // this MUST still hit Teleport, never a spurious reverse-emit (FR-007).
+        CrossingBaseline? baseline = new CrossingBaseline("74", 4500, CrossingDirection.Forward);
+        var result = CrossingDetector.Detect("v1", "74", 0, TriggerPoints, ref baseline); // delta = -4500
+        Assert.Empty(result.Records);
+        Assert.Equal(CrossingSuppressionReason.Teleport, result.Reason);
+        Assert.Equal(0, baseline!.LastCrossedAlongDistanceM);
+        Assert.Equal(CrossingDirection.Unknown, baseline.Direction);
     }
 
     [Fact]
@@ -90,7 +99,8 @@ public class CrossingDetectorTests
     {
         CrossingBaseline? baseline = new CrossingBaseline("74", 200); // was on route 74
         var result = CrossingDetector.Detect("v1", "9X", 600, TriggerPoints, ref baseline); // now on route 9X
-        Assert.Empty(result);
+        Assert.Empty(result.Records);
+        Assert.Equal(CrossingSuppressionReason.RouteTransfer, result.Reason);
         Assert.Equal("9X", baseline!.RouteJoinKey);
     }
 
@@ -99,7 +109,8 @@ public class CrossingDetectorTests
     {
         CrossingBaseline? baseline = new CrossingBaseline("74", 450); // already past trigger at 400m
         var result = Detect("v1", "74", CumDist, TriggerPoints, ref baseline, snapIndex: 3); // at 600m — between triggers
-        Assert.Empty(result);
+        Assert.Empty(result.Records);
+        Assert.Equal(CrossingSuppressionReason.None, result.Reason);
     }
 
     [Fact]
@@ -107,8 +118,8 @@ public class CrossingDetectorTests
     {
         CrossingBaseline? baseline = new CrossingBaseline("74", 200);
         var result = Detect("v1", "74", CumDist, TriggerPoints, ref baseline, snapIndex: 3);
-        Assert.Single(result);
-        Assert.Equal(TriggerPoints.Count, result[0].TotalTriggers);
+        Assert.Single(result.Records);
+        Assert.Equal(TriggerPoints.Count, result.Records[0].TotalTriggers);
     }
 
     [Fact]
@@ -116,34 +127,28 @@ public class CrossingDetectorTests
     {
         CrossingBaseline? baseline = new CrossingBaseline("74", 200);
         var result = Detect("v1", "74", CumDist, TriggerPoints, ref baseline, snapIndex: 3);
-        Assert.Single(result);
-        Assert.Equal("v1", result[0].VehicleId);
-        Assert.Equal("74", result[0].RouteJoinKey);
+        Assert.Single(result.Records);
+        Assert.Equal("v1", result.Records[0].VehicleId);
+        Assert.Equal("74", result.Records[0].RouteJoinKey);
     }
 
     [Fact]
     public void AlongDistanceM_EqualsCrossedTriggerDistance()
     {
-        // The record now carries each crossed checkpoint's ABSOLUTE along-route distance — a
-        // straight passthrough of the trigger point's AlongDistanceM, independent of the travel
-        // window or any spread. The client derives fire timing from this against the dot's own
-        // motion. Window 100→1000 crosses the triggers at 400m and 800m.
         CrossingBaseline? baseline = new CrossingBaseline("74", 100);
         var result = CrossingDetector.Detect("v1", "74", 1000, TriggerPoints, ref baseline);
-        Assert.Equal(2, result.Count);
-        Assert.Equal(400.0, result[0].AlongDistanceM, 4);
-        Assert.Equal(800.0, result[1].AlongDistanceM, 4);
+        Assert.Equal(2, result.Records.Count);
+        Assert.Equal(400.0, result.Records[0].AlongDistanceM, 4);
+        Assert.Equal(800.0, result.Records[1].AlongDistanceM, 4);
     }
 
     [Fact]
     public void AlongDistanceM_MonotonicallyIncreasingWithTriggerOrder()
     {
-        // Trigger points are distance-ordered, so emitted distances come out increasing — the
-        // ordering the client relies on to schedule a burst in true crossing order.
         CrossingBaseline? baseline = new CrossingBaseline("74", 0);
         var result = CrossingDetector.Detect("v1", "74", 1000, TriggerPoints, ref baseline);
-        Assert.Equal(2, result.Count);
-        Assert.True(result[0].AlongDistanceM < result[1].AlongDistanceM);
+        Assert.Equal(2, result.Records.Count);
+        Assert.True(result.Records[0].AlongDistanceM < result.Records[1].AlongDistanceM);
     }
 
     [Fact]
@@ -155,8 +160,83 @@ public class CrossingDetectorTests
         var triggers = new System.Collections.Generic.List<TriggerPoint> { new(2, 400), new(4, 800) };
         CrossingBaseline? baseline = new CrossingBaseline("74", 400);
         var result = CrossingDetector.Detect("v1", "74", 800, triggers, ref baseline);
-        Assert.Single(result);
-        Assert.Equal(800.0, result[0].AlongDistanceM, 4);
+        Assert.Single(result.Records);
+        Assert.Equal(800.0, result.Records[0].AlongDistanceM, 4);
+    }
+
+    // ── Reverse-direction emission (D4, feature 045) ────────────────────────────────────
+
+    [Fact]
+    public void Reverse_PastOneTrigger_EmitsOne_DescendingWindow()
+    {
+        // Vehicle was at 1000m, now at 600m: reverse window is [600, 1000) — trigger at 800m
+        // (index 4) is in range, trigger at 400m is not.
+        CrossingBaseline? baseline = new CrossingBaseline("74", 1000, CrossingDirection.Reverse);
+        var result = CrossingDetector.Detect("v1", "74", 600, TriggerPoints, ref baseline);
+        Assert.Single(result.Records);
+        Assert.Equal(CrossingSuppressionReason.None, result.Reason);
+        Assert.Equal(4, result.Records[0].TriggerIndex);
+        Assert.Equal(CrossingDirection.Reverse, baseline!.Direction);
+        Assert.Equal(600, baseline.LastCrossedAlongDistanceM);
+    }
+
+    [Fact]
+    public void Reverse_PastBothTriggers_EmitsDescendingTriggerOrder()
+    {
+        // Was at 1000m, now at 100m: reverse window [100, 1000) crosses both 800m and 400m —
+        // emitted in descending order (800 before 400) so the client fires them in true
+        // crossing order for this direction.
+        CrossingBaseline? baseline = new CrossingBaseline("74", 1000, CrossingDirection.Reverse);
+        var result = CrossingDetector.Detect("v1", "74", 100, TriggerPoints, ref baseline);
+        Assert.Equal(2, result.Records.Count);
+        Assert.Equal(4, result.Records[0].TriggerIndex); // 800m first
+        Assert.Equal(2, result.Records[1].TriggerIndex); // 400m second
+        Assert.True(result.Records[0].AlongDistanceM > result.Records[1].AlongDistanceM);
+    }
+
+    [Fact]
+    public void Reverse_FromUnknownDirection_StartsReversing()
+    {
+        // A freshly-seeded baseline (Direction == Unknown) moving backward should be treated
+        // as Reverse, not a turnaround (there's no prior Forward to turn around from).
+        CrossingBaseline? baseline = new CrossingBaseline("74", 1000, CrossingDirection.Unknown);
+        var result = CrossingDetector.Detect("v1", "74", 600, TriggerPoints, ref baseline);
+        Assert.Single(result.Records);
+        Assert.Equal(CrossingDirection.Reverse, baseline!.Direction);
+    }
+
+    [Fact]
+    public void TurnaroundForwardToReverse_EmitsNothingOnPivotTick()
+    {
+        CrossingBaseline? baseline = new CrossingBaseline("74", 600, CrossingDirection.Forward);
+        var result = CrossingDetector.Detect("v1", "74", 400, TriggerPoints, ref baseline); // delta = -200
+        Assert.Empty(result.Records);
+        Assert.Equal(CrossingSuppressionReason.None, result.Reason);
+        Assert.Equal(CrossingDirection.Reverse, baseline!.Direction);
+        Assert.Equal(400, baseline.LastCrossedAlongDistanceM);
+    }
+
+    [Fact]
+    public void TurnaroundReverseToForward_EmitsNothingOnPivotTick()
+    {
+        CrossingBaseline? baseline = new CrossingBaseline("74", 400, CrossingDirection.Reverse);
+        var result = CrossingDetector.Detect("v1", "74", 600, TriggerPoints, ref baseline); // delta = +200
+        Assert.Empty(result.Records);
+        Assert.Equal(CrossingSuppressionReason.None, result.Reason);
+        Assert.Equal(CrossingDirection.Forward, baseline!.Direction);
+        Assert.Equal(600, baseline.LastCrossedAlongDistanceM);
+    }
+
+    [Fact]
+    public void ForwardRegression_UnchangedAfterTurnaroundSupport()
+    {
+        // Sustained forward motion (no prior Reverse) still emits normally — regression guard
+        // for the turnaround-detection addition.
+        CrossingBaseline? baseline = new CrossingBaseline("74", 200, CrossingDirection.Forward);
+        var result = Detect("v1", "74", CumDist, TriggerPoints, ref baseline, snapIndex: 3); // at 600m
+        Assert.Single(result.Records);
+        Assert.Equal(2, result.Records[0].TriggerIndex);
+        Assert.Equal(CrossingDirection.Forward, baseline!.Direction);
     }
 
     // NOTE: the client owns crossing timing entirely, computing each fire delay from

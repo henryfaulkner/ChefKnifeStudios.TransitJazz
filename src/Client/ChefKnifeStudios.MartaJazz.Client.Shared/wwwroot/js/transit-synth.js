@@ -69,6 +69,27 @@
 
 let _tone = null;
 let _unlocked = false;
+
+// [TTFN] probe — window.TtfnProbe, mirrors the window.MemoryProbe idiom. Read-only
+// instrumentation for feature 045 (time-to-first-note); see specs/045-time-to-first-note/
+// contracts/ttfn-probe.md. `version` is replaced at WASM-publish time with the deploy
+// commit short-SHA (see .github/workflows) so [TTFN] lines are comparable across deploys —
+// left as the placeholder here is a build-pipeline bug, not expected behavior.
+const _ttfn = {
+    version: 'SET-PER-DEPLOY',
+    unlockAt: null,
+    firstTriggerAt: null,
+    firstAudibleAt: null,
+    droppedWhileLocked: 0,
+    noiseBedAt: null,
+};
+window.TtfnProbe = _ttfn;
+
+function _ttfnMarkUnlock() {
+    if (_ttfn.unlockAt !== null) return;
+    _ttfn.unlockAt = performance.now();
+    performance.mark('ttfn:unlock');
+}
 // Mirrors the C# SettingsBlade "audio enabled" toggle (AudioSettingChangedEventArgs), kept
 // current by setAudioEnabled on every toggle. This is the LIVE, fire-time mute gate for both
 // the continuous noise bed AND triggerNote — the crossing dispatcher captures an audioEnabled
@@ -267,6 +288,36 @@ export function setAudioEnabled(enabled) {
     }
 }
 
+// Kicks off instrumentForSlot for exactly the PROD_INSTRUMENTS slots (never the full
+// PALETTE — the 1.2-1.7GB RAM regression lever, see file header) so the MP3 fetch/decode/
+// reverb.generate() IR-build for the 3 shipped voices happen before the first crossing
+// arrives, not on its critical path (contracts/unlock-warming.md D2). Fire-and-forget —
+// callers must not await this, so it never delays overlay dismissal (Principle XI).
+//
+// EVICTED-BEFORE-FIRST-NOTE EDGE (FR-003, contracts/unlock-warming.md D2): a warmed slot
+// can be disposed by EvictInactiveRouteAudioAsync (TransitMap.razor.cs, after 3 absent
+// batches) before its route's first note plays. This is accepted, not pinned:
+// instrumentForSlot rebuilds transparently on the next triggerNote call (its cache lookup
+// misses and it re-fetches), so the first note for that route is still correct — merely
+// without the warm-time saving, i.e. no worse than pre-fix behavior.
+export function warmProdSamplers() {
+    const prodSlots = _slotIndicesForNames(PROD_INSTRUMENTS);
+    for (const slotIndex of prodSlots) {
+        instrumentForSlot(slotIndex);
+    }
+}
+
+// Shared by unlock() and the attachUnlockGesture handler (contracts/unlock-warming.md D1/D2):
+// builds the master bus (starting the ambient noise bed iff _audioEnabled) and fires off
+// prod-sampler warming, immediately after Tone.start() resolves. Idempotent via
+// getMasterBus's own `if (_masterBus) return` guard, so calling this from both unlock paths
+// (or a repeat call) never double-builds.
+function _warmAtUnlock(T) {
+    getMasterBus(T);
+    if (_ttfn.noiseBedAt === null) _ttfn.noiseBedAt = performance.now();
+    warmProdSamplers();
+}
+
 function buildSampleUrls(instrument, anchors) {
     const urls = {};
     for (const note of Object.keys(anchors)) {
@@ -339,18 +390,33 @@ export async function preload(routeIds) {
 // Attaches a one-shot native click listener to the unlock button so that
 // Tone.start() fires synchronously inside the gesture event, before Blazor's
 // async interop chain breaks the browser's autoplay trust window (iOS Safari).
+//
+// D6 (contracts/unlock-warming.md, FR-010/FR-011): the listener MUST be registered
+// BEFORE getTone() is awaited — a slow esm.sh load must not push the addEventListener
+// call past the click. The handler itself still awaits getTone()/T.start(), but that
+// promise chain resolves inside the browser's trusted-gesture window because it was
+// KICKED OFF synchronously from within the click handler, not from a prior await. Do not
+// re-add an await before addEventListener here (that reintroduces the iOS
+// permanent-silence bug this fixes — see discovery §2.5).
 export async function attachUnlockGesture(elementId) {
-    const T = await getTone();
     const el = document.getElementById(elementId);
     if (!el) return;
     function handler() {
         el.removeEventListener('click', handler);
-        T.start().then(() => {
-            _unlocked = true;
-            console.log('[TransitSynth] unlocked via gesture');
-        });
+        let toneModule;
+        getTone()
+            .then(T => { toneModule = T; return T.start(); })
+            .then(() => {
+                _unlocked = true;
+                _ttfnMarkUnlock();
+                _warmAtUnlock(toneModule);
+                console.log('[TransitSynth] unlocked via gesture');
+            });
     }
     el.addEventListener('click', handler);
+    // Warm the Tone.js import itself during overlay display so the handler's getTone()
+    // call above usually resolves instantly; harmless if the click races ahead of this.
+    getTone();
 }
 
 export async function unlock() {
@@ -358,6 +424,8 @@ export async function unlock() {
     const T = await getTone();
     await T.start();
     _unlocked = true;
+    _ttfnMarkUnlock();
+    _warmAtUnlock(T);
     console.log('[TransitSynth] unlocked');
 }
 
@@ -368,13 +436,20 @@ export function isUnlocked() {
 // triggerIndex and totalTriggers come from checkpoint-tracker; both default to
 // 0/1 so the C# interop path (which omits them) still plays without error.
 export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTriggers = 1) {
-    if (!_unlocked) return;
+    if (!_unlocked) {
+        // [TTFN] probe: counts notes that arrived before unlock. >0 by the time the first
+        // audible note plays means this was a dwell/steady-state unlock (notes were already
+        // queued); 0 means cold-start (first note ever seen was already past the gate).
+        _ttfn.droppedWhileLocked++;
+        return;
+    }
     // Live mute gate — read at FIRE time, not batch-capture time. The crossing dispatcher
     // schedules each note on a setTimeout up to a full cycle (~10s) out and closes over the
     // audioEnabled flag captured when the batch arrived; a mute that lands after scheduling
     // would otherwise still sound every already-queued note (the AudioFAB "not toggling"
     // symptom). _audioEnabled mirrors the live setting via setAudioEnabled on every toggle.
     if (!_audioEnabled) return;
+    if (_ttfn.firstTriggerAt === null) _ttfn.firstTriggerAt = performance.now();
     try {
         const { sampler, scale, durations } = await instrumentForSlot(_slotIndexForRoute(routeId));
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
@@ -384,6 +459,15 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
         const velocity = HUMANIZE_VELOCITY_MIN + Math.random() * (HUMANIZE_VELOCITY_MAX - HUMANIZE_VELOCITY_MIN);
         const startTime = _tone.now() + (Math.random() * 2 - 1) * HUMANIZE_TIME_JITTER_SEC;
         sampler.triggerAttackRelease(note, duration, startTime, velocity);
+        // [TTFN] probe: fires once, on the first audible note of the session.
+        if (_ttfn.firstAudibleAt === null && _ttfn.unlockAt !== null) {
+            _ttfn.firstAudibleAt = performance.now();
+            performance.measure('ttfn:unlock->audible', 'ttfn:unlock');
+            const unlockToTrigger = _ttfn.firstTriggerAt - _ttfn.unlockAt;
+            const triggerToAudible = _ttfn.firstAudibleAt - _ttfn.firstTriggerAt;
+            const total = _ttfn.firstAudibleAt - _ttfn.unlockAt;
+            console.log(`[TTFN] v=${_ttfn.version} unlock→trigger=${unlockToTrigger.toFixed(0)}ms trigger→audible=${triggerToAudible.toFixed(0)}ms total=${total.toFixed(0)}ms droppedWhileLocked=${_ttfn.droppedWhileLocked}`);
+        }
     } catch (err) {
         console.warn('[TransitSynth] triggerNote error:', err);
     }
