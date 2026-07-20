@@ -2,7 +2,7 @@ name: TransitJazz Client CI/CD
 
 on:
   push:
-    branches: [main, 045-time-to-first-note]
+    branches: [main]
 
 jobs:
   build:

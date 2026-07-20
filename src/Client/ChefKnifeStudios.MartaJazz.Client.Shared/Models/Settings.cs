@@ -7,7 +7,7 @@ namespace ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 public partial class Settings : ObservableObject
 {
     // ponytail: bump CurrentVersion when schema changes, old serialized data auto-discards
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
     [HiddenSetting]
     public int Version { get; set; } = CurrentVersion;
 
@@ -25,7 +25,7 @@ public partial class Settings : ObservableObject
 
     [ObservableProperty]
     [property: Description("SettingStreetMap")]
-    bool _isStreetMapEnabled = false;
+    bool _isStreetMapEnabled = true;
 
     [ObservableProperty]
     [property: Description("SettingBusesVisible")]
