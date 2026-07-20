@@ -30,6 +30,7 @@ public interface IRouteFilterViewModel : IViewModel, IDisposable
     void SetHoveredRoute(RouteItem? routeItem);
     public bool HasSelection { get; }
     bool HasSelectionFor(string category);
+    bool HasEmphasisFor(string category);
     public bool IsSingleSelection { get; }
     public string? SelectedRouteJoinKey { get; }
     public IReadOnlyCollection<string> SelectedRouteJoinKeys { get; }
@@ -305,6 +306,11 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     public bool HasSelection => RouteItems.Any(x => x.IsSelected);
 
     public bool HasSelectionFor(string category) => RouteItems.Any(x => x.IsSelected && x.Category == category);
+
+    // Category is in the effective emphasis set (selection ∪ hover) that
+    // RecomputeActiveTransitCounts scopes the counts to.
+    public bool HasEmphasisFor(string category) => RouteItems.Any(x =>
+        x.Category == category && (x.IsSelected || x.RouteJoinKey == HoveredRouteJoinKey));
 
     public bool IsSingleSelection => SelectedRouteJoinKeys.Count == 1;
 

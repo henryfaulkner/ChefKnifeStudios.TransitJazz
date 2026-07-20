@@ -14,7 +14,7 @@
     @foreach (var category in RouteFilterViewModel.CategoryOrder)
     {
         var count = RouteFilterViewModel.ActiveCountsByCategory.GetValueOrDefault(category);
-        @if (count > 0)
+        @if (count > 0 || RouteFilterViewModel.HasEmphasisFor(category))
         {
             <div class="transit-running-label__row">
                 <MatBody2 class="transit-running-label__icon" data-category="@category"></MatBody2>
