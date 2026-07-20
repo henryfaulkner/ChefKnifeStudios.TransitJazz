@@ -419,6 +419,24 @@ window.ChefMap = {
     },
 
     _routeColorsByRouteJoinKey: {},  // routeJoinKey → data color, for vehicle dot coloring
+    _routeCategoryByRouteJoinKey: {},  // routeJoinKey → vehicle category (rail/bus/streetcar/…), for checkpoint coloring
+    _isDarkMode: false,  // updated on every addAllRoutes push; drives checkpoint light/dark palette
+
+    // Checkpoint pulse + crossing-trail colors mirror the vehicle-category swatches in
+    // TransitRunningLabel.razor (the "vehicle label type" chips), not the route line color.
+    // Keep these in sync with that component's light/dark [data-category] CSS.
+    _categoryColors: {
+        light: { rail: '#1a237e', bus: '#006400', streetcar: '#b71c1c', _default: '#616161' },
+        dark:  { rail: '#7986cb', bus: '#66bb6a', streetcar: '#e57373', _default: '#9e9e9e' }
+    },
+
+    // Resolve the checkpoint color for a route from its vehicle category + current theme,
+    // falling back to the neutral default (never the route line color).
+    _checkpointColorFor: function (routeJoinKey) {
+        let palette = ChefMap._isDarkMode ? ChefMap._categoryColors.dark : ChefMap._categoryColors.light;
+        let category = (ChefMap._routeCategoryByRouteJoinKey[routeJoinKey] || '').toLowerCase();
+        return palette[category] || palette._default;
+    },
 
     _applyVehicleRouteColors: function (containerDivId) {
         let map = ChefMap.maps[containerDivId];
@@ -484,7 +502,7 @@ window.ChefMap = {
             return;
         }
 
-        let color = ChefMap._routeColorsByRouteJoinKey[routeJoinKey] || '#facc15';
+        let color = ChefMap._checkpointColorFor(routeJoinKey);
         let coords = feature.geometry.coordinates;
 
         try {
@@ -518,7 +536,7 @@ window.ChefMap = {
 
         let anchorCoord = feature.geometry.coordinates;
         let anchorDistanceM = feature.properties.alongDistanceM;
-        let color = ChefMap._routeColorsByRouteJoinKey[routeJoinKey] || '#facc15';   // FR-005
+        let color = ChefMap._checkpointColorFor(routeJoinKey);   // vehicle-category swatch, not route color
 
         // Speed: read empirical speed from the animator (audio-independent — R5).
         let vstate = ChefMapAnimator.vehicles[vehicleId];
@@ -551,12 +569,14 @@ window.ChefMap = {
         map.setLayoutProperty('vehicles-layer', 'visibility', visible ? 'visible' : 'none');
     },
 
-    addAllRoutes: function (containerDivId, routes) {
+    addAllRoutes: function (containerDivId, routes, isDarkMode) {
         let map = ChefMap.maps[containerDivId];
         if (!map) {
             console.warn('[ChefMap] addAllRoutes: no map for containerDivId=' + containerDivId);
             return;
         }
+
+        ChefMap._isDarkMode = !!isDarkMode;
 
         let features = [];
         (routes || []).forEach(function (route) {
@@ -565,6 +585,7 @@ window.ChefMap = {
             let lineColor = route.color || '#6b7280';
 
             ChefMap._routeColorsByRouteJoinKey[route.routeJoinKey] = lineColor;
+            ChefMap._routeCategoryByRouteJoinKey[route.routeJoinKey] = route.category || 'bus';
 
             ChefMapAnimator.loadRouteGeometry(route.routeJoinKey, route.coordinates);
 
