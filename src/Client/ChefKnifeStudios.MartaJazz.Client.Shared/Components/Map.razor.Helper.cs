@@ -122,7 +122,14 @@ public partial class Map : ComponentBase
         {
             _crossingDispatcherModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>(
                 "import", "./_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/crossing-dispatcher.js");
-            await _crossingDispatcherModule.InvokeVoidAsync("setActiveFilter", routeJoinKeys?.ToArray());
+            // Must pass the key array as a SINGLE interop argument. InvokeVoidAsync(string, object?[])
+            // takes a params object?[] — a bare string[] is covariantly assignable to object[], so
+            // handing it directly gets spread as the params array itself (one positional JS arg PER
+            // route key) instead of one array argument. JS's setActiveFilter(keys) then only ever
+            // received the FIRST key as a bare string, which new Set(str) exploded into characters.
+            // Wrapping in `new object[] { ... }` forces it to be treated as ONE argument.
+            object?[] jsArgs = [routeJoinKeys?.ToArray()];
+            await _crossingDispatcherModule.InvokeVoidAsync("setActiveFilter", jsArgs);
         }
         catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingFilter failed"); }
     }

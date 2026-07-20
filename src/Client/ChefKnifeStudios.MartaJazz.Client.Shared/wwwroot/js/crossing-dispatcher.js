@@ -30,13 +30,7 @@ export function setActiveFilter(keys) {
 // A crossing is allowed to fire iff there is no active filter or its route is in the filter.
 // Evaluated at FIRE time against the live _activeFilter, not at schedule time.
 function _passesFilter(routeJoinKey) {
-    const pass = _activeFilter === null || _activeFilter.has(routeJoinKey);
-    if (!pass) {
-        console.warn('[DIAG-045] JS dropped crossing for route', JSON.stringify(routeJoinKey),
-            'activeFilter size=', _activeFilter.size,
-            'sample=', Array.from(_activeFilter).slice(0, 5));
-    }
-    return pass;
+    return _activeFilter === null || _activeFilter.has(routeJoinKey);
 }
 
 // Lazily import the transit-synth ES module once; reused across batches. ChefMap is a global
