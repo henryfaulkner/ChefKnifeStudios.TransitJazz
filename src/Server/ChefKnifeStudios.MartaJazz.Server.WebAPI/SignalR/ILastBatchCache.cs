@@ -96,7 +96,13 @@ public sealed class LastBatchCache : ILastBatchCache
                 now,
                 new RouteCrossingBatchEvent(survivors));
 
-            return [.. _positionEnvelopes, crossingEnvelope];
+            // MessagePackSerializer's resolver cannot serialize the compiler-synthesized
+            // <>z__ReadOnlyArray backing type a bare collection expression ([.. a, b]) produces
+            // when target-typed to an interface return — it needs a concrete List<T>/T[].
+            var combined = new List<EventEnvelope>(_positionEnvelopes.Count + 1);
+            combined.AddRange(_positionEnvelopes);
+            combined.Add(crossingEnvelope);
+            return combined;
         }
 
         public void Set(IReadOnlyList<EventEnvelope> batch, DateTimeOffset now)
