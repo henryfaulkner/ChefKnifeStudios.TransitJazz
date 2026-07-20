@@ -2,7 +2,7 @@ name: TransitJazz Client CI/CD
 
 on:
   push:
-    branches: [main, feature/vehicle-coloring]
+    branches: [main]
 
 jobs:
   build:

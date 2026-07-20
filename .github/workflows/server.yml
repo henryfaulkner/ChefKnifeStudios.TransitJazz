@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main, feature/vehicle-coloring]
+    branches: [main]
 
 env:
   REGISTRY: chefknife.azurecr.io
