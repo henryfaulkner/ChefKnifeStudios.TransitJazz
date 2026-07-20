@@ -30,6 +30,14 @@ public interface IApplicationViewModel : IViewModel
     bool RoutesLoaded { get; }
 
     /// <summary>
+    /// Completes when the one-time route-shape load finishes: true when shapes were
+    /// cached, false when the load failed. Never faults, so consumers can await it
+    /// without a try/catch. Lets pages consume the shared load instead of issuing a
+    /// duplicate GetAllRouteShapes fetch on the startup critical path.
+    /// </summary>
+    Task<bool> RoutesLoadedTask { get; }
+
+    /// <summary>
     /// Connect to SignalR and load route shapes. Idempotent — safe to call multiple
     /// times; the underlying work runs at most once for the app lifetime.
     /// </summary>
@@ -49,6 +57,7 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
 
     readonly Dictionary<string, RouteShapeFeature> _routeShapes = new(StringComparer.Ordinal);
     readonly SemaphoreSlim _initGate = new(1, 1);
+    readonly TaskCompletionSource<bool> _routesLoadedTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     bool _initialized;
 
     public event SignalRNotificationHandler? NotificationReceived;
@@ -71,6 +80,8 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
 
     public IReadOnlyDictionary<string, RouteShapeFeature> RouteShapes => _routeShapes;
 
+    public Task<bool> RoutesLoadedTask => _routesLoadedTcs.Task;
+
     public async Task InitializeAsync(CancellationToken ct = default)
     {
         if (_initialized) return;
@@ -80,8 +91,10 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
         {
             if (_initialized) return;
 
-            await ConnectSignalRAsync(ct);
-            await LoadRoutesAsync(ct);
+            // The hub connection and the route-shape fetch are independent — run them in
+            // PARALLEL so RoutesLoaded (what the route filters render from) no longer waits
+            // behind the full SignalR handshake (negotiate + WS upgrade + JoinCity).
+            await Task.WhenAll(ConnectSignalRAsync(ct), LoadRoutesAsync(ct));
 
             _initialized = true;
         }
@@ -117,28 +130,42 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
     {
         _logger.LogDebug("ApplicationViewModel.LoadRoutesAsync: fetching all route shapes");
 
-        var res = await _gtfsEndpointsService.GetAllRouteShapes(ct);
-        if (!res.IsSuccess)
+        try
         {
-            _logger.LogError("ApplicationViewModel.LoadRoutesAsync: GetAllRouteShapes failed — Status={Status} Errors={Errors}",
-                res.Status, string.Join("; ", res.Errors));
-            return;
-        }
-
-        _routeShapes.Clear();
-        foreach (var feature in res.Value ?? [])
-        {
-            var key = feature.Properties?.JoinKey;
-            if (string.IsNullOrEmpty(key))
+            var res = await _gtfsEndpointsService.GetAllRouteShapes(ct);
+            if (!res.IsSuccess)
             {
-                _logger.LogWarning("ApplicationViewModel.LoadRoutesAsync: skipping feature with no RouteShortName or RouteId to derive a join key from");
-                continue;
+                _logger.LogError("ApplicationViewModel.LoadRoutesAsync: GetAllRouteShapes failed — Status={Status} Errors={Errors}",
+                    res.Status, string.Join("; ", res.Errors));
+                return;
             }
 
-            _routeShapes[key] = feature;
-        }
+            _routeShapes.Clear();
+            foreach (var feature in res.Value ?? [])
+            {
+                var key = feature.Properties?.JoinKey;
+                if (string.IsNullOrEmpty(key))
+                {
+                    _logger.LogWarning("ApplicationViewModel.LoadRoutesAsync: skipping feature with no RouteShortName or RouteId to derive a join key from");
+                    continue;
+                }
 
-        _logger.LogDebug("ApplicationViewModel.LoadRoutesAsync: cached {Count} route shapes", _routeShapes.Count);
-        RoutesLoaded = true;
+                _routeShapes[key] = feature;
+            }
+
+            _logger.LogDebug("ApplicationViewModel.LoadRoutesAsync: cached {Count} route shapes", _routeShapes.Count);
+            RoutesLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ApplicationViewModel.LoadRoutesAsync: route-shape load threw");
+        }
+        finally
+        {
+            // RoutesLoadedTask must ALWAYS complete (success or failure) — TransitMap awaits
+            // it instead of fetching shapes itself, and a faulted/never-completing task there
+            // would leave the map without routes forever.
+            _routesLoadedTcs.TrySetResult(RoutesLoaded);
+        }
     }
 }

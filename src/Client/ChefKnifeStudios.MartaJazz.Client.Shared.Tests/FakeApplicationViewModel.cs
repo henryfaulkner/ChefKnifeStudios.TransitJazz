@@ -19,18 +19,22 @@ public sealed class FakeApplicationViewModel : IApplicationViewModel
 {
     readonly Dictionary<string, RouteShapeFeature> _shapes;
 
-    public FakeApplicationViewModel(IEnumerable<RouteShapeFeature> shapes)
+    public FakeApplicationViewModel(IEnumerable<RouteShapeFeature> shapes, bool routesLoaded = true)
     {
         _shapes = shapes.ToDictionary(s => s.Properties.JoinKey, StringComparer.Ordinal);
-        RoutesLoaded = true;
+        RoutesLoaded = routesLoaded;
     }
 
     public event SignalRNotificationHandler? NotificationReceived;
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public IReadOnlyDictionary<string, RouteShapeFeature> RouteShapes => _shapes;
+    // Empty until RoutesLoaded, mirroring the live VM whose dict is only populated
+    // when the shape fetch completes.
+    public IReadOnlyDictionary<string, RouteShapeFeature> RouteShapes =>
+        RoutesLoaded ? _shapes : new Dictionary<string, RouteShapeFeature>(StringComparer.Ordinal);
     public bool IsConnected => true;
-    public bool RoutesLoaded { get; }
+    public bool RoutesLoaded { get; private set; }
+    public Task<bool> RoutesLoadedTask => Task.FromResult(RoutesLoaded);
 
     public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
     public Task PublishBatch(List<EventEnvelope> batch) => RaiseAsync(batch);
@@ -38,6 +42,18 @@ public sealed class FakeApplicationViewModel : IApplicationViewModel
     /// <summary>Test seam: fan a batch through NotificationReceived like the live hub.</summary>
     public Task RaiseAsync(List<EventEnvelope> batch) =>
         NotificationReceived?.Invoke(batch) ?? Task.CompletedTask;
+
+    /// <summary>
+    /// Test seam: flip <see cref="RoutesLoaded"/> and raise PropertyChanged, mirroring the
+    /// live ApplicationViewModel's [ObservableProperty] flip when the shape fetch completes.
+    /// Lets tests reproduce the startup race where the JoinCity replay (vehicle counts)
+    /// lands BEFORE the route shapes finish loading.
+    /// </summary>
+    public void RaiseRoutesLoaded()
+    {
+        RoutesLoaded = true;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IApplicationViewModel.RoutesLoaded)));
+    }
 
     // ── Test-data builder ────────────────────────────────────────────────────
     // Post-044 RouteShapeProperties carries `string Category` + `int RouteType`

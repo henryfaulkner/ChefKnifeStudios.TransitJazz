@@ -30,7 +30,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] ISignalRNotificationService NotificationService { get; set; } = null!;
     [Inject] IConfiguration Configuration { get; set; } = null!;
     [Inject] ILogger<TransitMap> Logger { get; set; } = null!;
-    [Inject] IGtfsEndpointsService GtfsEndpointsService { get; set; } = null!;
     [Inject] ITriggerPointGenerator TriggerPointGenerator { get; set; } = null!;
     [Inject] ITransitSynthJsInterop TransitSynth { get; set; } = null!;
     [Inject] IRouteFilterViewModel RouteFilterViewModel { get; set; } = null!;
@@ -553,29 +552,23 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     async Task LoadRoutesAsync(CancellationToken ct = default)
     {
-        Logger.LogDebug("TransitMap.LoadRoutesAsync: fetching all route shapes");
-        var res = await GtfsEndpointsService.GetAllRouteShapes(ct);
-        if (!res.IsSuccess)
+        // Route shapes are fetched ONCE per app lifetime by ApplicationViewModel (kicked off
+        // in App.razor, in parallel with the SignalR connect). Await that shared load instead
+        // of issuing a second GetAllRouteShapes call — the duplicate fetch doubled the shape
+        // payload (140 KB for MARTA, multi-MB for NYMTA) on the startup critical path. The
+        // InitializeAsync call is idempotent insurance in case this page ever renders before
+        // App.razor's fire-and-forget kick-off.
+        _ = ApplicationViewModel.InitializeAsync(ct);
+        var loaded = await ApplicationViewModel.RoutesLoadedTask;
+        if (!loaded)
         {
-            Logger.LogError("TransitMap.LoadRoutesAsync: GetAllRouteShapes failed — Status={Status} Errors={Errors}",
-                res.Status, string.Join("; ", res.Errors));
+            Logger.LogError("TransitMap.LoadRoutesAsync: shared route-shape load failed — routes will not render");
             return;
         }
 
-        var allFeatures = res.Value?.ToList() ?? [];
-        Logger.LogDebug("TransitMap.LoadRoutesAsync: received {Total} features from API", allFeatures.Count);
-
         _routeShapeCache.Clear();
-        foreach (var routeShapeFeature in allFeatures)
-        {
-            var key = routeShapeFeature.Properties?.JoinKey ?? "(null)";
-            _routeShapeCache[key] = routeShapeFeature;
-            Logger.LogDebug("TransitMap.LoadRoutesAsync: cached key={Key} RouteJoinKey={RouteJoinKey} CoordCount={CoordCount} Geometry={GeomNull}",
-                key,
-                routeShapeFeature.Properties?.RouteId,
-                routeShapeFeature.Geometry?.Coordinates?.Length ?? -1,
-                routeShapeFeature.Geometry is null ? "NULL" : "ok");
-        }
+        foreach (var (key, feature) in ApplicationViewModel.RouteShapes)
+            _routeShapeCache[key] = feature;
 
         Logger.LogDebug("TransitMap.LoadRoutesAsync: cache populated — {Cached} cached",
             _routeShapeCache.Count);
