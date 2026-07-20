@@ -62,6 +62,7 @@ public class Worker(
             var tickHealthOk = true;
             int tickTonesEmitted = 0, tickVehiclesProcessed = 0;
             int tickVehicleStateCacheSize = 0, tickCrossingBaselineCacheSize = 0, tickRouteIndexSize = 0, tickRouteTriggerPointCacheSize = 0;
+            int tickCrossingsSuppressedFirstSeen = 0, tickCrossingsSuppressedDeltaLeq0 = 0, tickCrossingsSuppressedTeleport = 0, tickCrossingsSuppressedTransfer = 0;
 
             foreach (var city in cities)
             {
@@ -110,7 +111,11 @@ public class Worker(
                         vehicle_state_cache_size = result.VehicleStateCacheSize,
                         crossing_baseline_cache_size = result.CrossingBaselineCacheSize,
                         route_index_size = result.RouteIndexSize,
-                        route_trigger_point_cache_size = result.RouteTriggerPointCacheSize
+                        route_trigger_point_cache_size = result.RouteTriggerPointCacheSize,
+                        crossings_suppressed_first_seen = result.CrossingsSuppressedFirstSeen,
+                        crossings_suppressed_delta_leq0 = result.CrossingsSuppressedDeltaLeq0,
+                        crossings_suppressed_teleport = result.CrossingsSuppressedTeleport,
+                        crossings_suppressed_transfer = result.CrossingsSuppressedTransfer
                     });
 
                     processedCities.Add(city.Name);
@@ -121,6 +126,10 @@ public class Worker(
                     tickCrossingBaselineCacheSize += result.CrossingBaselineCacheSize;
                     tickRouteIndexSize += result.RouteIndexSize;
                     tickRouteTriggerPointCacheSize += result.RouteTriggerPointCacheSize;
+                    tickCrossingsSuppressedFirstSeen += result.CrossingsSuppressedFirstSeen;
+                    tickCrossingsSuppressedDeltaLeq0 += result.CrossingsSuppressedDeltaLeq0;
+                    tickCrossingsSuppressedTeleport += result.CrossingsSuppressedTeleport;
+                    tickCrossingsSuppressedTransfer += result.CrossingsSuppressedTransfer;
                 }
             }
 
@@ -143,7 +152,11 @@ public class Worker(
                     vehicle_state_cache_size = tickVehicleStateCacheSize,
                     crossing_baseline_cache_size = tickCrossingBaselineCacheSize,
                     route_index_size = tickRouteIndexSize,
-                    route_trigger_point_cache_size = tickRouteTriggerPointCacheSize
+                    route_trigger_point_cache_size = tickRouteTriggerPointCacheSize,
+                    crossings_suppressed_first_seen = tickCrossingsSuppressedFirstSeen,
+                    crossings_suppressed_delta_leq0 = tickCrossingsSuppressedDeltaLeq0,
+                    crossings_suppressed_teleport = tickCrossingsSuppressedTeleport,
+                    crossings_suppressed_transfer = tickCrossingsSuppressedTransfer
                 });
             }
         }
@@ -160,7 +173,11 @@ public class Worker(
         int VehicleStateCacheSize,
         int CrossingBaselineCacheSize,
         int RouteIndexSize,
-        int RouteTriggerPointCacheSize)
+        int RouteTriggerPointCacheSize,
+        int CrossingsSuppressedFirstSeen = 0,
+        int CrossingsSuppressedDeltaLeq0 = 0,
+        int CrossingsSuppressedTeleport = 0,
+        int CrossingsSuppressedTransfer = 0)
     {
         public static CityTickResult Unhealthy(string cityName, Worker worker) => new(
             cityName, HealthOk: false, FeedFreshnessSeconds: null, TonesEmitted: 0, VehiclesProcessed: 0,
@@ -356,6 +373,7 @@ public class Worker(
             // synchronously inside the PublishBatchAsync await, before these go out of scope.
             using var batch = new RecyclableList<RouteNearestPointBatchEvent.RouteNearestPointRecord>(feed.Entities.Count);
             int movedCount = 0, unchangedCount = 0, stationaryCount = 0, staleCount = 0, skippedNoJoinKey = 0, skippedUnknownRoute = 0;
+            int crossingsSuppressedFirstSeen = 0, crossingsSuppressedDeltaLeq0 = 0, crossingsSuppressedTeleport = 0, crossingsSuppressedTransfer = 0;
             using var crossingRecords = new RecyclableList<RouteCrossingBatchEvent.RouteCrossingRecord>();
             var baselineMap = GetCrossingBaselines(city.Name);
             _routeCumDist.TryGetValue(city.Name, out var cityCumDist);
@@ -487,7 +505,14 @@ public class Worker(
                             // checkpoint-pulse filtering silently broke for those agencies.
                             var detected = CrossingDetector.Detect(vehicleId, nearest.RouteJoinKey, currentDistM, routeTriggers, ref baseline);
                             baselineMap[vehicleId] = baseline;
-                            crossingRecords.AddRange(detected);
+                            crossingRecords.AddRange(detected.Records);
+                            switch (detected.Reason)
+                            {
+                                case CrossingSuppressionReason.FirstSeen: crossingsSuppressedFirstSeen++; break;
+                                case CrossingSuppressionReason.DeltaLeqZero: crossingsSuppressedDeltaLeq0++; break;
+                                case CrossingSuppressionReason.Teleport: crossingsSuppressedTeleport++; break;
+                                case CrossingSuppressionReason.RouteTransfer: crossingsSuppressedTransfer++; break;
+                            }
                         }
                         else
                         {
@@ -566,7 +591,11 @@ public class Worker(
                 VehicleStateCacheSize: vehicleStateCache.Count,
                 CrossingBaselineCacheSize: baselineMap.Count,
                 RouteIndexSize: index.Count,
-                RouteTriggerPointCacheSize: cityTriggerPoints?.Count ?? 0);
+                RouteTriggerPointCacheSize: cityTriggerPoints?.Count ?? 0,
+                CrossingsSuppressedFirstSeen: crossingsSuppressedFirstSeen,
+                CrossingsSuppressedDeltaLeq0: crossingsSuppressedDeltaLeq0,
+                CrossingsSuppressedTeleport: crossingsSuppressedTeleport,
+                CrossingsSuppressedTransfer: crossingsSuppressedTransfer);
         }
         catch (Exception ex)
         {
