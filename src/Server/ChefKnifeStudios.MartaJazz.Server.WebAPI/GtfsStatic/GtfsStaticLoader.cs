@@ -25,7 +25,11 @@ public class GtfsStaticLoader(
     IConfiguration configuration,
     ILogger<GtfsStaticLoader> logger) : BackgroundService
 {
-    sealed record CityStaticEntry(string Name, string[] StaticZipUrls, string? ApiKeyEnvVar);
+    sealed record CityStaticEntry(
+        string Name,
+        string[] StaticZipUrls,
+        string? ApiKeyEnvVar,
+        IReadOnlyDictionary<string, string>? RouteTypeCategories);
 
     const double SimplifyToleranceMeters = 10.0;
     const double DefaultRefreshHours = 24.0;
@@ -119,7 +123,7 @@ public class GtfsStaticLoader(
         if (!section.Exists())
         {
             // Backwards compat: no Cities: block → just MARTA
-            return [new CityStaticEntry(CityNames.Marta, [MartaFallbackZipUrl], null)];
+            return [new CityStaticEntry(CityNames.Marta, [MartaFallbackZipUrl], null, null)];
         }
 
         var result = new List<CityStaticEntry>();
@@ -136,10 +140,16 @@ public class GtfsStaticLoader(
             if (urls.Length == 0) continue;
 
             var apiKeyEnvVar = child["ApiKeyEnvVar"];
-            result.Add(new CityStaticEntry(name, urls, apiKeyEnvVar));
+
+            var categoriesSection = child.GetSection("RouteTypeCategories");
+            IReadOnlyDictionary<string, string>? routeTypeCategories = categoriesSection.Exists()
+                ? categoriesSection.GetChildren().ToDictionary(c => c.Key, c => c.Value ?? string.Empty)
+                : null;
+
+            result.Add(new CityStaticEntry(name, urls, apiKeyEnvVar, routeTypeCategories));
         }
 
-        return result.Count > 0 ? result : [new CityStaticEntry(CityNames.Marta, [MartaFallbackZipUrl], null)];
+        return result.Count > 0 ? result : [new CityStaticEntry(CityNames.Marta, [MartaFallbackZipUrl], null, null)];
     }
 
     async Task<Dictionary<string, string>> BuildCityShapeSetAsync(CityStaticEntry city, HttpClient client, CancellationToken ct)
@@ -168,7 +178,7 @@ public class GtfsStaticLoader(
 
                 var routeToShape = ParseRouteToShapeMap(archive);
                 var shapes = ParseShapes(archive);
-                var meta = ParseRouteMetadata(archive);
+                var meta = ParseRouteMetadata(archive, city.RouteTypeCategories, city.Name, logger);
 
                 foreach (var (key, geoJson) in BuildZipRouteFeatures(city.Name, routeToShape, shapes, meta))
                     fresh.TryAdd(key, geoJson);
@@ -205,7 +215,7 @@ public class GtfsStaticLoader(
         string cityName,
         Dictionary<string, string> routeToShape,
         Dictionary<string, List<(double Lat, double Lon, int Seq)>> shapes,
-        Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, TransitMode Mode)> meta)
+        Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, string Category, int RouteType)> meta)
     {
         var result = new Dictionary<string, string>();
 
@@ -214,13 +224,15 @@ public class GtfsStaticLoader(
             if (!shapes.TryGetValue(shapeId, out var points) || points.Count == 0) continue;
 
             string? shortName = null, color = null, textColor = null;
-            var mode = TransitMode.Bus;
+            var category = "bus";
+            var routeType = 3;
             if (meta.TryGetValue(routeId, out var m))
             {
                 shortName = m.RouteShortName;
                 color = m.RouteColor;
                 textColor = m.TextColor;
-                mode = m.Mode;
+                category = m.Category;
+                routeType = m.RouteType;
             }
 
             var displayKey = shortName ?? routeId;
@@ -228,7 +240,7 @@ public class GtfsStaticLoader(
             if (result.ContainsKey(key)) continue;
 
             var simplified = Simplify(points, SimplifyToleranceMeters);
-            result[key] = BuildLineStringFeature(routeId, shortName, simplified, color, textColor, mode, cityName);
+            result[key] = BuildLineStringFeature(routeId, shortName, simplified, color, textColor, category, routeType, cityName);
         }
 
         return result;
@@ -296,11 +308,17 @@ public class GtfsStaticLoader(
         return result;
     }
 
-    internal static Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, TransitMode Mode)> ParseRouteMetadata(ZipArchive archive)
+    internal static Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, string Category, int RouteType)> ParseRouteMetadata(
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string>? cityMap = null,
+        string cityName = "",
+        ILogger? logger = null)
     {
-        var result = new Dictionary<string, (string?, string?, string?, TransitMode)>();
+        var result = new Dictionary<string, (string?, string?, string?, string, int)>();
         var entry = archive.GetEntry("routes.txt");
         if (entry == null) return result;
+
+        logger ??= Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
 
         using var reader = new StreamReader(entry.Open());
         var header = SplitCsvLine((reader.ReadLine() ?? string.Empty).TrimStart('﻿'));
@@ -321,13 +339,33 @@ public class GtfsStaticLoader(
             if (string.IsNullOrEmpty(shortName)) shortName = null;
             var color = colorIdx >= 0 && cols.Length > colorIdx ? NormalizeColor(cols[colorIdx]) : null;
             var textColor = textColorIdx >= 0 && cols.Length > textColorIdx ? NormalizeColor(cols[textColorIdx]) : null;
-            // GTFS route_type: 0=tram/light-rail, 1=subway/heavy-rail, 2=commuter-rail — all Rail
-            var routeType = routeTypeIdx >= 0 && cols.Length > routeTypeIdx ? cols[routeTypeIdx] : "";
-            var mode = routeType is "0" or "1" or "2" ? TransitMode.Rail : TransitMode.Bus;
+            var routeTypeRaw = routeTypeIdx >= 0 && cols.Length > routeTypeIdx ? cols[routeTypeIdx] : "";
+            var category = ClassifyCategory(routeTypeRaw, cityMap, cityName, logger);
+            var routeType = int.TryParse(routeTypeRaw, out var rt) ? rt : 3;
             if (!string.IsNullOrEmpty(routeId))
-                result[routeId] = (shortName, color, textColor, mode);
+                result[routeId] = (shortName, color, textColor, category, routeType);
         }
         return result;
+    }
+
+    // City-agnostic: per-city behavior comes only from cityMap, never a switch on
+    // cityName (FR-019). No config → today's exact rail/bus rule (D5a, SC-002).
+    // Config present but route_type unmapped → "bus" + warning, city keeps loading (D5b).
+    internal static string ClassifyCategory(
+        string routeType,
+        IReadOnlyDictionary<string, string>? cityMap,
+        string cityName,
+        ILogger logger)
+    {
+        if (cityMap is not null)
+        {
+            if (cityMap.TryGetValue(routeType, out var category)) return category;
+            logger.LogWarning("Unmapped route_type {RouteType} for city {City}, defaulting to bus", routeType, cityName);
+            return "bus";
+        }
+
+        // GTFS route_type: 0=tram/light-rail, 1=subway/heavy-rail, 2=commuter-rail — all Rail
+        return routeType is "0" or "1" or "2" ? "rail" : "bus";
     }
 
     internal static string? NormalizeColor(string raw)
@@ -454,7 +492,8 @@ public class GtfsStaticLoader(
         List<(double Lat, double Lon, int Seq)> points,
         string? color,
         string? textColor,
-        TransitMode mode,
+        string category,
+        int routeType,
         string city)
     {
         var sb = new StringBuilder();
@@ -475,7 +514,8 @@ public class GtfsStaticLoader(
         sb.Append($",\"routeShortName\":{(routeShortName != null ? JsonSerializer.Serialize(routeShortName) : "null")}");
         sb.Append($",\"color\":{(color != null ? JsonSerializer.Serialize(color) : "null")}");
         sb.Append($",\"textColor\":{(textColor != null ? JsonSerializer.Serialize(textColor) : "null")}");
-        sb.Append($",\"mode\":\"{mode}\"");
+        sb.Append($",\"category\":{JsonSerializer.Serialize(category)}");
+        sb.Append($",\"routeType\":{routeType}");
         sb.Append($",\"city\":{JsonSerializer.Serialize(city)}");
         sb.Append("}}");
         return sb.ToString();

@@ -345,7 +345,7 @@ window.ChefMapAnimator = {
                             vehicleId: state.vehicleId,
                             pinIcon: 'stop-pin-green',
                             routeJoinKey: state.routeJoinKey,
-                            transitMode: state.transitMode,
+                            category: state.category,
                             bearing: state.bearing
                         }
                     };
@@ -357,7 +357,7 @@ window.ChefMapAnimator = {
                     // keep them current — cheap primitive assignment, no allocation.
                     var p = feature.properties;
                     p.routeJoinKey = state.routeJoinKey;
-                    p.transitMode = state.transitMode;
+                    p.category = state.category;
                     p.bearing = state.bearing;
                 }
             }
@@ -583,7 +583,7 @@ window.ChefMapAnimator = {
             this.vehicles[rec.vehicleId] = {
                 vehicleId: rec.vehicleId,
                 routeJoinKey: rec.routeJoinKey,
-                transitMode: rec.transitMode || 'bus',
+                category: rec.category || 'unknown',
                 subPath: subPath,
                 subPathCumDist: subPathCumDist,
                 totalDistance: totalDistance,

@@ -165,12 +165,6 @@
   <data name="SettingDarkMode" xml:space="preserve">
     <value>Dark mode</value>
   </data>
-  <data name="NumBusesRunning" xml:space="preserve">
-    <value>buses running</value>
-  </data>
-  <data name="NumTrainsRunning" xml:space="preserve">
-    <value>trains running</value>
-  </data>
   <data name="AudioOverlayHeader" xml:space="preserve">
     <value>MARTA - Atlanta, GA, USA</value>
   </data>
@@ -249,11 +243,32 @@
   <data name="ClearSelections" xml:space="preserve">
     <value>Clear</value>
   </data>
-  <data name="Rail" xml:space="preserve">
+  <data name="rail" xml:space="preserve">
     <value>Rail</value>
   </data>
-  <data name="Buses" xml:space="preserve">
+  <data name="bus" xml:space="preserve">
     <value>Bus</value>
+  </data>
+  <data name="streetcar" xml:space="preserve">
+    <value>Streetcar</value>
+  </data>
+  <data name="unknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="RunningNoun_rail" xml:space="preserve">
+    <value>trains running</value>
+  </data>
+  <data name="RunningNoun_bus" xml:space="preserve">
+    <value>buses running</value>
+  </data>
+  <data name="RunningNoun_streetcar" xml:space="preserve">
+    <value>streetcars running</value>
+  </data>
+  <data name="RunningNoun_unknown" xml:space="preserve">
+    <value>unknown vehicles running</value>
+  </data>
+  <data name="VehiclesRunningTemplate" xml:space="preserve">
+    <value>{0} running</value>
   </data>
   <data name="InfoOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real MARTA vehicle, pulled live and turned into sound. Buses and trains move through Atlanta in real time, and the map plays what they're doing right now.</value>
