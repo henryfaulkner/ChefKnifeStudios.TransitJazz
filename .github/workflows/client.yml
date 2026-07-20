@@ -2,7 +2,7 @@ name: TransitJazz Client CI/CD
 
 on:
   push:
-    branches: [main, 044-dynamic-vehicle-categories]
+    branches: [main]
 
 jobs:
   build:
