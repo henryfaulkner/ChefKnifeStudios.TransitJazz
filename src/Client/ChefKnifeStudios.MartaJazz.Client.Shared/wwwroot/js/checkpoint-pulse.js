@@ -99,9 +99,7 @@ export function ensureLayer(map) {
             'circle-radius': DOT_RADIUS,
             'circle-color': ['get', 'color'],
             'circle-opacity': 1,
-            'circle-stroke-width': 1,
-            'circle-stroke-color': '#000000',
-            'circle-stroke-opacity': 1
+            'circle-stroke-width': 0
         }
     });
 
