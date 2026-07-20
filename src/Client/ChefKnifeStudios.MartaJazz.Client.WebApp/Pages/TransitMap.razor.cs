@@ -173,7 +173,12 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         var payload = new List<object>(crossings.Length);
         foreach (var crossing in crossings)
         {
-            if (effectiveIds is not null && !effectiveIds.Contains(crossing.RouteJoinKey)) continue;
+            if (effectiveIds is not null && !effectiveIds.Contains(crossing.RouteJoinKey))
+            {
+                Logger.LogWarning("[DIAG-045] Dropped crossing for route '{RouteJoinKey}' — not in effectiveIds (count={Count}). Sample selected keys: {Sample}",
+                    crossing.RouteJoinKey, effectiveIds.Count, string.Join(",", effectiveIds.Take(5)));
+                continue;
+            }
             payload.Add(new
             {
                 routeJoinKey = crossing.RouteJoinKey,
