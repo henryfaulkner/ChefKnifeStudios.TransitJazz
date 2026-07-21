@@ -66,6 +66,10 @@ async function _fireOne(elementId, c, flags, synth) {
 
     if (flags.audioEnabled) {
         try { synth.triggerNote(c.routeJoinKey, c.vehicleId, c.triggerIndex, c.totalTriggers); } catch (_) { }
+    } else if (window.MuteDiag) {
+        // [MUTE-DIAG] temporary: this batch was captured while muted. If you unmute mid-spread and
+        // still hear nothing, watch for the NEXT batch's flag — it should be true once unmuted.
+        console.log('[MUTE-DIAG] dispatcher skipped note (batch flag audioEnabled=false)');
     }
 }
 
@@ -74,16 +78,28 @@ async function _fireOne(elementId, c, flags, synth) {
 // actually reaches it, against the dot's own motion model (extrapolation at empirical speed, or
 // interpolation along its subPath). This is the tone-leads-dot fix (feature 040): timing tracks
 // the animated dot exactly, eliminating both the ~8s-spread mismatch and the speed-scaled
-// residual lead that a server-baked frac/offset left behind. Falls back to 0 (fire immediately)
-// when the animator has no usable state for the vehicle yet.
+// residual lead that a server-baked frac/offset left behind. Returns null (not 0) when the
+// animator has no usable motion state for the vehicle yet (idle phase, unknown vehicle/route) —
+// the caller distinguishes "no delay available" from a genuine zero so it can stagger fallback
+// crossings instead of firing them all in the same tick (see dispatchCrossings).
 function _delayForCrossing(c) {
     var anim = window.ChefMapAnimator;
     if (anim && typeof anim.crossingDelayMsFor === 'function') {
         var d = anim.crossingDelayMsFor(c.vehicleId, c.routeJoinKey, c.alongDistanceM);
         if (typeof d === 'number' && d >= 0) return d;
     }
-    return 0;
+    return null;
 }
+
+// Window crossings that fall back to no motion-based delay are jittered across (e.g. join-replay's
+// age-capped backlog landing on freshly-seeded, still-idle vehicles — feature 045). Without this,
+// every such crossing resolves to "fire now" and setTimeout(fn, 0) for all of them collapses into
+// the same task-queue tick: a burst of simultaneous pulses/tones (the bug feature 045
+// reintroduced; see specs/045-time-to-first-note/BURST-FIX-DESIGN.md). Random rather than a fixed
+// step so some genuinely land together (coincident crossings are real, not the bug) while most
+// spread out — a metronomic ramp would sound mechanical instead of like ordinary traffic.
+// Crossings with a real motion-based delay are untouched.
+const FALLBACK_JITTER_WINDOW_MS = 250;
 
 // C# entry point. crossings: [{ routeJoinKey, vehicleId, triggerIndex, totalTriggers, frac }].
 // flags: { checkpointsVisible, crossingTrailVisible, audioEnabled } captured at batch-receipt time.
@@ -97,7 +113,8 @@ export async function dispatchCrossings(elementId, crossings, flags) {
 
     for (let i = 0; i < crossings.length; i++) {
         const c = crossings[i];
-        const delay = _delayForCrossing(c);
+        const computed = _delayForCrossing(c);
+        const delay = computed !== null ? computed : Math.random() * FALLBACK_JITTER_WINDOW_MS;
         // One timer per crossing, but all in JS off the browser's timer queue — not thousands of
         // marshaled C# continuations. Each timer fires all three effects together.
         setTimeout(() => { _fireOne(elementId, c, flags, synth); }, delay);
