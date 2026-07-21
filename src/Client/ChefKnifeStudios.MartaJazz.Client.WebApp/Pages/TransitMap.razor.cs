@@ -157,6 +157,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             await _map.SetCrossingTrailVisibilityAsync(settings.IsCrossingTrailVisible);
             await _map.SetAllCheckpointsVisibilityAsync(settings.AreAllCheckpointsVisible);
             await _map.SetVehiclesVisibleAsync(settings.IsBusesVisible);
+            // Seed the dispatcher's live mute flag from the persisted setting (default is true).
+            await _map.SetCrossingAudioEnabledAsync(settings.IsAudioEnabled);
         }
     }
 
@@ -195,13 +197,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         if (payload.Count == 0) return;
 
         // Gating flags captured now; each is honored per-effect in JS (pulse ← checkpoints,
-        // trail ← trail setting, note ← audio). A setting flipping mid-spread is an accepted
-        // trade for collapsing thousands of timers into one interop call.
+        // trail ← trail setting). Audio is NOT captured here — the dispatcher re-checks a live
+        // mute flag at fire time (SetCrossingAudioEnabledAsync), so a crossing scheduled while
+        // muted still sounds if the user unmutes before it fires (extended-mute fix).
         var flags = new
         {
             checkpointsVisible = _checkpointsVisible,
-            crossingTrailVisible = _crossingTrailVisible,
-            audioEnabled = _audioEnabled
+            crossingTrailVisible = _crossingTrailVisible
         };
 
         await _map.DispatchCrossingsAsync(payload, flags);
@@ -234,6 +236,14 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         {
             _audioEnabled = audio.IsAudioEnabled;
             _ = TransitSynth.SetAudioEnabledAsync(_audioEnabled);
+            // Also push the live flag to the crossing dispatcher so crossings already scheduled
+            // during a muted window sound the instant they fire once unmuted, rather than waiting
+            // out the ~10s scheduling horizon (the extended-mute bug).
+            InvokeAsync(async () =>
+            {
+                if (_map is not null)
+                    await _map.SetCrossingAudioEnabledAsync(_audioEnabled);
+            });
             return;
         }
 

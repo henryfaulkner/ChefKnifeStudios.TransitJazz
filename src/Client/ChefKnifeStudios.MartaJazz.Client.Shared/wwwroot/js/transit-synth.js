@@ -279,13 +279,15 @@ function getMasterBus(T) {
 // immediately. If the master bus hasn't been built yet (no instrument loaded so far), the flag
 // is still recorded so both getMasterBus (noise bed) and triggerNote honor it once audio runs.
 //
-// RESUME ON UNMUTE: muting stops the pink-noise bed, which is the only continuously-running
-// source. With nothing scheduled, the browser can drop the AudioContext back to 'suspended'
-// (or 'interrupted' on iOS) after an idle period — exactly the "muted for a while" case. A
-// suspended context has a frozen clock, so a later triggerAttackRelease schedules against dead
-// time and never sounds (the "unmute → no checkpoint pulses" bug). Re-enabling therefore
-// resumes the context BEFORE restarting the noise bed; resume() only works if the context was
-// already unlocked by the original user gesture, which it always is here (unlock happened first).
+// RESUME ON UNMUTE (defensive): muting stops the pink-noise bed, the only continuously-running
+// source. With nothing scheduled, a browser can in principle drop the AudioContext back to
+// 'suspended' (or 'interrupted' on iOS) after a long idle. A suspended context has a frozen clock,
+// so a later triggerAttackRelease would never sound. Re-enabling resumes the context BEFORE
+// restarting the noise bed; resume() works because the context was already unlocked by the original
+// user gesture. NOTE: this is NOT what caused the "extended mute → no checkpoint tones" bug — that
+// was the crossing dispatcher gating on a per-batch-captured audioEnabled flag; it now re-checks a
+// live flag at fire time (see crossing-dispatcher.js setAudioEnabled). This resume is kept as a
+// belt-and-suspenders guard for genuine long-idle suspension.
 export function setAudioEnabled(enabled) {
     _audioEnabled = !!enabled;
     if (!_masterBus || !_masterBus.noise) return;
@@ -478,19 +480,6 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
         // durationSecondsFor (trail length) always agrees with what's actually played.
         const velocity = HUMANIZE_VELOCITY_MIN + Math.random() * (HUMANIZE_VELOCITY_MAX - HUMANIZE_VELOCITY_MIN);
         const startTime = _tone.now() + (Math.random() * 2 - 1) * HUMANIZE_TIME_JITTER_SEC;
-        // [MUTE-DIAG] temporary: reveals whether the note reaches triggerAttackRelease and with
-        // what clock/state after an unmute. Remove once the extended-mute bug is understood.
-        if (window.MuteDiag) {
-            console.log('[MUTE-DIAG] fire', {
-                ctxState: ctx && ctx.state,
-                now: _tone.now().toFixed(3),
-                startTime: startTime.toFixed(3),
-                ahead: (startTime - _tone.now()).toFixed(3),
-                loaded: !!(sampler && sampler.loaded),
-                disposed: !!(sampler && sampler.disposed),
-                note, duration,
-            });
-        }
         sampler.triggerAttackRelease(note, duration, startTime, velocity);
         // [TTFN] probe: fires once, on the first audible note of the session.
         if (_ttfn.firstAudibleAt === null && _ttfn.unlockAt !== null) {

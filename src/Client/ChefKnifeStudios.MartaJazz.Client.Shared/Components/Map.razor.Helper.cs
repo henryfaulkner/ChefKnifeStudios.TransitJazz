@@ -134,6 +134,21 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingFilter failed"); }
     }
 
+    // Push the current mute/unmute setting to the dispatcher so its already-scheduled timers
+    // re-check it at fire time (same live-flag pattern as SetCrossingFilterAsync). Without this,
+    // crossings queued during a muted window stayed silent after unmute until the ~10s scheduling
+    // horizon drained — the "extended mute" bug. See _audioEnabled in crossing-dispatcher.js.
+    public async Task SetCrossingAudioEnabledAsync(bool enabled)
+    {
+        try
+        {
+            _crossingDispatcherModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>(
+                "import", "./_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/crossing-dispatcher.js");
+            await _crossingDispatcherModule.InvokeVoidAsync("setAudioEnabled", enabled);
+        }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingAudioEnabled failed"); }
+    }
+
     public async Task SetCrossingTrailVisibilityAsync(bool visible)
     {
         try { await JsRuntime.InvokeVoidAsync("ChefMap.setCrossingTrailVisibility", ElementId, visible); }

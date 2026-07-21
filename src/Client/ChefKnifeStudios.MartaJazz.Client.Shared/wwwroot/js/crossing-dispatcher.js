@@ -27,6 +27,20 @@ export function setActiveFilter(keys) {
     _activeFilter = (keys && keys.length > 0) ? new Set(keys) : null;
 }
 
+// Live audio-enabled flag, pushed from C# on every mute/unmute toggle. Re-checked at FIRE time
+// (NOT captured per-batch in `flags`) for the SAME reason as _activeFilter: crossings are scheduled
+// up to a full cycle (~10s) out, plus jittered idle-fallback ones. If this were the per-batch
+// captured flags.audioEnabled, every crossing scheduled during a muted window would stay silent
+// after unmute until that backlog drained — you'd hear the (live) noise bed return instantly but no
+// checkpoint tones for several seconds (the "extended mute" symptom). Defaults true so audio behaves
+// normally until C# says otherwise; TransitMap pushes the persisted setting on init.
+let _audioEnabled = true;
+
+// C# pushes the current mute/unmute setting here on every AudioSettingChanged toggle (and init).
+export function setAudioEnabled(enabled) {
+    _audioEnabled = !!enabled;
+}
+
 // A crossing is allowed to fire iff there is no active filter or its route is in the filter.
 // Evaluated at FIRE time against the live _activeFilter, not at schedule time.
 function _passesFilter(routeJoinKey) {
@@ -64,12 +78,11 @@ async function _fireOne(elementId, c, flags, synth) {
         } catch (_) { }
     }
 
-    if (flags.audioEnabled) {
+    // Re-check the LIVE mute state at fire time, not the batch-captured flags.audioEnabled — a
+    // crossing scheduled while muted must sound if the user has unmuted by the time it fires
+    // (and vice versa). See _audioEnabled/setAudioEnabled above.
+    if (_audioEnabled) {
         try { synth.triggerNote(c.routeJoinKey, c.vehicleId, c.triggerIndex, c.totalTriggers); } catch (_) { }
-    } else if (window.MuteDiag) {
-        // [MUTE-DIAG] temporary: this batch was captured while muted. If you unmute mid-spread and
-        // still hear nothing, watch for the NEXT batch's flag — it should be true once unmuted.
-        console.log('[MUTE-DIAG] dispatcher skipped note (batch flag audioEnabled=false)');
     }
 }
 
@@ -102,7 +115,8 @@ function _delayForCrossing(c) {
 const FALLBACK_JITTER_WINDOW_MS = 250;
 
 // C# entry point. crossings: [{ routeJoinKey, vehicleId, triggerIndex, totalTriggers, frac }].
-// flags: { checkpointsVisible, crossingTrailVisible, audioEnabled } captured at batch-receipt time.
+// flags: { checkpointsVisible, crossingTrailVisible } captured at batch-receipt time. Audio is
+// NOT in flags — it's re-checked live at fire time via _audioEnabled (see setAudioEnabled).
 export async function dispatchCrossings(elementId, crossings, flags) {
     if (!crossings || crossings.length === 0) return;
 
