@@ -478,6 +478,19 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
         // durationSecondsFor (trail length) always agrees with what's actually played.
         const velocity = HUMANIZE_VELOCITY_MIN + Math.random() * (HUMANIZE_VELOCITY_MAX - HUMANIZE_VELOCITY_MIN);
         const startTime = _tone.now() + (Math.random() * 2 - 1) * HUMANIZE_TIME_JITTER_SEC;
+        // [MUTE-DIAG] temporary: reveals whether the note reaches triggerAttackRelease and with
+        // what clock/state after an unmute. Remove once the extended-mute bug is understood.
+        if (window.MuteDiag) {
+            console.log('[MUTE-DIAG] fire', {
+                ctxState: ctx && ctx.state,
+                now: _tone.now().toFixed(3),
+                startTime: startTime.toFixed(3),
+                ahead: (startTime - _tone.now()).toFixed(3),
+                loaded: !!(sampler && sampler.loaded),
+                disposed: !!(sampler && sampler.disposed),
+                note, duration,
+            });
+        }
         sampler.triggerAttackRelease(note, duration, startTime, velocity);
         // [TTFN] probe: fires once, on the first audible note of the session.
         if (_ttfn.firstAudibleAt === null && _ttfn.unlockAt !== null) {
