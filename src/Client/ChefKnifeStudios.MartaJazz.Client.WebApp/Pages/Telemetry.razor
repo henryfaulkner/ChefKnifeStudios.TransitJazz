@@ -1,9 +1,11 @@
 @page "/telemetry"
 @inject ITelemetryEndpointsService TelemetryEndpointsService
 @inject ILogger<Telemetry> Logger
+@inject IJSRuntime JS
 @using ChefKnifeStudios.MartaJazz.Client.Core.Services.EndpointsServices
 @using ChefKnifeStudios.MartaJazz.Shared.TelemetryData
 @using Microsoft.Extensions.Logging
+@using Microsoft.JSInterop
 
 <PageTitle>Telemetry</PageTitle>
 
@@ -124,5 +126,14 @@
             .ToList();
 
         _loading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await JS.InvokeVoidAsync("trackPageView", "/telemetry", "Telemetry"); }
+            catch (Exception ex) { Logger.LogWarning(ex, "Telemetry page: view tracking failed"); }
+        }
     }
 }
