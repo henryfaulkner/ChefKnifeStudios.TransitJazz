@@ -13,6 +13,7 @@ using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.Geospatial;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
@@ -40,6 +41,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] ITransitEndpointsService TransitEndpointsService { get; set; } = null!;
     [Inject] IOutsideClickJsInterop OutsideClickJsInterop { get; set; } = null!;
     [Inject] NavigationManager NavigationManager { get; set; } = null!;
+    [Inject] IJSRuntime JS { get; set; } = null!;
 
     const float MinWidth = 1100;
 
@@ -134,8 +136,15 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
+        {
             await OutsideClickJsInterop.AddOutsideClickListenerAsync(
                 _accordionElementId, CollapseAccordion);
+
+            // Tag the Umami pageview with the resolved city (from the URL hash). Each city
+            // switch does a full reload, so first render fires once per city view.
+            try { await JS.InvokeVoidAsync("trackCityView", NavigationManager.ResolveCity()); }
+            catch (Exception ex) { Logger.LogWarning(ex, "TransitMap: city view tracking failed"); }
+        }
 
         if (_mapReady && _routesLoaded && !_routesRendered && _map is not null)
         {
