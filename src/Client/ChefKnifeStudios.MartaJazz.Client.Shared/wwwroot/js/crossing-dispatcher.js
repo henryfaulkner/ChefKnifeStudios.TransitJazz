@@ -86,32 +86,32 @@ async function _fireOne(elementId, c, flags, synth) {
     }
 }
 
-// Delay (ms) at which this crossing's tone/pulse should fire. The server sends the checkpoint's
-// absolute along-route distance (alongDistanceM); the animator computes how long until the DOT
-// actually reaches it, against the dot's own motion model (extrapolation at empirical speed, or
-// interpolation along its subPath). This is the tone-leads-dot fix (feature 040): timing tracks
-// the animated dot exactly, eliminating both the ~8s-spread mismatch and the speed-scaled
-// residual lead that a server-baked frac/offset left behind. Returns null (not 0) when the
-// animator has no usable motion state for the vehicle yet (idle phase, unknown vehicle/route) —
-// the caller distinguishes "no delay available" from a genuine zero so it can stagger fallback
-// crossings instead of firing them all in the same tick (see dispatchCrossings).
+// Delay (ms) at which this crossing's tone/pulse should fire, per the animator's motion model
+// (extrapolation at empirical speed, or interpolation along its subPath) — the tone-leads-dot fix
+// (feature 040): timing tracks the animated dot exactly. Returns null when the animator has no
+// usable motion state for the vehicle at all (idle phase, unknown vehicle/route), and returns a
+// number <= 0 whenever the model says the dot has already reached/passed the checkpoint (e.g.
+// vehicle-animator.js's `remainingM <= 0` / `distIntoSub <= 0` branches). Both cases are "no
+// positive delay to wait out," and the caller (dispatchCrossings) jitters them the same way.
 function _delayForCrossing(c) {
     var anim = window.ChefMapAnimator;
     if (anim && typeof anim.crossingDelayMsFor === 'function') {
         var d = anim.crossingDelayMsFor(c.vehicleId, c.routeJoinKey, c.alongDistanceM);
-        if (typeof d === 'number' && d >= 0) return d;
+        if (typeof d === 'number') return d;
     }
     return null;
 }
 
-// Window crossings that fall back to no motion-based delay are jittered across (e.g. join-replay's
-// age-capped backlog landing on freshly-seeded, still-idle vehicles — feature 045). Without this,
-// every such crossing resolves to "fire now" and setTimeout(fn, 0) for all of them collapses into
-// the same task-queue tick: a burst of simultaneous pulses/tones (the bug feature 045
-// reintroduced; see specs/045-time-to-first-note/BURST-FIX-DESIGN.md). Random rather than a fixed
-// step so some genuinely land together (coincident crossings are real, not the bug) while most
-// spread out — a metronomic ramp would sound mechanical instead of like ordinary traffic.
-// Crossings with a real motion-based delay are untouched.
+// Window that crossings with no positive delay (null from the animator, or a computed <= 0 — the
+// dot has already reached/passed the checkpoint by the model) are jittered across. A single batch
+// can legitimately bundle an entire tick's crossings across the whole fleet (join-replay's
+// age-capped backlog, or a busy live tick — NYMTA peak observed ~85 crossings/tick, see
+// specs/045-time-to-first-note/BURST-FIX-DESIGN.md). Without jitter, every such crossing resolves
+// to delay 0 and all their setTimeout(fn, 0) calls collapse into the same task-queue tick: a burst
+// of dozens of simultaneous pulses/tones. Random rather than a fixed step so some genuinely land
+// together (coincident crossings are real, not the bug) while most spread out — a metronomic ramp
+// would sound mechanical instead of like ordinary traffic. Crossings with a real positive
+// motion-based delay are untouched.
 const FALLBACK_JITTER_WINDOW_MS = 250;
 
 // C# entry point. crossings: [{ routeJoinKey, vehicleId, triggerIndex, totalTriggers, frac }].
@@ -128,7 +128,7 @@ export async function dispatchCrossings(elementId, crossings, flags) {
     for (let i = 0; i < crossings.length; i++) {
         const c = crossings[i];
         const computed = _delayForCrossing(c);
-        const delay = computed !== null ? computed : Math.random() * FALLBACK_JITTER_WINDOW_MS;
+        const delay = (computed !== null && computed > 0) ? computed : Math.random() * FALLBACK_JITTER_WINDOW_MS;
         // One timer per crossing, but all in JS off the browser's timer queue — not thousands of
         // marshaled C# continuations. Each timer fires all three effects together.
         setTimeout(() => { _fireOne(elementId, c, flags, synth); }, delay);
