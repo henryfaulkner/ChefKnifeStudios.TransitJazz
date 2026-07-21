@@ -278,10 +278,24 @@ function getMasterBus(T) {
 // the live gate triggerNote re-reads at fire time — and starts/stops the continuous noise bed
 // immediately. If the master bus hasn't been built yet (no instrument loaded so far), the flag
 // is still recorded so both getMasterBus (noise bed) and triggerNote honor it once audio runs.
+//
+// RESUME ON UNMUTE: muting stops the pink-noise bed, which is the only continuously-running
+// source. With nothing scheduled, the browser can drop the AudioContext back to 'suspended'
+// (or 'interrupted' on iOS) after an idle period — exactly the "muted for a while" case. A
+// suspended context has a frozen clock, so a later triggerAttackRelease schedules against dead
+// time and never sounds (the "unmute → no checkpoint pulses" bug). Re-enabling therefore
+// resumes the context BEFORE restarting the noise bed; resume() only works if the context was
+// already unlocked by the original user gesture, which it always is here (unlock happened first).
 export function setAudioEnabled(enabled) {
     _audioEnabled = !!enabled;
     if (!_masterBus || !_masterBus.noise) return;
     if (_audioEnabled) {
+        if (_tone) {
+            const ctx = _tone.getContext().rawContext;
+            if (ctx && ctx.state !== 'running' && typeof ctx.resume === 'function') {
+                ctx.resume().catch(() => { });
+            }
+        }
         if (_masterBus.noise.state !== 'started') _masterBus.noise.start();
     } else if (_masterBus.noise.state === 'started') {
         _masterBus.noise.stop();
@@ -450,6 +464,12 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
     // symptom). _audioEnabled mirrors the live setting via setAudioEnabled on every toggle.
     if (!_audioEnabled) return;
     if (_ttfn.firstTriggerAt === null) _ttfn.firstTriggerAt = performance.now();
+    // Self-heal: if the context slipped back to suspended/interrupted while idle (see
+    // setAudioEnabled), resume it before scheduling so this note isn't lost to a frozen clock.
+    const ctx = _tone && _tone.getContext().rawContext;
+    if (ctx && ctx.state !== 'running' && typeof ctx.resume === 'function') {
+        try { await ctx.resume(); } catch (_) { }
+    }
     try {
         const { sampler, scale, durations } = await instrumentForSlot(_slotIndexForRoute(routeId));
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
