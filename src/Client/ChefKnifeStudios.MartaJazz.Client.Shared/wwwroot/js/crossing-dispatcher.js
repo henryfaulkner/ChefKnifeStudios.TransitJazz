@@ -60,10 +60,8 @@ async function _getSynth() {
 }
 
 // Fire one crossing's three effects together. Duration is resolved in-JS (no interop round-trip)
-// only when the trail is actually going to be drawn. toneEligible=false fires the visual
-// pulse+trail but not the tone — used to thin the audio of large fallback backlogs (see
-// FALLBACK_TONE_SPACING_MS); live crossings are always dispatched tone-eligible.
-async function _fireOne(elementId, c, flags, synth, toneEligible) {
+// only when the trail is actually going to be drawn.
+async function _fireOne(elementId, c, flags, synth) {
     // Re-check the live route filter at fire time. A crossing scheduled up to a cycle ago must
     // NOT fire if its route has since been deselected — this is what makes filter changes take
     // effect immediately instead of after the scheduling horizon drains (~10s).
@@ -83,7 +81,7 @@ async function _fireOne(elementId, c, flags, synth, toneEligible) {
     // Re-check the LIVE mute state at fire time, not the batch-captured flags.audioEnabled — a
     // crossing scheduled while muted must sound if the user has unmuted by the time it fires
     // (and vice versa). See _audioEnabled/setAudioEnabled above.
-    if (toneEligible && _audioEnabled) {
+    if (_audioEnabled) {
         try { synth.triggerNote(c.routeJoinKey, c.vehicleId, c.triggerIndex, c.totalTriggers); } catch (_) { }
     }
 }
@@ -121,16 +119,18 @@ const FALLBACK_SPACING_MS = 150;
 const FALLBACK_WINDOW_MIN_MS = 250;
 const FALLBACK_WINDOW_MAX_MS = 8000;
 
-// Tone thinning for the fallback (backlog) stream. Visual pulses tolerate density far better
-// than audio: dozens of little map pulses read as pleasing liveliness, dozens of tones read as
-// cacophony. So every fallback survivor still fires its pulse+trail, but only a density-capped,
-// RANDOMLY-chosen subset also sounds a tone — at most ~one tone per FALLBACK_TONE_SPACING_MS of
-// jitter window (≈3/sec), never fewer than FALLBACK_TONE_MIN_COUNT (so small backlogs are never
-// thinned at all). Random selection so no route/vehicle is systematically silenced. Live
-// crossings with a real positive motion delay ALWAYS sound — they're the current music; only
-// the replayed backlog is thinned.
-const FALLBACK_TONE_SPACING_MS = 350;
-const FALLBACK_TONE_MIN_COUNT = 3;
+// Density cap for the fallback (backlog) stream. Even coalesced to one crossing per vehicle, a
+// big backlog is too many events for a few seconds of audio — but thinning ONLY the tone left
+// silent "ghost pulses" on the map, which broke the app's core pairing (a pulse IS a note made
+// visible). So the budget gates the WHOLE crossing: a density-capped, RANDOMLY-chosen subset of
+// survivors fires pulse+trail+tone together, and the rest of the backlog doesn't fire at all —
+// at most ~one fire per FALLBACK_FIRE_SPACING_MS of jitter window (≈3/sec), never fewer than
+// FALLBACK_FIRE_MIN_COUNT (so small backlogs are never thinned). Random selection so no
+// route/vehicle is systematically dropped — which vehicles fire is a fresh draw every batch.
+// Live crossings with a real positive motion delay ALWAYS fire — they're the current music;
+// only the replayed backlog is capped.
+const FALLBACK_FIRE_SPACING_MS = 350;
+const FALLBACK_FIRE_MIN_COUNT = 3;
 
 // C# entry point. crossings: [{ routeJoinKey, vehicleId, triggerIndex, totalTriggers, frac }].
 // flags: { checkpointsVisible, crossingTrailVisible } captured at batch-receipt time. Audio is
@@ -166,20 +166,20 @@ export async function dispatchCrossings(elementId, crossings, flags) {
     const jitterWindowMs = Math.min(FALLBACK_WINDOW_MAX_MS,
         Math.max(FALLBACK_WINDOW_MIN_MS, fallbackCount * FALLBACK_SPACING_MS));
 
-    // Tone thinning: when the coalesced backlog still exceeds the tone-density budget for the
-    // window, pick which survivors get a tone uniformly at random (partial Fisher-Yates over
-    // the survivor indices). Everyone still pulses; only the tone is thinned. null → no
-    // thinning needed, all survivors are tone-eligible.
-    const maxTones = Math.max(FALLBACK_TONE_MIN_COUNT,
-        Math.floor(jitterWindowMs / FALLBACK_TONE_SPACING_MS));
-    let toneEligibleIdxs = null;
-    if (fallbackCount > maxTones) {
+    // Density cap: when the coalesced backlog still exceeds the fire budget for the window,
+    // pick WHICH survivors fire uniformly at random (partial Fisher-Yates over the survivor
+    // indices); the rest are dropped whole — pulse and tone together, never a silent "ghost
+    // pulse". null → no capping needed, every survivor fires.
+    const maxFires = Math.max(FALLBACK_FIRE_MIN_COUNT,
+        Math.floor(jitterWindowMs / FALLBACK_FIRE_SPACING_MS));
+    let firingIdxs = null;
+    if (fallbackCount > maxFires) {
         const survivorIdxs = Array.from(lastFallbackIdxByVehicle.values());
-        for (let i = 0; i < maxTones; i++) {
+        for (let i = 0; i < maxFires; i++) {
             const j = i + Math.floor(Math.random() * (survivorIdxs.length - i));
             const tmp = survivorIdxs[i]; survivorIdxs[i] = survivorIdxs[j]; survivorIdxs[j] = tmp;
         }
-        toneEligibleIdxs = new Set(survivorIdxs.slice(0, maxTones));
+        firingIdxs = new Set(survivorIdxs.slice(0, maxFires));
     }
 
     for (let i = 0; i < crossings.length; i++) {
@@ -188,15 +188,15 @@ export async function dispatchCrossings(elementId, crossings, flags) {
         // One timer per crossing, but all in JS off the browser's timer queue — not thousands of
         // marshaled C# continuations. Each timer fires all three effects together.
         if (computed !== null && computed > 0) {
-            // Live crossing: always tone-eligible, never coalesced or thinned.
-            setTimeout(() => { _fireOne(elementId, c, flags, synth, true); }, computed);
+            // Live crossing: always fires, never coalesced or capped.
+            setTimeout(() => { _fireOne(elementId, c, flags, synth); }, computed);
             continue;
         }
         // Fallback crossing: skip it if a later crossing in this batch superseded it for the
-        // same vehicle (per-vehicle coalescing above); otherwise jitter it across the window,
-        // sounding a tone only if it made the density-capped random draw.
+        // same vehicle (per-vehicle coalescing above) or it didn't make the density-capped
+        // random draw; otherwise jitter it across the window.
         if (lastFallbackIdxByVehicle.get(c.vehicleId) !== i) continue;
-        const toneEligible = toneEligibleIdxs === null || toneEligibleIdxs.has(i);
-        setTimeout(() => { _fireOne(elementId, c, flags, synth, toneEligible); }, Math.random() * jitterWindowMs);
+        if (firingIdxs !== null && !firingIdxs.has(i)) continue;
+        setTimeout(() => { _fireOne(elementId, c, flags, synth); }, Math.random() * jitterWindowMs);
     }
 }
