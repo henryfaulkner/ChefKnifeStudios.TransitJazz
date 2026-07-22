@@ -102,17 +102,22 @@ function _delayForCrossing(c) {
     return null;
 }
 
-// Window that crossings with no positive delay (null from the animator, or a computed <= 0 — the
-// dot has already reached/passed the checkpoint by the model) are jittered across. A single batch
-// can legitimately bundle an entire tick's crossings across the whole fleet (join-replay's
-// age-capped backlog, or a busy live tick — NYMTA peak observed ~85 crossings/tick, see
-// specs/045-time-to-first-note/BURST-FIX-DESIGN.md). Without jitter, every such crossing resolves
-// to delay 0 and all their setTimeout(fn, 0) calls collapse into the same task-queue tick: a burst
-// of dozens of simultaneous pulses/tones. Random rather than a fixed step so some genuinely land
-// together (coincident crossings are real, not the bug) while most spread out — a metronomic ramp
-// would sound mechanical instead of like ordinary traffic. Crossings with a real positive
-// motion-based delay are untouched.
-const FALLBACK_JITTER_WINDOW_MS = 250;
+// Crossings with no positive delay (null from the animator, or a computed <= 0 — the dot has
+// already reached/passed the checkpoint by the model) are jittered across a window SCALED to how
+// many of them the batch contains. A single batch can legitimately bundle an entire tick's
+// crossings across the whole fleet (join-replay's age-capped backlog, or a busy live tick — NYMTA
+// peak observed ~85 crossings/tick, see specs/045-time-to-first-note/BURST-FIX-DESIGN.md). The
+// previous FIXED 250ms window stopped the same-task-tick collapse but not the audible burst:
+// dozens of pulses inside a quarter second still read as one blast. Scaling the window by the
+// fallback count (~FALLBACK_SPACING_MS of room per crossing) keeps small batches snappy while a
+// big backlog trickles out like ordinary traffic. Random placement within the window (not a
+// fixed index*step ramp) so some crossings still genuinely coincide — coincident crossings are
+// real, not the bug — and nothing sounds metronomic. Capped safely under the ~10s batch cadence
+// so one batch's spread always drains before the next batch arrives. Crossings with a real
+// positive motion-based delay are untouched.
+const FALLBACK_SPACING_MS = 150;
+const FALLBACK_WINDOW_MIN_MS = 250;
+const FALLBACK_WINDOW_MAX_MS = 8000;
 
 // C# entry point. crossings: [{ routeJoinKey, vehicleId, triggerIndex, totalTriggers, frac }].
 // flags: { checkpointsVisible, crossingTrailVisible } captured at batch-receipt time. Audio is
@@ -125,12 +130,41 @@ export async function dispatchCrossings(elementId, crossings, flags) {
     try { synth = await _getSynth(); }
     catch (e) { console.error('[CrossingDispatcher] synth import failed', e); return; }
 
+    // First pass: compute each crossing's motion-model delay, and COALESCE the fallback
+    // crossings (no positive delay to wait out) per vehicle. A backlog batch — join-replay,
+    // or a dot that lagged several checkpoints behind — can carry SEVERAL already-passed
+    // checkpoints for the SAME vehicle; firing all of them is a replay of that vehicle's
+    // recent path, which is what sounded unnatural even once jittered. Keeping only the most
+    // recent fallback crossing per vehicle (last in batch order — the server emits crossings
+    // in traversal order) lets each vehicle announce itself exactly once without re-performing
+    // its history. Live crossings with a real positive motion delay are NEVER coalesced —
+    // they're the current music, not backlog.
+    const computedDelays = new Array(crossings.length);
+    const lastFallbackIdxByVehicle = new Map();
+    for (let i = 0; i < crossings.length; i++) {
+        const d = _delayForCrossing(crossings[i]);
+        computedDelays[i] = d;
+        if (d === null || d <= 0) lastFallbackIdxByVehicle.set(crossings[i].vehicleId, i);
+    }
+
+    // Size the fallback window to the burst it has to absorb — the COALESCED count (one
+    // survivor per vehicle), since that's how many fallback timers actually get scheduled.
+    const fallbackCount = lastFallbackIdxByVehicle.size;
+    const jitterWindowMs = Math.min(FALLBACK_WINDOW_MAX_MS,
+        Math.max(FALLBACK_WINDOW_MIN_MS, fallbackCount * FALLBACK_SPACING_MS));
+
     for (let i = 0; i < crossings.length; i++) {
         const c = crossings[i];
-        const computed = _delayForCrossing(c);
-        const delay = (computed !== null && computed > 0) ? computed : Math.random() * FALLBACK_JITTER_WINDOW_MS;
+        const computed = computedDelays[i];
         // One timer per crossing, but all in JS off the browser's timer queue — not thousands of
         // marshaled C# continuations. Each timer fires all three effects together.
-        setTimeout(() => { _fireOne(elementId, c, flags, synth); }, delay);
+        if (computed !== null && computed > 0) {
+            setTimeout(() => { _fireOne(elementId, c, flags, synth); }, computed);
+            continue;
+        }
+        // Fallback crossing: skip it if a later crossing in this batch superseded it for the
+        // same vehicle (per-vehicle coalescing above); otherwise jitter it across the window.
+        if (lastFallbackIdxByVehicle.get(c.vehicleId) !== i) continue;
+        setTimeout(() => { _fireOne(elementId, c, flags, synth); }, Math.random() * jitterWindowMs);
     }
 }
