@@ -98,6 +98,14 @@ function _ttfnMarkUnlock() {
 // audio behaves normally until told otherwise; setAudioEnabled(false) is called during init if
 // the persisted setting is muted (see TransitMap.razor.cs).
 let _audioEnabled = true;
+// Selected background "backfill" texture (049-backfill-texture-selector). 'noise' | 'percussion',
+// NEVER 'off' — there is always a backfill; total silence stays _audioEnabled's job. Mirrors the
+// persisted Settings.BackfillTexture; pushed from C# on init and on every FAB selection via
+// setBackfillTexture. Reconciled against _audioEnabled by the single _applyBackfillLayer choke
+// point so the two gates (mute × texture) never drift.
+let _backfillMode = 'noise';
+// Lazily-built { loop, kick, rim, volume } once percussion is first needed, or null.
+let _percussion = null;
 // PROD SHIP LIST — only these instruments play unless a dev build opts more in via
 // setEnabledInstruments (see docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md — SettingsBlade dev
 // section, #if DEBUG-gated on the C# side). This file has no build-time dev/prod variants
@@ -204,6 +212,29 @@ const MASTER_FILTER_HZ = 4000;
 const NOISE_VOLUME_DB = -38;
 const NOISE_FILTER_HZ = 2000;
 
+// Percussion backfill texture (049-backfill-texture-selector) — a sparse, humanized lo-fi
+// kick+rim kit on a slow Tone.Loop, the alternative to the noise bed above. STARTING-POINT
+// values pending the by-ear audition pass in tools/instrument-compat/
+// (contracts/audition-tool.md) before being treated as final.
+// REAL RECORDED HITS via Tone.Sampler (same FluidR3 GM CDN + URL shape as the melodic
+// PALETTE voices) — the earlier MembraneSynth/MetalSynth synthesis read as drum-machine,
+// not drums, in the 049 audition. Kick is a tom recording repitched to C2 (65Hz — C1's
+// 33Hz fundamental is below what most laptop speakers reproduce); rim is a woodblock.
+// Volumes stack (voice dB + layer dB) before the master compressor.
+// Placement is DETERMINISTIC (audition feedback: probabilistic rim hits read as procedural,
+// not human): the loop is one 4/4 measure ('1m', 2s at the default 120 BPM Transport) and
+// each voice lands on fixed quarter-note beats (1-4) within it. Only ±20ms micro-jitter and
+// velocity vary per hit — the pattern itself never changes.
+const PERCUSSION_VOLUME_DB = -16;
+const PERCUSSION_KICK_INSTRUMENT = 'melodic_tom';
+const PERCUSSION_KICK_PITCH = 'C2';
+const PERCUSSION_KICK_VOLUME_DB = -16;
+const PERCUSSION_KICK_BEATS = [1, 2, 3, 4];
+const PERCUSSION_RIM_INSTRUMENT = 'woodblock';
+const PERCUSSION_RIM_PITCH = 'C4';
+const PERCUSSION_RIM_VOLUME_DB = -16;
+const PERCUSSION_RIM_BEATS = [];
+
 // Small per-note humanization bounds. Timing offset only nudges the AUDIBLE trigger time —
 // it must NOT change note/duration selection (djb2-driven, shared with durationSecondsFor
 // for trail-length sync), so only velocity and a tiny start-time jitter are randomized here.
@@ -267,10 +298,92 @@ function getMasterBus(T) {
     const noiseFilter = new T.Filter(NOISE_FILTER_HZ, 'lowshelf');
     const noiseVolume = new T.Volume(NOISE_VOLUME_DB);
     noise.chain(noiseFilter, noiseVolume, compressor);
-    if (_audioEnabled) noise.start();
 
     _masterBus = { input: compressor, noise };
+    _applyBackfillLayer();
     return _masterBus;
+}
+
+function _humanVelocity() {
+    return HUMANIZE_VELOCITY_MIN + Math.random() * (HUMANIZE_VELOCITY_MAX - HUMANIZE_VELOCITY_MIN);
+}
+
+// Builds the percussion backfill kit lazily, once: a soft sampled tom-thump kick + an
+// occasional sampled woodblock rim, humanized like the note triggers, on a slow Tone.Loop.
+// Feeds bus.input (the master compressor) — NOT Destination — so it inherits the same master
+// glue/softening as the noise bed and every sampled voice. Starting the loop starts
+// Tone.Transport — the app's FIRST use of it; orthogonal to note triggers, which fire off
+// _tone.now(), unscheduled on the Transport (contracts/synth-engine.md INV-5).
+function buildPercussion(T) {
+    const bus = getMasterBus(T);
+    const volume = new T.Volume(PERCUSSION_VOLUME_DB);
+    volume.connect(bus.input);
+
+    // Real recorded hits via Tone.Sampler — the Sampler repitches the two anchor recordings,
+    // exactly like the melodic PALETTE voices (and reuses their buildSampleUrls URL shape).
+    // Four extra small one-shot buffers total; negligible next to the melodic anchors.
+    const kick = new T.Sampler({
+        urls: buildSampleUrls(PERCUSSION_KICK_INSTRUMENT, { C2: 'C2', C3: 'C3' }),
+        volume: PERCUSSION_KICK_VOLUME_DB,
+        release: 1,
+    });
+    kick.connect(volume);
+
+    const rim = new T.Sampler({
+        urls: buildSampleUrls(PERCUSSION_RIM_INSTRUMENT, { C4: 'C4', C5: 'C5' }),
+        volume: PERCUSSION_RIM_VOLUME_DB,
+        release: 0.5,
+    });
+    rim.connect(volume);
+
+    // One callback per 4/4 measure; each voice's hits are scheduled at its fixed
+    // PERCUSSION_*_BEATS quarter-note offsets within the measure. Deterministic placement —
+    // only ±20ms micro-jitter + velocity humanize per hit (Loop callbacks fire a lookAhead
+    // early, so time minus 20ms is still schedulable). loaded guards: the sample fetch/decode
+    // is async while buildPercussion is sync — ticks that fire before the buffers land are
+    // skipped rather than throwing inside the Transport callback.
+    const loop = new T.Loop((time) => {
+        const beatSec = T.Time('4n').toSeconds();
+        const jitter = () => (Math.random() * 2 - 1) * HUMANIZE_TIME_JITTER_SEC;
+        if (kick.loaded) {
+            for (const beat of PERCUSSION_KICK_BEATS) {
+                kick.triggerAttackRelease(PERCUSSION_KICK_PITCH, '2n', time + (beat - 1) * beatSec + jitter(), _humanVelocity());
+            }
+        }
+        if (rim.loaded) {
+            for (const beat of PERCUSSION_RIM_BEATS) {
+                rim.triggerAttackRelease(PERCUSSION_RIM_PITCH, '4n', time + (beat - 1) * beatSec + jitter(), _humanVelocity());
+            }
+        }
+    }, '1m');
+
+    return { loop, kick, rim, volume };
+}
+
+// The single choke point reconciling _audioEnabled x _backfillMode into exactly which of
+// {noise, percussion} runs. BOTH setAudioEnabled and setBackfillTexture call this so the two
+// gates never drift (contracts/synth-engine.md): muted -> both stopped; unmuted -> exactly the
+// selected texture running, the other stopped. Percussion is built lazily on first need.
+function _applyBackfillLayer() {
+    if (!_masterBus) return;
+
+    if (!_audioEnabled) {
+        if (_masterBus.noise.state === 'started') _masterBus.noise.stop();
+        if (_percussion && _percussion.loop.state === 'started') _percussion.loop.stop();
+        return;
+    }
+
+    if (_backfillMode === 'percussion') {
+        if (_masterBus.noise.state === 'started') _masterBus.noise.stop();
+        if (!_percussion) _percussion = buildPercussion(_tone);
+        if (_percussion.loop.state !== 'started') {
+            _tone.getTransport().start();
+            _percussion.loop.start(0);
+        }
+    } else {
+        if (_percussion && _percussion.loop.state === 'started') _percussion.loop.stop();
+        if (_masterBus.noise.state !== 'started') _masterBus.noise.start();
+    }
 }
 
 // Mirrors the app's mute/unmute setting into the JS module. Called from C# on init (with the
@@ -290,18 +403,30 @@ function getMasterBus(T) {
 // belt-and-suspenders guard for genuine long-idle suspension.
 export function setAudioEnabled(enabled) {
     _audioEnabled = !!enabled;
-    if (!_masterBus || !_masterBus.noise) return;
-    if (_audioEnabled) {
-        if (_tone) {
-            const ctx = _tone.getContext().rawContext;
-            if (ctx && ctx.state !== 'running' && typeof ctx.resume === 'function') {
-                ctx.resume().catch(() => { });
-            }
+    if (!_masterBus) return;
+    if (_audioEnabled && _tone) {
+        const ctx = _tone.getContext().rawContext;
+        if (ctx && ctx.state !== 'running' && typeof ctx.resume === 'function') {
+            ctx.resume().catch(() => { });
         }
-        if (_masterBus.noise.state !== 'started') _masterBus.noise.start();
-    } else if (_masterBus.noise.state === 'started') {
-        _masterBus.noise.stop();
     }
+    _applyBackfillLayer();
+}
+
+// Selects which continuous background "backfill" texture plays under the note triggers
+// ('noise' | 'percussion'). Mirrors setAudioEnabled's established live-toggle shape. Safe to
+// call before the master bus exists — the mode is recorded and honored once getMasterBus
+// builds it (contracts/synth-engine.md INV-4).
+export function setBackfillTexture(mode) {
+    _backfillMode = (mode === 'percussion') ? 'percussion' : 'noise';
+    if (!_masterBus) return;
+    if (_tone) {
+        const ctx = _tone.getContext().rawContext;
+        if (ctx && ctx.state !== 'running' && typeof ctx.resume === 'function') {
+            ctx.resume().catch(() => { });
+        }
+    }
+    _applyBackfillLayer();
 }
 
 // Kicks off instrumentForSlot for exactly the PROD_INSTRUMENTS slots (never the full
@@ -555,9 +680,18 @@ export async function dispose() {
         }
     }
     _instrumentCache.clear();
+    if (_percussion) {
+        try {
+            _percussion.loop.dispose();
+            _percussion.kick.dispose();
+            _percussion.rim.dispose();
+            _percussion.volume.dispose();
+        } catch (_) { /* ignore */ }
+        _percussion = null;
+    }
     _masterBus = null;
     _unlocked = false;
     _tone = null;
 }
 
-window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes, getInstrumentNames, setEnabledInstruments, setAudioEnabled };
+window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes, getInstrumentNames, setEnabledInstruments, setAudioEnabled, setBackfillTexture };

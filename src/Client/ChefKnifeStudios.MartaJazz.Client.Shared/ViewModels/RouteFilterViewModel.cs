@@ -29,6 +29,7 @@ public interface IRouteFilterViewModel : IViewModel, IDisposable
     void SelectAll(string category);
     void ClearSelection(string category);
     void SetHoveredRoute(RouteItem? routeItem);
+    void SetHoveredCategory(string? category);
     public bool HasSelection { get; }
     bool HasSelectionFor(string category);
     bool HasEmphasisFor(string category);
@@ -36,6 +37,8 @@ public interface IRouteFilterViewModel : IViewModel, IDisposable
     public string? SelectedRouteJoinKey { get; }
     public IReadOnlyCollection<string> SelectedRouteJoinKeys { get; }
     public string? HoveredRouteJoinKey { get; }
+    public string? HoveredCategory { get; }
+    public IReadOnlyCollection<string> HoveredRouteJoinKeys { get; }
     public IReadOnlyList<string> CategoryOrder { get; }
     public IReadOnlyDictionary<string, int> ActiveCountsByCategory { get; }
 }
@@ -53,7 +56,21 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     IReadOnlyDictionary<string, int> _activeCountsByCategory = new Dictionary<string, int>(StringComparer.Ordinal);
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HoveredRouteJoinKeys))]
     string? _hoveredRouteJoinKey;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HoveredRouteJoinKeys))]
+    string? _hoveredCategory;
+
+    // Effective hover set: a single hovered pill, or every route in a hovered category
+    // (the "Select All" label), whichever is active. Empty when nothing is hovered.
+    public IReadOnlyCollection<string> HoveredRouteJoinKeys =>
+        HoveredCategory is not null
+            ? RouteItems.Where(x => x.Category == HoveredCategory).Select(x => x.RouteJoinKey).ToList()
+            : HoveredRouteJoinKey is not null
+                ? [HoveredRouteJoinKey]
+                : [];
 
     IReadOnlyList<string> _categoryOrder = [];
     public IReadOnlyList<string> CategoryOrder => _categoryOrder;
@@ -189,23 +206,13 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     void RecomputeActiveTransitCounts()
     {
         var selected = SelectedRouteJoinKeys;
-        var hovered = HoveredRouteJoinKey;
+        var hovered = HoveredRouteJoinKeys;
 
-        // Build the effective emphasis set: union of persistent selection and hover.
+        // Build the effective emphasis set: union of persistent selection and hover(s).
         // Empty set means unscoped (all vehicles).
-        IReadOnlyCollection<string> effectiveIds;
-        if (selected.Count == 0 && hovered is null)
-        {
-            effectiveIds = [];
-        }
-        else if (hovered is null || selected.Contains(hovered))
-        {
-            effectiveIds = selected;
-        }
-        else
-        {
-            effectiveIds = [.. selected, hovered];
-        }
+        IReadOnlyCollection<string> effectiveIds = selected.Count == 0 && hovered.Count == 0
+            ? []
+            : [.. selected.Union(hovered, StringComparer.Ordinal)];
 
         IEnumerable<string> vehicleIds = effectiveIds.Count > 0
             ? effectiveIds.SelectMany(id => _routeVehicles.TryGetValue(id, out var v) ? v : [])
@@ -306,13 +313,19 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
         RecomputeActiveTransitCounts();
     }
 
+    public void SetHoveredCategory(string? category)
+    {
+        HoveredCategory = category;
+        RecomputeActiveTransitCounts();
+    }
+
     public bool HasSelection => RouteItems.Any(x => x.IsSelected);
 
     public bool HasSelectionFor(string category) => RouteItems.Any(x => x.IsSelected && x.Category == category);
 
     // Category is in the effective emphasis set (selection ∪ hover) that
     // RecomputeActiveTransitCounts scopes the counts to.
-    public bool HasEmphasisFor(string category) => RouteItems.Any(x =>
+    public bool HasEmphasisFor(string category) => category == HoveredCategory || RouteItems.Any(x =>
         x.Category == category && (x.IsSelected || x.RouteJoinKey == HoveredRouteJoinKey));
 
     public bool IsSingleSelection => SelectedRouteJoinKeys.Count == 1;

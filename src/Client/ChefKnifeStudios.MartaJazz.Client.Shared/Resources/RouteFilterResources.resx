@@ -165,6 +165,12 @@
   <data name="SettingDarkMode" xml:space="preserve">
     <value>Dark mode</value>
   </data>
+  <data name="BackfillNoise" xml:space="preserve">
+    <value>Ambient noise</value>
+  </data>
+  <data name="BackfillPercussion" xml:space="preserve">
+    <value>Lo-fi percussion</value>
+  </data>
   <data name="AudioOverlayHeader" xml:space="preserve">
     <value>MARTA - Atlanta, GA, USA</value>
   </data>

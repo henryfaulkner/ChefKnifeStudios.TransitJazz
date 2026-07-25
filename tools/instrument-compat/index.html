@@ -182,6 +182,82 @@
     <p id="density-hint" class="hint" style="display:none;">Add an instrument to hear the density sim.</p>
   </section>
 
+  <!-- Region 2b: Backfill Audition -->
+  <section id="backfill-controls">
+    <h2>Backfill</h2>
+    <div class="row">
+      <div>
+        <label>Texture</label>
+        <div class="density-buttons row" id="backfill-buttons">
+          <button class="secondary active" data-mode="noise" disabled>Noise</button>
+          <button class="secondary" data-mode="percussion" disabled>Percussion</button>
+        </div>
+      </div>
+    </div>
+    <div id="percussion-knobs" style="display:none; margin-top:0.75rem;">
+      <div class="row">
+        <div class="field">
+          <label for="perc-kick-voice">Kick voice</label>
+          <select id="perc-kick-voice" style="width:8rem;">
+            <option value="melodic_tom" selected>Tom</option>
+            <option value="taiko_drum">Taiko</option>
+            <option value="timpani">Timpani</option>
+            <option value="synth_drum">Synth drum</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="perc-kick-pitch">Kick pitch</label>
+          <input type="text" id="perc-kick-pitch" value="C2" style="width:5rem;" />
+        </div>
+        <div class="field">
+          <label for="perc-kick-volume">Kick volume (dB)</label>
+          <input type="number" id="perc-kick-volume" step="0.5" value="-16" style="width:6rem;" />
+        </div>
+        <div class="field">
+          <label>Kick beats</label>
+          <div class="row" id="perc-kick-beats">
+            <label><input type="checkbox" class="perc-kick-beat" value="1" checked /> 1</label>
+            <label><input type="checkbox" class="perc-kick-beat" value="2" /> 2</label>
+            <label><input type="checkbox" class="perc-kick-beat" value="3" checked /> 3</label>
+            <label><input type="checkbox" class="perc-kick-beat" value="4" /> 4</label>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="perc-rim-voice">Rim voice</label>
+          <select id="perc-rim-voice" style="width:8rem;">
+            <option value="woodblock" selected>Woodblock</option>
+            <option value="melodic_tom">Tom</option>
+            <option value="synth_drum">Synth drum</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="perc-rim-pitch">Rim pitch</label>
+          <input type="text" id="perc-rim-pitch" value="C4" style="width:5rem;" />
+        </div>
+        <div class="field">
+          <label for="perc-rim-volume">Rim volume (dB)</label>
+          <input type="number" id="perc-rim-volume" step="0.5" value="-16" style="width:6rem;" />
+        </div>
+        <div class="field">
+          <label>Rim beats</label>
+          <div class="row" id="perc-rim-beats">
+            <label><input type="checkbox" class="perc-rim-beat" value="1" /> 1</label>
+            <label><input type="checkbox" class="perc-rim-beat" value="2" checked /> 2</label>
+            <label><input type="checkbox" class="perc-rim-beat" value="3" /> 3</label>
+            <label><input type="checkbox" class="perc-rim-beat" value="4" checked /> 4</label>
+          </div>
+        </div>
+        <div class="field">
+          <label for="perc-volume">Overall volume (dB)</label>
+          <input type="number" id="perc-volume" step="0.5" value="-16" style="width:6rem;" />
+        </div>
+      </div>
+      <p class="hint">One 4/4 bar loop (2s at 120 BPM). Pick the beats each voice lands on — placement is fixed, only ±20ms feel-jitter varies. Changes apply live while Percussion runs.</p>
+    </div>
+  </section>
+
   <!-- Region 3: Instruments List -->
   <section id="instruments-section">
     <h2>Instruments</h2>
@@ -268,6 +344,40 @@ const DEFAULT_DURATIONS = ['8n', '8n.', '4n'];
 const STORAGE_KEY = 'instrument-compat:instruments';
 
 // ---------------------------------------------------------------------------
+// Backfill audition — starting-point percussion params (live-tunable via the
+// Backfill section's knobs; NOT pinned constants — see synth-engine.md).
+// ---------------------------------------------------------------------------
+
+// Real recorded hits (FluidR3 GM percussion voices via Tone.Sampler), not synthesis —
+// MembraneSynth/MetalSynth voicing read as drum-machine, not drums (audition feedback).
+// Kick sits at C2 (65Hz), not C1 (33Hz) — a 33Hz fundamental is below what most
+// laptop speakers reproduce at all. Volumes stack (voice dB + layer dB) pre-compressor.
+// Placement is deterministic: one 4/4-measure loop, each voice on fixed quarter-note
+// beats (1-4). Probabilistic rim hits read as procedural, not human (audition feedback).
+let percussionParams = {
+  kickVoice: 'melodic_tom',
+  kickPitch: 'C2',
+  kickVolumeDb: -16,
+  kickBeats: [1, 3],
+  rimVoice: 'woodblock',
+  rimPitch: 'C4',
+  rimVolumeDb: -16,
+  rimBeats: [2, 4],
+  volumeDb: -16,
+};
+
+// Same CDN + URL shape as the app's melodic voices (transit-synth.js SOUNDFONT_BASE).
+const PERCUSSION_SOUNDFONT_BASE = 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM';
+
+function percussionAnchorUrls(instrument, notes) {
+  const urls = {};
+  for (const note of notes) {
+    urls[note] = `${PERCUSSION_SOUNDFONT_BASE}/${instrument}-mp3/${note}.mp3`;
+  }
+  return urls;
+}
+
+// ---------------------------------------------------------------------------
 // Engine core
 // ---------------------------------------------------------------------------
 
@@ -311,12 +421,146 @@ function getMasterBus() {
 }
 
 // ---------------------------------------------------------------------------
+// Backfill: buildPercussion + _applyBackfillLayer (mirrors transit-synth.js's
+// choke point — see contracts/synth-engine.md and contracts/audition-tool.md AUD-3)
+// ---------------------------------------------------------------------------
+
+function humanVelocity() {
+  return HUMANIZE_VELOCITY_MIN + Math.random() * (HUMANIZE_VELOCITY_MAX - HUMANIZE_VELOCITY_MIN);
+}
+
+async function buildPercussion() {
+  const T = await getTone();
+  const bus = await getMasterBus();
+
+  const volume = new T.Volume(percussionParams.volumeDb);
+  volume.connect(bus.input);
+
+  // Real recorded hits via Tone.Sampler — the Sampler repitches the two anchor recordings,
+  // exactly like the app's melodic voices. Matches transit-synth.js buildPercussion.
+  const kick = new T.Sampler({
+    urls: percussionAnchorUrls(percussionParams.kickVoice, ['C2', 'C3']),
+    volume: percussionParams.kickVolumeDb,
+    release: 1,
+  });
+  kick.connect(volume);
+
+  const rim = new T.Sampler({
+    urls: percussionAnchorUrls(percussionParams.rimVoice, ['C4', 'C5']),
+    volume: percussionParams.rimVolumeDb,
+    release: 0.5,
+  });
+  rim.connect(volume);
+
+  try {
+    await T.loaded();
+  } catch (err) {
+    log(`Percussion sample load failed: ${err && err.message ? err.message : err}`);
+  }
+
+  // One callback per 4/4 measure; each voice's hits land on its fixed chosen beats.
+  // Only ±20ms micro-jitter + velocity humanize per hit (Loop callbacks fire a lookAhead
+  // early, so time minus 20ms is still schedulable). loaded guards: skip hits that fire
+  // before the sample fetch/decode finishes.
+  const loop = new T.Loop((time) => {
+    const beatSec = T.Time('4n').toSeconds();
+    const jitter = () => (Math.random() * 2 - 1) * HUMANIZE_TIME_JITTER_SEC;
+    if (kick.loaded) {
+      for (const beat of percussionParams.kickBeats) {
+        kick.triggerAttackRelease(percussionParams.kickPitch, '2n', time + (beat - 1) * beatSec + jitter(), humanVelocity());
+      }
+    }
+    if (rim.loaded) {
+      for (const beat of percussionParams.rimBeats) {
+        rim.triggerAttackRelease(percussionParams.rimPitch, '4n', time + (beat - 1) * beatSec + jitter(), humanVelocity());
+      }
+    }
+  }, '1m');
+
+  return { loop, kick, rim, volume };
+}
+
+async function applyBackfillLayer() {
+  if (!audioUnlocked) return; // not unlocked yet — mode is recorded, honored on Enable Audio
+
+  const bus = await getMasterBus(); // safe to build here: only called once unlocked (Enable Audio / mute toggle / mode select)
+
+  const shouldRun = audioUnlocked && !muted;
+
+  if (!shouldRun) {
+    if (bus.noise.state === 'started') bus.noise.stop();
+    if (percussion && percussion.loop.state === 'started') percussion.loop.stop();
+    return;
+  }
+
+  if (backfillMode === 'percussion') {
+    if (bus.noise.state === 'started') bus.noise.stop();
+    if (!percussion) percussion = await buildPercussion();
+    if (percussion.loop.state !== 'started') {
+      const T = await getTone();
+      T.getTransport().start();
+      percussion.loop.start(0);
+    }
+  } else {
+    if (percussion && percussion.loop.state === 'started') percussion.loop.stop();
+    if (bus.noise.state !== 'started') bus.noise.start();
+  }
+}
+
+async function setBackfillMode(mode) {
+  backfillMode = (mode === 'percussion') ? 'percussion' : 'noise';
+  backfillButtonsEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.mode === backfillMode);
+  });
+  percussionKnobsEl.style.display = (backfillMode === 'percussion') ? 'block' : 'none';
+  await applyBackfillLayer();
+  saveSession();
+}
+
+function readPercussionKnobs() {
+  percussionParams = {
+    kickVoice: percKickVoiceEl.value,
+    kickPitch: percKickPitchEl.value.trim() || 'C2',
+    kickVolumeDb: parseFloat(percKickVolumeEl.value) || 0,
+    kickBeats: percKickBeatEls.filter((c) => c.checked).map((c) => parseInt(c.value, 10)),
+    rimVoice: percRimVoiceEl.value,
+    rimPitch: percRimPitchEl.value.trim() || 'C4',
+    rimVolumeDb: parseFloat(percRimVolumeEl.value) || 0,
+    rimBeats: percRimBeatEls.filter((c) => c.checked).map((c) => parseInt(c.value, 10)),
+    volumeDb: parseFloat(percVolumeEl.value) || 0,
+  };
+  saveSession();
+}
+
+// Live-apply: rebuild the percussion voices so knob changes are audible
+// immediately without waiting for a mode toggle.
+async function rebuildPercussionLive() {
+  readPercussionKnobs();
+  if (backfillMode !== 'percussion' || !percussion) return;
+  const wasRunning = percussion.loop.state === 'started';
+  disposePercussion();
+  percussion = await buildPercussion();
+  if (wasRunning) percussion.loop.start(0);
+}
+
+function disposePercussion() {
+  if (!percussion) return;
+  percussion.loop.dispose();
+  percussion.kick.dispose();
+  percussion.rim.dispose();
+  percussion.volume.dispose();
+  percussion = null;
+}
+
+// ---------------------------------------------------------------------------
 // Global state
 // ---------------------------------------------------------------------------
 
 let audioUnlocked = false;
 let muted = false;
 let activityLevel = 'off';
+let backfillMode = 'noise'; // 'noise' | 'percussion' — mirrors the app's _backfillMode
+let percussion = null;      // lazy { loop, kick, rim, volume } | null
 
 /** @type {Map<string, {spec: object, state: string, errorMessage: string|null, sampler: any, chainNodes: object|null}>} */
 const voices = new Map();
@@ -332,6 +576,17 @@ const audioStatePill = document.getElementById('audio-state-pill');
 const densityButtonsEl = document.getElementById('density-buttons');
 const muteBtn = document.getElementById('mute-btn');
 const densityHintEl = document.getElementById('density-hint');
+const backfillButtonsEl = document.getElementById('backfill-buttons');
+const percussionKnobsEl = document.getElementById('percussion-knobs');
+const percKickVoiceEl = document.getElementById('perc-kick-voice');
+const percKickPitchEl = document.getElementById('perc-kick-pitch');
+const percKickVolumeEl = document.getElementById('perc-kick-volume');
+const percKickBeatEls = [...document.querySelectorAll('.perc-kick-beat')];
+const percRimVoiceEl = document.getElementById('perc-rim-voice');
+const percRimPitchEl = document.getElementById('perc-rim-pitch');
+const percRimVolumeEl = document.getElementById('perc-rim-volume');
+const percRimBeatEls = [...document.querySelectorAll('.perc-rim-beat')];
+const percVolumeEl = document.getElementById('perc-volume');
 const instrumentCardsEl = document.getElementById('instrument-cards');
 const logEl = document.getElementById('log');
 const addForm = document.getElementById('add-instrument-form');
@@ -339,6 +594,13 @@ const anchorRowsEl = document.getElementById('anchor-rows');
 const addAnchorRowBtn = document.getElementById('add-anchor-row-btn');
 const durationCheckboxesEl = document.getElementById('duration-checkboxes');
 const clearAllBtn = document.getElementById('clear-all-btn');
+
+backfillButtonsEl.querySelectorAll('button').forEach((btn) => {
+  btn.addEventListener('click', () => setBackfillMode(btn.dataset.mode));
+});
+
+[percKickVoiceEl, percKickPitchEl, percKickVolumeEl, percRimVoiceEl, percRimPitchEl, percRimVolumeEl, percVolumeEl, ...percKickBeatEls, ...percRimBeatEls]
+  .forEach((el) => el.addEventListener('change', rebuildPercussionLive));
 
 function log(message) {
   const line = document.createElement('div');
@@ -363,6 +625,7 @@ function updateAudioStatePill() {
 
 function setControlsEnabled(enabled) {
   densityButtonsEl.querySelectorAll('button').forEach((b) => { b.disabled = !enabled; });
+  backfillButtonsEl.querySelectorAll('button').forEach((b) => { b.disabled = !enabled; });
   muteBtn.disabled = !enabled;
   document.querySelectorAll('.play-note-btn').forEach((b) => {
     const specId = b.dataset.specId;
@@ -380,10 +643,7 @@ enableAudioBtn.addEventListener('click', async () => {
   audioUnlocked = true;
   updateAudioStatePill();
   setControlsEnabled(true);
-  if (!muted) {
-    const bus = await getMasterBus();
-    if (bus.noise.state !== 'started') bus.noise.start();
-  }
+  await applyBackfillLayer();
   log('Audio enabled.');
 });
 
@@ -485,19 +745,13 @@ async function setMuted(nextMuted) {
   muteBtn.classList.toggle('active', muted);
   updateAudioStatePill();
 
-  if (muted) {
-    if (masterBusPromise) {
-      const bus = await getMasterBus();
-      bus.noise.stop();
-    }
-  } else if (audioUnlocked) {
+  if (!muted && audioUnlocked) {
     const T = await getTone();
     if (T.getContext().rawContext.state === 'suspended') {
       await T.getContext().rawContext.resume();
     }
-    const bus = await getMasterBus();
-    if (bus.noise.state !== 'started') bus.noise.start();
   }
+  await applyBackfillLayer();
 
   saveSession();
 }
@@ -926,6 +1180,11 @@ function saveSession() {
     instruments: [...voices.values()].map((v) => v.spec),
     activityLevel,
     muted,
+    backfill: backfillMode,
+    // Version-stamp so sessions saved before a percussion redesign don't restore
+    // stale params (v4: fixed kick/rim beat grids replaced interval + probability).
+    percVersion: 4,
+    percussionParams,
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
@@ -960,6 +1219,26 @@ async function restoreSession() {
     if (activityLevel !== 'off') scheduleNextDensityTick();
   }
 
+  if (session.percVersion === 4 && session.percussionParams && typeof session.percussionParams === 'object') {
+    percussionParams = { ...percussionParams, ...session.percussionParams };
+    percKickVoiceEl.value = percussionParams.kickVoice;
+    percKickPitchEl.value = percussionParams.kickPitch;
+    percKickVolumeEl.value = percussionParams.kickVolumeDb;
+    percKickBeatEls.forEach((c) => { c.checked = percussionParams.kickBeats.includes(parseInt(c.value, 10)); });
+    percRimVoiceEl.value = percussionParams.rimVoice;
+    percRimPitchEl.value = percussionParams.rimPitch;
+    percRimVolumeEl.value = percussionParams.rimVolumeDb;
+    percRimBeatEls.forEach((c) => { c.checked = percussionParams.rimBeats.includes(parseInt(c.value, 10)); });
+    percVolumeEl.value = percussionParams.volumeDb;
+  }
+  if (session.backfill === 'percussion' || session.backfill === 'noise') {
+    backfillMode = session.backfill;
+    backfillButtonsEl.querySelectorAll('button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.mode === backfillMode);
+    });
+    percussionKnobsEl.style.display = (backfillMode === 'percussion') ? 'block' : 'none';
+  }
+
   if (Array.isArray(session.instruments)) {
     for (const spec of session.instruments) {
       log(`Restoring "${spec.name}"...`);
@@ -986,6 +1265,13 @@ clearAllBtn.addEventListener('click', () => {
   densityButtonsEl.querySelectorAll('button').forEach((b) => {
     b.classList.toggle('active', b.dataset.level === 'off');
   });
+
+  disposePercussion();
+  backfillMode = 'noise';
+  backfillButtonsEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.mode === 'noise');
+  });
+  percussionKnobsEl.style.display = 'none';
 
   renderInstrumentCards();
   updateAudioStatePill();

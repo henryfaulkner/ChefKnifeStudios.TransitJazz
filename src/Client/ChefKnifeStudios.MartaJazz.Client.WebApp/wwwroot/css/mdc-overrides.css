@@ -22,6 +22,26 @@
     }
 }
 
+.backfill-texture-fab-menu.mdc-menu {
+    transform: translateY(-50px) !important;
+    z-index: 75;
+
+    & .mdc-list {
+        padding: 0;
+
+        & .mdc-list-item {
+            padding: 0;
+
+            & .mdc-button {
+                padding: 8px 24px;
+                height: 100%;
+                width: 100%;
+                justify-content: flex-start;
+            }
+        }
+    }
+}
+
 /* RouteFilters lives inside MatExpansionPanelDetails, which MatBlazor renders as
    .mat-expansion-panel__content outside the RouteFilters scoped-CSS tree, so ::deep
    can't reach it. Scoped to the transit-map accordion so other expansion panels

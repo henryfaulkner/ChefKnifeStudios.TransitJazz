@@ -108,6 +108,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _checkpointsVisible = settings.AreCheckpointsVisible;
         _crossingTrailVisible = settings.IsCrossingTrailVisible;
         _ = TransitSynth.SetAudioEnabledAsync(_audioEnabled);
+        _ = TransitSynth.SetBackfillTextureAsync(settings.BackfillTexture.ToString().ToLowerInvariant());
 
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived += HandleSettingsEventReceived;
@@ -171,9 +172,9 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         // Capture the route-filter snapshot at batch-receipt time so the gate reflects what
         // was selected when the crossings arrived, not whatever changes during the spread.
         var selected = RouteFilterViewModel.SelectedRouteJoinKeys;
-        var hovered = RouteFilterViewModel.HoveredRouteJoinKey;
-        var effectiveIds = selected.Count > 0 || hovered is not null
-            ? selected.Concat(hovered is not null ? [hovered] : []).ToHashSet(StringComparer.Ordinal)
+        var hovered = RouteFilterViewModel.HoveredRouteJoinKeys;
+        var effectiveIds = selected.Count > 0 || hovered.Count > 0
+            ? selected.Concat(hovered).ToHashSet(StringComparer.Ordinal)
             : null;
 
         // Project to the dispatcher's payload shape (camelCase → JS). The server stamps each
@@ -353,7 +354,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         if (e.PropertyName is not (nameof(IRouteFilterViewModel.RouteItems)
                                 or nameof(IRouteFilterViewModel.HasSelection)
-                                or nameof(IRouteFilterViewModel.HoveredRouteJoinKey)))
+                                or nameof(IRouteFilterViewModel.HoveredRouteJoinKey)
+                                or nameof(IRouteFilterViewModel.HoveredCategory)))
             return;
 
         if (!_mapReady || _map is null) return;
@@ -366,30 +368,24 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         if (_map is null) return;
 
         var selected = RouteFilterViewModel.SelectedRouteJoinKeys;
-        var hovered = RouteFilterViewModel.HoveredRouteJoinKey;
+        var hovered = RouteFilterViewModel.HoveredRouteJoinKeys;
 
-        // Keep the crossing dispatcher's live filter in sync with the current selection ∪ hover so
+        // Keep the crossing dispatcher's live filter in sync with the current selection ∪ hover(s) so
         // its already-scheduled timers re-check it at fire time (immediate filtering, no ~10s lag).
         // null when nothing is selected/hovered → dispatcher lets all routes through.
-        var effectiveIds = hovered is null && selected.Count == 0
+        var effectiveIds = hovered.Count == 0 && selected.Count == 0
             ? null
-            : hovered is null || selected.Contains(hovered)
-                ? (IEnumerable<string>)selected
-                : selected.Concat([hovered]).ToList();
+            : (IEnumerable<string>)selected.Union(hovered, StringComparer.Ordinal).ToList();
         InvokeAsync(() => _map.SetCrossingFilterAsync(effectiveIds));
 
-        if (hovered is null && selected.Count == 0)
+        if (hovered.Count == 0 && selected.Count == 0)
         {
             InvokeAsync(() => _map.ClearRouteFocusAsync());
             return;
         }
 
-        // Emphasize the union of persistently selected routes and the hovered route.
-        var focusSet = hovered is null
-            ? selected
-            : selected.Contains(hovered)
-                ? selected
-                : selected.Concat([hovered]).ToList();
+        // Emphasize the union of persistently selected routes and the hovered route(s).
+        var focusSet = selected.Union(hovered, StringComparer.Ordinal).ToList();
 
         InvokeAsync(() => _map.FocusRoutesAsync(focusSet));
     }

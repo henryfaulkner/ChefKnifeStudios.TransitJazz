@@ -22,6 +22,13 @@ public interface ITransitSynthJsInterop : IAsyncDisposable
     Task SetAudioEnabledAsync(bool enabled);
 
     /// <summary>
+    /// Selects which continuous background "backfill" texture plays under the note triggers
+    /// ('noise' | 'percussion'). Mirrors the persisted BackfillTexture into the JS engine.
+    /// Safe to call before the master bus exists — the mode is recorded and honored on build.
+    /// </summary>
+    Task SetBackfillTextureAsync(string mode);
+
+    /// <summary>
     /// Frees Samplers cached for routes not in <paramref name="activeRouteIds"/> so decoded
     /// audio doesn't accumulate across a long session. Pass the routes with live vehicles.
     /// </summary>

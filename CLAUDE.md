@@ -1,7 +1,44 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/048-septa-transit/plan.md
+feature plan at specs/049-backfill-texture-selector/plan.md
+
+049-backfill-texture-selector exposes the soundscape's continuous background
+"backfill" filler as a user-selectable choice. Today `transit-synth.js` runs ONE
+fixed layer — a pink-noise bed on the master bus gated by the global audio mute
+(`getMasterBus`, the `Tone.Noise('pink')` at ~-38dB). This feature generalizes that
+single node into a **swappable backfill layer** with two mutually-exclusive states:
+**Noise** (today's bed, the default — byte-for-byte unchanged) and **Percussion** (a
+new sparse, humanized lo-fi kit — `MembraneSynth` kick + `MetalSynth` rim on a slow
+`Tone.Loop`, the app's FIRST use of `Tone.Transport`, feeding the same master
+compressor so it inherits the master glue/softening). Engine changes: new
+`_backfillMode`/`_percussion` state, a `setBackfillTexture(mode)` export shaped like
+`setAudioEnabled`, a single `_applyBackfillLayer()` choke point that reconciles
+`_audioEnabled × _backfillMode` → exactly one running layer (so mute stops BOTH and
+unmute restarts WHICHEVER is selected — the two gates never drift), `buildPercussion`,
+and updates to `getMasterBus`/`setAudioEnabled`/`dispose` + the export map. There is
+ALWAYS a backfill — no "off"; total silence stays the separate audio mute's job. C#:
+a `BackfillTexture { Noise, Percussion }` enum + `[HiddenSetting]` persisted property
+on `Settings.cs` (bump `CurrentVersion` 4→5; `[HiddenSetting]` keeps it out of the
+reflection-driven bool-only `SettingsBlade`), a `SetBackfillTextureAsync(string)`
+interop mirroring `SetAudioEnabledAsync`, and a new `BackfillTextureFab.razor`
+(`graphic_eq`, structured like `CityFab`'s MatFAB+MatMenu, wired like `AudioFab`'s
+read/persist — but NO event bus, nothing else consumes the choice, YAGNI) mounted in
+`MainLayout` and pushed on init beside `SetAudioEnabledAsync` in `TransitMap.razor.cs`
+(~L110). Persistence reuses the existing `SettingsService` local-storage blob (per the
+2026-07-25 clarify) — enum only, never live Tone.js nodes. Labels via
+`IStringLocalizer<RouteFilterResources>` (EN keys only; `.es` deferred per 015/016/017).
+The percussion SOUND is the real experiment: its final `PERCUSSION_*` constants are
+dialed in by ear FIRST via a new Backfill audition mode added to
+`tools/instrument-compat/` (which already reproduces the app's exact master bus, so the
+loop auditioned as a sibling node is fidelity-accurate — no throwaway page), then
+transcribed by hand (no export, matching 047). SUPERSEDES the deferred
+`docs/DRUMKIT_AND_DENSITY_DESIGN_DOCUMENT.md` (its event-driven-off-transit percussion
+is rejected; only its settled synth-drum voice palette §4 is carried over) — mark it
+with a one-line SUPERSEDED banner at implementation time. Frontend-only; no
+server/worker/shared changes. See specs/049-backfill-texture-selector/ for spec, plan,
+research, data-model, the four contracts (synth-engine, settings-interop, backfill-fab,
+audition-tool), and quickstart (audition-first, then D1-D10 acceptance).
 
 048-septa-transit adds Philadelphia **SEPTA** as a live-vehicle city, per
 docs/city-compat/septa.md (92/100, Drop-in). Two-part fork: (1) the live-vehicle
