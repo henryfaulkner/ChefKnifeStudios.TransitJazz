@@ -1,7 +1,59 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/045-time-to-first-note/plan.md
+feature plan at specs/047-instrument-compat/plan.md
+
+047-instrument-compat builds `tools/instrument-compat/index.html`, a single
+self-contained static HTML developer tool (no build step, no backend, no ties
+to the TransitJazz .NET solution — same standalone-tool pattern as
+`tools/telemetry-mcp/`) that lets a sound designer audition candidate
+instruments for the live soundscape without running the app. Faithfully
+reproduces `transit-synth.js`'s exact Tone.js v15 chain: per-voice
+Sampler→Filter(1800Hz)→StereoWidener(0.4)→Volume→Reverb(1.4/0.02/0.35) into a
+shared, lazily-built-once master bus (Compressor→Filter(4000Hz)→Destination
+plus a continuous -38dB pink-noise bed), the verbatim C-minor-pentatonic
+SCALE array + noteForPosition mapping, and the ±20ms/0.75–1.0 humanization
+jitter — all pinned byte-for-byte to the app's constants (constitution
+Principle VIII fidelity binding, not a new principle). Explicit per-note
+anchor-URL instrument add (no base-URL auto-derive mode), an Enable-Audio
+gesture-gated unlock (no autoplay, mirroring the app's iOS Safari fix), a
+Density Off/Low/Medium/High synthetic-crossing scheduler (uniform-random
+instrument choice + random triggerIndex/totalTriggers through the real
+noteForPosition, since there are no real routes to hash), fire-time-rechecked
+mute (silences in-flight notes, not just newly-scheduled ones), and
+localStorage persistence of instrument specs (never live Tone.js nodes —
+rebuilt/re-fetched on reload) + density/mute state. Deliberately does NOT
+build: base-URL convenience mode, a scale-sweep button, or PALETTE-snippet
+export — onboarding a validated instrument into the app stays a manual step.
+See specs/047-instrument-compat/ for spec, plan, research, data-model, the
+engine/fidelity contract, and quickstart (cello-anchor smoke test).
+
+046-discover-transit-city builds `.claude/skills/discover-transit-city/`, a hands-free
+CRON-driven orchestrator skill (zero arguments, invoked weekly by a `/schedule` cloud
+routine) — NOT application code, no server/worker/client/shared files touched. Each run:
+(1) selects one not-yet-evaluated NA/EU transit authority from a curated `candidates.md`
+pool, falling back to open `WebSearch` once exhausted, deduping by city+authority parsed
+from existing `docs/city-compat/*.md` H1s (not filename); (2) resolves ambiguous
+multi-operator cities via a stated tie-break rule (largest urban-core network, unified
+GTFS-RT feed preferred); (3) discovers GTFS-RT vehicle-positions / static GTFS / rail-realtime
+URLs, explicitly rejecting trip-updates/alerts-only endpoints and key-gated feeds (never
+attempts key acquisition); (4) evaluates compatibility by DELEGATING ENTIRELY to the
+existing `mj-gtfs` skill (fetch/decode) and `mj-data-explorer`'s `gtfs-compatibility`
+function (interpretation table) — no new fetch/decode/interpretation logic is written;
+(5) writes exactly one `docs/city-compat/{slug}.md` using one of TWO RIGID, FIELD-BY-FIELD
+FILL-IN TEMPLATES authored in `specs/046-discover-transit-city/contracts/` — 
+`report-template-compatible.md` (mirrors ttc.md's shape) or `report-template-blocked.md`
+(mirrors cta.md's shape, D2: a negative report is a successful run) — chosen once per run,
+never blended, every numeric field either a real `mj-gtfs`-measured value or the literal
+token `UNASSESSED`/`N/A` (never invented); the templates' content becomes the literal body
+of the skill's `references/report-templates.md` at implementation time. (6) commits ONLY
+that one file to a new `compat/{slug}` branch and opens a PR to `main` via `gh pr create`
+— NEVER a direct `main` commit, NEVER a merge, NEVER an `add-transit-city` onboarding
+trigger (see `contracts/pr-delivery-contract.md` for the full invariant list + degraded-path
+handling when push/PR-create fails). See specs/046-discover-transit-city/ for spec, plan,
+research, data-model, the four contracts (both report templates, the six-stage
+orchestration contract, the PR-delivery contract), and quickstart (the required manual
+SEPTA dry-run before the `/schedule` routine is ever created).
 
 017-map-style-toggle adds ONE boolean to the existing 016 Settings Blade —
 IsStreetMapEnabled (default false), [Description("SettingStreetMap")] — that

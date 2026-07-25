@@ -1,0 +1,1006 @@
+<!doctype html>
+<!--
+  TransitJazz Instrument Compatibility Audition Tool
+
+  How to run:
+  - Easiest: open this file directly in a modern browser (double-click, or drag into a browser window).
+  - If ES module import() is blocked on file:// (some browsers restrict this): serve this folder with
+    any static file server, e.g. from tools/instrument-compat/:
+      python -m http.server 8080
+    then open http://localhost:8080/
+
+  See DESIGN_DOCUMENT.md in this folder for the full background and fidelity notes.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TransitJazz Instrument Compatibility</title>
+<style>
+  :root {
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #14161c;
+    color: #e6e6ea;
+    line-height: 1.4;
+  }
+  header, main, footer {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 1rem 1.25rem;
+  }
+  h1 { font-size: 1.35rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: #b9bcc7; }
+  .subtitle { color: #9a9ea9; font-size: 0.9rem; margin: 0 0 1rem; }
+  section {
+    background: #1c1f28;
+    border: 1px solid #2a2e3a;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  button {
+    font: inherit;
+    background: #3a5fd9;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 0.9rem;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: #4b6ee8; }
+  button.secondary {
+    background: #2a2e3a;
+    color: #cfd2db;
+  }
+  button.secondary:hover:not(:disabled) { background: #363b4a; }
+  button.danger {
+    background: #6e2a2a;
+  }
+  button.danger:hover:not(:disabled) { background: #863434; }
+  button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .disabled, [disabled] { opacity: 0.5; }
+  input, select {
+    font: inherit;
+    background: #10121a;
+    border: 1px solid #333747;
+    color: #e6e6ea;
+    border-radius: 5px;
+    padding: 0.35rem 0.5rem;
+  }
+  label { font-size: 0.8rem; color: #9a9ea9; display: block; margin-bottom: 0.2rem; }
+  .field { margin-bottom: 0.6rem; }
+  .row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: flex-end; }
+  .anchor-row { display: flex; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.4rem; }
+  .anchor-row input[data-field="noteName"] { width: 5rem; }
+  .anchor-row input[data-field="url"] { flex: 1; min-width: 12rem; }
+  .anchor-drop-zone {
+    margin-top: 0.3rem;
+    padding: 0.4rem 0.5rem;
+    border: 1px dashed #333747;
+    border-radius: 5px;
+    font-size: 0.75rem;
+    color: #7c8093;
+    text-align: center;
+    cursor: pointer;
+  }
+  .anchor-drop-zone:hover { border-color: #4b6ee8; color: #b9bcc7; }
+  .anchor-drop-zone.drag-over { border-color: #7be08f; color: #7be08f; background: #17251c; }
+  .anchor-drop-zone.has-file { border-style: solid; border-color: #3a5fd9; color: #cfd2db; }
+  .status-pill {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    margin-left: 0.4rem;
+  }
+  .status-locked { background: #3a3d47; color: #b9bcc7; }
+  .status-enabled { background: #1e4d2b; color: #7be08f; }
+  .status-muted { background: #4d3a1e; color: #e0b87b; }
+  .instrument-card {
+    border: 1px solid #2a2e3a;
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    background: #171a22;
+  }
+  .instrument-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .instrument-card .card-name { font-weight: 600; }
+  .instrument-card .anchors-compact { color: #9a9ea9; font-size: 0.8rem; margin: 0.25rem 0; word-break: break-all; }
+  .chip {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+  }
+  .chip-loading { background: #3a3d47; color: #cfd2db; }
+  .chip-ready { background: #1e4d2b; color: #7be08f; }
+  .chip-failed { background: #5a1e1e; color: #f29a9a; }
+  .error-message { color: #f29a9a; font-size: 0.8rem; margin-top: 0.25rem; }
+  .card-controls { display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; }
+  .hint { color: #9a9ea9; font-size: 0.85rem; font-style: italic; }
+  #log {
+    max-height: 160px;
+    overflow-y: auto;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.78rem;
+    background: #0e1016;
+    border-radius: 5px;
+    padding: 0.5rem;
+    color: #9a9ea9;
+  }
+  #log div { white-space: pre-wrap; }
+  .density-buttons button { min-width: 4.5rem; }
+  .density-buttons button.active { outline: 2px solid #7be08f; }
+  details summary { cursor: pointer; color: #9a9ea9; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>TransitJazz Instrument Compatibility</h1>
+  <p class="subtitle">Audition candidate instruments through the app's real synthesis chain, solo and inside a simulated multi-voice soundscape — no build step, no backend.</p>
+  <div class="row">
+    <button id="enable-audio-btn">Enable Audio</button>
+    <span id="audio-state-pill" class="status-pill status-locked">Locked</span>
+  </div>
+</header>
+
+<main>
+  <!-- Region 2: Transport / Density Controls -->
+  <section id="transport-controls">
+    <h2>Transport / Density</h2>
+    <div class="row">
+      <div>
+        <label>Density</label>
+        <div class="density-buttons row" id="density-buttons">
+          <button class="secondary active" data-level="off" disabled>Off</button>
+          <button class="secondary" data-level="low" disabled>Low</button>
+          <button class="secondary" data-level="medium" disabled>Medium</button>
+          <button class="secondary" data-level="high" disabled>High</button>
+        </div>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="mute-btn" class="secondary" disabled>Mute</button>
+      </div>
+    </div>
+    <p id="density-hint" class="hint" style="display:none;">Add an instrument to hear the density sim.</p>
+  </section>
+
+  <!-- Region 3: Instruments List -->
+  <section id="instruments-section">
+    <h2>Instruments</h2>
+    <div id="instrument-cards"></div>
+
+    <details id="add-instrument-details">
+      <summary>Add instrument</summary>
+      <form id="add-instrument-form" style="margin-top:0.75rem;">
+        <div class="field">
+          <label for="new-name">Name</label>
+          <input type="text" id="new-name" placeholder="e.g. cello" />
+        </div>
+
+        <label>Anchor notes (note name + sample URL)</label>
+        <div id="anchor-rows"></div>
+        <div class="row" style="margin-bottom:0.6rem;">
+          <button type="button" id="add-anchor-row-btn" class="secondary">+ Add anchor row</button>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="new-attack">Attack (s)</label>
+            <input type="number" id="new-attack" step="0.001" value="0" style="width:6rem;" />
+          </div>
+          <div class="field">
+            <label for="new-release">Release (s)</label>
+            <input type="number" id="new-release" step="0.01" value="1.0" style="width:6rem;" />
+          </div>
+          <div class="field">
+            <label for="new-volume">Volume (dB)</label>
+            <input type="number" id="new-volume" step="0.5" value="0" style="width:6rem;" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Durations</label>
+          <div class="row" id="duration-checkboxes"></div>
+        </div>
+
+        <button type="submit">Add / Load</button>
+      </form>
+    </details>
+  </section>
+
+  <!-- Region 4: Status / Log Area -->
+  <section id="log-section">
+    <h2>Log</h2>
+    <div id="log"></div>
+  </section>
+
+  <section id="session-controls">
+    <button id="clear-all-btn" class="danger secondary">Clear all</button>
+  </section>
+</main>
+
+<script type="module">
+
+// ---------------------------------------------------------------------------
+// Fidelity constants (verbatim from the live app's transit-synth.js — see
+// DESIGN_DOCUMENT.md §3 and specs/047-instrument-compat/data-model.md).
+// Do NOT change any of these values.
+// ---------------------------------------------------------------------------
+
+const SCALE = ['C2', 'Eb2', 'F2', 'G2', 'Bb2', 'C3', 'Eb3', 'F3', 'G3', 'Bb3'];
+
+const FILTER_CUTOFF_HZ = 1800;
+const STEREO_WIDTH = 0.4;
+const REVERB_DECAY = 1.4;
+const REVERB_PRE_DELAY = 0.02;
+const REVERB_WET = 0.35;
+
+const MASTER_COMPRESSOR = { threshold: -18, ratio: 3, attack: 0.02, release: 0.25 };
+const MASTER_FILTER_HZ = 4000;
+const NOISE_VOLUME_DB = -38;
+const NOISE_FILTER_HZ = 2000;
+
+const HUMANIZE_TIME_JITTER_SEC = 0.02;
+const HUMANIZE_VELOCITY_MIN = 0.75;
+const HUMANIZE_VELOCITY_MAX = 1.0;
+
+const DURATION_TOKENS = ['16n', '16n.', '8n', '8n.', '4n', '4n.', '2n'];
+const DEFAULT_DURATIONS = ['8n', '8n.', '4n'];
+
+const STORAGE_KEY = 'instrument-compat:instruments';
+
+// ---------------------------------------------------------------------------
+// Engine core
+// ---------------------------------------------------------------------------
+
+let toneModulePromise = null;
+function getTone() {
+  if (!toneModulePromise) {
+    toneModulePromise = import('https://esm.sh/tone@15');
+  }
+  return toneModulePromise;
+}
+
+function noteForPosition(scale, triggerIndex, totalTriggers) {
+  const clampedTotal = Math.max(totalTriggers, 1);
+  const clampedIndex = Math.max(0, Math.min(triggerIndex, clampedTotal - 1));
+  const scaleIndex = Math.round((clampedIndex / (clampedTotal - 1 || 1)) * (scale.length - 1));
+  return scale[scaleIndex];
+}
+
+let masterBusPromise = null;
+function getMasterBus() {
+  if (!masterBusPromise) {
+    masterBusPromise = (async () => {
+      const T = await getTone();
+      const compressor = new T.Compressor(MASTER_COMPRESSOR);
+      const filter = new T.Filter(MASTER_FILTER_HZ, 'lowpass');
+      compressor.chain(filter, T.Destination);
+
+      const noise = new T.Noise('pink');
+      const noiseFilter = new T.Filter(NOISE_FILTER_HZ, 'lowshelf');
+      const noiseVolume = new T.Volume(NOISE_VOLUME_DB);
+      noise.chain(noiseFilter, noiseVolume, compressor);
+
+      if (audioUnlocked && !muted) {
+        noise.start();
+      }
+
+      return { input: compressor, noise };
+    })();
+  }
+  return masterBusPromise;
+}
+
+// ---------------------------------------------------------------------------
+// Global state
+// ---------------------------------------------------------------------------
+
+let audioUnlocked = false;
+let muted = false;
+let activityLevel = 'off';
+
+/** @type {Map<string, {spec: object, state: string, errorMessage: string|null, sampler: any, chainNodes: object|null}>} */
+const voices = new Map();
+
+let densityTimer = null;
+
+// ---------------------------------------------------------------------------
+// DOM refs
+// ---------------------------------------------------------------------------
+
+const enableAudioBtn = document.getElementById('enable-audio-btn');
+const audioStatePill = document.getElementById('audio-state-pill');
+const densityButtonsEl = document.getElementById('density-buttons');
+const muteBtn = document.getElementById('mute-btn');
+const densityHintEl = document.getElementById('density-hint');
+const instrumentCardsEl = document.getElementById('instrument-cards');
+const logEl = document.getElementById('log');
+const addForm = document.getElementById('add-instrument-form');
+const anchorRowsEl = document.getElementById('anchor-rows');
+const addAnchorRowBtn = document.getElementById('add-anchor-row-btn');
+const durationCheckboxesEl = document.getElementById('duration-checkboxes');
+const clearAllBtn = document.getElementById('clear-all-btn');
+
+function log(message) {
+  const line = document.createElement('div');
+  const time = new Date().toLocaleTimeString();
+  line.textContent = `[${time}] ${message}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function updateAudioStatePill() {
+  if (!audioUnlocked) {
+    audioStatePill.textContent = 'Locked';
+    audioStatePill.className = 'status-pill status-locked';
+  } else if (muted) {
+    audioStatePill.textContent = 'Muted';
+    audioStatePill.className = 'status-pill status-muted';
+  } else {
+    audioStatePill.textContent = 'Enabled';
+    audioStatePill.className = 'status-pill status-enabled';
+  }
+}
+
+function setControlsEnabled(enabled) {
+  densityButtonsEl.querySelectorAll('button').forEach((b) => { b.disabled = !enabled; });
+  muteBtn.disabled = !enabled;
+  document.querySelectorAll('.play-note-btn').forEach((b) => {
+    const specId = b.dataset.specId;
+    const voice = voices.get(specId);
+    b.disabled = !enabled || !voice || voice.state !== 'ready';
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Enable Audio (gesture-gated unlock)
+// ---------------------------------------------------------------------------
+
+enableAudioBtn.addEventListener('click', async () => {
+  const T = await Tone_start_guard();
+  audioUnlocked = true;
+  updateAudioStatePill();
+  setControlsEnabled(true);
+  if (!muted) {
+    const bus = await getMasterBus();
+    if (bus.noise.state !== 'started') bus.noise.start();
+  }
+  log('Audio enabled.');
+});
+
+// Tone.start() must be the first awaited call in the handler's chain (no
+// other await before it), per the app's iOS Safari gesture-window fix.
+async function Tone_start_guard() {
+  const T = await getTone();
+  await T.start();
+  return T;
+}
+
+// ---------------------------------------------------------------------------
+// buildInstrument / triggerNote
+// ---------------------------------------------------------------------------
+
+async function buildInstrument(spec) {
+  const voice = { spec, state: 'loading', errorMessage: null, sampler: null, chainNodes: null };
+  voices.set(spec.id, voice);
+  renderInstrumentCards();
+
+  const T = await getTone();
+
+  const urls = {};
+  for (const anchor of spec.anchors) {
+    urls[anchor.noteName] = anchor.url;
+  }
+
+  await new Promise((resolve) => {
+    const sampler = new T.Sampler(urls, {
+      attack: spec.attack,
+      release: spec.release,
+      onload: () => {
+        (async () => {
+          try {
+            const filter = new T.Filter(FILTER_CUTOFF_HZ, 'lowpass');
+            const widener = new T.StereoWidener(STEREO_WIDTH);
+            const volume = new T.Volume(spec.volumeDb ?? 0);
+            const reverb = new T.Reverb({ decay: REVERB_DECAY, preDelay: REVERB_PRE_DELAY, wet: REVERB_WET });
+            await reverb.generate();
+            const bus = await getMasterBus();
+            sampler.chain(filter, widener, volume, reverb, bus.input);
+
+            voice.sampler = sampler;
+            voice.chainNodes = { filter, widener, volume, reverb };
+            voice.state = 'ready';
+            log(`"${spec.name}" ready.`);
+          } catch (err) {
+            voice.state = 'failed';
+            voice.errorMessage = err && err.message ? err.message : String(err);
+            log(`"${spec.name}" failed: ${voice.errorMessage}`);
+          }
+          renderInstrumentCards();
+          resolve();
+        })();
+      },
+      onerror: (err) => {
+        voice.state = 'failed';
+        voice.errorMessage = err && err.message ? err.message : String(err);
+        voice.sampler = sampler;
+        log(`"${spec.name}" failed to load: ${voice.errorMessage}`);
+        renderInstrumentCards();
+        resolve();
+      },
+    });
+  });
+
+  return voice;
+}
+
+function triggerNote(voice, triggerIndex, totalTriggers) {
+  if (!voice || voice.state !== 'ready') return;
+  if (muted) return; // fire-time re-check, not just schedule-time
+
+  const note = noteForPosition(SCALE, triggerIndex, totalTriggers);
+  const durations = voice.spec.durations && voice.spec.durations.length ? voice.spec.durations : DEFAULT_DURATIONS;
+  const durationToken = durations[Math.floor(Math.random() * durations.length)];
+  const velocity = HUMANIZE_VELOCITY_MIN + Math.random() * (HUMANIZE_VELOCITY_MAX - HUMANIZE_VELOCITY_MIN);
+  const startTime = Tone_now() + (Math.random() * 2 - 1) * HUMANIZE_TIME_JITTER_SEC;
+
+  voice.sampler.triggerAttackRelease(note, durationToken, startTime, velocity);
+}
+
+let cachedToneForNow = null;
+function Tone_now() {
+  // getTone() is already resolved by the time triggerNote can be called
+  // (voice.state === 'ready' implies the module loaded), so this sync
+  // helper is safe to call from the hot path.
+  return cachedToneForNow.now();
+}
+getTone().then((T) => { cachedToneForNow = T; });
+
+// ---------------------------------------------------------------------------
+// Mute
+// ---------------------------------------------------------------------------
+
+async function setMuted(nextMuted) {
+  muted = nextMuted;
+  muteBtn.textContent = muted ? 'Unmute' : 'Mute';
+  muteBtn.classList.toggle('active', muted);
+  updateAudioStatePill();
+
+  if (muted) {
+    if (masterBusPromise) {
+      const bus = await getMasterBus();
+      bus.noise.stop();
+    }
+  } else if (audioUnlocked) {
+    const T = await getTone();
+    if (T.getContext().rawContext.state === 'suspended') {
+      await T.getContext().rawContext.resume();
+    }
+    const bus = await getMasterBus();
+    if (bus.noise.state !== 'started') bus.noise.start();
+  }
+
+  saveSession();
+}
+
+muteBtn.addEventListener('click', () => {
+  setMuted(!muted);
+});
+
+// ---------------------------------------------------------------------------
+// Density
+// ---------------------------------------------------------------------------
+
+const DENSITY_RATE_RANGE_PER_SEC = {
+  off: [0, 0],
+  low: [0.5, 1],
+  medium: [4, 5],
+  high: [7, 9],
+};
+
+function setActivityLevel(level) {
+  activityLevel = level;
+  densityButtonsEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.level === level);
+  });
+  updateDensityHint();
+  saveSession();
+
+  if (densityTimer) {
+    clearTimeout(densityTimer);
+    densityTimer = null;
+  }
+  if (level !== 'off') {
+    scheduleNextDensityTick();
+  }
+}
+
+function scheduleNextDensityTick() {
+  const [minRate, maxRate] = DENSITY_RATE_RANGE_PER_SEC[activityLevel];
+  if (activityLevel === 'off' || maxRate === 0) return;
+
+  const rate = minRate + Math.random() * (maxRate - minRate);
+  const meanGapMs = 1000 / rate;
+  // Randomized inter-arrival gap (Poisson-ish) around the mean, per research.md.
+  const gapMs = meanGapMs * (0.5 + Math.random());
+
+  densityTimer = setTimeout(() => {
+    fireDensityTick();
+    scheduleNextDensityTick();
+  }, gapMs);
+}
+
+function fireDensityTick() {
+  const readyVoices = [...voices.values()].filter((v) => v.state === 'ready');
+  if (readyVoices.length === 0) return;
+
+  const voice = readyVoices[Math.floor(Math.random() * readyVoices.length)];
+  const totalTriggers = 8 + Math.floor(Math.random() * 17); // [8,24]
+  const triggerIndex = Math.floor(Math.random() * totalTriggers); // [0,totalTriggers)
+  triggerNote(voice, triggerIndex, totalTriggers);
+}
+
+function updateDensityHint() {
+  const anyReady = [...voices.values()].some((v) => v.state === 'ready');
+  densityHintEl.style.display = (activityLevel !== 'off' && !anyReady) ? 'block' : 'none';
+}
+
+densityButtonsEl.querySelectorAll('button').forEach((btn) => {
+  btn.addEventListener('click', () => setActivityLevel(btn.dataset.level));
+});
+
+// ---------------------------------------------------------------------------
+// Add-instrument form: anchor rows + duration checkboxes
+// ---------------------------------------------------------------------------
+
+function readFileAsDataUri(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function filenameToNoteGuess(filename) {
+  return filename.replace(/\.[^/.]+$/, '');
+}
+
+// Shared by both the add-instrument form and the per-card edit form: makes an
+// anchor row's URL field a file drop target (plus a click-to-browse fallback),
+// converting a dropped/chosen audio file into a data: URI so it persists to
+// localStorage the same way a pasted URL does (see anchor.url in data-model.md).
+function wireAnchorRowDrop(row) {
+  const urlInput = row.querySelector('[data-field="url"]');
+  const noteInput = row.querySelector('[data-field="noteName"]');
+  const dropZone = row.querySelector('.anchor-drop-zone');
+  const fileInput = row.querySelector('[data-field="file"]');
+
+  async function loadFile(file) {
+    if (!file) return;
+    if (file.type && !file.type.startsWith('audio/')) {
+      log(`"${file.name}" doesn't look like an audio file — using it anyway.`);
+    }
+    try {
+      urlInput.value = await readFileAsDataUri(file);
+      if (!noteInput.value.trim()) {
+        noteInput.value = filenameToNoteGuess(file.name);
+      }
+      dropZone.textContent = `Loaded: ${file.name}`;
+      dropZone.classList.add('has-file');
+    } catch (err) {
+      log(`Failed to read "${file.name}": ${err && err.message ? err.message : err}`);
+    }
+  }
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => loadFile(fileInput.files[0]));
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+  });
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    loadFile(e.dataTransfer.files[0]);
+  });
+}
+
+function anchorRowInnerHtml(noteName, url) {
+  return `
+    <div>
+      <label>Note</label>
+      <input type="text" data-field="noteName" value="${escapeHtml(noteName)}" placeholder="C2" />
+    </div>
+    <div style="flex:1;">
+      <label>Sample URL</label>
+      <input type="url" data-field="url" value="${escapeHtml(url)}" placeholder="https://.../C2.mp3" />
+      <div class="anchor-drop-zone">Drop audio file here, or click to browse</div>
+      <input type="file" data-field="file" accept="audio/*" style="display:none;" />
+    </div>
+    <button type="button" class="secondary remove-anchor-row-btn">Remove</button>
+  `;
+}
+
+function addAnchorRow(noteName = '', url = '') {
+  const row = document.createElement('div');
+  row.className = 'anchor-row';
+  row.innerHTML = anchorRowInnerHtml(noteName, url);
+  row.querySelector('.remove-anchor-row-btn').addEventListener('click', () => {
+    if (anchorRowsEl.children.length > 1) {
+      row.remove();
+    }
+  });
+  wireAnchorRowDrop(row);
+  anchorRowsEl.appendChild(row);
+}
+
+addAnchorRowBtn.addEventListener('click', () => addAnchorRow());
+
+function resetAddForm() {
+  anchorRowsEl.innerHTML = '';
+  addAnchorRow('C2', '');
+  addAnchorRow('C3', '');
+
+  durationCheckboxesEl.innerHTML = '';
+  DURATION_TOKENS.forEach((token) => {
+    const id = `dur-${token.replace('.', 'dot')}`;
+    const wrapper = document.createElement('label');
+    wrapper.style.display = 'inline-flex';
+    wrapper.style.alignItems = 'center';
+    wrapper.style.gap = '0.25rem';
+    wrapper.style.marginRight = '0.5rem';
+    wrapper.innerHTML = `<input type="checkbox" id="${id}" value="${token}" ${DEFAULT_DURATIONS.includes(token) ? 'checked' : ''}/> ${token}`;
+    durationCheckboxesEl.appendChild(wrapper);
+  });
+
+  document.getElementById('new-name').value = '';
+  document.getElementById('new-attack').value = '0';
+  document.getElementById('new-release').value = '1.0';
+  document.getElementById('new-volume').value = '0';
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function genId() {
+  return 'inst-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+addForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const anchors = [...anchorRowsEl.querySelectorAll('.anchor-row')].map((row) => ({
+    noteName: row.querySelector('[data-field="noteName"]').value.trim(),
+    url: row.querySelector('[data-field="url"]').value.trim(),
+  })).filter((a) => a.noteName && a.url);
+
+  if (anchors.length === 0) {
+    log('Cannot add instrument: at least one anchor row needs both a note name and a URL.');
+    return;
+  }
+
+  const durations = [...durationCheckboxesEl.querySelectorAll('input[type="checkbox"]:checked')].map((cb) => cb.value);
+
+  const name = document.getElementById('new-name').value.trim() || `Instrument ${voices.size + 1}`;
+
+  const spec = {
+    id: genId(),
+    name,
+    anchors,
+    attack: parseFloat(document.getElementById('new-attack').value) || 0,
+    release: parseFloat(document.getElementById('new-release').value) || 1.0,
+    volumeDb: parseFloat(document.getElementById('new-volume').value) || 0,
+    durations: durations.length ? durations : [...DEFAULT_DURATIONS],
+  };
+
+  resetAddForm();
+  document.getElementById('add-instrument-details').open = false;
+
+  log(`Loading "${spec.name}"...`);
+  await buildInstrument(spec);
+  saveSession();
+});
+
+// ---------------------------------------------------------------------------
+// Instrument cards
+// ---------------------------------------------------------------------------
+
+function renderInstrumentCards() {
+  instrumentCardsEl.innerHTML = '';
+
+  for (const voice of voices.values()) {
+    const card = document.createElement('div');
+    card.className = 'instrument-card';
+
+    const anchorsCompact = voice.spec.anchors
+      .map((a) => `${a.noteName}: ${a.url.startsWith('data:') ? '(uploaded file)' : a.url}`)
+      .join(' · ');
+
+    const chipClass = voice.state === 'ready' ? 'chip-ready' : voice.state === 'failed' ? 'chip-failed' : 'chip-loading';
+    const chipLabel = voice.state === 'ready' ? 'Ready ✓' : voice.state === 'failed' ? 'Failed' : 'Loading…';
+
+    card.innerHTML = `
+      <div class="card-header">
+        <span class="card-name">${escapeHtml(voice.spec.name)}</span>
+        <span class="chip ${chipClass}">${chipLabel}</span>
+      </div>
+      <div class="anchors-compact">${escapeHtml(anchorsCompact)}</div>
+      ${voice.state === 'failed' ? `<div class="error-message">${escapeHtml(voice.errorMessage || 'Unknown error')}</div>` : ''}
+      <div class="card-controls">
+        <button class="play-note-btn secondary" data-spec-id="${voice.spec.id}" ${voice.state !== 'ready' || !audioUnlocked ? 'disabled' : ''}>Play note</button>
+        <button class="edit-btn secondary" data-spec-id="${voice.spec.id}">Edit</button>
+        <button class="remove-btn danger secondary" data-spec-id="${voice.spec.id}">Remove</button>
+      </div>
+      <div class="edit-form" style="display:none;"></div>
+    `;
+
+    card.querySelector('.play-note-btn').addEventListener('click', () => {
+      const totalTriggers = 8 + Math.floor(Math.random() * 17);
+      const triggerIndex = Math.floor(Math.random() * totalTriggers);
+      triggerNote(voice, triggerIndex, totalTriggers);
+    });
+
+    card.querySelector('.edit-btn').addEventListener('click', () => {
+      toggleEditForm(card, voice);
+    });
+
+    card.querySelector('.remove-btn').addEventListener('click', () => {
+      removeInstrument(voice.spec.id);
+    });
+
+    instrumentCardsEl.appendChild(card);
+  }
+
+  updateDensityHint();
+}
+
+function toggleEditForm(card, voice) {
+  const editFormEl = card.querySelector('.edit-form');
+  const isOpen = editFormEl.style.display !== 'none';
+  if (isOpen) {
+    editFormEl.style.display = 'none';
+    editFormEl.innerHTML = '';
+    return;
+  }
+
+  editFormEl.style.display = 'block';
+  editFormEl.style.marginTop = '0.6rem';
+  editFormEl.style.borderTop = '1px solid #2a2e3a';
+  editFormEl.style.paddingTop = '0.6rem';
+
+  const spec = voice.spec;
+  editFormEl.innerHTML = `
+    <div class="field">
+      <label>Name</label>
+      <input type="text" data-field="name" value="${escapeHtml(spec.name)}" />
+    </div>
+    <label>Anchor notes (note name + sample URL)</label>
+    <div class="edit-anchor-rows"></div>
+    <div class="row" style="margin-bottom:0.6rem;">
+      <button type="button" class="secondary edit-add-anchor-row-btn">+ Add anchor row</button>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Attack (s)</label>
+        <input type="number" data-field="attack" step="0.001" value="${spec.attack}" style="width:6rem;" />
+      </div>
+      <div class="field">
+        <label>Release (s)</label>
+        <input type="number" data-field="release" step="0.01" value="${spec.release}" style="width:6rem;" />
+      </div>
+      <div class="field">
+        <label>Volume (dB)</label>
+        <input type="number" data-field="volumeDb" step="0.5" value="${spec.volumeDb}" style="width:6rem;" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Durations</label>
+      <div class="row edit-duration-checkboxes"></div>
+    </div>
+    <div class="row">
+      <button type="button" class="edit-save-btn">Save &amp; rebuild</button>
+      <button type="button" class="secondary edit-cancel-btn">Cancel</button>
+    </div>
+  `;
+
+  const editAnchorRowsEl = editFormEl.querySelector('.edit-anchor-rows');
+  const addEditAnchorRow = (noteName = '', url = '') => {
+    const row = document.createElement('div');
+    row.className = 'anchor-row';
+    row.innerHTML = anchorRowInnerHtml(noteName, url);
+    row.querySelector('.remove-anchor-row-btn').addEventListener('click', () => {
+      if (editAnchorRowsEl.children.length > 1) row.remove();
+    });
+    wireAnchorRowDrop(row);
+    editAnchorRowsEl.appendChild(row);
+  };
+  spec.anchors.forEach((a) => addEditAnchorRow(a.noteName, a.url));
+  editFormEl.querySelector('.edit-add-anchor-row-btn').addEventListener('click', () => addEditAnchorRow());
+
+  const editDurationCheckboxesEl = editFormEl.querySelector('.edit-duration-checkboxes');
+  DURATION_TOKENS.forEach((token) => {
+    const wrapper = document.createElement('label');
+    wrapper.style.display = 'inline-flex';
+    wrapper.style.alignItems = 'center';
+    wrapper.style.gap = '0.25rem';
+    wrapper.style.marginRight = '0.5rem';
+    wrapper.innerHTML = `<input type="checkbox" value="${token}" ${spec.durations.includes(token) ? 'checked' : ''}/> ${token}`;
+    editDurationCheckboxesEl.appendChild(wrapper);
+  });
+
+  editFormEl.querySelector('.edit-cancel-btn').addEventListener('click', () => {
+    editFormEl.style.display = 'none';
+    editFormEl.innerHTML = '';
+  });
+
+  editFormEl.querySelector('.edit-save-btn').addEventListener('click', () => {
+    const anchors = [...editAnchorRowsEl.querySelectorAll('.anchor-row')].map((row) => ({
+      noteName: row.querySelector('[data-field="noteName"]').value.trim(),
+      url: row.querySelector('[data-field="url"]').value.trim(),
+    })).filter((a) => a.noteName && a.url);
+
+    if (anchors.length === 0) {
+      log(`Cannot save "${spec.name}": at least one anchor row needs both a note name and a URL.`);
+      return;
+    }
+
+    const durations = [...editDurationCheckboxesEl.querySelectorAll('input[type="checkbox"]:checked')].map((cb) => cb.value);
+
+    const updatedSpec = {
+      id: spec.id,
+      name: editFormEl.querySelector('[data-field="name"]').value.trim() || spec.name,
+      anchors,
+      attack: parseFloat(editFormEl.querySelector('[data-field="attack"]').value) || 0,
+      release: parseFloat(editFormEl.querySelector('[data-field="release"]').value) || 1.0,
+      volumeDb: parseFloat(editFormEl.querySelector('[data-field="volumeDb"]').value) || 0,
+      durations: durations.length ? durations : [...DEFAULT_DURATIONS],
+    };
+
+    rebuildInstrument(updatedSpec);
+  });
+}
+
+async function rebuildInstrument(updatedSpec) {
+  const oldVoice = voices.get(updatedSpec.id);
+  if (oldVoice) {
+    disposeVoice(oldVoice);
+  }
+  log(`Rebuilding "${updatedSpec.name}"...`);
+  await buildInstrument(updatedSpec);
+  saveSession();
+}
+
+function disposeVoice(voice) {
+  if (voice.chainNodes) {
+    Object.values(voice.chainNodes).forEach((node) => node.dispose());
+  }
+  if (voice.sampler) {
+    voice.sampler.dispose();
+  }
+}
+
+function removeInstrument(specId) {
+  const voice = voices.get(specId);
+  if (voice) {
+    disposeVoice(voice);
+    voices.delete(specId);
+  }
+  renderInstrumentCards();
+  saveSession();
+  log(`Removed "${voice ? voice.spec.name : specId}".`);
+}
+
+// ---------------------------------------------------------------------------
+// Persistence
+// ---------------------------------------------------------------------------
+
+function saveSession() {
+  const session = {
+    instruments: [...voices.values()].map((v) => v.spec),
+    activityLevel,
+    muted,
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  } catch (err) {
+    log(`Could not save session (localStorage full — uploaded files count against the browser's storage quota): ${err && err.message ? err.message : err}`);
+  }
+}
+
+async function restoreSession() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+
+  let session;
+  try {
+    session = JSON.parse(raw);
+  } catch {
+    return;
+  }
+
+  if (typeof session.muted === 'boolean') {
+    muted = session.muted;
+    muteBtn.textContent = muted ? 'Unmute' : 'Mute';
+    muteBtn.classList.toggle('active', muted);
+  }
+  updateAudioStatePill();
+
+  if (session.activityLevel) {
+    activityLevel = session.activityLevel;
+    densityButtonsEl.querySelectorAll('button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.level === activityLevel);
+    });
+    if (activityLevel !== 'off') scheduleNextDensityTick();
+  }
+
+  if (Array.isArray(session.instruments)) {
+    for (const spec of session.instruments) {
+      log(`Restoring "${spec.name}"...`);
+      buildInstrument(spec).then(() => saveSession());
+    }
+  }
+}
+
+clearAllBtn.addEventListener('click', () => {
+  if (densityTimer) {
+    clearTimeout(densityTimer);
+    densityTimer = null;
+  }
+  for (const voice of voices.values()) {
+    disposeVoice(voice);
+  }
+  voices.clear();
+  localStorage.removeItem(STORAGE_KEY);
+
+  activityLevel = 'off';
+  muted = false;
+  muteBtn.textContent = 'Mute';
+  muteBtn.classList.remove('active');
+  densityButtonsEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.level === 'off');
+  });
+
+  renderInstrumentCards();
+  updateAudioStatePill();
+  log('Cleared all instruments and reset session.');
+});
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+
+resetAddForm();
+restoreSession();
+renderInstrumentCards();
+log('Tool loaded. Click Enable Audio to begin.');
+
+</script>
+</body>
+</html>

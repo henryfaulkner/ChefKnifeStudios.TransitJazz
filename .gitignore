@@ -61,8 +61,6 @@ nunit-*.xml
 .opencode
 .specify
 bloat-reports
-specs
-docs
 .mcp.json
 
 .claude/settings.local.json
