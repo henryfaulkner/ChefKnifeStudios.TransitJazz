@@ -233,7 +233,7 @@ const PERCUSSION_KICK_BEATS = [1, 2, 3, 4];
 const PERCUSSION_RIM_INSTRUMENT = 'woodblock';
 const PERCUSSION_RIM_PITCH = 'C4';
 const PERCUSSION_RIM_VOLUME_DB = -16;
-const PERCUSSION_RIM_BEATS = [4];
+const PERCUSSION_RIM_BEATS = [];
 
 // Small per-note humanization bounds. Timing offset only nudges the AUDIBLE trigger time —
 // it must NOT change note/duration selection (djb2-driven, shared with durationSecondsFor

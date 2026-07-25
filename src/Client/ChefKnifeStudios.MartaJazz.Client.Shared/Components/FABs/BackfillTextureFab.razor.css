@@ -1,8 +1,7 @@
 .backfill-texture-fab-container {
     position: fixed;
     bottom: 42px;
-    right: 274px;
-    z-index: 75;
+    right: 224px;
 }
 
 ::deep .mdc-fab {
