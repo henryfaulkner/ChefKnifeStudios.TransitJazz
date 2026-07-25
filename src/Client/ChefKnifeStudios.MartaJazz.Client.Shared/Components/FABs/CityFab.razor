@@ -20,19 +20,19 @@
                 <MatButton Label="Boston, MA" Mini="true" @onclick="HandleMbtaClicked" Disabled="@(CurrentCity == CityNames.Mbta)" />
             </MatListItem>
             <MatListItem>
+                <MatButton Label="Denver, CO" Mini="true" @onclick="HandleRtdClicked" Disabled="@(CurrentCity == CityNames.Rtd)" />
+            </MatListItem>
+            <MatListItem>
                 <MatButton Label="New York, NY" Mini="true" @onclick="HandleNymtaClicked" Disabled="@(CurrentCity == CityNames.Nymta)" />
-            </MatListItem>
-            <MatListItem>
-                <MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked"  Disabled="@(CurrentCity == CityNames.Wmata)" />
-            </MatListItem>
-            <MatListItem>
-                <MatButton Label="Toronto, ON" Mini="true" @onclick="HandleTtcClicked" Disabled="@(CurrentCity == CityNames.Ttc)" />
             </MatListItem>
             <MatListItem>
                 <MatButton Label="Philadelphia, PA" Mini="true" @onclick="HandleSeptaClicked" Disabled="@(CurrentCity == CityNames.Septa)" />
             </MatListItem>
             <MatListItem>
-                <MatButton Label="Denver, CO" Mini="true" @onclick="HandleRtdClicked" Disabled="@(CurrentCity == CityNames.Rtd)" />
+                <MatButton Label="Toronto, ON" Mini="true" @onclick="HandleTtcClicked" Disabled="@(CurrentCity == CityNames.Ttc)" />
+            </MatListItem>
+            <MatListItem>
+                <MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked" Disabled="@(CurrentCity == CityNames.Wmata)" />
             </MatListItem>
         </MatList>
     </MatMenu>
