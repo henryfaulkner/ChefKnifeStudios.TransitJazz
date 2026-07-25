@@ -3,11 +3,11 @@ using Xunit;
 
 namespace ChefKnifeStudios.MartaJazz.Client.Shared.Tests;
 
-// Route colors that wash out against the current theme's background are swapped for a
-// fallback everywhere a route color is rendered — RouteFilters pills and the map route-line
-// layer must agree. Light theme washes out white/light-grey only. Dark theme washes out BOTH
-// ends: white/light-grey (still a weak color) → red, and black/dark-grey (invisible against
-// the dark background) → blue.
+// Route colors that are white/light-grey or black/dark-grey are swapped for a fallback
+// everywhere a route color is rendered — RouteFilters pills and the map route-line layer
+// must agree, since a route can otherwise render invisibly in one place and visibly in the
+// other. White/light-grey always falls back to red; black/dark-grey always falls back to
+// blue — independent of light/dark theme.
 public class RouteColorFallbackTests
 {
     [Theory]
@@ -17,21 +17,9 @@ public class RouteColorFallbackTests
     [InlineData("#F0F0F0")]
     [InlineData(null)]
     [InlineData("")]
-    public void ResolveColor_LightMode_FallsBackRedForWhiteAndLightGrey(string? color)
+    public void ResolveColor_FallsBackRedForWhiteAndLightGrey(string? color)
     {
-        Assert.Equal(RouteColorFallback.WhiteFallbackColor, RouteColorFallback.ResolveColor(color, isDarkMode: false));
-    }
-
-    [Theory]
-    [InlineData("#FFFFFF")]
-    [InlineData("#FFF")]
-    [InlineData("#FEFEFE")]
-    [InlineData("#F0F0F0")]
-    [InlineData(null)]
-    [InlineData("")]
-    public void ResolveColor_DarkMode_FallsBackRedForWhiteAndLightGrey(string? color)
-    {
-        Assert.Equal(RouteColorFallback.WhiteFallbackColor, RouteColorFallback.ResolveColor(color, isDarkMode: true));
+        Assert.Equal(RouteColorFallback.WhiteFallbackColor, RouteColorFallback.ResolveColor(color));
     }
 
     [Theory]
@@ -39,24 +27,17 @@ public class RouteColorFallbackTests
     [InlineData("#000")]
     [InlineData("#010101")]
     [InlineData("#1A1A1A")]
-    public void ResolveColor_DarkMode_FallsBackBlueForBlackAndDarkGrey(string color)
+    public void ResolveColor_FallsBackBlueForBlackAndDarkGrey(string color)
     {
-        Assert.Equal(RouteColorFallback.BlackFallbackColor, RouteColorFallback.ResolveColor(color, isDarkMode: true));
-    }
-
-    [Fact]
-    public void ResolveColor_LightMode_KeepsBlack_NotWashedOutOnLightBackground()
-    {
-        Assert.Equal("#000000", RouteColorFallback.ResolveColor("#000000", isDarkMode: false));
+        Assert.Equal(RouteColorFallback.BlackFallbackColor, RouteColorFallback.ResolveColor(color));
     }
 
     [Theory]
     [InlineData("#CC0000")]
     [InlineData("#1F77B4")]
     [InlineData("#22AA55")]
-    public void ResolveColor_SaturatedColor_PassesThroughInBothModes(string color)
+    public void ResolveColor_SaturatedColor_PassesThrough(string color)
     {
-        Assert.Equal(color, RouteColorFallback.ResolveColor(color, isDarkMode: false));
-        Assert.Equal(color, RouteColorFallback.ResolveColor(color, isDarkMode: true));
+        Assert.Equal(color, RouteColorFallback.ResolveColor(color));
     }
 }
