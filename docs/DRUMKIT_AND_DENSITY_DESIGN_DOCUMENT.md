@@ -1,3 +1,7 @@
+> **SUPERSEDED by specs/049-backfill-texture-selector** — its event-driven-off-transit
+> percussion direction is rejected; only this doc's settled synth-drum voice palette
+> (§4) is carried over into the continuous-loop backfill percussion texture.
+
 # Drumkit & Data-Density Percussion — Design Document
 
 > **Purpose of this document.** This is a design doc for a **future** percussion voice
