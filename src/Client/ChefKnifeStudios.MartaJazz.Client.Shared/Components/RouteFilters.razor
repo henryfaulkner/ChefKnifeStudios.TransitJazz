@@ -17,7 +17,7 @@
             @onmouseout="(args) => HandleMouseOut(args, routeItem)"
         >
             <div
-                class="route-filters__route-filter-circle @((RouteFilterViewModel.HasSelection || RouteFilterViewModel.HoveredRouteJoinKey != null) && !routeItem.IsSelected && routeItem.RouteJoinKey != RouteFilterViewModel.HoveredRouteJoinKey ? "route-filters__route-filter-disabled" : string.Empty)"
+                class="route-filters__route-filter-circle @((RouteFilterViewModel.HasSelection || RouteFilterViewModel.HoveredRouteJoinKeys.Count > 0) && !routeItem.IsSelected && !RouteFilterViewModel.HoveredRouteJoinKeys.Contains(routeItem.RouteJoinKey) ? "route-filters__route-filter-disabled" : string.Empty) @(RouteFilterViewModel.HoveredCategory == routeItem.Category ? "route-filters__route-filter-circle--hovered" : string.Empty)"
                 style="--route-filter-color: @routeItem.Color"
             >
                 <span class="route-filters__route-filter-label">
@@ -30,7 +30,12 @@
 @{
     RenderFragment<string> SectionLabel = category =>
         @<div class="route-filters__section-header">
-            <MatSubtitle1 Class="route-filters__section-label route-filters__section-label--clickable" @onclick="() => HandleSelectAll(category)">@Loc[category]</MatSubtitle1>
+            <MatSubtitle1
+                Class="route-filters__section-label route-filters__section-label--clickable"
+                @onclick="() => HandleSelectAll(category)"
+                @onmouseover="(args) => HandleSectionMouseOver(args, category)"
+                @onmouseout="(args) => HandleSectionMouseOut(args, category)"
+            >@Loc[category]</MatSubtitle1>
             @if (RouteFilterViewModel.HasSelectionFor(category))
             {
                 <MatIconButton

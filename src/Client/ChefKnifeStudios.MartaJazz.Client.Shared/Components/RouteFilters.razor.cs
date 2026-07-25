@@ -26,7 +26,7 @@ public partial class RouteFilters : ComponentBase, IDisposable
 
     void RouteFilterViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection) or nameof(IRouteFilterViewModel.ActiveCountsByCategory) or nameof(IRouteFilterViewModel.HoveredRouteJoinKey))
+        if (e.PropertyName is nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection) or nameof(IRouteFilterViewModel.ActiveCountsByCategory) or nameof(IRouteFilterViewModel.HoveredRouteJoinKey) or nameof(IRouteFilterViewModel.HoveredCategory))
         {
             InvokeAsync(StateHasChanged);
         }
@@ -40,6 +40,16 @@ public partial class RouteFilters : ComponentBase, IDisposable
     void HandleMouseOut(MouseEventArgs args, RouteItem routeItem)
     {
         RouteFilterViewModel.SetHoveredRoute(null);
+    }
+
+    void HandleSectionMouseOver(MouseEventArgs args, string category)
+    {
+        RouteFilterViewModel.SetHoveredCategory(category);
+    }
+
+    void HandleSectionMouseOut(MouseEventArgs args, string category)
+    {
+        RouteFilterViewModel.SetHoveredCategory(null);
     }
 
     void HandleSelect(RouteItem routeItem)
