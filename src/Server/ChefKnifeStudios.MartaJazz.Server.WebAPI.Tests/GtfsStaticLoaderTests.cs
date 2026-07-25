@@ -290,4 +290,93 @@ public class GtfsStaticLoaderTests
         Assert.Single(features);
         Assert.True(features.ContainsKey("marta:41"));
     }
+
+    // ── ResolveNestedGtfsArchive — SEPTA zip-of-zips ─────────────────────────
+
+    const string MinimalTripsTxt = "route_id,service_id,trip_id,shape_id\n47,weekday,47-trip-1,47-shape\n";
+
+    static ZipArchive MakeZipWithEntries(params (string Name, byte[] Bytes)[] entries)
+    {
+        var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, bytes) in entries)
+            {
+                var entry = zip.CreateEntry(name);
+                using var s = entry.Open();
+                s.Write(bytes, 0, bytes.Length);
+            }
+        }
+        ms.Position = 0;
+        return new ZipArchive(ms, ZipArchiveMode.Read);
+    }
+
+    static byte[] ZipBytesOf(string fileName, string content)
+    {
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = zip.CreateEntry(fileName);
+            using var w = new StreamWriter(entry.Open(), Encoding.UTF8);
+            w.Write(content);
+        }
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void ResolveNestedGtfsArchive_FlatZipWithTripsAtRoot_ReturnsNull()
+    {
+        // Regression guard: every existing city (MARTA, WMATA, MBTA, NYMTA, TTC) ships a flat
+        // zip. The resolver must be a no-op for them.
+        using var archive = MakeZip("trips.txt", MinimalTripsTxt);
+
+        var nested = GtfsStaticLoader.ResolveNestedGtfsArchive(archive);
+
+        Assert.Null(nested);
+    }
+
+    [Fact]
+    public void ResolveNestedGtfsArchive_SingleNestedZip_UnwrapsAndFindsTrips()
+    {
+        var busZipBytes = ZipBytesOf("trips.txt", MinimalTripsTxt);
+        using var outer = MakeZipWithEntries(("google_bus.zip", busZipBytes));
+
+        using var nested = GtfsStaticLoader.ResolveNestedGtfsArchive(outer);
+
+        Assert.NotNull(nested);
+        Assert.NotNull(nested!.GetEntry("trips.txt"));
+    }
+
+    [Fact]
+    public void ResolveNestedGtfsArchive_BusAndRailNestedZips_SelectsNonRailEntry()
+    {
+        // SEPTA's actual structure: gtfs_public.zip contains both google_bus.zip and
+        // google_rail.zip. The bus/trolley/streetcar/NHSL data (this feature's scope) lives in
+        // the non-"rail"-named entry — Regional Rail (google_rail.zip) must never be selected.
+        var busZipBytes = ZipBytesOf("trips.txt", MinimalTripsTxt);
+        var railZipBytes = ZipBytesOf("trips.txt", "route_id,service_id,trip_id,shape_id\nR1,weekday,r1-trip-1,r1-shape\n");
+        using var outer = MakeZipWithEntries(
+            ("google_rail.zip", railZipBytes),
+            ("google_bus.zip", busZipBytes));
+
+        using var nested = GtfsStaticLoader.ResolveNestedGtfsArchive(outer);
+
+        Assert.NotNull(nested);
+        var routeToShape = GtfsStaticLoader.ParseRouteToShapeMap(nested!);
+        Assert.True(routeToShape.ContainsKey("47"), "should have unwrapped google_bus.zip, not google_rail.zip");
+        Assert.False(routeToShape.ContainsKey("R1"), "must not select the rail-named nested zip");
+    }
+
+    [Fact]
+    public void ResolveNestedGtfsArchive_NoRootTripsAndNoNestedZip_ReturnsNull()
+    {
+        // Corrupted/unexpected upstream format: no trips.txt at root, no nested zip to fall
+        // back to either. Caller treats this the same as any other unreadable zip (0 routes,
+        // logged warning, last-known-good data kept) — must not throw.
+        using var archive = MakeZip("routes.txt", "route_id,route_short_name\n47,47\n");
+
+        var nested = GtfsStaticLoader.ResolveNestedGtfsArchive(archive);
+
+        Assert.Null(nested);
+    }
 }

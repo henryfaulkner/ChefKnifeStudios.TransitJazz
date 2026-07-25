@@ -174,7 +174,15 @@ public class GtfsStaticLoader(
             {
                 var fetchUrl = apiKey is not null ? $"{zipUrl}?api_key={apiKey}" : zipUrl;
                 var zipBytes = await client.GetByteArrayAsync(fetchUrl, ct);
-                using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+                using var outerArchive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+
+                // Most agencies publish a flat zip with trips.txt/shapes.txt/routes.txt at the
+                // root. SEPTA's gtfs_public.zip is a zip-of-zips (google_bus.zip + google_rail.zip
+                // nested inside) — if the root has no trips.txt, unwrap the non-rail nested zip
+                // entry and process that instead. A no-op for every flat-zip city (root always
+                // has trips.txt), so this never changes existing behavior.
+                using var nestedArchive = ResolveNestedGtfsArchive(outerArchive);
+                var archive = nestedArchive ?? outerArchive;
 
                 var routeToShape = ParseRouteToShapeMap(archive);
                 var shapes = ParseShapes(archive);
@@ -244,6 +252,33 @@ public class GtfsStaticLoader(
         }
 
         return result;
+    }
+
+    // Detects a zip-of-zips (SEPTA's gtfs_public.zip: google_bus.zip + google_rail.zip nested
+    // inside) and unwraps the correct nested archive. Returns null when the outer archive already
+    // has trips.txt at its root (the common flat-zip case — caller keeps using the outer archive
+    // unchanged) or when no usable nested zip entry exists (caller then fails this zipUrl exactly
+    // as it would any other unreadable zip). Never opens a nested archive when the root already
+    // has trips.txt, even if a stray .zip entry happens to also be present.
+    internal static ZipArchive? ResolveNestedGtfsArchive(ZipArchive outerArchive)
+    {
+        if (outerArchive.GetEntry("trips.txt") != null) return null;
+
+        var nestedEntries = outerArchive.Entries
+            .Where(e => e.FullName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (nestedEntries.Count == 0) return null;
+
+        // Prefer the entry whose name doesn't look like the rail-only archive (SEPTA:
+        // google_bus.zip over google_rail.zip). Falls back to the first/only entry otherwise.
+        var selected = nestedEntries.FirstOrDefault(e => !e.Name.Contains("rail", StringComparison.OrdinalIgnoreCase))
+            ?? nestedEntries[0];
+
+        using var entryStream = selected.Open();
+        var ms = new MemoryStream();
+        entryStream.CopyTo(ms);
+        ms.Position = 0;
+        return new ZipArchive(ms, ZipArchiveMode.Read);
     }
 
     internal static Dictionary<string, string> ParseRouteToShapeMap(ZipArchive archive)

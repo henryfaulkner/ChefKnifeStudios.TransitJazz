@@ -1,7 +1,33 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/047-instrument-compat/plan.md
+feature plan at specs/048-septa-transit/plan.md
+
+048-septa-transit adds Philadelphia **SEPTA** as a live-vehicle city, per
+docs/city-compat/septa.md (92/100, Drop-in). Two-part fork: (1) the live-vehicle
+path is pure config — SEPTA's buses, trackless trolleys, streetcars, and the
+Norristown High Speed Line (route_type=1, route_id "M1") all ride one keyless
+GTFS-RT feed with 100% route_id/lat/lon coverage and a verbatim
+route_id==route_short_name match, so `septa` falls into the existing `else` arm
+of the Worker's city-registry factory and is served by the config-driven
+GtfsRtCity — zero new classes, same as WMATA/MBTA/TTC. (2) the static-GTFS path
+needs one new, narrowly-scoped capability: SEPTA's gtfs_public.zip is a
+zip-of-zips (nested google_bus.zip + google_rail.zip), and GtfsStaticLoader.cs
+previously only handled flat single-level zips. BuildCityShapeSetAsync gains an
+additive, city-agnostic detect-root-else-unwrap-nested-zip step (prefers the
+non-"rail"-named nested entry) — a no-op for every existing flat-zip city,
+unit-tested for flat/nested/fallback-with-no-match cases. Regional Rail
+(google_rail.zip, route_type=2) is out of scope — never unwrapped. Broad Street
+Subway / Market-Frankford Line (B1/B2/B3/L1) share the same feed/ID scheme as
+M1 but showed zero live vehicles in the compat report; no bespoke rail adapter
+is built for them — they'll flow through the same generic path automatically
+if SEPTA ever emits live positions under those IDs. Standard registration
+touch-points otherwise: CityNames.Septa constant, Worker+WebAPI appsettings.json
+Cities: entries (byte-identical, keyless), CityFab.razor picker button
+("Philadelphia, PA"), map origin at Center City/15th & Market (39.9526,
+-75.1652, not geographic centroid), AudioUnlockOverlay + InfoFab copy. See
+specs/048-septa-transit/ for spec, plan, research, data-model, the three
+contracts (city-config, city-picker, nested-zip-extraction), and quickstart.
 
 047-instrument-compat builds `tools/instrument-compat/index.html`, a single
 self-contained static HTML developer tool (no build step, no backend, no ties
