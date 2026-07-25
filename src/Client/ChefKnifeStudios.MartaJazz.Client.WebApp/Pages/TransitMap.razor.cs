@@ -108,6 +108,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _checkpointsVisible = settings.AreCheckpointsVisible;
         _crossingTrailVisible = settings.IsCrossingTrailVisible;
         _ = TransitSynth.SetAudioEnabledAsync(_audioEnabled);
+        _ = TransitSynth.SetBackfillTextureAsync(settings.BackfillTexture.ToString().ToLowerInvariant());
 
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived += HandleSettingsEventReceived;

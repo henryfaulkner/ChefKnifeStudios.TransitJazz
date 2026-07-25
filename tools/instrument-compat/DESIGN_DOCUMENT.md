@@ -31,6 +31,7 @@ The output of a session with this tool is a **judgment**: "this instrument is co
 - **Density audition**: Low / Medium / High density simulation that fires synthetic checkpoint "crossings" across the instruments you've added, so you hear them together in a realistic soundscape.
 - Per-instrument controls to audition it solo (play a single note now).
 - Persist the instrument list to `localStorage` so a page reload doesn't lose your setup.
+- **Backfill audition mode** (§11): a Noise/Percussion selector + live percussion knobs for dialing in the app's swappable background texture layer before it's pinned into `transit-synth.js`.
 
 ### Out of scope (explicitly do NOT build)
 - **Base-URL / note-list convenience mode.** The user chose explicit per-note URLs. Do not build a "give a base folder and auto-derive `{base}/{Note}.mp3`" mode.
@@ -392,7 +393,49 @@ Where the tool intentionally differs from the app (and that's fine): no map/trai
 
 ---
 
-## 10. Glossary
+## 11. Backfill audition mode (added by 049-backfill-texture-selector)
+
+The app generalizes its single fixed pink-noise bed into a **swappable backfill
+layer** with two mutually-exclusive states: **Noise** (today's bed, unchanged) and
+**Percussion** (a new sparse, humanized lo-fi kit — `MembraneSynth` kick +
+`MetalSynth` rim on a slow `Tone.Loop`/`Tone.Transport`, feeding the same master
+compressor). Since `Tone.Transport` is a **novel surface** the app has never used, the
+percussion voice is dialed in by ear in this tool first — the tool already reproduces
+the app's exact master bus (§3.6), so a percussion loop wired here as a sibling node
+to the noise bed is fidelity-accurate by construction.
+
+**What was added:**
+
+- A **Backfill** section (sibling to Transport/Density and Instruments) with a
+  **Noise / Percussion** selector mirroring the app's two-mode model.
+- When **Percussion** is selected, live knobs for every value that gets pinned into
+  `transit-synth.js`'s `PERCUSSION_*` constants: loop interval (`1n`/`2n`/`4n`), kick
+  pitch/decay/volume, rim volume/probability, and overall percussion volume (dB).
+  Changing a knob live-rebuilds the percussion voices so the change is audible
+  immediately.
+- `buildPercussion()` — the same recipe as the app's `buildPercussion(T)` (see
+  `specs/049-backfill-texture-selector/contracts/synth-engine.md`): kick + rim →
+  `Tone.Volume` → `getMasterBus().input`, driven by a `Tone.Loop`.
+- `applyBackfillLayer()` — mirrors the app's `_applyBackfillLayer()` choke point:
+  reconciles `audioUnlocked && !muted` × `backfillMode` so exactly one of
+  {noise, percussion} plays while unmuted, and both stop while muted or locked. Both
+  the Enable-Audio handler and the mute toggle route through it, so the two gates
+  never drift — matching the app's mute-composition invariant.
+- Session persistence gained `backfill` (`'noise'`/`'percussion'`) and
+  `percussionParams` alongside the existing `instruments` / `activityLevel` / `muted`
+  keys, so a dialed-in kit survives a reload while tuning.
+
+**What was intentionally NOT added** (matches the tool's existing no-export stance,
+§2 "Out of scope"): no PALETTE/percussion-snippet export. The tuned
+`percussionParams` values are **transcribed by hand** into the app's `PERCUSSION_*`
+constants — auditioning here is a taste/QA step, not a code generator.
+
+**How to audition:** Enable Audio → in the Backfill section select **Percussion** →
+turn the knobs while a couple of real instruments are loaded and the density sim is
+running (Medium/High), so the kit is judged as an *unobtrusive atmospheric bed*
+underneath a live mix, not in isolation — the true test of a backfill layer.
+
+## 12. Glossary
 
 - **Crossing** — the app's term for "a vehicle reached a checkpoint," i.e. one note event. This tool generates synthetic crossings.
 - **triggerIndex / totalTriggers** — a vehicle's checkpoint position along its route and the route's total checkpoints; maps to a scale degree (pitch).

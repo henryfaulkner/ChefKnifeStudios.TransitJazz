@@ -4,10 +4,16 @@ using System.ComponentModel;
 
 namespace ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 
+public enum BackfillTexture
+{
+    Noise,      // default — today's continuous pink-noise bed
+    Percussion, // sparse lo-fi kit on a slow Tone.Transport loop
+}
+
 public partial class Settings : ObservableObject
 {
     // ponytail: bump CurrentVersion when schema changes, old serialized data auto-discards
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
     [HiddenSetting]
     public int Version { get; set; } = CurrentVersion;
 
@@ -38,4 +44,8 @@ public partial class Settings : ObservableObject
     [ObservableProperty]
     [property: Description("SettingDarkMode")]
     bool _isDarkModeEnabled = false;
+
+    [ObservableProperty]
+    [property: HiddenSetting]
+    BackfillTexture _backfillTexture = BackfillTexture.Noise;
 }

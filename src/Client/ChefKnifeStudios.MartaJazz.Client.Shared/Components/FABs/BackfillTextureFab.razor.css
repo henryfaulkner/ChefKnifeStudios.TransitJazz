@@ -1,0 +1,10 @@
+.backfill-texture-fab-container {
+    position: fixed;
+    bottom: 42px;
+    right: 274px;
+    z-index: 75;
+}
+
+::deep .mdc-fab {
+    box-shadow: none !important;
+}
