@@ -8,6 +8,7 @@ public static class CityNames
     public const string Nymta = "nymta";
     public const string Ttc = "ttc";
     public const string Septa = "septa";
+    public const string Rtd = "rtd";
 }
 
 public static class HubMethods

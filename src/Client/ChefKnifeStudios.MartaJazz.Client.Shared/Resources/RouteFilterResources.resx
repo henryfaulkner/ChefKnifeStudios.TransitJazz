@@ -252,6 +252,21 @@
   <data name="SeptaOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real SEPTA vehicle, pulled live and turned into sound. Buses, trolleys, and the Norristown High Speed Line move through Philadelphia in real time, and the map plays what they're doing right now.</value>
   </data>
+  <data name="RtdAudioOverlayHeader" xml:space="preserve">
+    <value>RTD - Denver, CO, USA</value>
+  </data>
+  <data name="RtdAudioOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real bus or train. Hundreds of them, spread across a grid that runs true until the foothills interrupt it. They follow Colfax Avenue end to end, the light rail out to Golden along the old highway corridor, and the commuter rail line running straight for the airport across the plains northeast of downtown.</value>
+  </data>
+  <data name="RtdAudioOverlayParagraph2" xml:space="preserve">
+    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony sits open and high, thin air between the notes. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — crossing Speer Boulevard, climbing toward Golden on the W Line, out past Peña Boulevard on the way to the airport. Rush hour thickens downtown into something dense; late at night a single light-rail chime carries a long way. What is playing right now has not played before.</value>
+  </data>
+  <data name="RtdAudioOverlayParagraph3" xml:space="preserve">
+    <value>Denver's rail network is young — built mostly this century, laid down along corridors the city had already carved for cars and freight. This is the music inside that motion.</value>
+  </data>
+  <data name="RtdOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real RTD vehicle, pulled live and turned into sound. Buses, light rail, and commuter rail move through the Denver metro in real time, and the map plays what they're doing right now.</value>
+  </data>
   <data name="AudioOverlayButton" xml:space="preserve">
     <value>Enter Experience</value>
   </data>
