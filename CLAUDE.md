@@ -1,7 +1,34 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/049-backfill-texture-selector/plan.md
+feature plan at specs/050-rtd-transit/plan.md
+
+050-rtd-transit adds Denver **RTD** as a live-vehicle city, per
+docs/city-compat/rtd.md (92.4/100, Drop-in). Pure config-only fork — RTD's
+single keyless GTFS-RT feed carries buses, light rail (route_type=0), and
+commuter rail (route_type=2) together with 100% route_id/lat/lon coverage, so
+`rtd` falls into the existing `else` arm of the Worker's city-registry
+factory and is served by the config-driven GtfsRtCity — zero new classes,
+zero new production code, same as WMATA/MBTA/TTC/SEPTA's live-vehicle path.
+Bus route_ids match statically at 89.2% verbatim (83/93); of the 10 unmatched
+IDs, 8 are rail lines using a numeric-prefix scheme (101C/101E/101T/103W/
+107R/113B/113G/117N) resolved entirely via the existing CityConfig.
+RailRouteIdMap mechanism (an 8-entry dictionary remapping to static's plain
+line letters C/E/T/W/R/B/G/N; A already matches verbatim) — the same
+mechanism WMATA already uses for its Metro lines, proving it generalizes to a
+second city with zero code changes. The remaining 2 unmatched bus IDs (BOND,
+FREE) are an explicit non-goal, left to the platform's existing
+"unknown route" handling. The static GTFS zip is a normal flat zip behind a
+308 redirect (HttpClient follows redirects by default) — unlike SEPTA's
+nested zip-of-zips, GtfsStaticLoader.cs needs no changes. Standard
+registration touch-points: CityNames.Rtd constant, Worker+WebAPI
+appsettings.json Cities: entries (byte-identical, keyless, includes
+RailRouteIdMap), CityFab.razor picker button ("Denver, CO"), map origin at
+Denver Union Station (39.7539, -105.0009, the downtown transit core, not
+geographic centroid), AudioUnlockOverlay + InfoFab copy mentioning buses,
+light rail, and commuter rail. See specs/050-rtd-transit/ for spec, plan,
+research, data-model, the two contracts (city-config, city-picker), and
+quickstart.
 
 049-backfill-texture-selector exposes the soundscape's continuous background
 "backfill" filler as a user-selectable choice. Today `transit-synth.js` runs ONE

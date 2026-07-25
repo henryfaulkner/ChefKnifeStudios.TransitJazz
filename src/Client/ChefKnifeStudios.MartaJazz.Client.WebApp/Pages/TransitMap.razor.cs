@@ -85,6 +85,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         [CityNames.Nymta] = (40.7580, -73.9855),
         [CityNames.Ttc]   = (43.6532, -79.3832),
         [CityNames.Septa] = (39.9526, -75.1652),
+        [CityNames.Rtd]   = (39.7539, -105.0009),
     };
 
     CameraOptions DefaultCameraOptions
