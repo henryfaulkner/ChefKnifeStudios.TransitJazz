@@ -1,27 +1,33 @@
 namespace ChefKnifeStudios.MartaJazz.Client.Shared.Constants;
 
-// GTFS route colors that are too close to the map/pill background to read (white and light
-// grey) are swapped for this fallback everywhere a route color is rendered — the pill swatches
-// in RouteFilters and the route line layer on the map (Map.razor / map-interop.js) must agree,
-// since a route can otherwise render invisibly in one place and visibly in the other.
+// GTFS route colors that are too close to the current theme's background are swapped for a
+// fallback everywhere a route color is rendered — the pill swatches in RouteFilters and the
+// route line layer on the map (Map.razor / map-interop.js) must agree, since a route can
+// otherwise render invisibly in one place and visibly in the other. Light theme washes out
+// white/light-grey; dark theme washes out black/dark-grey — so the check is theme-aware.
 public static class RouteColorFallback
 {
     public const string FallbackColor = "#CC0000";
 
-    public static bool IsVisibleColor(string? color)
+    public static bool IsVisibleColor(string? color, bool isDarkMode)
     {
         if (string.IsNullOrWhiteSpace(color)) return false;
         var c = color.TrimStart('#').ToUpperInvariant();
-        if (c is "FFFFFF" or "FFF" or "FEFEFE") return false;
-        return !IsLightGrey(c);
+
+        if (!isDarkMode && c is "FFFFFF" or "FFF" or "FEFEFE") return false;
+        if (isDarkMode && c is "000000" or "000" or "010101") return false;
+
+        return !IsWashedOut(c, isDarkMode);
     }
 
-    public static string ResolveColor(string? color) => IsVisibleColor(color) ? color! : FallbackColor;
+    public static string ResolveColor(string? color, bool isDarkMode) =>
+        IsVisibleColor(color, isDarkMode) ? color! : FallbackColor;
 
-    // A light grey/near-white grey reads as washed-out against the light map basemap and pill
-    // background alike. Treated as "light grey" when R, G, B are all within a few units of each
-    // other (low saturation) and all above a brightness floor.
-    static bool IsLightGrey(string hex)
+    // A low-saturation color reads as washed out against its theme's background when it's also
+    // close to that background's brightness extreme — near-white on the light theme, near-black
+    // on the dark theme. Treated as washed out when R, G, B are within a few units of each other
+    // (low saturation) and sit past the relevant brightness threshold for the active theme.
+    static bool IsWashedOut(string hex, bool isDarkMode)
     {
         if (hex.Length != 6 || !TryParseHex(hex, out var r, out var g, out var b)) return false;
 
@@ -29,9 +35,12 @@ public static class RouteColorFallback
         var min = System.Math.Min(r, System.Math.Min(g, b));
 
         const int SaturationTolerance = 10;
-        const int BrightnessFloor = 200;
+        if (max - min > SaturationTolerance) return false;
 
-        return (max - min) <= SaturationTolerance && min >= BrightnessFloor;
+        const int LightBrightnessFloor = 200;
+        const int DarkBrightnessCeiling = 55;
+
+        return isDarkMode ? max <= DarkBrightnessCeiling : min >= LightBrightnessFloor;
     }
 
     static bool TryParseHex(string hex, out int r, out int g, out int b)

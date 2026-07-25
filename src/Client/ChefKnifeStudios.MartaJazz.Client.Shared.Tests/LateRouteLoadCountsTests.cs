@@ -1,4 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Client.Shared.Components;
+using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -43,7 +44,7 @@ public class LateRouteLoadCountsTests
             new[] { FakeApplicationViewModel.Shape("501", "streetcar", 0) },
             routesLoaded: false);
         var vm = new RouteFilterViewModel(
-            NullLogger<RouteFilterViewModel>.Instance, new NoopToastService(), app);
+            NullLogger<RouteFilterViewModel>.Instance, new NoopToastService(), app, new NoopSettingsService());
 
         // Counts seeded by the replay while shapes are still loading — nothing renderable yet.
         await app.RaiseAsync(BatchWith("veh-1", "501", "streetcar"));
@@ -66,5 +67,13 @@ public class LateRouteLoadCountsTests
         public void ShowSuccess(string message, string? title = null) { }
         public void ShowWarning(string message, string? title = null) { }
         public void ShowError(string message, string? title = null) { }
+    }
+
+    sealed class NoopSettingsService : ISettingsService
+    {
+        public Settings GetSettings() => new();
+        public void SaveSettings(Settings settings) { }
+        public T? GetSettingValue<T>(string propertyName) => default;
+        public void SetSettingValue<T>(string propertyName, T value) { }
     }
 }

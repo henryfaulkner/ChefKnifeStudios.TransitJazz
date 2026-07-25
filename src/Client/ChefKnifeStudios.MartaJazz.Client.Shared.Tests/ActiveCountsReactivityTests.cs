@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Components;
+using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
@@ -30,7 +31,8 @@ public class ActiveCountsReactivityTests
         var vm = new RouteFilterViewModel(
             NullLogger<RouteFilterViewModel>.Instance,
             new NoopToastService(),
-            app);
+            app,
+            new NoopSettingsService());
         return vm;
     }
 
@@ -57,7 +59,7 @@ public class ActiveCountsReactivityTests
             FakeApplicationViewModel.Shape("501", "streetcar", 0),
         });
         var vm = new RouteFilterViewModel(
-            NullLogger<RouteFilterViewModel>.Instance, new NoopToastService(), app);
+            NullLogger<RouteFilterViewModel>.Instance, new NoopToastService(), app, new NoopSettingsService());
 
         var fired = new List<string?>();
         vm.PropertyChanged += (_, e) => fired.Add(e.PropertyName);
@@ -75,7 +77,7 @@ public class ActiveCountsReactivityTests
             FakeApplicationViewModel.Shape("501", "streetcar", 0),
         });
         var vm = new RouteFilterViewModel(
-            NullLogger<RouteFilterViewModel>.Instance, new NoopToastService(), app);
+            NullLogger<RouteFilterViewModel>.Instance, new NoopToastService(), app, new NoopSettingsService());
 
         await app.RaiseAsync(BatchWith("veh-1", "501", "streetcar"));
 
@@ -87,5 +89,13 @@ public class ActiveCountsReactivityTests
         public void ShowSuccess(string message, string? title = null) { }
         public void ShowWarning(string message, string? title = null) { }
         public void ShowError(string message, string? title = null) { }
+    }
+
+    sealed class NoopSettingsService : ISettingsService
+    {
+        public Settings GetSettings() => new();
+        public void SaveSettings(Settings settings) { }
+        public T? GetSettingValue<T>(string propertyName) => default;
+        public void SetSettingValue<T>(string propertyName, T value) { }
     }
 }

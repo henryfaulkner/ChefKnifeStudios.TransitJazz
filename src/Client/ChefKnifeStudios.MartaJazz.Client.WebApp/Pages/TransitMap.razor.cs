@@ -425,19 +425,21 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             return;
         }
 
+        var isDarkMode = SettingsService.GetSettings().IsDarkModeEnabled;
+
         var payload = _routeShapeCache
             .Where(kvp => kvp.Value.Geometry?.Coordinates is { Length: > 0 })
             .Select(kvp => (object)new
             {
                 routeJoinKey = kvp.Key,
-                color = RouteColorFallback.ResolveColor(kvp.Value.Properties?.Color),
+                color = RouteColorFallback.ResolveColor(kvp.Value.Properties?.Color, isDarkMode),
                 category = kvp.Value.Properties?.Category ?? "bus",
                 coordinates = kvp.Value.Geometry!.Coordinates
             })
             .ToArray();
 
         if (_map is not null)
-            await _map.AddAllRoutesAsync(payload, SettingsService.GetSettings().IsDarkModeEnabled);
+            await _map.AddAllRoutesAsync(payload, isDarkMode);
 
         Logger.LogDebug("TransitMap.RenderRoutesAsync: route geometry push complete");
     }

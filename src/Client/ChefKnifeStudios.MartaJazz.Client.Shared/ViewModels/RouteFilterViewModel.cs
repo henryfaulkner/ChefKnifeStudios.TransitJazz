@@ -61,6 +61,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     readonly ILogger<RouteFilterViewModel> _logger;
     readonly IToastService _toastService;
     readonly IApplicationViewModel _applicationViewModel;
+    readonly ISettingsService _settingsService;
 
     // Accumulated distinct non-stale vehicle IDs per route, upserted across every batch
     // (live + cold-start snapshot) — mirrors the server-side LastBatchCache accumulator so
@@ -82,11 +83,13 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     public RouteFilterViewModel(
         ILogger<RouteFilterViewModel> logger,
         IToastService toastService,
-        IApplicationViewModel applicationViewModel)
+        IApplicationViewModel applicationViewModel,
+        ISettingsService settingsService)
     {
         _logger = logger;
         _toastService = toastService;
         _applicationViewModel = applicationViewModel;
+        _settingsService = settingsService;
 
         // RouteShapes are loaded asynchronously by ApplicationViewModel, so the cache
         // may still be empty when this VM is constructed. Build whatever is available
@@ -237,7 +240,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             {
                 RouteJoinKey = x.Properties.JoinKey,
                 Label = x.Properties.JoinKey,
-                Color = RouteColorFallback.ResolveColor(x.Properties.Color),
+                Color = RouteColorFallback.ResolveColor(x.Properties.Color, _settingsService.GetSettings().IsDarkModeEnabled),
                 IsSelected = previouslySelected.Contains(x.Properties.JoinKey),
                 Category = x.Properties.Category,
                 RouteType = x.Properties.RouteType,

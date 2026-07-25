@@ -1,4 +1,5 @@
 using ChefKnifeStudios.MartaJazz.Client.Shared.Components;
+using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Shared.GtfsData;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -28,7 +29,8 @@ public class CategoryOrderTests
         return new RouteFilterViewModel(
             NullLogger<RouteFilterViewModel>.Instance,
             new NoopToastService(),
-            app);
+            app,
+            new NoopSettingsService());
     }
 
     // TTC: streetcar(0), rail(1), bus(3) → [streetcar, rail, bus] (SC-001 ordering).
@@ -90,5 +92,13 @@ public class CategoryOrderTests
         public void ShowSuccess(string message, string? title = null) { }
         public void ShowWarning(string message, string? title = null) { }
         public void ShowError(string message, string? title = null) { }
+    }
+
+    sealed class NoopSettingsService : ISettingsService
+    {
+        public Settings GetSettings() => new();
+        public void SaveSettings(Settings settings) { }
+        public T? GetSettingValue<T>(string propertyName) => default;
+        public void SetSettingValue<T>(string propertyName, T value) { }
     }
 }
