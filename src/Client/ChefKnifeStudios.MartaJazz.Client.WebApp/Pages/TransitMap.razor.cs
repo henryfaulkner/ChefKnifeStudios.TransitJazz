@@ -1,6 +1,7 @@
 using ChefKnifeStudios.MartaJazz.Client.Core.Services;
 using ChefKnifeStudios.MartaJazz.Client.Core.Services.EndpointsServices;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Components;
+using ChefKnifeStudios.MartaJazz.Client.Shared.Constants;
 using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Models;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
@@ -83,6 +84,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         [CityNames.Mbta]  = (42.361, -71.057),
         [CityNames.Nymta] = (40.7580, -73.9855),
         [CityNames.Ttc]   = (43.6532, -79.3832),
+        [CityNames.Septa] = (39.9526, -75.1652),
     };
 
     CameraOptions DefaultCameraOptions
@@ -428,7 +430,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             .Select(kvp => (object)new
             {
                 routeJoinKey = kvp.Key,
-                color = kvp.Value.Properties?.Color ?? "#6b7280",
+                color = RouteColorFallback.ResolveColor(kvp.Value.Properties?.Color),
                 category = kvp.Value.Properties?.Category ?? "bus",
                 coordinates = kvp.Value.Geometry!.Coordinates
             })

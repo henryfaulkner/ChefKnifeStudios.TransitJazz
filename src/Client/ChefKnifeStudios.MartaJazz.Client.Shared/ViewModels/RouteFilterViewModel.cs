@@ -1,3 +1,4 @@
+using ChefKnifeStudios.MartaJazz.Client.Shared.Constants;
 using ChefKnifeStudios.MartaJazz.Client.Shared.Services;
 using ChefKnifeStudios.MartaJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.MartaJazz.Shared.Events;
@@ -236,7 +237,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             {
                 RouteJoinKey = x.Properties.JoinKey,
                 Label = x.Properties.JoinKey,
-                Color = IsVisibleColor(x.Properties.Color) ? x.Properties.Color! : "#CC0000",
+                Color = RouteColorFallback.ResolveColor(x.Properties.Color),
                 IsSelected = previouslySelected.Contains(x.Properties.JoinKey),
                 Category = x.Properties.Category,
                 RouteType = x.Properties.RouteType,
@@ -303,13 +304,6 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     {
         HoveredRouteJoinKey = routeItem?.RouteJoinKey;
         RecomputeActiveTransitCounts();
-    }
-
-    static bool IsVisibleColor(string? color)
-    {
-        if (string.IsNullOrWhiteSpace(color)) return false;
-        var c = color.TrimStart('#').ToUpperInvariant();
-        return c is not ("FFFFFF" or "FFF" or "FEFEFE");
     }
 
     public bool HasSelection => RouteItems.Any(x => x.IsSelected);

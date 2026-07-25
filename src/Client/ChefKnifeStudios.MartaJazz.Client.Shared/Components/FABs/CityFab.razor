@@ -28,6 +28,9 @@
             <MatListItem>
                 <MatButton Label="Toronto, ON" Mini="true" @onclick="HandleTtcClicked" Disabled="@(CurrentCity == CityNames.Ttc)" />
             </MatListItem>
+            <MatListItem>
+                <MatButton Label="Philadelphia, PA" Mini="true" @onclick="HandleSeptaClicked" Disabled="@(CurrentCity == CityNames.Septa)" />
+            </MatListItem>
         </MatList>
     </MatMenu>
 </div>
@@ -62,6 +65,11 @@
     async Task HandleTtcClicked()
     {
         await JS.InvokeVoidAsync("eval", $"location.hash='ttc';location.reload()");
+    }
+
+    async Task HandleSeptaClicked()
+    {
+        await JS.InvokeVoidAsync("eval", $"location.hash='septa';location.reload()");
     }
 
     MatFAB Button2;

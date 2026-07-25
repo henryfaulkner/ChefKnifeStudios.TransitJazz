@@ -213,6 +213,18 @@
   <data name="TtcAudioOverlayParagraph3" xml:space="preserve">
     <value>Toronto runs the largest streetcar network in the Americas, and it still owns the old downtown lines outright. The subway draws its shape on the map but keeps its own counsel here — the surface is where this city actually speaks. This is the music inside that motion.</value>
   </data>
+  <data name="SeptaAudioOverlayHeader" xml:space="preserve">
+    <value>SEPTA - Philadelphia, PA, USA</value>
+  </data>
+  <data name="SeptaAudioOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real bus, trolley, or train. Hundreds of them, crossing a city laid out on a grid two centuries before anyone called it that. They follow Broad Street straight down its spine, Market Street splitting the city into north and south, and the trolleys of West Philadelphia still climbing the old tracks toward 69th Street.</value>
+  </data>
+  <data name="SeptaAudioOverlayParagraph2" xml:space="preserve">
+    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony holds a rowhouse steadiness, block after block, close together. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — turning off Broad, rattling along Girard, climbing out of the subway-surface tunnel into daylight at 40th Street. Rush hour packs the piece tight against itself; late at night it opens up, one trolley bell in the quiet. What is playing right now has not played before.</value>
+  </data>
+  <data name="SeptaAudioOverlayParagraph3" xml:space="preserve">
+    <value>Philadelphia was laid out on a grid before the country had a name for itself, and SEPTA still traces it — trolleys included, running since before anyone thought to call them historic. This is the music inside that motion.</value>
+  </data>
   <data name="NymtaAudioOverlayHeader" xml:space="preserve">
     <value>NYCT - New York, NY, USA</value>
   </data>
@@ -230,6 +242,9 @@
   </data>
   <data name="TtcOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real TTC vehicle, pulled live and turned into sound. Buses and streetcars move through Toronto in real time, and the map plays what they're doing right now.</value>
+  </data>
+  <data name="SeptaOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real SEPTA vehicle, pulled live and turned into sound. Buses, trolleys, and the Norristown High Speed Line move through Philadelphia in real time, and the map plays what they're doing right now.</value>
   </data>
   <data name="AudioOverlayButton" xml:space="preserve">
     <value>Enter Experience</value>
