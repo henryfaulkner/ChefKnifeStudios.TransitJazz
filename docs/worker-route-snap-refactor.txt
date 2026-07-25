@@ -1,0 +1,17 @@
+1. Worker route-snap refactor
+`Server.TransitDataWorker/Worker.cs` snaps buses to nearest point using a geohash spatial index across all routes. We must replace this with an algorithm which snaps buses to nearest point using a geohash special index on the bus's own route (using its routeId). Make possible via the following changes:
+- `IReadOnlyDictionary<string, RoutePoint[]> _routeIndex` - keyed by routeId
+- `BuildRouteIndex()` - projects each RouteShapeFeature into a RoutePoint[] per route (GeoJSON [lon,lat] order)
+- `ProcessSpatialReconciliationAsync` reads `entity.Vehicle.Trip?.RouteId`, looks up the route's points, calls `RouteSnapper.FindNearest().Point`
+- Fallback: skip vehicle if routeIs is null/empty (skippedNoRouteId) or unknown to index (skippedUnknownRoute); logs both counters per cycle
+
+2. Snap validation API 
+Shared utilities extracted so Worker and WebAPI share the same algorithm:
+- `Shared/Geospatial/RoutePoint.cs` - `readonly record struct RoutePoint(string RouteId, double Lat, double Lon)`
+- `Shared/Geospatial/RouteSnapper.cs` - static FindNearest() + FindNearestN() returning `Snap(int Index, RoutePoint Point, double DistanceKm`
+- `Shared/GtfsData/ValidateSnapResponse.cs` - ValidateSnapResponse + SnapCandidate records
+- `Shared/ApiEndpoints.cs` - Added `ValidateSnap = "gtfs/routes/{routeId}/validate-snap"`
+- `Server.WebAPI/EndpointGroups/GtfsEndpoints.cs` - GET endpoint accepting lat/lon query params + optional topN (defaut 5, max 50); returns Nearest + RunnersUp; 400/404/503 on bad input/unknow route/not loaded
+- Worker's original HaversineCalculator.cs and RoutePoint.cs were deleted (moved to Shared)
+
+Shapes loaded from GTFS static zip by `GtfsStaticLoader` (WebAPI hosted service), stored in `IKeyValueRepository<string>` (in-memory), one RouteShapeFeature per routeId (first-trip-wins). Endpoints inline-deserialize from repo - no service layer.
