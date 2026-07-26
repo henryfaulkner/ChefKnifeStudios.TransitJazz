@@ -91,7 +91,7 @@ fix"**:
 - `src/Server/.../TransitDataWorker/Worker.cs:~537-557` (spreadMs, currentDistM, snap index)
 - `src/Client/.../wwwroot/js/crossing-dispatcher.js` (fires tones at OffsetMs)
 - `src/Client/.../wwwroot/js/vehicle-animator.js` (the dot's actual motion model)
-- `src/ChefKnifeStudios.MartaJazz.Shared/Events/RouteCrossingBatchEvent.cs` (record contract
+- `src/ChefKnifeStudios.TransitJazz.Shared/Events/RouteCrossingBatchEvent.cs` (record contract
   — if fix A/B changes what's sent)
 
 ---

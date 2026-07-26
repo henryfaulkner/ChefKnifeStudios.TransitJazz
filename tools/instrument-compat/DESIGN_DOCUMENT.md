@@ -44,7 +44,7 @@ The output of a session with this tool is a **judgment**: "this instrument is co
 
 ## 3. Background: How the app's audio actually works
 
-This section is the ground truth the tool must faithfully reproduce. It is distilled from the app's `transit-synth.js` and `crossing-dispatcher.js`. **A builder should not need to open those files** — everything needed is here. (Paths given only for provenance: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/transit-synth.js` and `.../crossing-dispatcher.js`.)
+This section is the ground truth the tool must faithfully reproduce. It is distilled from the app's `transit-synth.js` and `crossing-dispatcher.js`. **A builder should not need to open those files** — everything needed is here. (Paths given only for provenance: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/transit-synth.js` and `.../crossing-dispatcher.js`.)
 
 ### 3.1 Tone.js version & load
 

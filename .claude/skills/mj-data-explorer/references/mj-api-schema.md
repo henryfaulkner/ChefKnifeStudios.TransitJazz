@@ -2,7 +2,7 @@
 
 # MartaJazz API Schema Reference
 
-The REST API served by `ChefKnifeStudios.MartaJazz.Server.WebAPI`. Use this when
+The REST API served by `ChefKnifeStudios.TransitJazz.Server.WebAPI`. Use this when
 cross-referencing telemetry `route_id` values against live GTFS data, or verifying
 that route shapes are loaded and healthy.
 

@@ -6,7 +6,7 @@ This feature has no new runtime behavior to demo — validation is entirely
 ## 1. Build
 
 ```powershell
-dotnet build ChefKnifeStudios.MartaJazz.sln
+dotnet build ChefKnifeStudios.TransitJazz.sln
 ```
 
 Must succeed with zero errors. A missed rename site (e.g. a call site still
@@ -16,7 +16,7 @@ compile — this is the primary safety net for an exhaustive rename.
 ## 2. Run existing tests
 
 ```powershell
-dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests
+dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests
 ```
 
 All existing tests MUST pass unmodified in their *assertions* (SC-003) —
@@ -27,7 +27,7 @@ only identifier names inside test code change to match the rename.
 ```powershell
 # Should return ONLY true-route_id sites (RouteShapeProperties.RouteId,
 # GtfsEndpoints, GtfsStaticLoader, and the GTFS-RT wire model fields):
-git grep -n "RouteId" -- src/ ':(exclude)src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI' ':(exclude)*GtfsRtModels.cs'
+git grep -n "RouteId" -- src/ ':(exclude)src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI' ':(exclude)*GtfsRtModels.cs'
 
 # Should return exactly ONE hit — the RouteShapeProperties.JoinKey definition:
 git grep -n "RouteShortName ?? RouteId"
@@ -35,7 +35,7 @@ git grep -n "RouteShortName ?? RouteId"
 
 ## 4. Manual smoke test (map still renders and animates correctly)
 
-Start the app via the AppHost (`ChefKnifeStudios.MartaJazz.AppHost`) and
+Start the app via the AppHost (`ChefKnifeStudios.TransitJazz.AppHost`) and
 confirm in the browser:
 - Routes render on the map (no blank/missing route layer — would indicate a
   broken `routeJoinKey` GeoJSON property mismatch between C# and JS).

@@ -85,7 +85,7 @@ specs/015-route-filter-ui/
 All changes are within the Blazor WASM client. No server/worker/shared changes.
 
 ```text
-src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/
 ├── wwwroot/js/
 │   └── map-interop.js                      # MODIFY: add focusRoute / clearRouteFocus to window.ChefMap
 ├── Components/
@@ -101,7 +101,7 @@ src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
 └── Resources/
     └── RouteFilterResources.resx            # NEW: English placeholder + blurb-bar strings (IStringLocalizer source)
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/
+src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/
 ├── Pages/
 │   ├── TransitMap.razor                    # MODIFY: render <RouteBlurbBar /> over the map
 │   └── TransitMap.razor.cs                 # MODIFY: inject IRouteFilterViewModel, subscribe, drive map focus interop

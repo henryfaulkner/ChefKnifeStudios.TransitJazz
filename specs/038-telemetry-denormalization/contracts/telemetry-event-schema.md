@@ -7,7 +7,7 @@ The single serialized record. `ParquetSerializer.SerializeAsync(rows, stream)` r
 ```csharp
 using Parquet.Serialization.Attributes; // ParquetColumn
 
-namespace ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Logging;
+namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 
 /// <summary>
 /// One denormalized telemetry row. event_type discriminates PerCityCycle vs FullCycle.

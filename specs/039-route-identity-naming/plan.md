@@ -10,7 +10,7 @@
 ## Technical Context
 
 **Language/Version**: C# / .NET 10.0 (all four touched projects); vanilla JavaScript (Client.Shared `wwwroot/js/`)
-**Primary Dependencies**: None new. Touches: `ChefKnifeStudios.MartaJazz.Shared` (records/DTOs), `Server.TransitDataWorker` (`Worker.cs`, `VehicleState.cs`, `Cities/GtfsRtCity.cs`), `Client.Shared` (`ViewModels/RouteFilterViewModel.cs`, `ViewModels/ApplicationViewModel.cs`, `Data/RouteBlurbStore.cs`, `wwwroot/js/map-interop.js`, `wwwroot/js/vehicle-animator.js`), `Client.WebApp` (`Pages/TransitMap.razor.cs`)
+**Primary Dependencies**: None new. Touches: `ChefKnifeStudios.TransitJazz.Shared` (records/DTOs), `Server.TransitDataWorker` (`Worker.cs`, `VehicleState.cs`, `Cities/GtfsRtCity.cs`), `Client.Shared` (`ViewModels/RouteFilterViewModel.cs`, `ViewModels/ApplicationViewModel.cs`, `Data/RouteBlurbStore.cs`, `wwwroot/js/map-interop.js`, `wwwroot/js/vehicle-animator.js`), `Client.WebApp` (`Pages/TransitMap.razor.cs`)
 **Storage**: N/A — no schema, no persisted data carries these field names (feature 038 confirmed telemetry parquet has no route-identity columns)
 **Testing**: xUnit (existing `TransitDataWorker.Tests` and any Client test projects) — rename identifiers in test code/assertions; no new test infrastructure
 **Target Platform**: Existing three deployables (WASM static site, WebAPI, TransitDataWorker Docker image) — unchanged
@@ -55,14 +55,14 @@ specs/039-route-identity-naming/
 ### Source Code (repository root)
 
 ```text
-src/ChefKnifeStudios.MartaJazz.Shared/
+src/ChefKnifeStudios.TransitJazz.Shared/
 ├── GtfsData/RouteShapeFeature.cs          # ADD: JoinKey computed property on RouteShapeProperties
 ├── Geospatial/RoutePoint.cs               # RENAME: RouteId → RouteJoinKey
 └── Events/
     ├── RouteNearestPointBatchEvent.cs     # RENAME: RouteNearestPointRecord.RouteId → RouteJoinKey
     └── RouteCrossingBatchEvent.cs         # RENAME: RouteCrossingRecord.RouteId → RouteJoinKey
 
-src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 ├── Worker.cs                              # RENAME: _routeIndex/_routeMode/_routeCumDist/_routeTriggerPoints
 │                                           #   keys, local `routeId` variables, BuildRouteIndex,
 │                                           #   log message templates (skippedNoRouteId → skippedNoJoinKey);
@@ -73,7 +73,7 @@ src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
                                             #   wire model's Trip.RouteId in place (wire field name
                                             #   is out of scope); only downstream consumers are renamed
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/
 ├── ViewModels/
 │   ├── RouteFilterViewModel.cs            # RENAME: RouteItem.RouteId → RouteJoinKey; SelectedRouteId(s)/
 │   │                                       #   HoveredRouteId → SelectedRouteJoinKey(s)/HoveredRouteJoinKey;
@@ -86,7 +86,7 @@ src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
     │                                       #   MapLibre `['get', 'routeId']` match expressions)
     └── vehicle-animator.js                # RENAME: state.routeId / rec.routeId → routeJoinKey
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/
+src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/
 └── Pages/TransitMap.razor.cs              # RENAME: _routeShapeCache key/log templates;
                                             #   REPLACE the `??` expression (line 576) with
                                             #   RouteShapeProperties.JoinKey; CrossingEventDto.RouteId

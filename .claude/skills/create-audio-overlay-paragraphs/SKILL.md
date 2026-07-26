@@ -16,7 +16,7 @@ This is hand-authored creative writing, not a templated readout. It is the
 **voice of the app** and the first impression. Match the reference tone exactly.
 
 The text lives as resx entries in
-`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Resources/RouteFilterResources.resx`,
+`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Resources/RouteFilterResources.resx`,
 keyed `{Prefix}Header`, `{Prefix}Paragraph1`, `{Prefix}Paragraph2`,
 `{Prefix}Paragraph3`. The prefix is resolved per-city in
 `AudioUnlockOverlay.razor` (`OnInitialized`): MARTA/Atlanta is the bare

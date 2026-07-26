@@ -31,13 +31,13 @@ Verify: `ls deploy/` — no YAML files remain.
 Remove-Item -Recurse -Force src/BusDataPoc/
 
 # B2: Dead C# files
-Remove-Item src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/EventMapper.cs
-Remove-Item src/ChefKnifeStudios.MartaJazz.Shared/JsonFlattener.cs
-Remove-Item src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/EndpointsServices/Discard.cs
-Remove-Item src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/JsInterop/AudioPlayerJsInterop.cs
+Remove-Item src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/EventMapper.cs
+Remove-Item src/ChefKnifeStudios.TransitJazz.Shared/JsonFlattener.cs
+Remove-Item src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/EndpointsServices/Discard.cs
+Remove-Item src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/JsInterop/AudioPlayerJsInterop.cs
 
 # B3: Debug test page
-Remove-Item src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/SignalRTest.razor
+Remove-Item src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/SignalRTest.razor
 ```
 
 Gate: `dotnet build` → 0 errors.
@@ -46,14 +46,14 @@ Gate: `dotnet build` → 0 errors.
 
 ## Batch C — Unused NuGet Packages (~3 package edits + ~4 commented lines deleted)
 
-Edit `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/ChefKnifeStudios.MartaJazz.Server.WebAPI.csproj`:
+Edit `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj`:
 - Remove `<PackageReference Include="Microsoft.Identity.Web" ... />`
 - Remove `<PackageReference Include="StackExchange.Redis" ... />`
 
-Edit `src/Server/ChefKnifeStudios.MartaJazz.ServiceDefaults/ChefKnifeStudios.MartaJazz.ServiceDefaults.csproj`:
+Edit `src/Server/ChefKnifeStudios.TransitJazz.ServiceDefaults/ChefKnifeStudios.TransitJazz.ServiceDefaults.csproj`:
 - Remove `<PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" ... />`
 
-Edit `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/Program.cs`:
+Edit `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/Program.cs`:
 - Delete lines `//app.UseAuthentication();`, `//app.UseAuthorization();`, `//.RequireAuthorization("TransitDataPublisher");`
 
 Gate: `dotnet restore && dotnet build` → 0 errors.

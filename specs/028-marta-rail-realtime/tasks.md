@@ -13,18 +13,18 @@ request TDD. Verification is via telemetry (`mj-data-explorer`) + in-app observa
 runtime contract assertion, per quickstart.md §3. No unit-test tasks are generated.
 
 **Organization**: Tasks are grouped by user story. This feature is **worker-only**
-(`src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`); no Shared/WebAPI/Client code.
+(`src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`); no Shared/WebAPI/Client code.
 
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: US1 (trains appear/move), US2 (audio voice), US3 (no bus regression)
-- All paths are under `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/` unless noted
+- All paths are under `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/` unless noted
 
 ## Path Conventions
 
 - Worker project root (abbreviated **WORKER/** below):
-  `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`
+  `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`
 - New code lives in `WORKER/RailRealtime/`
 
 ---

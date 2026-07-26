@@ -62,22 +62,22 @@ specs/032-mbta-boston-transit/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   └── CityNames.cs                                  # ADD: const string Mbta = "mbta";
 │
 ├── Server/
-│   ├── ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+│   ├── ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 │   │   ├── appsettings.json                          # ADD: mbta entry to Cities: array
 │   │   └── appsettings.Development.json              # ADD: mbta entry (dev parity)
 │   │   # Program.cs UNCHANGED — non-marta config auto-routes to GtfsRtCity (Program.cs:39-42)
 │   │
-│   └── ChefKnifeStudios.MartaJazz.Server.WebAPI/
+│   └── ChefKnifeStudios.TransitJazz.Server.WebAPI/
 │       ├── appsettings.json                          # ADD: mbta entry to Cities: array
 │       └── appsettings.Development.json              # ADD: mbta entry (dev parity)
 │       # GtfsStaticLoader.cs UNCHANGED — LoadCityEntries() iterates Cities: (loader L59-86)
 │
 └── Client/
-    └── ChefKnifeStudios.MartaJazz.Client.Shared/
+    └── ChefKnifeStudios.TransitJazz.Client.Shared/
         └── Components/FABs/CityFab.razor            # ADD: one MatListItem + HandleMbtaClicked
 ```
 

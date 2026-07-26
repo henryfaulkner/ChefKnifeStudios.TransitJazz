@@ -1,0 +1,13 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "ChefKnifeStudios.TransitJazz.Server.TransitDataWorker": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development",
+        "WMATA_API_KEY": "fe06d6246fa3494d9c545990487a87d3"
+      }
+    }
+  }
+}

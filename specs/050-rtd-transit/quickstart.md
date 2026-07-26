@@ -12,7 +12,7 @@ no new unit tests are needed (research.md R4).
 ## Steps
 
 ### 1. Add the `Rtd` constant
-`src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs` → add `public const string Rtd = "rtd";`.
+`src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs` → add `public const string Rtd = "rtd";`.
 
 ### 2. Add the Worker `Cities:` entry
 `src/Server/…TransitDataWorker/appsettings.json` → append the canonical `rtd` object, including

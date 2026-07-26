@@ -15,7 +15,7 @@
 
 ## Path Conventions
 
-Web application (constitution three-deployable layout). Server code under `src/Server/...WebAPI`, shared constants under `src/ChefKnifeStudios.MartaJazz.Shared`, client under `src/Client/...`. Tests in the new `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests` project.
+Web application (constitution three-deployable layout). Server code under `src/Server/...WebAPI`, shared constants under `src/ChefKnifeStudios.TransitJazz.Shared`, client under `src/Client/...`. Tests in the new `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests` project.
 
 ---
 
@@ -23,8 +23,8 @@ Web application (constitution three-deployable layout). Server code under `src/S
 
 **Purpose**: Project scaffolding for this feature's new test project.
 
-- [x] T001 Create the WebAPI unit-test project `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests.csproj` per `contracts/tests.md` (xUnit; `Microsoft.NET.Test.Sdk`, `xunit`, `xunit.runner.visualstudio`; `net10.0`; `Nullable` + `ImplicitUsings` enabled; `IsPackable=false`) with project references to `Server.WebAPI` and `Shared`.
-- [x] T002 Add `ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests` to `ChefKnifeStudios.TransitJazz.sln` (`dotnet sln add ...`) and confirm `dotnet build` succeeds.
+- [x] T001 Create the WebAPI unit-test project `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.csproj` per `contracts/tests.md` (xUnit; `Microsoft.NET.Test.Sdk`, `xunit`, `xunit.runner.visualstudio`; `net10.0`; `Nullable` + `ImplicitUsings` enabled; `IsPackable=false`) with project references to `Server.WebAPI` and `Shared`.
+- [x] T002 Add `ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests` to `ChefKnifeStudios.TransitJazz.sln` (`dotnet sln add ...`) and confirm `dotnet build` succeeds.
 
 ---
 
@@ -34,12 +34,12 @@ Web application (constitution three-deployable layout). Server code under `src/S
 
 **⚠️ CRITICAL**: No user-story-specific work can begin until this phase is complete.
 
-- [x] T003 Add `Transit` nested class with `public const string GetLastBatch = "/transit/last-batch";` to `src/ChefKnifeStudios.MartaJazz.Shared/ApiEndpoints.cs` (sibling of `Gtfs`/`Test`).
-- [x] T004 Create `ILastBatchCache` + `LastBatchCache` in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/SignalR/ILastBatchCache.cs` per `contracts/batch-cache.md`: single-slot atomic-swap (`Volatile.Read`/`Volatile.Write`) over `IReadOnlyList<EventEnvelope>`, seeded to `Array.Empty<EventEnvelope>()`, `Set(null)` ⇒ empty (FR-002, FR-004, FR-007, FR-008).
-- [x] T005 Register the cache as a singleton in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/Program.cs`: `builder.Services.AddSingleton<ILastBatchCache, LastBatchCache>();` (place near the SignalR/`ITransitHubPublisher` registrations).
-- [x] T006 Hook the write path in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/SignalR/WorkerTransitHub.cs`: constructor-inject `ILastBatchCache`; in `PublishBatch`, call `_lastBatchCache.Set(batch)` **before** the `SendAsync("ReceiveBatch", batch)` relay (FR-001, FR-002, FR-010).
-- [x] T007 Create `TransitEndpoints` in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/EndpointGroups/TransitEndpoints.cs` per `contracts/last-batch-endpoint.md`: `MapTransitEndpoints()` group mapping `GET ApiEndpoints.Transit.GetLastBatch` to a thin handler that returns `Results.Ok(cache.Current)`; `.WithName(...)` + `.Produces<IEnumerable<EventEnvelope>>(StatusCodes.Status200OK)`; anonymous access (FR-003, FR-004).
-- [x] T008 Map the new group in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/Program.cs` by appending `.MapTransitEndpoints()` to the existing `app.MapTestEndpoints().MapGtfsEndpoints()` chain.
+- [x] T003 Add `Transit` nested class with `public const string GetLastBatch = "/transit/last-batch";` to `src/ChefKnifeStudios.TransitJazz.Shared/ApiEndpoints.cs` (sibling of `Gtfs`/`Test`).
+- [x] T004 Create `ILastBatchCache` + `LastBatchCache` in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/SignalR/ILastBatchCache.cs` per `contracts/batch-cache.md`: single-slot atomic-swap (`Volatile.Read`/`Volatile.Write`) over `IReadOnlyList<EventEnvelope>`, seeded to `Array.Empty<EventEnvelope>()`, `Set(null)` ⇒ empty (FR-002, FR-004, FR-007, FR-008).
+- [x] T005 Register the cache as a singleton in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/Program.cs`: `builder.Services.AddSingleton<ILastBatchCache, LastBatchCache>();` (place near the SignalR/`ITransitHubPublisher` registrations).
+- [x] T006 Hook the write path in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/SignalR/WorkerTransitHub.cs`: constructor-inject `ILastBatchCache`; in `PublishBatch`, call `_lastBatchCache.Set(batch)` **before** the `SendAsync("ReceiveBatch", batch)` relay (FR-001, FR-002, FR-010).
+- [x] T007 Create `TransitEndpoints` in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/EndpointGroups/TransitEndpoints.cs` per `contracts/last-batch-endpoint.md`: `MapTransitEndpoints()` group mapping `GET ApiEndpoints.Transit.GetLastBatch` to a thin handler that returns `Results.Ok(cache.Current)`; `.WithName(...)` + `.Produces<IEnumerable<EventEnvelope>>(StatusCodes.Status200OK)`; anonymous access (FR-003, FR-004).
+- [x] T008 Map the new group in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/Program.cs` by appending `.MapTransitEndpoints()` to the existing `app.MapTestEndpoints().MapGtfsEndpoints()` chain.
 
 **Checkpoint**: Server caches and serves the latest batch; HTTP shape verifiable via `quickstart.md` Steps 1–2. User-story work can begin.
 
@@ -55,14 +55,14 @@ Web application (constitution three-deployable layout). Server code under `src/S
 
 > Write these unit tests FIRST; ensure they FAIL before implementing T006's hook behavior.
 
-- [x] T009 [P] [US1] `LastBatchCacheTests` in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/LastBatchCacheTests.cs` per `contracts/tests.md`: cold-start empty/non-null; `Set(b1)` ⇒ `Current==b1`; `Set(b1)`→`Set(b2)` ⇒ latest wins; `Set(null)` ⇒ empty non-null; concurrent set/read never null/torn (FR-002, FR-004, FR-008).
-- [x] T010 [P] [US1] `WorkerTransitHubTests` in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/WorkerTransitHubTests.cs` per `contracts/tests.md`: with `FakeLastBatchCache` + fake `IHubContext<TransitHub>`, `PublishBatch(b)` calls `Set(b)` once AND relays `ReceiveBatch` once; empty batch still caches + relays (FR-001, FR-002, FR-010).
+- [x] T009 [P] [US1] `LastBatchCacheTests` in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/LastBatchCacheTests.cs` per `contracts/tests.md`: cold-start empty/non-null; `Set(b1)` ⇒ `Current==b1`; `Set(b1)`→`Set(b2)` ⇒ latest wins; `Set(null)` ⇒ empty non-null; concurrent set/read never null/torn (FR-002, FR-004, FR-008).
+- [x] T010 [P] [US1] `WorkerTransitHubTests` in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/WorkerTransitHubTests.cs` per `contracts/tests.md`: with `FakeLastBatchCache` + fake `IHubContext<TransitHub>`, `PublishBatch(b)` calls `Set(b)` once AND relays `ReceiveBatch` once; empty batch still caches + relays (FR-001, FR-002, FR-010).
 
 ### Implementation for User Story 1
 
-- [x] T011 [P] [US1] Create `ITransitEndpointsService` + `TransitEndpointsService` in `src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/EndpointsServices/TransitEndpointsService.cs`, mirroring `GtfsEndpointsService`: `Task<Result<IEnumerable<EventEnvelope>>> GetLastBatch(CancellationToken ct = default)` via `IHttpServiceFactory.Create(nameof(APIs.TransitJazzAPI))` calling `ApiEndpoints.Transit.GetLastBatch`, with try/catch → `Result.Error` (FR-005, FR-009).
-- [x] T012 [US1] Register the client service in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Program.cs`: `builder.Services.AddSingleton<ITransitEndpointsService, TransitEndpointsService>();` (next to `IGtfsEndpointsService`).
-- [x] T013 [US1] Inject `ITransitEndpointsService` into `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` (`[Inject]`) and add a one-time snapshot fetch in the `OnInitializedAsync` load sequence — after `NotificationService.InitAsync()` and `LoadRoutesAsync()` — that, on success, feeds the result into the existing `HandleVehicleBatchAsync(...)`; best-effort (log + continue on failure), non-blocking, relying on the existing `_pendingBatch` guard if the map is not yet ready (FR-005, FR-006).
+- [x] T011 [P] [US1] Create `ITransitEndpointsService` + `TransitEndpointsService` in `src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/EndpointsServices/TransitEndpointsService.cs`, mirroring `GtfsEndpointsService`: `Task<Result<IEnumerable<EventEnvelope>>> GetLastBatch(CancellationToken ct = default)` via `IHttpServiceFactory.Create(nameof(APIs.TransitJazzAPI))` calling `ApiEndpoints.Transit.GetLastBatch`, with try/catch → `Result.Error` (FR-005, FR-009).
+- [x] T012 [US1] Register the client service in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Program.cs`: `builder.Services.AddSingleton<ITransitEndpointsService, TransitEndpointsService>();` (next to `IGtfsEndpointsService`).
+- [x] T013 [US1] Inject `ITransitEndpointsService` into `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` (`[Inject]`) and add a one-time snapshot fetch in the `OnInitializedAsync` load sequence — after `NotificationService.InitAsync()` and `LoadRoutesAsync()` — that, on success, feeds the result into the existing `HandleVehicleBatchAsync(...)`; best-effort (log + continue on failure), non-blocking, relying on the existing `_pendingBatch` guard if the map is not yet ready (FR-005, FR-006).
 
 **Checkpoint**: MVP complete — buses appear on load and transition smoothly. Validate via `quickstart.md` Steps 3–4.
 
@@ -78,7 +78,7 @@ Web application (constitution three-deployable layout). Server code under `src/S
 
 > No new production code expected beyond Foundational + US1: the cache returns empty `[]` (T004/T007) and `HandleVehicleBatchAsync` already no-ops on an empty batch. These tasks confirm and harden that path.
 
-- [x] T014 [US2] Verify the cold-start client path in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`: an empty `IEnumerable<EventEnvelope>` from `GetLastBatch` flows through `HandleVehicleBatchAsync` to a harmless empty render (no exception, no spinner-forever); add a guard/early-return only if a gap is found (FR-004, US2 AC-1/AC-2).
+- [x] T014 [US2] Verify the cold-start client path in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`: an empty `IEnumerable<EventEnvelope>` from `GetLastBatch` flows through `HandleVehicleBatchAsync` to a harmless empty render (no exception, no spinner-forever); add a guard/early-return only if a gap is found (FR-004, US2 AC-1/AC-2).
 - [ ] T015 [US2] Execute `quickstart.md` Step 1 (cold-start endpoint `200`+`[]`) and Step 5 (cold-start client load) and record results (SC-003).
 
 **Checkpoint**: Cold start is graceful on both server and client.
@@ -103,7 +103,7 @@ Web application (constitution three-deployable layout). Server code under `src/S
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [x] T017 Run the full unit suite: `dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests` — confirm `LastBatchCacheTests` and `WorkerTransitHubTests` all pass (`quickstart.md` Step 7).
+- [x] T017 Run the full unit suite: `dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests` — confirm `LastBatchCacheTests` and `WorkerTransitHubTests` all pass (`quickstart.md` Step 7).
 - [ ] T018 Run `quickstart.md` Step 6 (no upstream fetch on repeated reads; FR-007 / SC-005) and confirm logs show no extra GTFS-RT/Worker activity from reads.
 - [x] T019 [P] Add structured `ILogger` debug logging in `TransitEndpoints` (snapshot size served) and at the `WorkerTransitHub` cache write, consistent with existing logging style (Principle IV); no user-facing copy, so no `.resx` change.
 - [x] T020 Full-solution `dotnet build` + `dotnet test` to confirm no regressions in existing projects.

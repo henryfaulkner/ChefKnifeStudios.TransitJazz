@@ -17,8 +17,8 @@
 
 All paths are relative to the repository root `C:\Projects\ChefKnifeStudios.TransitJazz\`.
 
-Client component root: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/`
-Client WebApp root: `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`
+Client component root: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/`
+Client WebApp root: `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/`
 
 ---
 
@@ -26,10 +26,10 @@ Client WebApp root: `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`
 
 **Purpose**: Create the new FAB component files
 
-- [X] T001 Create `FABs/AudioFab.razor` in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/AudioFab.razor`
-- [X] T002 [P] Create `FABs/AudioFab.razor.css` in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/AudioFab.razor.css`
-- [X] T003 [P] Create `FABs/MapStyleFab.razor` in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/MapStyleFab.razor`
-- [X] T004 [P] Create `FABs/MapStyleFab.razor.css` in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/MapStyleFab.razor.css`
+- [X] T001 Create `FABs/AudioFab.razor` in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/AudioFab.razor`
+- [X] T002 [P] Create `FABs/AudioFab.razor.css` in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/AudioFab.razor.css`
+- [X] T003 [P] Create `FABs/MapStyleFab.razor` in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/MapStyleFab.razor`
+- [X] T004 [P] Create `FABs/MapStyleFab.razor.css` in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/MapStyleFab.razor.css`
 
 **Checkpoint**: Both new FAB files exist with basic shell markup.
 
@@ -67,12 +67,12 @@ Client WebApp root: `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`
 
 **Independent Test**: No gear FAB (`MatFAB Icon="settings"`) or slide-out panel appears in the UI. Audio and map-style toggles still work and persist correctly.
 
-- [X] T009 [US3] Modify `MainLayout.razor` — replace `<SettingsBlade />` and `<SettingsFab />` with `<AudioFab />` and `<MapStyleFab />`; remove `@using ChefKnifeStudios.MartaJazz.Client.Shared.Components.Blades`
+- [X] T009 [US3] Modify `MainLayout.razor` — replace `<SettingsBlade />` and `<SettingsFab />` with `<AudioFab />` and `<MapStyleFab />`; remove `@using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Blades`
 - [X] T010 [US3] Remove deprecated files under `Components/Blades/`: `BladeContainer.razor`, `BladeContainer.razor.cs`, `BladeContainer.razor.css`, `SettingsBlade.razor`, `SettingsBlade.razor.cs`, `SettingsBlade.razor.css`
 - [X] T011 [US3] Remove deprecated FAB files: `SettingsFab.razor`, `SettingsFab.razor.css` from `Components/FABs/`
 - [X] T012 [US3] Remove `BladeEventArgs.cs` from `EventArgs/`
 - [X] T013 [US3] Update comment referencing "settings gear FAB (Principle X)" in `wwwroot/js/map-interop.js` (line ~32) to describe the new FAB control row
-- [X] T014 [US3] Remove unused `@using ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs` from `MainLayout.razor` if no other event args remain in use (verify `ThemeChangedEventArgs` still needed) — `ThemeChangedEventArgs` still needed, no import removed
+- [X] T014 [US3] Remove unused `@using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs` from `MainLayout.razor` if no other event args remain in use (verify `ThemeChangedEventArgs` still needed) — `ThemeChangedEventArgs` still needed, no import removed
 
 **Checkpoint**: App has no settings blade, no gear FAB. Only audio and map-style FABs exist at bottom-right.
 

@@ -37,7 +37,7 @@ CORS policy "Default" with its 5 hardcoded localhost origins + `AllowCredentials
 
 ### 5. `delete:` WASM heap cap + RAM investigation
 The `EmccMaximumHeapSize` cap plus the whole browser-RAM / `MemoryProbe` investigation. The ~1.2 GB client RAM is .NET WASM linear memory — it *evaporates* on Server (the runtime moves to the host). The heap-cap workaround, the cap-tuning commit, and the memory-probe tooling become dead weight.
-`src/Client/.../WebApp/ChefKnifeStudios.MartaJazz.Client.WebApp.csproj:6`; memory notes `project_browser_ram_wasm_heap`, `project_memory_probe_instrumentation`
+`src/Client/.../WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj:6`; memory notes `project_browser_ram_wasm_heap`, `project_memory_probe_instrumentation`
 
 ### 6. `delete:` Static Web App deploy pipeline
 `client.yml` Static Web App pipeline + `wasm-tools` workload + `staticwebapp.config.json` + the `Blazor-Environment` header injection. Server deploys as one container (reuse `server.yml` + the existing `WebAPI/Dockerfile`); the SWA artifact path, the `skip_app_build` upload, and the runtime env-header trick all go.

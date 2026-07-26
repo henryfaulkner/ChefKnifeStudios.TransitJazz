@@ -95,10 +95,10 @@ specs/016-settings-blade/
 ### Source Code (repository root)
 
 All changes are within the Blazor WASM client. No server/worker/shared changes. Namespace root is
-`ChefKnifeStudios.MartaJazz` (the solution's actual root), under `src/Client/`.
+`ChefKnifeStudios.TransitJazz` (the solution's actual root), under `src/Client/`.
 
 ```text
-src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/
 ├── Models/
 │   └── Settings.cs                          # NEW: ObservableObject, 3 [Description]-labeled bool props
 ├── Constants/
@@ -129,7 +129,7 @@ src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
 └── wwwroot/js/
     └── outside-click.js                     # NEW: addOutsideClickListener / removeOutsideClickListener
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/
+src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/
 ├── Layout/
 │   └── MainLayout.razor                     # MODIFY: host <SettingsBlade/> + <SettingsFab/> once; (theme handler already present)
 ├── Pages/
@@ -137,7 +137,7 @@ src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/
 │   └── TransitMap.razor                     # (no change expected; blade/FAB live in layout)
 └── Program.cs                               # MODIFY: register ISettingsService (transient), IOutsideClickJsInterop (singleton)
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/
+src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/
 └── map-interop.js                           # MODIFY: add setBasemapStyle (streets↔blank-dark) + setCheckpointVisibility to window.ChefMap
 ```
 

@@ -4,8 +4,8 @@ Server-side only. One production file, one test file.
 
 ## Files
 
-- **Modify**: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/SignalR/ILastBatchCache.cs` — rewrite the `LastBatchCache` class body (interface unchanged).
-- **Modify**: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/LastBatchCacheTests.cs` — richer factory, rewrite 3 inverted tests, add 6 new tests.
+- **Modify**: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/SignalR/ILastBatchCache.cs` — rewrite the `LastBatchCache` class body (interface unchanged).
+- **Modify**: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/LastBatchCacheTests.cs` — richer factory, rewrite 3 inverted tests, add 6 new tests.
 - **Do NOT touch**: `WorkerTransitHub.cs`, `TransitEndpoints.cs`, `Program.cs`, `WorkerTransitHubTests.cs`, any Shared record, or any client file.
 
 ## Implementation sketch (`LastBatchCache`)
@@ -78,8 +78,8 @@ Notes:
 ## Verify
 
 ```powershell
-dotnet build src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/ChefKnifeStudios.MartaJazz.Server.WebAPI.csproj
-dotnet test  src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests.csproj
+dotnet build src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj
+dotnet test  src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.csproj
 ```
 
 Definition of done: build green; all existing + new tests pass; `GET /transit/last-batch` returns no stale records and no empty envelopes; live `ReceiveBatch` still carries the full batch.

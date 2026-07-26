@@ -55,7 +55,7 @@ No `NEEDS CLARIFICATION` markers remained in the spec. Research below records th
 
 ## R8. Test framework & project shape
 
-- **Decision**: New `ChefKnifeStudios.MartaJazz.Shared.Tests` xUnit v2 project, csproj copied from the existing `*.Tests` projects (`Microsoft.NET.Test.Sdk 17.*`, `xunit 2.*`, `xunit.runner.visualstudio 2.*`, `IsPackable=false`, `Nullable`+`ImplicitUsings` enabled), `ProjectReference` to Shared. Added to `ChefKnifeStudios.TransitJazz.sln`.
+- **Decision**: New `ChefKnifeStudios.TransitJazz.Shared.Tests` xUnit v2 project, csproj copied from the existing `*.Tests` projects (`Microsoft.NET.Test.Sdk 17.*`, `xunit 2.*`, `xunit.runner.visualstudio 2.*`, `IsPackable=false`, `Nullable`+`ImplicitUsings` enabled), `ProjectReference` to Shared. Added to `ChefKnifeStudios.TransitJazz.sln`.
 - **Rationale**: Consistency with the repo's two existing test projects; no new tooling. CI already builds the solution, so the tests run automatically (Principle V).
 - **Alternatives considered**: Co-locating tests in an existing Server test project (wrong dependency direction — Shared shouldn't be tested through a Server assembly). Rejected.
 

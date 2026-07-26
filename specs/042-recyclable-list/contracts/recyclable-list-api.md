@@ -1,6 +1,6 @@
 # API Contract: RecyclableList<T>
 
-The public API this feature exposes to other code in the solution. Namespace: `ChefKnifeStudios.MartaJazz.Shared.Collections`. Assembly: `ChefKnifeStudios.TransitJazz.Shared`.
+The public API this feature exposes to other code in the solution. Namespace: `ChefKnifeStudios.TransitJazz.Shared.Collections`. Assembly: `ChefKnifeStudios.TransitJazz.Shared`.
 
 ## `public sealed class RecyclableList<T> : IList<T>, IReadOnlyList<T>, IDisposable`
 

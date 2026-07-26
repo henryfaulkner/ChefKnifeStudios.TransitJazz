@@ -1,0 +1,183 @@
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.GtfsStatic;
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.Interfaces;
+using ChefKnifeStudios.TransitJazz.Shared;
+using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+
+namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.EndpointGroups;
+
+public static class GtfsEndpoints
+{
+    public static IEndpointRouteBuilder MapGtfsEndpoints(this IEndpointRouteBuilder builder)
+    {
+        var group = builder
+            .MapGroup(string.Empty)
+            .WithName(nameof(ApiEndpoints.Gtfs))
+            .WithTags(nameof(ApiEndpoints.Gtfs));
+
+        group.MapGet("/gtfs/debug/keys", async (
+            [FromServices] IKeyValueRepository<string> repo,
+            CancellationToken ct) =>
+        {
+            var all = await repo.GetAllAsync(ct);
+            if (!all.IsSuccess) return Results.StatusCode(503);
+            var keys = all.Value.Keys.OrderBy(k => k).ToList();
+            return Results.Ok(keys);
+        });
+
+        group.MapGet(ApiEndpoints.Gtfs.GetRouteShape, async (
+            string routeId,
+            [FromQuery] string? city,
+            [FromServices] IKeyValueRepository<string> repo,
+            [FromServices] ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
+            var cityKey = (city ?? CityNames.Marta).ToLowerInvariant();
+
+            var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);
+            if (!readyResult.IsSuccess)
+            {
+                logger.LogWarning("GtfsEndpoints: GTFS Static data not yet loaded.");
+                return Results.StatusCode(503);
+            }
+
+            var kvKey = $"{cityKey}:{routeId}";
+            var shapeResult = await repo.GetAsync(kvKey, ct);
+            if (!shapeResult.IsSuccess)
+            {
+                logger.LogWarning("GtfsEndpoints: Route shape not found for {Key}.", kvKey);
+                return Results.NotFound();
+            }
+
+            var feature = JsonSerializer.Deserialize<RouteShapeFeature>(shapeResult.Value, Shared.JsonOptions.Get());
+            if (feature is null)
+            {
+                logger.LogWarning("GtfsEndpoints: Failed to deserialize route shape for {Key}.", kvKey);
+                return Results.StatusCode(503);
+            }
+
+            return Results.Ok(feature);
+        })
+        .WithName(nameof(ApiEndpoints.Gtfs.GetRouteShape))
+        .Produces<RouteShapeFeature>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status404NotFound)
+        .Produces(StatusCodes.Status503ServiceUnavailable);
+
+        group.MapGet(ApiEndpoints.Gtfs.GetAllRouteShapes, async (
+            [FromQuery] string? city,
+            [FromServices] IKeyValueRepository<string> repo,
+            [FromServices] ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
+
+            var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);
+            if (!readyResult.IsSuccess)
+            {
+                logger.LogWarning("GtfsEndpoints: GTFS Static data not yet loaded.");
+                return Results.StatusCode(503);
+            }
+
+            var allShapesResult = await repo.GetAllAsync(ct);
+            if (!allShapesResult.IsSuccess)
+            {
+                logger.LogWarning("GtfsEndpoints: Failed to retrieve all route shapes.");
+                return Results.StatusCode(503);
+            }
+
+            var prefix = city is not null ? $"{city.ToLowerInvariant()}:" : null;
+
+            var features = allShapesResult.Value
+                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey
+                    && !kvp.Key.EndsWith(GtfsStaticLoader.SubwayOffsetsKeySuffix)
+                    && (prefix is null || kvp.Key.StartsWith(prefix)))
+                .Select(kvp => JsonSerializer.Deserialize<RouteShapeFeature>(kvp.Value, Shared.JsonOptions.Get()))
+                .Where(f => f is not null)
+                .ToList();
+
+            return Results.Ok(features);
+        })
+        .WithName(nameof(ApiEndpoints.Gtfs.GetAllRouteShapes))
+        .Produces<IEnumerable<RouteShapeFeature>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status503ServiceUnavailable);
+
+        group.MapGet(ApiEndpoints.Gtfs.GetSubwayStopOffsets, async (
+            [FromQuery] string? city,
+            [FromServices] IKeyValueRepository<string> repo,
+            [FromServices] ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
+            var cityKey = (city ?? CityNames.Nymta).ToLowerInvariant();
+
+            var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);
+            if (!readyResult.IsSuccess)
+            {
+                logger.LogWarning("GtfsEndpoints: GTFS Static data not yet loaded.");
+                return Results.StatusCode(503);
+            }
+
+            var kvKey = $"{cityKey}:{GtfsStaticLoader.SubwayOffsetsKeySuffix}";
+            var offsetsResult = await repo.GetAsync(kvKey, ct);
+            if (!offsetsResult.IsSuccess)
+                return Results.Ok(Array.Empty<SubwayStopOffsetSet>());
+
+            var sets = JsonSerializer.Deserialize<SubwayStopOffsetSet[]>(offsetsResult.Value, Shared.JsonOptions.Get());
+            return Results.Ok(sets ?? []);
+        })
+        .WithName(nameof(ApiEndpoints.Gtfs.GetSubwayStopOffsets))
+        .Produces<IEnumerable<SubwayStopOffsetSet>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status503ServiceUnavailable);
+
+        group.MapGet(ApiEndpoints.Gtfs.GetAllRoutes, async (
+            [FromQuery] string? city,
+            [FromServices] IKeyValueRepository<string> repo,
+            [FromServices] ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
+            var cityKey = (city ?? CityNames.Marta).ToLowerInvariant();
+            var prefix = $"{cityKey}:";
+
+            var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);
+            if (!readyResult.IsSuccess)
+            {
+                logger.LogWarning("GtfsEndpoints: GTFS Static data not yet loaded.");
+                return Results.StatusCode(503);
+            }
+
+            var allShapesResult = await repo.GetAllAsync(ct);
+            if (!allShapesResult.IsSuccess)
+            {
+                logger.LogWarning("GtfsEndpoints: Failed to retrieve all route shapes.");
+                return Results.StatusCode(503);
+            }
+
+            var featureProperties = allShapesResult.Value
+                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey
+                    && !kvp.Key.EndsWith(GtfsStaticLoader.SubwayOffsetsKeySuffix)
+                    && kvp.Key.StartsWith(prefix))
+                .Select(kvp => JsonSerializer.Deserialize<RouteShapeFeature>(kvp.Value, Shared.JsonOptions.Get()))
+                .Select(x => x?.Properties)
+                .Where(f => f is not null)
+                .ToList();
+
+            return Results.Ok(featureProperties);
+        })
+        .WithName(nameof(ApiEndpoints.Gtfs.GetAllRoutes))
+        .Produces<IEnumerable<RouteShapeProperties>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status503ServiceUnavailable);
+
+        return builder;
+    }
+}

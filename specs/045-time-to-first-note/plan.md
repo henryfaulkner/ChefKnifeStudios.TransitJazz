@@ -67,21 +67,21 @@ specs/045-time-to-first-note/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   └── Services/TriggerPointGenerator.cs        # spacing constant (US-spacing, DEFERRED — comment/constant only if touched)
 │
 ├── Server/
-│   ├── ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+│   ├── ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 │   │   ├── Worker.cs                            # US2: wire suppression counters through the V2 loop + CityTickResult + PerCityCycle row
 │   │   ├── Checkpoints/CrossingDetector.cs      # US2: return per-reason suppression outcome; reverse-direction emission
 │   │   └── Logging/TelemetryEvent.cs            # US2: new snake_case suppression-count columns
 │   │
-│   └── ChefKnifeStudios.MartaJazz.Server.WebAPI/
+│   └── ChefKnifeStudios.TransitJazz.Server.WebAPI/
 │       └── SignalR/
 │           ├── ILastBatchCache.cs               # US3: cache recent crossings alongside the position snapshot
 │           └── TransitHub.cs                    # US3: replay age-capped crossings on JoinCity
 │
-├── Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+├── Client/ChefKnifeStudios.TransitJazz.Client.Shared/
 │   ├── wwwroot/js/transit-synth.js              # US1: build master bus + noise bed in unlock(); warmProdSamplers(); US4: attach listener pre-import; US5: [TTFN] probe
 │   └── Services/JsInterop/TransitSynthJsInterop.cs  # US1: WarmSamplersAsync() interop wrapper (if driven from C#)
 │
@@ -90,10 +90,10 @@ tools/telemetry-mcp/internal/validate/
 └── validate_test.go                             # US2: accept/reject vectors for new columns
 
 # Tests
-src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/
+src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/
 ├── CrossingDetectorTests.cs                     # US2: reverse-direction emission + per-reason counts
 └── TelemetryEventSchemaTests.cs                 # US2: new columns present + round-trip
-src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/
+src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/
 └── LastBatchCacheCrossingExclusionTests.cs      # US3: exclusion → age-capped inclusion (rewrite the guard the test pins)
 ```
 

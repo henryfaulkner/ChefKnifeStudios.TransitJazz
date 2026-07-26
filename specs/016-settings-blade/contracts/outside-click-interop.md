@@ -12,7 +12,7 @@ Follows the existing `TransitSynthJsInterop` idiom exactly: `Lazy<Task<IJSObject
 `import` of an RCL static asset with a cache-busting `?g=<guid>`, try/catch + `ILogger`, `IAsyncDisposable`.
 
 ```csharp
-namespace ChefKnifeStudios.MartaJazz.Client.Shared.Services.JsInterop;
+namespace ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop;
 
 public interface IOutsideClickJsInterop
 {
@@ -22,7 +22,7 @@ public interface IOutsideClickJsInterop
 ```
 
 Module import path:
-`./_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/outside-click.js?g=<guid>`
+`./_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/outside-click.js?g=<guid>`
 
 ### .NET ↔ JS round trip
 1. `AddOutsideClickListenerAsync(elementId, callback)`:

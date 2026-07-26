@@ -21,7 +21,7 @@ untouched shared pipeline + a no-branch assertion.
 
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: US1 / US2 / US3 (US4 folded into Foundational)
-- File paths are exact. Root namespace is `ChefKnifeStudios.MartaJazz`; projects under `src/Server/`.
+- File paths are exact. Root namespace is `ChefKnifeStudios.TransitJazz`; projects under `src/Server/`.
 
 ---
 
@@ -29,10 +29,10 @@ untouched shared pipeline + a no-branch assertion.
 
 **Purpose**: Constants and DTOs that cross the WebAPI↔Worker boundary, plus config scaffolding.
 
-- [X] T001 [P] Add `public const string Nymta = "nymta";` to `CityNames` in `src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs`
-- [X] T002 [P] Add `Gtfs.GetSubwayStopOffsets = "/gtfs/subway/stop-offsets"` to `src/ChefKnifeStudios.MartaJazz.Shared/ApiEndpoints.cs`
-- [X] T003 [P] Create shared DTOs `SubwayStopOffsetSet` + `SubwayStop` (records per data-model.md) in new file `src/ChefKnifeStudios.MartaJazz.Shared/GtfsData/SubwayStopOffset.cs`
-- [X] T004 Add the `nymta` `Cities:` entry (subway static zip in `StaticZipUrls`, the 8 line-group RT URLs in `GtfsRtUrls`, `EmitsTelemetry: false`) to BOTH `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.json` and `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.json`
+- [X] T001 [P] Add `public const string Nymta = "nymta";` to `CityNames` in `src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs`
+- [X] T002 [P] Add `Gtfs.GetSubwayStopOffsets = "/gtfs/subway/stop-offsets"` to `src/ChefKnifeStudios.TransitJazz.Shared/ApiEndpoints.cs`
+- [X] T003 [P] Create shared DTOs `SubwayStopOffsetSet` + `SubwayStop` (records per data-model.md) in new file `src/ChefKnifeStudios.TransitJazz.Shared/GtfsData/SubwayStopOffset.cs`
+- [X] T004 Add the `nymta` `Cities:` entry (subway static zip in `StaticZipUrls`, the 8 line-group RT URLs in `GtfsRtUrls`, `EmitsTelemetry: false`) to BOTH `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json` and `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json`
 
 **Checkpoint**: Solution still builds; shared contract types + config exist for both projects.
 
@@ -48,14 +48,14 @@ both depend on this phase.
 
 ### Server-side offset production (WebAPI)
 
-- [X] T005 [US4] Create `SubwayStopOffsetBuilder` in new file `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/SubwayStopOffsetBuilder.cs`: parse `stops.txt` (`stop_id→lat/lon`) and `stop_times.txt` (per-trip ordered `stop_id`) from the `ZipArchive`, reusing `GtfsStaticLoader.SplitCsvLine` + header-index idiom; collapse to per-`(route,direction)` ordered stop lists (direction from `stop_id` suffix, route from the existing `trips.txt` `trip_id→route_id` map); discard raw rows (FR-013)
+- [X] T005 [US4] Create `SubwayStopOffsetBuilder` in new file `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/SubwayStopOffsetBuilder.cs`: parse `stops.txt` (`stop_id→lat/lon`) and `stop_times.txt` (per-trip ordered `stop_id`) from the `ZipArchive`, reusing `GtfsStaticLoader.SplitCsvLine` + header-index idiom; collapse to per-`(route,direction)` ordered stop lists (direction from `stop_id` suffix, route from the existing `trips.txt` `trip_id→route_id` map); discard raw rows (FR-013)
 - [X] T006 [US4] In `SubwayStopOffsetBuilder`, build each route+direction's interpolation polyline (`Coordinates`) + `CumulativeDistanceMeters` via `HaversineCalculator.DistanceMeters` (same math as `Worker.cs:259-262`), and compute each ordered stop's `DistanceAlongShapeMeters` as its nearest polyline vertex's cumulative distance; emit `SubwayStopOffsetSet[]` (INV-E1/E2/E3/E6)
 - [X] T007 [US4] Wire the builder into `GtfsStaticLoader` (`src/Server/.../WebAPI/GtfsStatic/GtfsStaticLoader.cs`): after the per-city shape set is built, if `city.Name == CityNames.Nymta`, run `SubwayStopOffsetBuilder` and store the JSON blob under `{city}:__subway_offsets__` in `IKeyValueRepository<string>`; honor the existing last-good-wins policy on empty/failed fetch (`GtfsStaticLoader.cs:77-87`)
 - [X] T008 [US4] Add `GET /gtfs/subway/stop-offsets` to `src/Server/.../WebAPI/EndpointGroups/GtfsEndpoints.cs` per `contracts/stop-offsets-endpoint.md`: same `ReadyKey` 503 gate as `/gtfs/routes/shapes`, read `{city}:__subway_offsets__`, return `SubwayStopOffsetSet[]` (or `[]` if absent)
 
 ### Worker-side fetch, cache & options
 
-- [X] T009 [P] [US4] Create `SubwaySynthesisOptions` (`NominalRunSeconds=90`, `GtfsRtUrls`) in new file `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Subway/SubwaySynthesisOptions.cs`
+- [X] T009 [P] [US4] Create `SubwaySynthesisOptions` (`NominalRunSeconds=90`, `GtfsRtUrls`) in new file `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Subway/SubwaySynthesisOptions.cs`
 - [X] T010 [US4] Create `StopOffsetTable` (worker-side cached lookup form) in new file `src/Server/.../TransitDataWorker/Subway/StopOffsetTable.cs` per data-model.md: `StationCoord` dict, `Sets` dict keyed by `(route,dir)`, `TryStation`, `StationBefore`, `PointOnShapeAtDistance` (binary-search + lerp over `CumulativeDistanceMeters`)
 
 **Checkpoint**: `GET /gtfs/subway/stop-offsets?city=nymta` returns a valid payload (quickstart §2);
@@ -73,8 +73,8 @@ longer empty.
 
 ### Tests for User Story 1
 
-- [X] T011 [P] [US1] `SubwayStopOffsetBuilderTests` in new file `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/SubwayStopOffsetBuilderTests.cs`: feed small in-memory `stops.txt`/`stop_times.txt`/`shapes.txt`/`trips.txt` strings → assert INV-E1 (cumdist length/monotonic), INV-E2 (stops ordered/in-range), INV-E3 (both directions), INV-E6 (empty route omitted)
-- [X] T012 [P] [US1] Create `SubwaySynthesisTests` in new file `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/SubwaySynthesisTests.cs` with the stopped/arriving cases: `StoppedAt`→exact station coord (INV-A3), `IncomingAt`→exact station coord, `CurrentStatus==null`→treated as `StoppedAt` (INV-A4), unknown `StopId`→dropped + `skippedUnknownStation++` with other entities unaffected (INV-A5)
+- [X] T011 [P] [US1] `SubwayStopOffsetBuilderTests` in new file `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/SubwayStopOffsetBuilderTests.cs`: feed small in-memory `stops.txt`/`stop_times.txt`/`shapes.txt`/`trips.txt` strings → assert INV-E1 (cumdist length/monotonic), INV-E2 (stops ordered/in-range), INV-E3 (both directions), INV-E6 (empty route omitted)
+- [X] T012 [P] [US1] Create `SubwaySynthesisTests` in new file `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/SubwaySynthesisTests.cs` with the stopped/arriving cases: `StoppedAt`→exact station coord (INV-A3), `IncomingAt`→exact station coord, `CurrentStatus==null`→treated as `StoppedAt` (INV-A4), unknown `StopId`→dropped + `skippedUnknownStation++` with other entities unaffected (INV-A5)
 
 ### Implementation for User Story 1
 
@@ -134,7 +134,7 @@ exactly like buses.
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [X] T020 [P] Confirm no new NuGet packages were added (plan constraint) and both projects build clean: `dotnet build ChefKnifeStudios.TransitJazz.sln`
-- [X] T021 [P] Run the full test suites: `dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests` and `dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests`
+- [X] T021 [P] Run the full test suites: `dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests` and `dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests`
 - [ ] T022 Run `quickstart.md` end-to-end (§2 endpoint, §3 no-per-tick-refetch log check, §4 visible trains, §6 fault isolation, §7 edge cases) — requires running WebAPI + Worker against live MTA feeds; left for manual verification
 - [X] T023 [P] Confirm `Worker.cs` diff is empty in the final change set (Principle VII / SC-004 guarantee)
 

@@ -39,7 +39,7 @@ dotnet user-secrets set "Marta:RailRealtime:ApiKey" "<key>"   # or env Marta__Ra
 
 ## 2. Implement (worker-only)
 
-Files under `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`:
+Files under `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`:
 
 1. `RailRealtime/RailRealtimeOptions.cs` — `BaseUrl`, `ApiKey`, `Enabled` (see data-model Entity 4).
 2. `RailRealtime/RailArrivalDto.cs` — JSON DTO, all-string fields (data-model Entity 1).
@@ -68,7 +68,7 @@ Files under `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`:
 
 ```bash
 # from repo root — run the worker (Aspire AppHost or the worker project directly)
-dotnet run --project src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker
+dotnet run --project src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker
 ```
 
 Then open the client app and look for train markers on the four rail lines, gliding along track,

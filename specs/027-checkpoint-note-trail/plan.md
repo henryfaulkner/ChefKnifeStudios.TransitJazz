@@ -59,7 +59,7 @@ specs/027-checkpoint-note-trail/
 ### Source Code (repository root)
 
 ```text
-src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/
 ├── wwwroot/js/
 │   ├── checkpoint-trail.js        # NEW — RAF-driven growing line layer (sibling of checkpoint-pulse.js)
 │   ├── checkpoint-pulse.js        # UNCHANGED reference sibling (pattern source)
@@ -71,7 +71,7 @@ src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
 └── Components/
     └── Map.razor.Helper.cs        # EDIT — add StartCrossingTrailAsync + SetCrossingTrailVisibilityAsync wrappers
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/
+src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/
 └── Pages/
     └── TransitMap.razor.cs        # EDIT — in OnCrossingsAsync, alongside PulseCheckpointAsync (gated on
                                    #        _checkpointsVisible), call StartCrossingTrailAsync with the

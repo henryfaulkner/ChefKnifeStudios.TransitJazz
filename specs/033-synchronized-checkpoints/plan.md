@@ -54,7 +54,7 @@ SignalR branch, keep marker generation). Hub / publisher / `ITransitHubPublisher
 **no change**.
 
 **Note on namespaces**: the design doc uses the product name `TransitJazz`; the actual source root
-namespace is `ChefKnifeStudios.MartaJazz` under `src/`. All file references below use the real paths.
+namespace is `ChefKnifeStudios.TransitJazz` under `src/`. All file references below use the real paths.
 
 ## Constitution Check
 
@@ -99,7 +99,7 @@ specs/033-synchronized-checkpoints/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   ├── Events/RouteCrossingBatchEvent.cs           # NEW: ISignalREvent payload — list of
 │   │                                               #      (VehicleId, RouteId, TriggerIndex, TotalTriggers)
 │   ├── Services/TriggerPointGenerator.cs           # MOVE from Client.Shared/Services (one shared impl)
@@ -107,7 +107,7 @@ src/
 │   └── Models/TriggerPoint.cs                       # MOVE from Client.Shared/Models
 │
 ├── Server/
-│   └── ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+│   └── ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 │       ├── Checkpoints/CrossingDetector.cs         # NEW: per-route cumDist build + per-vehicle
 │       │                                           #      crossing detection mirroring checkpoint-tracker.js onTick
 │       └── Worker.cs                               # CHANGE: build/cache per-route triggerPoints+cumDist
@@ -117,14 +117,14 @@ src/
 │                                                   #         prune crossing baselines alongside vehicle states
 │
 └── Client/
-    ├── ChefKnifeStudios.MartaJazz.Client.Shared/
+    ├── ChefKnifeStudios.TransitJazz.Client.Shared/
     │   ├── Services/TriggerPointGenerator.cs       # DELETE (moved to Shared)
     │   ├── Services/ITriggerPointGenerator.cs      # DELETE (moved to Shared)
     │   ├── Models/TriggerPoint.cs                  # DELETE (moved to Shared)
     │   ├── Services/JsInterop/CheckpointTrackerJsInterop.cs   # DELETE (detection retired)
     │   ├── Services/JsInterop/ICheckpointTrackerJsInterop.cs  # DELETE
     │   └── wwwroot/js/checkpoint-tracker.js        # DELETE (local detection retired)
-    ├── ChefKnifeStudios.MartaJazz.Client.WebApp/
+    ├── ChefKnifeStudios.TransitJazz.Client.WebApp/
     │   ├── Pages/TransitMap.razor.cs               # CHANGE: in HandleVehicleBatchAsync, add a branch
     │   │                                           #         mapping RouteCrossingBatchEvent → CrossingEventDto[]
     │   │                                           #         → OnCrossingsAsync; drop CheckpointTracker inject,

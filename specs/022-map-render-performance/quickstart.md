@@ -13,7 +13,7 @@
 
 ## Change #1 — Server-Side RDP Simplification
 
-### File: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs`
+### File: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs`
 
 1. Add constant at the top of the class:
    ```csharp
@@ -37,7 +37,7 @@
 ### Verify #1
 
 ```
-dotnet build src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI
+dotnet build src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI
 ```
 Restart the app so `GtfsStaticLoader` re-ingests.
 
@@ -57,7 +57,7 @@ Sum the coordinate counts across all features. Target: ~10k–20k total (was 111
 
 ## Change #2 — Single Routes Source + Layer (JS)
 
-### File: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js`
+### File: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js`
 
 1. Add state: `_routesFeatureCollection: null`
 
@@ -81,7 +81,7 @@ All 86 routes render from one source+layer. Hover and multi-select (feature 020)
 
 ## Change #3 — Single-Marshal Interop (C#)
 
-### File: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/Map.razor.Helper.cs`
+### File: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/Map.razor.Helper.cs`
 
 1. Add:
    ```csharp
@@ -94,7 +94,7 @@ All 86 routes render from one source+layer. Hover and multi-select (feature 020)
 
 2. Remove `AddRouteShapeFeatureAsync` and `LoadRouteGeometryForAnimationAsync`.
 
-### File: `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`
+### File: `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`
 
 1. Rewrite `RenderRoutesAsync`:
    - Build a single payload array from `_routeShapeCache` (filter out null/empty coordinates).
@@ -109,7 +109,7 @@ All 86 routes render from one source+layer. Hover and multi-select (feature 020)
 
 Build:
 ```
-dotnet build src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp
+dotnet build src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp
 ```
 Routes render. Add a temporary `console.count('addAllRoutes')` in JS — should fire 1–2 times (once for initial render, once for basemap toggle if tested). Spinner window visibly shorter.
 
@@ -117,7 +117,7 @@ Routes render. Add a temporary `console.count('addAllRoutes')` in JS — should 
 
 ## Change #4 — Defer Tracker Math
 
-### File: `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`
+### File: `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`
 
 1. In `OnAfterRenderAsync`, after `RenderRoutesAsync`:
    ```csharp
@@ -148,8 +148,8 @@ Routes visible and map pannable before trigger-point markers appear on the map (
 
 ```powershell
 # 1. Build
-dotnet build src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI
-dotnet build src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp
+dotnet build src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI
+dotnet build src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp
 
 # 2. Run (via Aspire or direct)
 # After #1: restart so GtfsStaticLoader re-ingests and check GET /gtfs/routes/shapes

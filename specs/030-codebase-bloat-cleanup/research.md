@@ -12,11 +12,11 @@
 | Item | Actual Path | Size | Callers |
 |------|-------------|------|---------|
 | BusDataPoc dir | `src/BusDataPoc/MartaJazz.Engine/` | ~80 MB (bin artifacts) | 0 (not in .sln) |
-| EventMapper.cs | `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/EventMapper.cs` | 119 lines | 0 |
-| JsonFlattener.cs | `src/ChefKnifeStudios.MartaJazz.Shared/JsonFlattener.cs` | 53 lines | 0 — NOT in Client.Shared as reported; it's in Shared |
-| Discard.cs | `src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/EndpointsServices/Discard.cs` | 7 lines | 0 |
-| AudioPlayerJsInterop.cs (Core) | `src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/JsInterop/AudioPlayerJsInterop.cs` | 54 lines | 0 — DI wires Client.Shared version |
-| audioPlayerJsInterop.js | `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/audioPlayerJsInterop.js` | 4 lines | KEEP — used by Client.Shared AudioPlayerJsInterop |
+| EventMapper.cs | `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/EventMapper.cs` | 119 lines | 0 |
+| JsonFlattener.cs | `src/ChefKnifeStudios.TransitJazz.Shared/JsonFlattener.cs` | 53 lines | 0 — NOT in Client.Shared as reported; it's in Shared |
+| Discard.cs | `src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/EndpointsServices/Discard.cs` | 7 lines | 0 |
+| AudioPlayerJsInterop.cs (Core) | `src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/JsInterop/AudioPlayerJsInterop.cs` | 54 lines | 0 — DI wires Client.Shared version |
+| audioPlayerJsInterop.js | `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/audioPlayerJsInterop.js` | 4 lines | KEEP — used by Client.Shared AudioPlayerJsInterop |
 
 **Correction from audit report**: `audioPlayerJsInterop.js` is NOT a no-op stub — it exports a real `play(soundUrl)` function used by the surviving Client.Shared implementation. Do not delete it.
 
@@ -61,9 +61,9 @@ Additionally in Client.Core: `IAudioPlayerJsInterop` → `AudioPlayerJsInterop` 
 ## Finding 4: Duplicated Code — Verified
 
 ### Haversine (3 locations)
-1. `src/ChefKnifeStudios.MartaJazz.Shared/Geospatial/HaversineCalculator.cs` — returns **km**, used by Worker.cs and RouteSnapper.cs
-2. `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` lines 411-427 — local `HaversineMeters()` returning **meters**
-3. `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/vehicle-animator.js` — JS haversine for vehicle animation
+1. `src/ChefKnifeStudios.TransitJazz.Shared/Geospatial/HaversineCalculator.cs` — returns **km**, used by Worker.cs and RouteSnapper.cs
+2. `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` lines 411-427 — local `HaversineMeters()` returning **meters**
+3. `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/vehicle-animator.js` — JS haversine for vehicle animation
 
 **Decision**: 
 - Add `DistanceMeters()` overload (or wrapper) to `HaversineCalculator.cs` (returns meters = km × 1000)
@@ -84,8 +84,8 @@ Additionally in Client.Core: `IAudioPlayerJsInterop` → `AudioPlayerJsInterop` 
 
 ### Console.WriteLine (21 occurrences, 3 files)
 1. `src/BusDataPoc/MartaJazz.Engine/Worker.cs` — 1 call (will be deleted with BusDataPoc)
-2. `src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/HttpService.cs` — 3 calls (lines 126, 133, 139)
-3. `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/Map.razor.Helper.cs` — 17 calls
+2. `src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/HttpService.cs` — 3 calls (lines 126, 133, 139)
+3. `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/Map.razor.Helper.cs` — 17 calls
 
 **Decision**: In Blazor WASM, `ILogger<T>` writes to browser console — the calls are functionally equivalent but should use ILogger for consistency. Replace with `ILogger` in HttpService.cs (3 calls). For Map.razor.Helper.cs (17 calls), evaluate: many are likely tracing/debug — delete rather than convert to avoid excessive browser console spam.
 

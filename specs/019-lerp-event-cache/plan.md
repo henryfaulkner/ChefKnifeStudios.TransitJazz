@@ -12,7 +12,7 @@ Eliminate the up-to-one-poll-interval (~10s) "blank of buses" window a client se
 **Language/Version**: C# / .NET 10.0 (all projects)
 **Primary Dependencies**: ASP.NET Core Minimal API, SignalR (`IHubContext<TransitHub>`), Blazor WebAssembly (client), Ardalis.Result (client service contract)
 **Storage**: In-memory only — a single mutable reference to the latest `List<EventEnvelope>` snapshot held in a WebAPI singleton. No persistence; resets on restart (per spec).
-**Testing**: xUnit (server). Existing test project: `ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests` — but it references only the Worker, not the WebAPI where this feature's code lives. This feature adds a **new** WebAPI test project (`ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests`, xUnit) carrying **pure unit tests** for the `LastBatchCache` invariants and the `WorkerTransitHub` write-path. No host is booted and no live MARTA feed is touched. Endpoint HTTP behavior and client load-path behavior are covered by the manual quickstart (integration tests are explicitly out of scope for this feature). See the "Testing Strategy" section below and `contracts/tests.md`.
+**Testing**: xUnit (server). Existing test project: `ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests` — but it references only the Worker, not the WebAPI where this feature's code lives. This feature adds a **new** WebAPI test project (`ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests`, xUnit) carrying **pure unit tests** for the `LastBatchCache` invariants and the `WorkerTransitHub` write-path. No host is booted and no live MARTA feed is touched. Endpoint HTTP behavior and client load-path behavior are covered by the manual quickstart (integration tests are explicitly out of scope for this feature). See the "Testing Strategy" section below and `contracts/tests.md`.
 **Target Platform**: WebAPI on Azure Container Apps (Linux); frontend WASM on Azure Static Web Apps
 **Project Type**: Web (Blazor WASM frontend + ASP.NET Core WebAPI backend + Worker), per the constitution's three-deployable architecture
 **Performance Goals**: Snapshot read served from memory with no upstream fetch (FR-007); endpoint adds negligible latency to map load. Buses visible within the load itself (SC-001).
@@ -60,10 +60,10 @@ specs/019-lerp-event-cache/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   └── ApiEndpoints.cs                         # ADD: ApiEndpoints.Transit.GetLastBatch constant
 │
-├── Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/
+├── Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/
 │   ├── SignalR/
 │   │   ├── ILastBatchCache.cs                  # NEW: interface + impl (atomic-swap singleton)
 │   │   └── WorkerTransitHub.cs                 # EDIT: write cache before relaying
@@ -72,15 +72,15 @@ src/
 │   └── Program.cs                              # EDIT: register ILastBatchCache singleton; MapTransitEndpoints()
 │
 ├── Client/
-│   ├── ChefKnifeStudios.MartaJazz.Client.Core/
+│   ├── ChefKnifeStudios.TransitJazz.Client.Core/
 │   │   └── Services/EndpointsServices/
 │   │       └── TransitEndpointsService.cs      # NEW: ITransitEndpointsService.GetLastBatch -> Result<IEnumerable<EventEnvelope>>
-│   ├── ChefKnifeStudios.MartaJazz.Client.WebApp/
+│   ├── ChefKnifeStudios.TransitJazz.Client.WebApp/
 │   │   ├── Program.cs                          # EDIT: register ITransitEndpointsService
 │   │   └── Pages/TransitMap.razor.cs           # EDIT: fetch snapshot on load, feed HandleVehicleBatchAsync
 │
-└── Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/   # NEW xUnit project (refs WebAPI + Shared)
-    ├── ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests.csproj
+└── Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/   # NEW xUnit project (refs WebAPI + Shared)
+    ├── ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.csproj
     ├── LastBatchCacheTests.cs                  # NEW: cache invariants (unit)
     └── WorkerTransitHubTests.cs                # NEW: write-path caches then relays (unit)
 ```
@@ -91,7 +91,7 @@ The new test project must be added to `ChefKnifeStudios.TransitJazz.sln`.
 
 ## Testing Strategy
 
-Pure unit tests only — **integration tests are out of scope for this feature**. A new xUnit project `ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests` (mirrors the existing `...TransitDataWorker.Tests` setup: `Microsoft.NET.Test.Sdk`, `xunit`, `xunit.runner.visualstudio`) references `Server.WebAPI` and `Shared`. No host is booted and no live MARTA feed is touched — every test runs against plain objects, so the Worker/`GtfsStaticLoader` hosted services are never started. Full detail and assertions in `contracts/tests.md`.
+Pure unit tests only — **integration tests are out of scope for this feature**. A new xUnit project `ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests` (mirrors the existing `...TransitDataWorker.Tests` setup: `Microsoft.NET.Test.Sdk`, `xunit`, `xunit.runner.visualstudio`) references `Server.WebAPI` and `Shared`. No host is booted and no live MARTA feed is touched — every test runs against plain objects, so the Worker/`GtfsStaticLoader` hosted services are never started. Full detail and assertions in `contracts/tests.md`.
 
 ### Unit tests
 

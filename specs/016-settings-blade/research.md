@@ -34,7 +34,7 @@ follow it verbatim, where the existing MartaJazz codebase already provides a pie
 
 ## D3 — Event bus: reuse the existing `IEventNotificationService`
 
-- **Decision**: Use the **existing** `ChefKnifeStudios.MartaJazz.Client.Core.Services.IEventNotificationService`
+- **Decision**: Use the **existing** `ChefKnifeStudios.TransitJazz.Client.Core.Services.IEventNotificationService`
   (already registered as a singleton in `Program.cs`) for both (a) the FAB→blade open/close signal and (b)
   broadcasting each setting's effect to the map/audio consumers.
 - **Rationale**: The doc's design centers on this exact bus; MartaJazz already has it, already shares it as a
@@ -63,7 +63,7 @@ follow it verbatim, where the existing MartaJazz codebase already provides a pie
 
 - **Decision**: Add a new `outside-click.js` ES module + `IOutsideClickJsInterop`/`OutsideClickJsInterop`
   following the **existing** `TransitSynthJsInterop` idiom: `Lazy<Task<IJSObjectReference>>` with a dynamic
-  `import("./_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/outside-click.js?g=<guid>")`, try/catch +
+  `import("./_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/outside-click.js?g=<guid>")`, try/catch +
   `ILogger`, `IAsyncDisposable`. The module exposes `addOutsideClickListener(elementId, dotNetRef)` (returns
   the listener handle) and `removeOutsideClickListener(handle)`; .NET stores the handle + a callback in a
   dictionary and exposes a `[JSInvokable] HandleOutsideClick(elementId)`.

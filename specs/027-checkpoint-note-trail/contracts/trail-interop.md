@@ -27,7 +27,7 @@ startCrossingTrail: async function (containerDivId, routeId, vehicleId, triggerI
 }
 ```
 
-- Lazy import via a new `_getCheckpointTrail()` mirroring `_getCheckpointPulse()` (imports `/_content/ChefKnifeStudios.MartaJazz.Client.Shared/js/checkpoint-trail.js`).
+- Lazy import via a new `_getCheckpointTrail()` mirroring `_getCheckpointPulse()` (imports `/_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/checkpoint-trail.js`).
 - `ensureLayer` is also called once on map load next to the pulse `ensureLayer` (so the layer exists before the first crossing).
 
 ## 2. `ChefMap.setCrossingTrailVisibility` (JS, in `map-interop.js`)

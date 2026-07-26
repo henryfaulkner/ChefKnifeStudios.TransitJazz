@@ -34,7 +34,7 @@ ProtoBuf-net (existing `FeedMessage` model — reused, not re-serialized), exist
 (snap/cycle datasets); runtime contract assertion (single coord per `TRAIN_ID`). No unit-test
 project exists for the worker today; follow the repo's existing manual/telemetry verification
 pattern (see prior features 013/019/023 quickstarts).
-**Target Platform**: Server — `ChefKnifeStudios.MartaJazz.Server.TransitDataWorker` (Docker
+**Target Platform**: Server — `ChefKnifeStudios.TransitJazz.Server.TransitDataWorker` (Docker
 background service). No WASM/client deployable touched.
 **Project Type**: Decoupled cloud app (Constitution Principle I). This feature is **worker-only**.
 **Performance Goals**: Negligible — only ~16 trains system-wide at peak vs. hundreds of buses;
@@ -86,7 +86,7 @@ specs/028-marta-rail-realtime/
 ### Source Code (repository root)
 
 ```text
-src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 ├── RailRealtime/                          # NEW folder
 │   ├── RailArrivalDto.cs                  # NEW — JSON DTO mirroring one feed element (all strings)
 │   ├── RailRealtimeAdapter.cs             # NEW — IRailRealtimeAdapter: fetch → filter → dedup → emit FeedMessage

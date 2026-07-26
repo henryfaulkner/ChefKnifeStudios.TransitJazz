@@ -37,7 +37,7 @@ Worker's fallback logic, and the client's `RouteFilter` UI / running-vehicle-cou
 ## 2. Current Architecture (single global classifier)
 
 **The one and only classification site**, `GtfsStaticLoader.ParseRouteMetadata`
-(`src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs:324-326`):
+(`src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs:324-326`):
 
 ```csharp
 // GTFS route_type: 0=tram/light-rail, 1=subway/heavy-rail, 2=commuter-rail — all Rail
@@ -53,7 +53,7 @@ consulted by the classifier itself.
 ### 2.1 The `TransitMode` enum and its wire-contract role
 
 ```csharp
-// src/ChefKnifeStudios.MartaJazz.Shared/Events/RouteNearestPointBatchEvent.cs:7
+// src/ChefKnifeStudios.TransitJazz.Shared/Events/RouteNearestPointBatchEvent.cs:7
 public enum TransitMode { Bus = 0, Rail = 1 }
 ```
 

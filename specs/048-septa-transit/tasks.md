@@ -22,11 +22,11 @@ shape data exists, so US2 is sequenced first, but each has its own independent t
 
 ## Path Conventions
 
-Existing web app structure: `src/ChefKnifeStudios.MartaJazz.Shared/`,
-`src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`,
-`src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/`,
-`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`,
-`src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`.
+Existing web app structure: `src/ChefKnifeStudios.TransitJazz.Shared/`,
+`src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`,
+`src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/`,
+`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`,
+`src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/`.
 
 ---
 
@@ -34,7 +34,7 @@ Existing web app structure: `src/ChefKnifeStudios.MartaJazz.Shared/`,
 
 **Purpose**: The one shared constant every other task depends on.
 
-- [ ] T001 Add `public const string Septa = "septa";` to `src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs`
+- [ ] T001 Add `public const string Septa = "septa";` to `src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs`
 
 **Checkpoint**: `CityNames.Septa` exists and compiles; nothing references it yet.
 
@@ -48,8 +48,8 @@ the "config-only" pattern shared by every prior `GtfsRtCity` onboarding.
 **⚠️ CRITICAL**: T002 and T003 MUST be byte-identical in shape (per contracts/city-config.md)
 before either user story is verifiable end-to-end.
 
-- [ ] T002 [P] Add the `septa` `Cities:` entry to `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.json` per `contracts/city-config.md` (depends on T001)
-- [ ] T003 [P] Add the identical `septa` `Cities:` entry to `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.json` per `contracts/city-config.md` (depends on T001)
+- [ ] T002 [P] Add the `septa` `Cities:` entry to `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json` per `contracts/city-config.md` (depends on T001)
+- [ ] T003 [P] Add the identical `septa` `Cities:` entry to `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json` per `contracts/city-config.md` (depends on T001)
 - [ ] T004 Build the solution (`dotnet build src\ChefKnifeStudios.TransitJazz.sln`) — expect 0 errors, no new warnings
 
 **Checkpoint**: `septa` is registered in both services' config; Worker will hit the existing
@@ -81,7 +81,7 @@ routes / 145 with shapes).
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] Implement the detect-root-else-unwrap-nested-zip step in `BuildCityShapeSetAsync`, `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs`, per `contracts/nested-zip-extraction.md` (depends on T005-T008 existing and failing)
+- [ ] T009 [US2] Implement the detect-root-else-unwrap-nested-zip step in `BuildCityShapeSetAsync`, `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs`, per `contracts/nested-zip-extraction.md` (depends on T005-T008 existing and failing)
 - [ ] T010 [US2] Run the Phase-3 unit tests (T005-T008) and confirm all pass against T009's implementation
 - [ ] T011 [US2] Manually fetch `https://www3.septa.org/developer/gtfs_public.zip`, confirm it has no root `trips.txt` but contains `google_bus.zip` + `google_rail.zip`, and confirm the WebAPI's route-shapes endpoint returns ~145 SEPTA routes with shapes and zero `route_type=2` (Regional Rail) entries after a static refresh cycle (depends on T002, T003, T009)
 
@@ -102,12 +102,12 @@ audio plays for crossings.
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] Add the Philadelphia `MatListItem`/`MatButton` + `HandleSeptaClicked` handler to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/CityFab.razor` per `contracts/city-picker.md` (depends on T001)
-- [ ] T013 [P] [US1] Add `_cityCenter[CityNames.Septa] = (39.9526, -75.1652)` to `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` per research.md R3 (depends on T001)
-- [ ] T014 [US1] Invoke the `create-audio-overlay-paragraphs` skill for Philadelphia/SEPTA to write `SeptaAudioOverlayHeader`/`Paragraph1`/`Paragraph2`/`Paragraph3` into `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Resources/RouteFilterResources.resx`
-- [ ] T015 [US1] Wire the `CityNames.Septa => "SeptaAudioOverlay"` switch arm into `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/AudioUnlockOverlay.razor`'s `OnInitialized` (depends on T001, T014)
+- [ ] T012 [P] [US1] Add the Philadelphia `MatListItem`/`MatButton` + `HandleSeptaClicked` handler to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/CityFab.razor` per `contracts/city-picker.md` (depends on T001)
+- [ ] T013 [P] [US1] Add `_cityCenter[CityNames.Septa] = (39.9526, -75.1652)` to `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` per research.md R3 (depends on T001)
+- [ ] T014 [US1] Invoke the `create-audio-overlay-paragraphs` skill for Philadelphia/SEPTA to write `SeptaAudioOverlayHeader`/`Paragraph1`/`Paragraph2`/`Paragraph3` into `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Resources/RouteFilterResources.resx`
+- [ ] T015 [US1] Wire the `CityNames.Septa => "SeptaAudioOverlay"` switch arm into `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/AudioUnlockOverlay.razor`'s `OnInitialized` (depends on T001, T014)
 - [ ] T016 [P] [US1] Add the `SeptaOverlayParagraph1` info-panel key to `RouteFilterResources.resx` (one templated sentence, no skill invocation — see plan.md step 9 pattern from add-transit-city)
-- [ ] T017 [US1] Wire the `CityNames.Septa => "SeptaOverlay"` switch arm into `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/InfoFab.razor`'s `OnInitialized` (depends on T001, T016)
+- [ ] T017 [US1] Wire the `CityNames.Septa => "SeptaOverlay"` switch arm into `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/InfoFab.razor`'s `OnInitialized` (depends on T001, T016)
 - [ ] T018 [US1] Build the solution again (`dotnet build src\ChefKnifeStudios.TransitJazz.sln`) — expect 0 errors, no new warnings (depends on T009, T012, T013, T015, T017)
 - [ ] T019 [US1] Live smoke test: run Worker + WebAPI + Client, select Philadelphia via the picker, confirm SEPTA buses/trolleys/streetcars/NHSL render and move on the map over several poll cycles, audio plays on crossings, and the audio-unlock overlay + info panel show Philadelphia-specific copy (depends on T002, T003, T009, T018)
 

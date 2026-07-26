@@ -44,7 +44,7 @@
 
 ### Implementation for User Story 1
 
-- [x] T006 [US1] Create `.github/workflows/client.yml` — trigger on push to `main`, single `build` job: checkout, setup .NET 10, install `wasm-tools`, `dotnet publish` the Blazor WebApp csproj with `-c Release /p:BlazorEnableCompression=false`, upload artifact `blazor-client` from `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/bin/Release/net10.0/publish/wwwroot`
+- [x] T006 [US1] Create `.github/workflows/client.yml` — trigger on push to `main`, single `build` job: checkout, setup .NET 10, install `wasm-tools`, `dotnet publish` the Blazor WebApp csproj with `-c Release /p:BlazorEnableCompression=false`, upload artifact `blazor-client` from `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/bin/Release/net10.0/publish/wwwroot`
 - [x] T007 [US1] Add `deploy` job to `.github/workflows/client.yml` — `needs: build`, `environment: production`, download artifact `blazor-client` to `./client`, write `{"headers":{"Blazor-Environment":"Production"}}` to `./client/staticwebapp.config.json`, deploy via `Azure/static-web-apps-deploy@v1` with `azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APP_TOKEN }}`, `action: upload`, `app_location: ./client`, `output_location: ""`, `skip_app_build: true`
 
 **Checkpoint**: Push to `main` → "Client CI/CD" workflow succeeds → Static Web App updated → `Blazor-Environment: Production` header present. US1 is independently functional.

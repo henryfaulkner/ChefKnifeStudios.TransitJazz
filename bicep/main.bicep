@@ -35,7 +35,7 @@ param containerRegistryResourceGroup string = 'general'
 param serverImageTag string = 'latest'
 
 @description('GitHub repository URL for the Static Web App source.')
-param repositoryUrl string = 'https://github.com/henryfaulkner/ChefKnifeStudios.MartaJazz'
+param repositoryUrl string = 'https://github.com/henryfaulkner/ChefKnifeStudios.TransitJazz'
 
 @description('GitHub Personal Access Token for SWA deployment.')
 @secure()

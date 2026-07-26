@@ -195,7 +195,7 @@ new interop: outside-click.js + IOutsideClickJsInterop (lazy-RCL-module idiom
 like TransitSynthJsInterop). _elementId uses cached Guid.NewGuid() (the doc's
 recommended fix, not its empty-GUID quirk). All blade copy via
 IStringLocalizer<RouteFilterResources>. Frontend-only; no server/worker/
-shared changes. Namespace root is ChefKnifeStudios.MartaJazz under src/Client/.
+shared changes. Namespace root is ChefKnifeStudios.TransitJazz under src/Client/.
 See specs/016-settings-blade/ for plan, research, data-model, contracts
 (settings-events, settings-service, outside-click-interop), and quickstart.
 

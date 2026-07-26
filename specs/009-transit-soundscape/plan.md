@@ -58,12 +58,12 @@ specs/009-transit-soundscape/
 
 ### Source Code (repository root)
 
-> Note on folder names: the most recent rename commit (`9d59c69`) changed the *folder* names from `ChefKnifeStudios.TransitJazz.Client.*` to `ChefKnifeStudios.MartaJazz.Client.*`, while the assembly / root-namespace names remain `ChefKnifeStudios.TransitJazz.Client.*`. Paths below use the actual on-disk folder names.
+> Note on folder names: the most recent rename commit (`9d59c69`) changed the *folder* names from `ChefKnifeStudios.TransitJazz.Client.*` to `ChefKnifeStudios.TransitJazz.Client.*`, while the assembly / root-namespace names remain `ChefKnifeStudios.TransitJazz.Client.*`. Paths below use the actual on-disk folder names.
 
 ```text
 src/
 ├── Client/
-│   ├── ChefKnifeStudios.MartaJazz.Client.Shared/        # RCL — reused by WebApp
+│   ├── ChefKnifeStudios.TransitJazz.Client.Shared/        # RCL — reused by WebApp
 │   │   ├── Components/
 │   │   │   ├── Map.razor                                # unchanged
 │   │   │   ├── Map.razor.cs                             # unchanged
@@ -91,9 +91,9 @@ src/
 │   │           └── transit-synth.js                     # NEW — ES module: lazy Tone.js import; route→synth palette; vehicle→pitch;
 │   │                                                    #   unlock-on-gesture flow; triggerNote(routeId, vehicleId)
 │   │
-│   ├── ChefKnifeStudios.MartaJazz.Client.Core/          # unchanged
+│   ├── ChefKnifeStudios.TransitJazz.Client.Core/          # unchanged
 │   │
-│   └── ChefKnifeStudios.MartaJazz.Client.WebApp/
+│   └── ChefKnifeStudios.TransitJazz.Client.WebApp/
 │       ├── Pages/
 │       │   ├── TransitMap.razor                         # EDITED — add a top-level "Click to enable audio" hint overlay
 │       │   │                                            #   that is removed on first click anywhere on the page

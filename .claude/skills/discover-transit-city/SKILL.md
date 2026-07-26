@@ -136,7 +136,7 @@ was found). **Never reimplement fetch/decode logic** — this stage is entirely 
    partial compatibility" section to produce independent bus and rail verdicts.
 7. **Ground-truth checks before finalizing verdicts** — these come from a direct read of
    the platform's actual source
-   (`src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker`), not just the
+   (`src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker`), not just the
    generic skill docs. If these facts look to have drifted since this skill was
    authored, re-verify against the cited files directly:
    - Before calling any residual `alignment.unmatched_rt_ids` entry "needs new code,"

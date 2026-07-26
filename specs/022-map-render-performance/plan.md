@@ -60,19 +60,19 @@ specs/022-map-render-performance/
 ```text
 src/
 ├── Server/
-│   └── ChefKnifeStudios.MartaJazz.Server.WebAPI/
+│   └── ChefKnifeStudios.TransitJazz.Server.WebAPI/
 │       └── GtfsStatic/
 │           └── GtfsStaticLoader.cs          # #1: Add RDP Simplify helper + tolerance const
 │
 └── Client/
-    ├── ChefKnifeStudios.MartaJazz.Client.Shared/
+    ├── ChefKnifeStudios.TransitJazz.Client.Shared/
     │   ├── Components/
     │   │   └── Map.razor.Helper.cs          # #3: Add AddAllRoutesAsync; retire per-route methods
     │   └── wwwroot/js/
     │       └── map-interop.js               # #2 + #3: single routes source/layer, addAllRoutes,
     │                                        #          feature-state focus, setMapStyle restore
     │
-    └── ChefKnifeStudios.MartaJazz.Client.WebApp/
+    └── ChefKnifeStudios.TransitJazz.Client.WebApp/
         └── Pages/
             └── TransitMap.razor.cs          # #3 + #4: bulk payload, defer tracker math
 ```

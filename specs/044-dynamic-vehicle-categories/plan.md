@@ -64,27 +64,27 @@ specs/044-dynamic-vehicle-categories/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   ├── Events/RouteNearestPointBatchEvent.cs     # remove enum TransitMode; Key(10) TransitMode→string Category="bus"
 │   ├── GtfsData/RouteShapeFeature.cs             # RouteShapeProperties.Mode→Category (string); add int RouteType=3 (before City)
 │   └── (JsonOptions.cs — locate; verify JsonStringEnumConverter has no other enum consumer before touching)
 │
 ├── Server/
-│   ├── ChefKnifeStudios.MartaJazz.Server.WebAPI/
+│   ├── ChefKnifeStudios.TransitJazz.Server.WebAPI/
 │   │   ├── GtfsStatic/GtfsStaticLoader.cs        # extend CityStaticEntry w/ RouteTypeCategories; ClassifyCategory(); ParseRouteMetadata tuple → (string Category, int RouteType); BuildLineStringFeature emits "category"+"routeType"
 │   │   ├── appsettings.json                      # add RouteTypeCategories to the ttc entry (§4.1)
 │   │   └── (appsettings.Development.json has 4 cities — no ttc — nothing to add there today)
-│   └── ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+│   └── ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 │       └── Worker.cs                             # _routeMode/modeMap Dictionary<string,TransitMode>→<string,string>; join-failure fallbacks TransitMode.Bus→"unknown" (§3.6); tuple/param retypes threaded through
 │
 ├── Client/
-│   ├── ChefKnifeStudios.MartaJazz.Client.Shared/
+│   ├── ChefKnifeStudios.TransitJazz.Client.Shared/
 │   │   ├── ViewModels/RouteFilterViewModel.cs    # RouteItem.Mode→Category(string)+RouteType(int); _railVehicleIds→_vehicleCategory dict; ActiveBusCount/ActiveRailCount→ActiveCountsByCategory ([ObservableProperty], reassigned each recompute); add CategoryOrder; SelectAll/ClearSelection/HasSelectionFor(string)
 │   │   ├── Components/RouteFilters.razor(.cs/.css) # @if pair → @foreach over CategoryOrder; route-filters__section + data-category; light+dark CSS
 │   │   ├── Components/TransitRunningLabel.razor    # 2 rows → loop; broaden PropertyChanged filter → nameof(ActiveCountsByCategory); RunningNoun() helper; [data-category] icon CSS light+dark
 │   │   ├── Resources/RouteFilterResources.resx    # remove Rail/Buses/NumTrainsRunning/NumBusesRunning; add rail/bus/streetcar labels + RunningNoun_* + VehiclesRunningTemplate
 │   │   └── wwwroot/js/{map-interop.js, vehicle-animator.js}  # transitMode→category; 'Rail'→['downcase',...] 'rail'; fallback 'bus'→'unknown'
-│   └── ChefKnifeStudios.MartaJazz.Client.WebApp/
+│   └── ChefKnifeStudios.TransitJazz.Client.WebApp/
 │       └── Pages/TransitMap.razor.cs             # r.TransitMode.ToString().ToLowerInvariant() → r.Category
 │
 tests/  (as located under the WebAPI.Tests project)
@@ -92,7 +92,7 @@ tests/  (as located under the WebAPI.Tests project)
 └── EventEnvelopeMessagePackTests.cs              # Key(10) round-trip: TransitMode.Rail arg → string category
 ```
 
-**Structure Decision**: Web application (constitution's decoupled 3-unit architecture + `Shared` contracts). No new projects, directories, or dependencies. Every change is an edit to an existing file in one of the four affected projects (`Shared`, `Server.WebAPI`, `Server.TransitDataWorker`, `Client.Shared`) plus one `Client.WebApp` file and the two `Client.Shared/wwwroot/js` interop files. The exact real paths above were verified by glob (note: real prefix is `src/ChefKnifeStudios.MartaJazz.*`, not the design doc's abbreviated `src/Shared/...`).
+**Structure Decision**: Web application (constitution's decoupled 3-unit architecture + `Shared` contracts). No new projects, directories, or dependencies. Every change is an edit to an existing file in one of the four affected projects (`Shared`, `Server.WebAPI`, `Server.TransitDataWorker`, `Client.Shared`) plus one `Client.WebApp` file and the two `Client.Shared/wwwroot/js` interop files. The exact real paths above were verified by glob (note: real prefix is `src/ChefKnifeStudios.TransitJazz.*`, not the design doc's abbreviated `src/Shared/...`).
 
 ## Complexity Tracking
 

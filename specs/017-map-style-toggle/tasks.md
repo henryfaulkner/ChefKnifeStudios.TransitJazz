@@ -16,8 +16,8 @@ delivers US3. US3 is therefore included in the Polish phase as a quickstart veri
 
 ## Path Key
 
-All paths relative to repo root. Client.Shared = `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`.
-WebApp = `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`.
+All paths relative to repo root. Client.Shared = `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`.
+WebApp = `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/`.
 
 ---
 

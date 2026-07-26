@@ -16,7 +16,7 @@ Verified against current `main`/branch source so the plan reflects code, not jus
 - `ITransitHubPublisher.PublishBatchAsync(List<EventEnvelope>, CancellationToken)` and `SignalRHubPublisher` call `InvokeAsync("PublishBatch", batch)` — confirms the city param must thread through both.
 - `RouteShapeProperties` is a record with `RouteId, RouteShortName, Color, TextColor, Mode` — adding `City` is an additive record member.
 - `GtfsEndpoints` exposes `GetRouteShape`/`GetAllRouteShapes`/`GetAllRoutes` over `IKeyValueRepository<string>` keyed by bare `routeId` — confirms KV keys + endpoint need `?city=` and `{city}:{routeId}`.
-- Client `SignalRNotificationService` only listens for `ReceiveBatch`; it never calls a hub method — `JoinCity` after `StartAsync` is the insertion point. Namespace root is `ChefKnifeStudios.MartaJazz`.
+- Client `SignalRNotificationService` only listens for `ReceiveBatch`; it never calls a hub method — `JoinCity` after `StartAsync` is the insertion point. Namespace root is `ChefKnifeStudios.TransitJazz`.
 
 ## Q1 — Client fan-out: per-city SignalR Group
 

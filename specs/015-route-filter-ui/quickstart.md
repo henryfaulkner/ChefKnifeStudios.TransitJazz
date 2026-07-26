@@ -11,7 +11,7 @@ exists in this repo, so verification is by build + in-browser observation.
 ## Build
 
 ```pwsh
-dotnet build src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/ChefKnifeStudios.MartaJazz.Client.WebApp.csproj
+dotnet build src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj
 ```
 
 Run the app (Aspire AppHost or the WebApp directly) and open `/transit-map`.

@@ -26,7 +26,7 @@ two files (`index.html`, `wwwroot/css/app.css`), so most tasks are sequential
 ## Path Conventions
 
 Single frontend touch under
-`src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/wwwroot/`.
+`src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/wwwroot/`.
 
 ---
 
@@ -35,7 +35,7 @@ Single frontend touch under
 **Purpose**: No project init needed — files already exist. This phase just
 confirms the baseline before editing.
 
-- [X] T001 Confirm the two target files exist and note the code to replace: `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/wwwroot/index.html` (the `<div id="app">Loading...</div>` on line ~20) and `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/wwwroot/css/app.css` (the existing `.loading-indicator` block to be replaced by the new spinner CSS).
+- [X] T001 Confirm the two target files exist and note the code to replace: `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/wwwroot/index.html` (the `<div id="app">Loading...</div>` on line ~20) and `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/wwwroot/css/app.css` (the existing `.loading-indicator` block to be replaced by the new spinner CSS).
 
 ---
 
@@ -60,8 +60,8 @@ residue (quickstart tests 1 & 2).
 
 ### Implementation for User Story 1
 
-- [X] T002 [US1] Add the spinner markup **inside** `<div id="app">…</div>` in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/wwwroot/index.html`, replacing the literal `Loading...`. Structure: an outer `.app-loader` container holding a `.app-loader__ring` element and a `<span class="app-loader__label">loading...</span>`. Keeping it inside `#app` means Blazor's first render tears it down automatically (no removal code) — see research.md R3.
-- [X] T003 [US1] Add the spinner CSS to `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/wwwroot/css/app.css`, replacing the existing `.loading-indicator` block. Translate the user's example to project standards (FR-008): `.app-loader` = full-viewport centered flex container; `.app-loader__ring` = a square with `border-radius:50%`, a visible arc via one-side border (`border` transparent + `border-right`/`border-top` colored, ~0.3rem), `animation: app-loader-spin 2s linear infinite`; `.app-loader__label` centered. Add `@keyframes app-loader-spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }`. Light colors: background `var(--background)`, ring + label `var(--on-surface)` (defined in `variables.css`). Do NOT use the example's raw `white` (fails on the light `#F5F5F5` background).
+- [X] T002 [US1] Add the spinner markup **inside** `<div id="app">…</div>` in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/wwwroot/index.html`, replacing the literal `Loading...`. Structure: an outer `.app-loader` container holding a `.app-loader__ring` element and a `<span class="app-loader__label">loading...</span>`. Keeping it inside `#app` means Blazor's first render tears it down automatically (no removal code) — see research.md R3.
+- [X] T003 [US1] Add the spinner CSS to `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/wwwroot/css/app.css`, replacing the existing `.loading-indicator` block. Translate the user's example to project standards (FR-008): `.app-loader` = full-viewport centered flex container; `.app-loader__ring` = a square with `border-radius:50%`, a visible arc via one-side border (`border` transparent + `border-right`/`border-top` colored, ~0.3rem), `animation: app-loader-spin 2s linear infinite`; `.app-loader__label` centered. Add `@keyframes app-loader-spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }`. Light colors: background `var(--background)`, ring + label `var(--on-surface)` (defined in `variables.css`). Do NOT use the example's raw `white` (fails on the light `#F5F5F5` background).
 
 **Checkpoint**: Spinner appears on cold load, spins, and self-removes when the app
 renders (quickstart 1 & 2 pass). At this point it always renders in LIGHT styling —
@@ -81,8 +81,8 @@ error (quickstart tests 3–7).
 
 ### Implementation for User Story 2
 
-- [X] T004 [US2] Add the inline pre-boot theme `<script>` to `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/wwwroot/index.html`. Place it high in `<head>` (before the app renders) so `data-theme` is set before first paint — avoids flash of wrong theme. Behavior per contracts/boot-theme-read.md: read `localStorage.getItem("Setting")`; `JSON.parse`; find a boolean property whose lowercased name is `isdarkmodeenabled` (case-insensitive — Blazored writes camelCase `isDarkModeEnabled`, see research.md R2); set `document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light")`. Wrap the whole thing in `try/catch`; on ANY failure set `data-theme="light"`. Never throw.
-- [X] T005 [US2] Add the dark-mode CSS override to `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/wwwroot/css/app.css`: under `[data-theme="dark"]`, set `.app-loader` background `#1A1C1E` and `.app-loader__ring` / `.app-loader__label` color `#E2E2E6` (from `ColorConstants.Dark.Background` / `.OnSurface` — constitution XIII requires dark values from that palette, not ad-hoc hexes). Keep the light rule as the default (no `[data-theme]` needed for light; the pre-boot script sets `data-theme="light"` explicitly anyway).
+- [X] T004 [US2] Add the inline pre-boot theme `<script>` to `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/wwwroot/index.html`. Place it high in `<head>` (before the app renders) so `data-theme` is set before first paint — avoids flash of wrong theme. Behavior per contracts/boot-theme-read.md: read `localStorage.getItem("Setting")`; `JSON.parse`; find a boolean property whose lowercased name is `isdarkmodeenabled` (case-insensitive — Blazored writes camelCase `isDarkModeEnabled`, see research.md R2); set `document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light")`. Wrap the whole thing in `try/catch`; on ANY failure set `data-theme="light"`. Never throw.
+- [X] T005 [US2] Add the dark-mode CSS override to `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/wwwroot/css/app.css`: under `[data-theme="dark"]`, set `.app-loader` background `#1A1C1E` and `.app-loader__ring` / `.app-loader__label` color `#E2E2E6` (from `ColorConstants.Dark.Background` / `.OnSurface` — constitution XIII requires dark values from that palette, not ad-hoc hexes). Keep the light rule as the default (no `[data-theme]` needed for light; the pre-boot script sets `data-theme="light"` explicitly anyway).
 
 **Checkpoint**: US1 AND US2 both work — spinner animates, self-removes, AND themes
 correctly from the saved preference with a light fallback (quickstart 1–7 pass).

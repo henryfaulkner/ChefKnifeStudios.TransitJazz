@@ -14,14 +14,14 @@ The only genuinely new code is a small, pure, unit-testable **`RouteIdNormalizer
 **Language/Version**: C# / .NET 10.0
 **Primary Dependencies**: `protobuf-net` (GTFS-RT decode, existing), ASP.NET Core config binding, xUnit (existing `TransitDataWorker.Tests`)
 **Storage**: N/A (in-memory route index / KV store, unchanged)
-**Testing**: xUnit — new `RouteIdNormalizerTests` in `ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests` (pure unit tests, no HTTP/host)
+**Testing**: xUnit — new `RouteIdNormalizerTests` in `ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests` (pure unit tests, no HTTP/host)
 **Target Platform**: Worker = Linux container (ACR image); WebAPI = Azure Container App; Client = Blazor WASM
 **Project Type**: Web (decoupled Worker + WebAPI + Blazor WASM), per constitution Principle I
 **Performance Goals**: Unchanged — normalization is O(route-ID length) per vehicle per tick, negligible vs. existing per-tick snap work
 **Constraints**: Additive only — no behavior change for `marta`/`wmata`/`mbta`/`nymta`; normalization must never throw (bad config degrades match rate, never crashes a tick)
 **Scale/Scope**: ~266 NYC bus route IDs, one citywide RT feed, 6 static zips; one new ~40-line class + config + one picker button
 
-**On-disk naming note**: the solution's root namespace/folders are `ChefKnifeStudios.MartaJazz.*` (not `TransitJazz`). All new files follow the existing `MartaJazz` namespace convention. The `TransitJazz` name appears only in the repo path and product-facing docs.
+**On-disk naming note**: the solution's root namespace/folders are `ChefKnifeStudios.TransitJazz.*` (not `TransitJazz`). All new files follow the existing `MartaJazz` namespace convention. The `TransitJazz` name appears only in the repo path and product-facing docs.
 
 ## Constitution Check
 
@@ -63,10 +63,10 @@ specs/041-nymta-bus-support/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   └── CityNames.cs                                      # + NymtaBus = "nymta-bus"
 │
-├── Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+├── Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 │   ├── Cities/
 │   │   ├── CityConfig.cs                                 # + string[] RouteIdNormalization = []
 │   │   ├── GtfsRtCity.cs                                 # + ApplyRouteIdNormalization(merged) call + method
@@ -74,13 +74,13 @@ src/
 │   ├── Program.cs                                        # UNCHANGED (nymta-bus hits existing else arm)
 │   └── appsettings.json                                  # + nymta-bus Cities: entry
 │
-├── Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/
+├── Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/
 │   └── RouteIdNormalizerTests.cs                         # NEW — xUnit [Theory] accept vectors
 │
-├── Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/
+├── Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/
 │   └── appsettings.json                                  # + nymta-bus Cities: entry (static-zip loader parity)
 │
-└── Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+└── Client/ChefKnifeStudios.TransitJazz.Client.Shared/
     ├── Components/FABs/CityFab.razor                     # + "New York Buses" button (#nymta-bus)
     └── Resources/RouteFilterResources.resx               # + CityNymtaBus label key
 ```

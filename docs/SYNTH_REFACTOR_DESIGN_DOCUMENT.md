@@ -15,7 +15,7 @@
 
 **Status:** IMPLEMENTED — `transit-synth.js` is the pure-synthesis engine; the prior
 Sampler build is preserved unwired at `transit-synth.legacy.js`.
-**Component:** `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/transit-synth.js`
+**Component:** `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/transit-synth.js`
 **Related:** [[project_009_transit_soundscape]] (original plan — already specified pure
 synthesis before it evolved into the Sampler build), `docs/BROWSER_MEMORY_INVESTIGATION_DESIGN_DOCUMENT.md`
 §3.5 (the RAM postmortem this refactor is downstream of), `docs/DRUMKIT_AND_DENSITY_DESIGN_DOCUMENT.md`

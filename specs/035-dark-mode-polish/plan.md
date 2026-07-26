@@ -53,7 +53,7 @@ specs/035-dark-mode-polish/
 ### Source Code (files touched)
 
 ```text
-src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/
 ├── Components/
 │   ├── FABs/
 │   │   ├── AudioFab.razor.css          # no change (stays at right:124px)

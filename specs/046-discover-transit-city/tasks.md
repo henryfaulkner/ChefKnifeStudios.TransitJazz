@@ -149,7 +149,7 @@ untouched.
 - [X] T013 [US1] Reference `Cities/ITransitCity.cs`, `Cities/CityConfig.cs`,
   `Cities/GtfsRtCity.cs`, `Cities/RouteIdNormalizer.cs`, and
   `RailRealtime/RailRealtimeAdapter.cs` (under
-  `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`) by path in the STAGE 4
+  `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`) by path in the STAGE 4
   block so the running agent can re-verify the ground-truth facts (config-only extension
   shape, the three normalizer names, the two rail mechanisms) against current source if
   they've drifted since this plan was written — per plan.md's Technical Context

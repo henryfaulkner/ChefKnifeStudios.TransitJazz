@@ -1,0 +1,79 @@
+@using ChefKnifeStudios.TransitJazz.Client.Core.Services
+@using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services
+@using ChefKnifeStudios.TransitJazz.Shared.Events
+@using Microsoft.Extensions.Localization
+@inject IEventNotificationService EventNotificationService
+@inject ISettingsService SettingsService
+@inject IStringLocalizer<RouteFilterResources> Loc
+
+@{
+    RenderFragment<RouteItem> RoutePill = routeItem =>
+        @<div
+            class="route-filters__route-filter"
+            @onclick="() => HandleSelect(routeItem)"
+            @onmouseover="(args) => HandleMouseOver(args, routeItem)"
+            @onmouseout="(args) => HandleMouseOut(args, routeItem)"
+        >
+            <div
+                class="route-filters__route-filter-circle @((RouteFilterViewModel.HasSelection || RouteFilterViewModel.HoveredRouteJoinKeys.Count > 0) && !routeItem.IsSelected && !RouteFilterViewModel.HoveredRouteJoinKeys.Contains(routeItem.RouteJoinKey) ? "route-filters__route-filter-disabled" : string.Empty) @(RouteFilterViewModel.HoveredCategory == routeItem.Category ? "route-filters__route-filter-circle--hovered" : string.Empty)"
+                style="--route-filter-color: @routeItem.Color"
+            >
+                <span class="route-filters__route-filter-label">
+                    @(routeItem.Label.Length > 5 ? routeItem.Label[..5] : routeItem.Label)
+                </span>
+            </div>
+        </div>;
+}
+
+@{
+    RenderFragment<string> SectionLabel = category =>
+        @<div class="route-filters__section-header">
+            <MatSubtitle1
+                Class="route-filters__section-label route-filters__section-label--clickable"
+                @onclick="() => HandleSelectAll(category)"
+                @onmouseover="(args) => HandleSectionMouseOver(args, category)"
+                @onmouseout="(args) => HandleSectionMouseOut(args, category)"
+            >@Loc[category]</MatSubtitle1>
+            @if (RouteFilterViewModel.HasSelectionFor(category))
+            {
+                <MatIconButton
+                    Icon="close"
+                    Class="route-filters__clear-btn"
+                    @onclick="() => HandleClearSelections(category)"
+                />
+            }
+        </div>;
+}
+
+<div class="route-filters @(_isDark ? "route-filters--dark" : "")">
+    @foreach (var category in RouteFilterViewModel.CategoryOrder)
+    {
+        @if (RouteFilterViewModel.RouteItems.Any(r => r.Category == category))
+        {
+            <div class="route-filters__section" data-category="@category">
+                @SectionLabel(category)
+                <div class="route-filters__pills" data-category="@category">
+                    @foreach (var routeItem in RouteFilterViewModel.RouteItems.Where(r => r.Category == category))
+                    {
+                        @RoutePill(routeItem)
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    bool _isDark;
+
+    void HandleDarkEvent(object sender, IEventArgs e)
+    {
+        if (e is ThemeChangedEventArgs theme)
+        {
+            _isDark = theme.IsDarkMode;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+}

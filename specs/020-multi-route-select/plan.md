@@ -111,10 +111,10 @@ specs/020-multi-route-select/
 ### Source Code (repository root)
 
 All changes are within the Blazor WASM client. No server/worker/shared changes. Namespace root is
-`ChefKnifeStudios.MartaJazz`, under `src/Client/`.
+`ChefKnifeStudios.TransitJazz`, under `src/Client/`.
 
 ```text
-src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/
 ├── ViewModels/
 │   └── RouteFilterViewModel.cs        # MODIFY: selection becomes a persistent SET; SelectRoute → toggle;
 │                                       #   add SelectAll(); ClearSelection() empties set; add SelectedRouteIds;
@@ -133,7 +133,7 @@ src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
 └── Components/Map.razor.Helper.cs     # MODIFY: add FocusRoutesAsync(IEnumerable<string> routeIds) wrapper
     wwwroot/js/map-interop.js          # MODIFY: add ChefMap.focusRoutes (emphasize a SET, blur the rest)
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/
+src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/
 └── Pages/
     └── TransitMap.razor.cs            # MODIFY: OnRouteFilterPropertyChanged → FocusRoutesAsync(set) /
                                         #   ClearRouteFocusAsync() when empty; OnCrossingsAsync → gate tone by

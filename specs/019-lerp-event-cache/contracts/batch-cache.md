@@ -3,7 +3,7 @@
 ## Interface
 
 ```csharp
-namespace ChefKnifeStudios.MartaJazz.Server.WebAPI.SignalR;
+namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.SignalR;
 
 public interface ILastBatchCache
 {

@@ -20,10 +20,10 @@ description: "Task list for feature 021 — Checkpoint Flash on Bus Pass & Bus-V
 
 ## Path Conventions
 
-Frontend-only feature. All changes under `src/Client/`. Namespace root `ChefKnifeStudios.MartaJazz`.
+Frontend-only feature. All changes under `src/Client/`. Namespace root `ChefKnifeStudios.TransitJazz`.
 
-- RCL (shared components/JS/resx): `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`
-- WASM app (page): `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`
+- RCL (shared components/JS/resx): `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`
+- WASM app (page): `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/`
 
 ---
 
@@ -41,15 +41,15 @@ Frontend-only feature. All changes under `src/Client/`. Namespace root `ChefKnif
 
 **⚠️ CRITICAL**: US1 (pulse) cannot function until this phase is complete.
 
-- [X] T002 [P] Create the pulse ES module `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/checkpoint-pulse.js` per `contracts/pulse-interop.md`. Export `ensureLayer(map)`, `start(map, routeId, triggerIndex, coordinates, color)`, `reset(map)`. Maintain an internal active-pulse map keyed `"{routeId}::{triggerIndex}"` with `{coordinates, color, startTimeMs}` (data-model.md §5). Implement a single `requestAnimationFrame` loop that, each frame, computes eased `radius` (R_START≈4 → R_END≈24, ease-out cubic) and `opacity` (O_START≈0.6 → 0) over `DURATION_MS≈600`, builds one Point FeatureCollection with per-feature props `{radius, color, opacity}`, calls `source.setData(fc)` once, drops finished pulses (t≥1), and reschedules only while pulses remain. `ensureLayer` idempotently adds source `checkpoint-pulse` (empty FC) and layer `checkpoint-pulse-layer` (circle, data-driven paint: `circle-radius=['get','radius']`, `circle-color=['get','color']`, `circle-opacity=['get','opacity']`) inserted ABOVE `trigger-points-layer`. `reset` clears active pulses, sets source to empty FC, cancels the RAF.
+- [X] T002 [P] Create the pulse ES module `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/checkpoint-pulse.js` per `contracts/pulse-interop.md`. Export `ensureLayer(map)`, `start(map, routeId, triggerIndex, coordinates, color)`, `reset(map)`. Maintain an internal active-pulse map keyed `"{routeId}::{triggerIndex}"` with `{coordinates, color, startTimeMs}` (data-model.md §5). Implement a single `requestAnimationFrame` loop that, each frame, computes eased `radius` (R_START≈4 → R_END≈24, ease-out cubic) and `opacity` (O_START≈0.6 → 0) over `DURATION_MS≈600`, builds one Point FeatureCollection with per-feature props `{radius, color, opacity}`, calls `source.setData(fc)` once, drops finished pulses (t≥1), and reschedules only while pulses remain. `ensureLayer` idempotently adds source `checkpoint-pulse` (empty FC) and layer `checkpoint-pulse-layer` (circle, data-driven paint: `circle-radius=['get','radius']`, `circle-color=['get','color']`, `circle-opacity=['get','opacity']`) inserted ABOVE `trigger-points-layer`. `reset` clears active pulses, sets source to empty FC, cancels the RAF.
 
-- [X] T003 Wire the pulse module into `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js`: add `ChefMap.pulseCheckpoint(containerDivId, routeId, triggerIndex)` that (a) no-ops if `trigger-points-layer` visibility is `'none'` (FR-008), (b) resolves the checkpoint coordinate from `ChefMap._triggerPointFeatures[routeId]` by matching `properties.triggerIndex === triggerIndex` (no-op + warn if not found), (c) resolves color `ChefMap._routeColorsByRouteId[routeId] || '#facc15'` (FR-004), (d) calls `CheckpointPulse.ensureLayer(map)` then `CheckpointPulse.start(map, routeId, triggerIndex, coords, color)`. Import/reference the `checkpoint-pulse.js` module consistent with how other JS modules are loaded in this file.
+- [X] T003 Wire the pulse module into `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js`: add `ChefMap.pulseCheckpoint(containerDivId, routeId, triggerIndex)` that (a) no-ops if `trigger-points-layer` visibility is `'none'` (FR-008), (b) resolves the checkpoint coordinate from `ChefMap._triggerPointFeatures[routeId]` by matching `properties.triggerIndex === triggerIndex` (no-op + warn if not found), (c) resolves color `ChefMap._routeColorsByRouteId[routeId] || '#facc15'` (FR-004), (d) calls `CheckpointPulse.ensureLayer(map)` then `CheckpointPulse.start(map, routeId, triggerIndex, coords, color)`. Import/reference the `checkpoint-pulse.js` module consistent with how other JS modules are loaded in this file.
 
 - [X] T004 Make the pulse layer survive a basemap style swap (FR-012) in `map-interop.js` `setMapStyle`: inside the existing `map.once('style.load', …)` callback (alongside the vehicles-layer re-add), call `CheckpointPulse.ensureLayer(map)` to re-add the empty `checkpoint-pulse` source+layer above `trigger-points-layer`, and `CheckpointPulse.reset(map)` to drop any in-flight pulses.
 
 - [X] T005 Gate pulses on checkpoint visibility (FR-008) in `map-interop.js` `setCheckpointVisibility`: when `visible === false`, also hide `checkpoint-pulse-layer` and call `CheckpointPulse.reset(map)` (no orphaned animations); when `visible === true`, restore `checkpoint-pulse-layer` visibility (do NOT replay past pulses).
 
-- [X] T006 Add the C# interop wrapper `PulseCheckpointAsync(string routeId, int triggerIndex)` to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/Map.razor.Helper.cs` — invokes `ChefMap.pulseCheckpoint` with `ElementId`, wrapped in try/catch + console log, matching the sibling wrappers (e.g. `SetCheckpointVisibilityAsync`).
+- [X] T006 Add the C# interop wrapper `PulseCheckpointAsync(string routeId, int triggerIndex)` to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/Map.razor.Helper.cs` — invokes `ChefMap.pulseCheckpoint` with `ElementId`, wrapped in try/catch + console log, matching the sibling wrappers (e.g. `SetCheckpointVisibilityAsync`).
 
 **Checkpoint**: Pulse plumbing exists end-to-end (C# → JS → overlay layer), but nothing calls it yet.
 
@@ -63,7 +63,7 @@ Frontend-only feature. All changes under `src/Client/`. Namespace root `ChefKnif
 
 ### Implementation for User Story 1
 
-- [X] T007 [US1] Split `OnCrossingsAsync` in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` per `contracts/crossing-handler.md`: remove the top-level `if (!_audioEnabled) return;` early-return. For each crossing, keep the selection gate (`if (selected.Count > 0 && !selected.Contains(crossing.RouteId)) continue;`). Then ALWAYS call `await _map.PulseCheckpointAsync(crossing.RouteId, crossing.TriggerIndex)` (when `_map is not null`, wrapped in try/catch + `Logger.LogWarning`). Only call `TransitSynth.TriggerNoteAsync(...)` when `_audioEnabled` (its existing try/catch retained). Pulse fires independently of audio (research R4); anti-flicker stays upstream in `checkpoint-tracker.js` (FR-006).
+- [X] T007 [US1] Split `OnCrossingsAsync` in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` per `contracts/crossing-handler.md`: remove the top-level `if (!_audioEnabled) return;` early-return. For each crossing, keep the selection gate (`if (selected.Count > 0 && !selected.Contains(crossing.RouteId)) continue;`). Then ALWAYS call `await _map.PulseCheckpointAsync(crossing.RouteId, crossing.TriggerIndex)` (when `_map is not null`, wrapped in try/catch + `Logger.LogWarning`). Only call `TransitSynth.TriggerNoteAsync(...)` when `_audioEnabled` (its existing try/catch retained). Pulse fires independently of audio (research R4); anti-flicker stays upstream in `checkpoint-tracker.js` (FR-006).
 
 **Checkpoint**: US1 fully functional — checkpoint pulses on passes, correct per-route color, audio-independent, selection-scoped, suppressed when checkpoints hidden, survives basemap swap. This is a shippable MVP.
 
@@ -77,17 +77,17 @@ Frontend-only feature. All changes under `src/Client/`. Namespace root `ChefKnif
 
 ### Implementation for User Story 2
 
-- [X] T008 [P] [US2] Add `BusVisibilitySettingChangedEventArgs : IEventArgs` (one `required bool IsBusesVisible { get; init; }`) at `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/EventArgs/BusVisibilitySettingChangedEventArgs.cs`, mirroring `GisSettingChangedEventArgs.cs`.
+- [X] T008 [P] [US2] Add `BusVisibilitySettingChangedEventArgs : IEventArgs` (one `required bool IsBusesVisible { get; init; }`) at `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/EventArgs/BusVisibilitySettingChangedEventArgs.cs`, mirroring `GisSettingChangedEventArgs.cs`.
 
-- [X] T009 [P] [US2] Add the resx entry `SettingBusesVisible` = `Buses` to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Resources/RouteFilterResources.resx` (EN only; `.es` deferred), matching the existing `SettingAudioEnabled` / `SettingCheckpointsVisible` / `SettingStreetMap` entries.
+- [X] T009 [P] [US2] Add the resx entry `SettingBusesVisible` = `Buses` to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Resources/RouteFilterResources.resx` (EN only; `.es` deferred), matching the existing `SettingAudioEnabled` / `SettingCheckpointsVisible` / `SettingStreetMap` entries.
 
-- [X] T010 [US2] Add the setting to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Models/Settings.cs`: `[ObservableProperty] [property: Description("SettingBusesVisible")] private bool _isBusesVisible = false;` (default OFF — FR-009a). The reflection-driven `SettingsBlade` will render the checkbox automatically (no `.razor` change). (Depends on T009 so the rendered label resolves.)
+- [X] T010 [US2] Add the setting to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Models/Settings.cs`: `[ObservableProperty] [property: Description("SettingBusesVisible")] private bool _isBusesVisible = false;` (default OFF — FR-009a). The reflection-driven `SettingsBlade` will render the checkbox automatically (no `.razor` change). (Depends on T009 so the rendered label resolves.)
 
-- [X] T011 [US2] Add the producer switch arm in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/Blades/SettingsBlade.razor.cs` `HandleSettingPressed`: `nameof(Settings.IsBusesVisible) => new BusVisibilitySettingChangedEventArgs { IsBusesVisible = value },`. (Depends on T008, T010.)
+- [X] T011 [US2] Add the producer switch arm in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/Blades/SettingsBlade.razor.cs` `HandleSettingPressed`: `nameof(Settings.IsBusesVisible) => new BusVisibilitySettingChangedEventArgs { IsBusesVisible = value },`. (Depends on T008, T010.)
 
-- [X] T012 [US2] Add the consumer branch in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` `HandleSettingsEventReceived`: `if (e is BusVisibilitySettingChangedEventArgs buses) { InvokeAsync(async () => { if (_map is not null) await _map.SetVehiclesVisibleAsync(buses.IsBusesVisible); }); return; }` (FR-009b). (Depends on T008.)
+- [X] T012 [US2] Add the consumer branch in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` `HandleSettingsEventReceived`: `if (e is BusVisibilitySettingChangedEventArgs buses) { InvokeAsync(async () => { if (_map is not null) await _map.SetVehiclesVisibleAsync(buses.IsBusesVisible); }); return; }` (FR-009b). (Depends on T008.)
 
-- [X] T013 [US2] Honor the persisted setting on initial render and after basemap swap in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`: replace BOTH hardcoded `await _map.SetVehiclesVisibleAsync(true);` calls (one in `OnAfterRenderAsync`, one in the `GisSettingChangedEventArgs` handler) with `await _map.SetVehiclesVisibleAsync(SettingsService.GetSettings().IsBusesVisible);` (FR-009c, FR-011). (Depends on T010.)
+- [X] T013 [US2] Honor the persisted setting on initial render and after basemap swap in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`: replace BOTH hardcoded `await _map.SetVehiclesVisibleAsync(true);` calls (one in `OnAfterRenderAsync`, one in the `GisSettingChangedEventArgs` handler) with `await _map.SetVehiclesVisibleAsync(SettingsService.GetSettings().IsBusesVisible);` (FR-009c, FR-011). (Depends on T010.)
 
 **Checkpoint**: US1 AND US2 both work independently — pulses fire on passes; the Buses toggle hides/shows markers (default hidden, persisted, immediate, basemap-swap-safe) and never affects pulses.
 

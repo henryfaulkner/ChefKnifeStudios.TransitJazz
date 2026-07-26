@@ -10,7 +10,7 @@ is the focus this planning pass was asked to nail down.
 ## Decision: Ground every "what compatible means" claim in `TransitDataWorker`'s actual source, not just skill docs
 
 **Rationale**: A follow-up clarification pass (2026-07-25, informed by a direct read of
-`src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker`) found the original plan
+`src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker`) found the original plan
 was accurate at the level the `mj-gtfs`/`gtfs-compatibility` skill docs describe, but
 under-specified relative to what the worker's C# source actually does today. Five concrete
 gaps were closed (see spec Clarifications, 2026-07-25 session, and `data-model.md`'s new

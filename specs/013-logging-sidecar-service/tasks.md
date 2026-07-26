@@ -15,7 +15,7 @@ description: "Task list for Logging Sidecar Service"
 
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: US1 = Cycle telemetry (P1/MVP), US2 = Snap telemetry (P2), US3 = Lerp telemetry (P3)
-- All paths are relative to repo root. Production code lives in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/` (abbreviated **WORKER/** below); tests in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/` (**TESTS/**).
+- All paths are relative to repo root. Production code lives in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/` (abbreviated **WORKER/** below); tests in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/` (**TESTS/**).
 
 ---
 
@@ -23,9 +23,9 @@ description: "Task list for Logging Sidecar Service"
 
 **Purpose**: Dependencies, folder, config, and test project so all later work compiles.
 
-- [x] T001 Add `Parquet.Net` (5.*) and `Azure.Storage.Blobs` (12.*) PackageReferences to `WORKER/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.csproj` (Azure.Identity already present); run `dotnet restore`.
+- [x] T001 Add `Parquet.Net` (5.*) and `Azure.Storage.Blobs` (12.*) PackageReferences to `WORKER/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.csproj` (Azure.Identity already present); run `dotnet restore`.
 - [x] T002 Create the `WORKER/Logging/` directory (all sidecar production files land here, per FR-013).
-- [x] T003 [P] Create xunit test project `TESTS/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests.csproj` (net10.0, references the worker project + `Parquet.Net`), and add it to `ChefKnifeStudios.MartaJazz.sln`.
+- [x] T003 [P] Create xunit test project `TESTS/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.csproj` (net10.0, references the worker project + `Parquet.Net`), and add it to `ChefKnifeStudios.TransitJazz.sln`.
 - [x] T004 [P] Create `WORKER/Logging/LoggingOptions.cs` binding `Logging:Telemetry:*` (BlobServiceUri, Container=`telemetry`, FlushIntervalSeconds=300, ChannelCapacity=10000, Enabled=true) per contracts/blob-layout.md.
 - [x] T005 [P] Add a `Logging:Telemetry` block (non-secret keys only; no account key/connection string) to `WORKER/appsettings.Development.json` for local runs, per quickstart.md Â§2.
 
@@ -39,7 +39,7 @@ description: "Task list for Logging Sidecar Service"
 
 **âš ï¸ CRITICAL**: Phases 3â€“5 all depend on this phase.
 
-- [x] T006 [P] Create `WORKER/Logging/IEventNotificationService.cs` with `IEventArgs`, `EventReceivedEventHandler`, `IEventNotificationService`, and `EventNotificationService` â€” a server-side mirror of `src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/EventNotificationService.cs` (FR-001, FR-014).
+- [x] T006 [P] Create `WORKER/Logging/IEventNotificationService.cs` with `IEventArgs`, `EventReceivedEventHandler`, `IEventNotificationService`, and `EventNotificationService` â€” a server-side mirror of `src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/EventNotificationService.cs` (FR-001, FR-014).
 - [x] T007 [P] Create `WORKER/Logging/LogEventArgs.cs` â€” abstract base `: IEventArgs` carrying `CycleId` (string), per data-model.md (FR-009).
 - [x] T008 [P] Create `WORKER/Logging/TelemetryColumns.cs` â€” `const string` names for every column in contracts/parquet-schemas.md (snake_case), the frozen downstream contract (research R4).
 - [x] T009 [P] Create `WORKER/Logging/ILoggingService.cs` â€” sink abstraction: `void Accumulate(IEventArgs e)` and `Task FlushAsync(CancellationToken)`, plus health accessors (dropped/persist-failure counters), per data-model.md lifecycle.

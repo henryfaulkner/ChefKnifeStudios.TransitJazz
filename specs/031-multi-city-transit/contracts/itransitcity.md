@@ -1,6 +1,6 @@
 # Contract: ITransitCity (Worker strategy interface)
 
-**Location**: `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Cities/ITransitCity.cs`
+**Location**: `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Cities/ITransitCity.cs`
 
 ```csharp
 public interface ITransitCity

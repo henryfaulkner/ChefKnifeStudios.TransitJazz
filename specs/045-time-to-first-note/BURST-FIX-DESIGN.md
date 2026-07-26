@@ -286,7 +286,7 @@ manually instead.
 
 ## Files touched
 
-- `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/crossing-dispatcher.js`
+- `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/crossing-dispatcher.js`
   — `_delayForCrossing` returns the raw computed number (incl. `0`/negative)
   instead of clamping to `0`, still `null` when there's no motion state at
   all; `dispatchCrossings` coalesces fallback crossings to the most recent

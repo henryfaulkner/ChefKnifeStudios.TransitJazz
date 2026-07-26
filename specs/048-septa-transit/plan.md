@@ -66,7 +66,7 @@ MUST NOT be loaded. No bespoke rail adapter for `B1`/`B2`/`B3`/`L1`.
 route-attributed vehicles. Change = 4 config/constant/UI touch-points (same as TTC) + 1 new
 additive method-level change in `GtfsStaticLoader.cs` + its unit tests.
 
-**On-disk naming note**: the solution's root namespace/folders are `ChefKnifeStudios.MartaJazz.*`
+**On-disk naming note**: the solution's root namespace/folders are `ChefKnifeStudios.TransitJazz.*`
 (not `TransitJazz`). All references below use the `MartaJazz` convention. The `TransitJazz` name
 appears only in the repo path and product-facing docs.
 
@@ -124,24 +124,24 @@ specs/048-septa-transit/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   └── CityNames.cs                                      # + Septa = "septa"
 │
-├── Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+├── Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 │   ├── Program.cs                                        # UNCHANGED (septa hits existing else arm → GtfsRtCity)
 │   └── appsettings.json                                  # + septa Cities: entry (keyless, no rail, no normalization, telemetry true)
 │
-├── Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/
+├── Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/
 │   ├── appsettings.json                                  # + septa Cities: entry (static-zip loader parity)
 │   └── GtfsStatic/GtfsStaticLoader.cs                     # + nested-zip detect/unwrap step in BuildCityShapeSetAsync (additive, city-agnostic — NOT a septa-specific branch)
 │
-└── Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+└── Client/ChefKnifeStudios.TransitJazz.Client.Shared/
     ├── Components/FABs/CityFab.razor                     # + "Philadelphia, PA" menu button + HandleSeptaClicked (#septa) handler
     ├── Components/FABs/InfoFab.razor                      # + SeptaOverlay switch arm
     ├── Components/AudioUnlockOverlay.razor                 # + SeptaAudioOverlay switch arm
     └── Resources/RouteFilterResources.resx                 # + Septa* overlay/info copy keys
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs   # + _cityCenter[CityNames.Septa] entry (Philadelphia's Center City core)
+src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs   # + _cityCenter[CityNames.Septa] entry (Philadelphia's Center City core)
 
 tests/
 └── Server.WebAPI.Tests (or equivalent existing test project)/

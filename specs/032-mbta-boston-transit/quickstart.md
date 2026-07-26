@@ -6,10 +6,10 @@ The entire change. ~4 config edits + 2 source edits. No new files.
 
 Append this object to the `Cities` array in each of:
 
-- `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.json`
-- `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.Development.json`
-- `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.json`
-- `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.Development.json`
+- `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json`
+- `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.Development.json`
+- `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json`
+- `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.Development.json`
 
 ```json
 {
@@ -24,7 +24,7 @@ Append this object to the `Cities` array in each of:
 
 ## Step 2 — Add the `CityNames.Mbta` constant
 
-`src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs`:
+`src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs`:
 
 ```csharp
 public static class CityNames
@@ -37,7 +37,7 @@ public static class CityNames
 
 ## Step 3 — Add the Boston entry to the city picker
 
-`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/CityFab.razor` — add a list item next to the existing two and a handler mirroring `HandleWmataClicked`:
+`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/CityFab.razor` — add a list item next to the existing two and a handler mirroring `HandleWmataClicked`:
 
 ```razor
 <MatListItem>

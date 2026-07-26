@@ -14,12 +14,12 @@ On first load of the map page (`@page "/"`, `TransitMap`), the browser visibly f
 
 Everything below runs on the **single UI/main thread** (Blazor WASM is single-threaded; MapLibre + JS interop run on the main JS thread), serialized with no yields:
 
-1. **The per-route render storm** — `TransitMap.RenderRoutesAsync()` (`src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs:267`) loops over every cached route and `await`s a chain of interop calls per route, back-to-back, never yielding a frame:
+1. **The per-route render storm** — `TransitMap.RenderRoutesAsync()` (`src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs:267`) loops over every cached route and `await`s a chain of interop calls per route, back-to-back, never yielding a frame:
    - `AddRouteShapeFeatureAsync` (marshals full coord array C#→JS; `map.addSource` + `map.addLayer`)
    - `LoadRouteGeometryForAnimationAsync` (marshals the coords **again**)
    - `ConfigureTrackerForRouteAsync` → a C# Haversine pass over every coordinate, `TriggerPointGenerator.Generate`, then `AddTriggerPointMarkersAsync` (marshals points + coords a **third** time).
 
-2. **The trigger-point quadratic blow-up** — `ChefMap.addTriggerPointMarkers` (`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js:253`) is called once per route, and **each call rebuilds the entire combined FeatureCollection** via `Object.values(ChefMap._triggerPointFeatures).flat()` and calls `source.setData(fc)` on the whole thing. For N routes that is O(N²) feature work plus N full-source `setData` repaints.
+2. **The trigger-point quadratic blow-up** — `ChefMap.addTriggerPointMarkers` (`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js:253`) is called once per route, and **each call rebuilds the entire combined FeatureCollection** via `Object.values(ChefMap._triggerPointFeatures).flat()` and calls `source.setData(fc)` on the whole thing. For N routes that is O(N²) feature work plus N full-source `setData` repaints.
 
 3. **The overlay is a Blazor-rendered DOM element** (`TransitMap.razor`, rendered while `!_audioUnlocked`), so it is blocked by the very same thread that is busy doing (1) and (2). That is why it appears frozen — its one job (stay responsive during warm-up) fails.
 
@@ -88,7 +88,7 @@ Everything below runs on the **single UI/main thread** (Blazor WASM is single-th
 
 ### Part B — Yielding render loop in `RenderRoutesAsync`
 
-**File:** `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`, method `RenderRoutesAsync` (line ~267).
+**File:** `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`, method `RenderRoutesAsync` (line ~267).
 
 **Goal:** yield the UI thread between routes so the browser can paint a frame (spinner + progressively-appearing routes) between chunks of work, converting one long freeze into many short slices.
 
@@ -132,7 +132,7 @@ async Task RenderRoutesAsync()
 
 ### Part C (partial) — Trigger-point quadratic fix
 
-**File:** `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js`, function `ChefMap.addTriggerPointMarkers` (line ~253), plus the C# caller in `TransitMap.razor.cs`.
+**File:** `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js`, function `ChefMap.addTriggerPointMarkers` (line ~253), plus the C# caller in `TransitMap.razor.cs`.
 
 **Current behavior (the bug):** each `addTriggerPointMarkers(routeId, ...)` call:
 1. builds `ChefMap._triggerPointFeatures[routeId]` (fine — keep this), then
@@ -251,10 +251,10 @@ public async Task FlushTriggerPointsAsync()
 
 | File | Change |
 |---|---|
-| `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor` | **A:** add compositor-animated spinner element + `@keyframes` (transform/opacity only) inside existing overlay markup/`<style>`. |
-| `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` | **B:** `await Task.Delay(1)` between routes in `RenderRoutesAsync` (yield every K=1 route); optional progress counters. **C wire-up:** call `_map.FlushTriggerPointsAsync()` once after the loop. |
-| `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js` | **C:** `addTriggerPointMarkers` accumulates only (no combined rebuild/`setData`); ensure-source-exists block retained but with empty data; add new `flushTriggerPoints`. |
-| `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/Map.razor.Helper.cs` | **C:** add `FlushTriggerPointsAsync()` thin wrapper. |
+| `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor` | **A:** add compositor-animated spinner element + `@keyframes` (transform/opacity only) inside existing overlay markup/`<style>`. |
+| `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` | **B:** `await Task.Delay(1)` between routes in `RenderRoutesAsync` (yield every K=1 route); optional progress counters. **C wire-up:** call `_map.FlushTriggerPointsAsync()` once after the loop. |
+| `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js` | **C:** `addTriggerPointMarkers` accumulates only (no combined rebuild/`setData`); ensure-source-exists block retained but with empty data; add new `flushTriggerPoints`. |
+| `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/Map.razor.Helper.cs` | **C:** add `FlushTriggerPointsAsync()` thin wrapper. |
 
 No `.resx`, no DI, no contract changes.
 
@@ -266,7 +266,7 @@ No `.resx`, no DI, no contract changes.
 
 Manual (this is a perceived-performance + visual-correctness change; there is no existing unit harness for the interop layer):
 
-1. **Build:** `dotnet build src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/ChefKnifeStudios.MartaJazz.Client.WebApp.csproj` — 0 errors.
+1. **Build:** `dotnet build src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj` — 0 errors.
 2. **Overlay never freezes (A+B):** DevTools → Performance → CPU throttle 4–6×. Reload `/`. The spinner rotates continuously throughout load; no multi-second visual stall of the overlay.
 3. **Progressive route appearance (B):** routes pop in incrementally rather than all at once after a freeze.
 4. **Audio unlock still works mid-load (A+B):** tap the overlay button while routes are still rendering → audio unlocks, overlay dismisses, subsequent crossings play.

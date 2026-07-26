@@ -22,8 +22,8 @@ description: "Task list for Map Render Performance — Tranche 2"
 **Purpose**: Establish the pre-change baseline so the post-#1 gate comparison is meaningful.
 
 - [X] T001 Read and understand plan.md, quickstart.md, and contracts/interop.md in full before touching any code
-- [X] T002 [P] Build the server project to confirm it currently builds clean: `dotnet build src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI`
-- [X] T003 [P] Build the client project to confirm it currently builds clean: `dotnet build src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp`
+- [X] T002 [P] Build the server project to confirm it currently builds clean: `dotnet build src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI`
+- [X] T003 [P] Build the client project to confirm it currently builds clean: `dotnet build src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp`
 
 ---
 
@@ -33,10 +33,10 @@ description: "Task list for Map Render Performance — Tranche 2"
 
 **⚠️ GATE**: After T008, measure total coordinate count and payload size via `GET /gtfs/routes/shapes`. If the result is acceptable and the freeze is gone, the remaining phases are optional polish.
 
-- [X] T004 [US1] Add `const double SimplifyToleranceMeters = 10.0` named constant at the top of `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs` (before the class body, after `using` statements, or as a static field — whichever follows existing file conventions)
+- [X] T004 [US1] Add `const double SimplifyToleranceMeters = 10.0` named constant at the top of `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs` (before the class body, after `using` statements, or as a static field — whichever follows existing file conventions)
 - [X] T005 [US1] Implement static `Simplify(List<(double Lat, double Lon, int Seq)> pts, double toleranceMeters)` method in `GtfsStaticLoader.cs` using an iterative (stack-based) Ramer–Douglas–Peucker algorithm with equirectangular perpendicular distance; guard: return `pts` unchanged if `pts.Count < 3`; tolerance in degrees: latitude = `toleranceMeters / 111_320.0`, longitude = `toleranceMeters / (111_320.0 * Math.Cos(avgLat * Math.PI / 180))` where `avgLat` is the average latitude of the point sequence
 - [X] T006 [US1] Call `Simplify(points, SimplifyToleranceMeters)` in `GtfsStaticLoader.StartAsync` immediately before the `BuildLineStringFeature` call (line ~53), replacing the `points` argument with the simplified result
-- [X] T007 [US1] Build the server project: `dotnet build src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI` — must succeed with 0 errors
+- [X] T007 [US1] Build the server project: `dotnet build src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI` — must succeed with 0 errors
 - [ ] T008 [US1] Run the full app, wait for GTFS ingest, call `GET /gtfs/routes/shapes`, and verify: total coordinate count drops roughly 5–10× (from ~111,627 to ~10,000–20,000), payload under 1 MB, max single-route coordinate count in the low hundreds; visually confirm routes look correct at zoom 9–14 in the browser
 
 **Checkpoint**: #1 complete. Measure freeze duration with DevTools CPU throttle (4–6×). **If acceptable, stop here.** Proceed to Phase 3 only if further improvement is needed.
@@ -51,7 +51,7 @@ description: "Task list for Map Render Performance — Tranche 2"
 
 ### Change #2 — Single Routes Source + Data-Driven Layer (JS)
 
-- [X] T009 [P] [US1] Add `_routesFeatureCollection: null` state field to the `window.ChefMap` object in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js`
+- [X] T009 [P] [US1] Add `_routesFeatureCollection: null` state field to the `window.ChefMap` object in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js`
 - [X] T010 [US1] Add `ChefMap.addAllRoutes(containerDivId, routes)` function to `map-interop.js` that: (a) builds a GeoJSON FeatureCollection with `feature.id = routeId` (string) per route, (b) seeds `_routeColors` and `_routeColorsByRouteId` per route, (c) calls `ChefMapAnimator.loadRouteGeometry(routeId, coordinates)` per route in the same loop, (d) upserts the `routes` MapLibre source (addSource if absent, setData if present), (e) adds `routes-layer` (type `line`, data-driven paint, inserted before `vehicles-layer`) on first call only, (f) caches the collection to `_routesFeatureCollection`, (g) calls `_applyVehicleRouteColors(containerDivId)` once after the loop
 - [X] T011 [US1] Set the paint expression for `routes-layer` in `map-interop.js` to use data-driven color (`['coalesce', ['get', 'color'], '#6b7280']`) and feature-state-driven opacity: `['case', ['boolean', ['feature-state', 'focused'], false], 0.95, ['boolean', ['feature-state', 'dimmed'], false], 0.3, 0.7]`; set layout to `{ 'line-join': 'round', 'line-cap': 'round' }` and `'line-width': 2`
 - [X] T012 [US1] Rewrite `ChefMap.focusRoutes(containerDivId, routeIds)` in `map-interop.js` to use `map.setFeatureState({source:'routes', id:rid}, {focused:bool, dimmed:bool})` for all known route IDs (routes in the set get `focused:true,dimmed:false`; all others get `focused:false,dimmed:true`)
@@ -62,17 +62,17 @@ description: "Task list for Map Render Performance — Tranche 2"
 
 ### Change #3 — Single-Marshal Interop (C#)
 
-- [X] T017 [US1] Add `public async Task AddAllRoutesAsync(object payload)` to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/Map.razor.Helper.cs` invoking `ChefMap.addAllRoutes` via `JsRuntime.InvokeVoidAsync`; wrap in try/catch with `Console.WriteLine` on failure (matching existing error handling style)
+- [X] T017 [US1] Add `public async Task AddAllRoutesAsync(object payload)` to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/Map.razor.Helper.cs` invoking `ChefMap.addAllRoutes` via `JsRuntime.InvokeVoidAsync`; wrap in try/catch with `Console.WriteLine` on failure (matching existing error handling style)
 - [X] T018 [US1] Remove `AddRouteShapeFeatureAsync` from `Map.razor.Helper.cs` (dead after T021)
 - [X] T019 [US1] Remove `LoadRouteGeometryForAnimationAsync` from `Map.razor.Helper.cs` (animation geometry is now loaded inside `addAllRoutes` JS loop)
-- [X] T020 [US1] Rewrite `RenderRoutesAsync` in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`: build a single payload array from `_routeShapeCache` (filter out entries where `Geometry?.Coordinates` is null or empty, map to anonymous objects `{ routeId, color, coordinates }`), call `await _map!.AddAllRoutesAsync(payload)` once, remove the per-route `foreach`, per-route `Task.Delay(1)`, per-route `StateHasChanged()`, per-route `ConfigureTrackerForRouteAsync` call, and the `FlushTriggerPointsAsync` call from this method (FlushTriggerPoints moves to T022)
+- [X] T020 [US1] Rewrite `RenderRoutesAsync` in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`: build a single payload array from `_routeShapeCache` (filter out entries where `Geometry?.Coordinates` is null or empty, map to anonymous objects `{ routeId, color, coordinates }`), call `await _map!.AddAllRoutesAsync(payload)` once, remove the per-route `foreach`, per-route `Task.Delay(1)`, per-route `StateHasChanged()`, per-route `ConfigureTrackerForRouteAsync` call, and the `FlushTriggerPointsAsync` call from this method (FlushTriggerPoints moves to T022)
 - [X] T021 [US1] Remove fields `_routesRenderedCount` and `_routesTotalCount` from `TransitMap.razor.cs` (and any references in the razor file or progress UI that display them)
 
 ### Change #4 — Deferred Tracker Math
 
 - [X] T022 [US1] Add `async Task ConfigureAllTrackersAsync()` to `TransitMap.razor.cs` that: calls `await Task.Yield()` first, then iterates `_routeShapeCache` calling `await ConfigureTrackerForRouteAsync(routeId, feature)` per route, then calls `await _map.FlushTriggerPointsAsync()` once at the end
 - [X] T023 [US1] In `OnAfterRenderAsync` in `TransitMap.razor.cs`, change the sequence after `_routesRendered = true` to: call `await RenderRoutesAsync()` (fast bulk call), then `_ = ConfigureAllTrackersAsync()` (fire-and-forget), then proceed with `SetCheckpointVisibilityAsync`, `SetAllCheckpointsVisibilityAsync`, `SetVehiclesVisibleAsync` as before
-- [X] T024 [US1] Build the client: `dotnet build src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp` — must succeed with 0 errors
+- [X] T024 [US1] Build the client: `dotnet build src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp` — must succeed with 0 errors
 - [ ] T025 [US1] Run the full app and verify: routes render from 1 source+layer, `console.count('addAllRoutes')` fires 1–2 times on load, routes are visible and the map is pannable before trigger-point markers appear (observable when all-checkpoints is enabled in settings)
 
 **Checkpoint**: User Story 1 complete — fast load achieved via #1+#2+#3+#4.
@@ -127,7 +127,7 @@ description: "Task list for Map Render Performance — Tranche 2"
 - [X] T036 [P] Remove `console.count` instrumentation added during T025 verification (if added)
 - [X] T037 [P] Remove the `_routeColors` map from `map-interop.js` if it is now fully unused (it was keyed by `layerId` and used only by the old per-layer `focusRoute`/`focusRoutes`; `_routeColorsByRouteId` is still needed)
 - [X] T038 Confirm `_routesRendered` bool in `TransitMap.razor.cs` still correctly gates `OnAfterRenderAsync` so `RenderRoutesAsync` and `ConfigureAllTrackersAsync` are not called more than once per page load (field remains; just verify the guard logic is intact after the rewrite)
-- [X] T039 Run full build one final time: `dotnet build src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI` and `dotnet build src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp` — both must succeed with 0 errors, 0 warnings introduced by this feature
+- [X] T039 Run full build one final time: `dotnet build src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI` and `dotnet build src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp` — both must succeed with 0 errors, 0 warnings introduced by this feature
 
 ---
 

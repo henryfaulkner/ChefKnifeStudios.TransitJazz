@@ -15,12 +15,12 @@ description: "Task list for RecyclableList<T> pooled collection"
 
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: US1 / US2 / US3, or SETUP / FOUND / POLISH
-- File paths are repo-relative. Assembly is `ChefKnifeStudios.TransitJazz.Shared`; namespace root `ChefKnifeStudios.MartaJazz.Shared`.
+- File paths are repo-relative. Assembly is `ChefKnifeStudios.TransitJazz.Shared`; namespace root `ChefKnifeStudios.TransitJazz.Shared`.
 
 ## Path Conventions
 
-- Production code: `src/ChefKnifeStudios.MartaJazz.Shared/Collections/`
-- Tests: `src/ChefKnifeStudios.MartaJazz.Shared.Tests/` (NEW project)
+- Production code: `src/ChefKnifeStudios.TransitJazz.Shared/Collections/`
+- Tests: `src/ChefKnifeStudios.TransitJazz.Shared.Tests/` (NEW project)
 - Solution: `ChefKnifeStudios.TransitJazz.sln` at repo root
 
 ---
@@ -29,8 +29,8 @@ description: "Task list for RecyclableList<T> pooled collection"
 
 **Purpose**: Create the folder + the new test project so all later work has a home.
 
-- [X] T001 Create the `Collections/` folder under `src/ChefKnifeStudios.MartaJazz.Shared/` (no new package references — BCL only; do NOT edit the Shared `.csproj`).
-- [X] T002 Create the new test project `src/ChefKnifeStudios.MartaJazz.Shared.Tests/ChefKnifeStudios.MartaJazz.Shared.Tests.csproj`, copying the csproj shape of `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/…csproj` (`net10.0`, `Nullable` + `ImplicitUsings` enabled, `IsPackable=false`, `Microsoft.NET.Test.Sdk 17.*`, `xunit 2.*`, `xunit.runner.visualstudio 2.*`) with a single `ProjectReference` to `..\ChefKnifeStudios.MartaJazz.Shared\ChefKnifeStudios.MartaJazz.Shared.csproj`.
+- [X] T001 Create the `Collections/` folder under `src/ChefKnifeStudios.TransitJazz.Shared/` (no new package references — BCL only; do NOT edit the Shared `.csproj`).
+- [X] T002 Create the new test project `src/ChefKnifeStudios.TransitJazz.Shared.Tests/ChefKnifeStudios.TransitJazz.Shared.Tests.csproj`, copying the csproj shape of `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/…csproj` (`net10.0`, `Nullable` + `ImplicitUsings` enabled, `IsPackable=false`, `Microsoft.NET.Test.Sdk 17.*`, `xunit 2.*`, `xunit.runner.visualstudio 2.*`) with a single `ProjectReference` to `..\ChefKnifeStudios.TransitJazz.Shared\ChefKnifeStudios.TransitJazz.Shared.csproj`.
 - [X] T003 Add the new test project to `ChefKnifeStudios.TransitJazz.sln` (`dotnet sln add …`); confirm `dotnet build` on the solution succeeds with the empty project.
 
 **Checkpoint**: Solution builds; empty test project is wired into CI.
@@ -41,7 +41,7 @@ description: "Task list for RecyclableList<T> pooled collection"
 
 **Purpose**: The core `RecyclableList<T>` type — every user story depends on it. **⚠️ No user-story work can begin until this phase is complete.**
 
-- [X] T004 [FOUND] Create `src/ChefKnifeStudios.MartaJazz.Shared/Collections/RecyclableList.cs` with the non-generic host `public static class RecyclableList` exposing the DEBUG-only `Abandoned` signal + `RecyclableListAbandonedInfo` (see contracts §"non-generic host"; guard the event and info-capture with `#if DEBUG`).
+- [X] T004 [FOUND] Create `src/ChefKnifeStudios.TransitJazz.Shared/Collections/RecyclableList.cs` with the non-generic host `public static class RecyclableList` exposing the DEBUG-only `Abandoned` signal + `RecyclableListAbandonedInfo` (see contracts §"non-generic host"; guard the event and info-capture with `#if DEBUG`).
 - [X] T005 [FOUND] In the same file (or a partial), declare `public sealed class RecyclableList<T> : IList<T>, IReadOnlyList<T>, IDisposable` with fields `_array`, `_count`, `_disposed`, `_version` and a shared empty-array sentinel; implement the three constructors (empty / `capacity` with `ArgumentOutOfRangeException` on negative / `IEnumerable<T>` with `ArgumentNullException` on null, pre-sizing via `TryGetNonEnumeratedCount`). Enforces INV-1.
 - [X] T006 [FOUND] Implement pooled growth: a private `Grow(int min)` that rents `>= max(min, doubled)` from `ArrayPool<T>.Shared`, copies `[0.._count)`, and returns the previous buffer with `clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>()`; plus `EnsureCapacity(int)`. Enforces INV-2/INV-3/INV-4.
 - [X] T007 [FOUND] Implement the `IList<T>` surface: `Count`, `Capacity`, `IsReadOnly`, indexer (bounds vs. `_count`), `Add`, `Insert`, `Remove`, `RemoveAt`, `Clear` (reset count + null used region for refs, keep buffer), `Contains`, `IndexOf`, `CopyTo`, and a `_version`-checked `GetEnumerator()` (both generic and non-generic). Behavioral parity with `List<T>` (G1).
@@ -61,7 +61,7 @@ description: "Task list for RecyclableList<T> pooled collection"
 
 ### Tests for User Story 1 ⚠️ (write first, expect fail until Phase 2 done)
 
-- [X] T011 [P] [US1] Create `src/ChefKnifeStudios.MartaJazz.Shared.Tests/RecyclableListTests.cs`; add growth test — add 100 items to an empty list, assert `Count==100` and indices `0..99` preserve insertion order (AV-1, SC-001).
+- [X] T011 [P] [US1] Create `src/ChefKnifeStudios.TransitJazz.Shared.Tests/RecyclableListTests.cs`; add growth test — add 100 items to an empty list, assert `Count==100` and indices `0..99` preserve insertion order (AV-1, SC-001).
 - [X] T012 [P] [US1] In `RecyclableListTests.cs`, add a parity harness that applies the same operation sequence (add/insert/remove/sort/search/clear/indexer) to a `RecyclableList<T>` and a `List<T>` and asserts identical observable results (AV-2, SC-001).
 - [X] T013 [P] [US1] Add a pre-size test — `new RecyclableList<int>(1000)`, add 1000 items, assert `Capacity` never grows past the initial rental while filling (no mid-fill rental) (AV-3, SC-004).
 - [X] T014 [P] [US1] Add edge-case tests — empty list read/enumerate/`Clear`/`Dispose` do not throw; negative capacity throws `ArgumentOutOfRangeException`; null source throws `ArgumentNullException`; `AsSpan()` over empty list is length 0.
@@ -82,13 +82,13 @@ description: "Task list for RecyclableList<T> pooled collection"
 
 ### Tests for User Story 2 ⚠️
 
-- [X] T016 [P] [US2] Create `src/ChefKnifeStudios.MartaJazz.Shared.Tests/RecyclableListExtensionsTests.cs`; test `AsRecyclableList()` from a known-count `IEnumerable` pre-sizes and copies all items in order; caller-owned disposal returns the buffer once.
+- [X] T016 [P] [US2] Create `src/ChefKnifeStudios.TransitJazz.Shared.Tests/RecyclableListExtensionsTests.cs`; test `AsRecyclableList()` from a known-count `IEnumerable` pre-sizes and copies all items in order; caller-owned disposal returns the buffer once.
 - [X] T017 [P] [US2] Add a double-dispose test — calling `Dispose()` twice is a no-op and returns the buffer exactly once (simulates method-return + external-lifetime-end double registration) (AV-5, SC-006, G3).
 - [X] T018 [P] [US2] Add `AsList()` / `AsIList()` tests — `AsList()` yields a `List<T>` copy of the live region; `AsIList()` returns the same instance typed as `IList<T>`.
 
 ### Implementation for User Story 2
 
-- [X] T019 [US2] Create `src/ChefKnifeStudios.MartaJazz.Shared/Collections/RecyclableListExtensions.cs` with `AsRecyclableList<T>`, `AsList<T>`, `AsIList<T>` (per contracts §RecyclableListExtensions), with XML docs noting caller-owned disposal for `AsRecyclableList`. Run T016–T018 to green.
+- [X] T019 [US2] Create `src/ChefKnifeStudios.TransitJazz.Shared/Collections/RecyclableListExtensions.cs` with `AsRecyclableList<T>`, `AsList<T>`, `AsIList<T>` (per contracts §RecyclableListExtensions), with XML docs noting caller-owned disposal for `AsRecyclableList`. Run T016–T018 to green.
 - [X] T020 [US2] Document the request-lifetime registration pattern (`httpContext.Response.RegisterForDispose(buffer)`) in the `AsRecyclableList` XML doc and confirm Shared adds NO ASP.NET reference (registration stays in WebAPI — FR-014). (No Shared code beyond the doc note.)
 
 **Checkpoint**: US1 + US2 both work independently; buffering + external-lifetime disposal verified.
@@ -120,7 +120,7 @@ description: "Task list for RecyclableList<T> pooled collection"
 
 - [X] T024 [P] [POLISH] In `RecyclableListTests.cs`, add the DEBUG abandonment test — subscribe to `RecyclableList.Abandoned`, create + abandon (no dispose) an instance inside a non-inlined helper so the ref is collectible, then `GC.Collect()` + `GC.WaitForPendingFinalizers()`, and assert the static latch fired. Guard with `#if DEBUG` (inert in Release). **Deterministic seam only** — NO `Thread.Sleep`, NO retry wrapper; add a per-test timeout (`[Fact(Timeout=…)]`) with a comment stating the chosen value and why (AV-6/AV-7, SC-005).
 - [X] T025 [P] [POLISH] Add the allocation-comparison test — measure `GC.GetAllocatedBytesForCurrentThread()` deltas for a large accumulation via `List<T>` vs. a disposed, pre-sized-then-grown `RecyclableList<T>`, and assert the pooled path allocates **strictly fewer** backing-array bytes. This is a **hard, build-failing `Assert`** (not advisory logging), with a **wide, documented safety margin** so normal CI/runtime variance never trips it. Unit-level (Tier 0), NO retry, NO sleep (SC-003, SC-007).
-- [X] T026 [POLISH] Run `dotnet test src/ChefKnifeStudios.MartaJazz.Shared.Tests/…csproj` and `dotnet build` on the whole solution; confirm the new tests are green and no existing Server test project regressed (SC-007, Principle V).
+- [X] T026 [POLISH] Run `dotnet test src/ChefKnifeStudios.TransitJazz.Shared.Tests/…csproj` and `dotnet build` on the whole solution; confirm the new tests are green and no existing Server test project regressed (SC-007, Principle V).
 - [X] T027 [POLISH] Walk quickstart.md's three usage snippets against the final API to confirm they compile as written; fix any signature drift in code or quickstart.
 
 ---

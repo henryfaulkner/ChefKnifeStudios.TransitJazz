@@ -1,8 +1,8 @@
 # Contract: SEPTA City Configuration
 
 The `septa` entry added to the `Cities:` array. Must be added **identically** to both
-`Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.json` and
-`Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.json`.
+`Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json` and
+`Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json`.
 
 ## Canonical JSON
 

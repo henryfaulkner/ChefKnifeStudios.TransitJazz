@@ -5,7 +5,7 @@ server, shared, or persisted-schema changes beyond the new bool inside the alrea
 
 ## Entity: Settings (MODIFY)
 
-`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Models/Settings.cs` — `ObservableObject`, boolean-only,
+`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Models/Settings.cs` — `ObservableObject`, boolean-only,
 persisted as one JSON blob under local-storage key `"Setting"`. The blade renders one `MatCheckbox` per public
 bool via reflection, labeling each from its `[Description]` resx key.
 
@@ -30,7 +30,7 @@ value)` persists synchronously → `GisSettingChangedEventArgs` posted → consu
 
 ## Entity: GisSettingChangedEventArgs (NEW)
 
-`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/EventArgs/GisSettingChangedEventArgs.cs` — implements
+`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/EventArgs/GisSettingChangedEventArgs.cs` — implements
 `IEventArgs`, same shape as `AudioSettingChangedEventArgs`.
 
 | Field | Type | Notes |

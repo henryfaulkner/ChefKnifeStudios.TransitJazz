@@ -20,7 +20,7 @@ US1 (per-city viewing) and US3 (one isolated bespoke class = `MartaCity`) are de
 Slice 1 because per-city scoping cannot exist without `ITransitCity` + the first concrete city. US2
 proves the config-only path on top.
 
-**Namespace note**: source root is `ChefKnifeStudios.MartaJazz` (not `.TransitJazz`). All paths below
+**Namespace note**: source root is `ChefKnifeStudios.TransitJazz` (not `.TransitJazz`). All paths below
 are real.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -38,8 +38,8 @@ Web app, existing 11-project solution. No new projects; one new folder `Cities/`
 
 **Purpose**: Additive shared contract changes that everything else builds on.
 
-- [X] T001 [P] Add `string? City = null` to `RouteShapeProperties` record in `src/ChefKnifeStudios.MartaJazz.Shared/GtfsData/RouteShapeFeature.cs` (additive, nullable for back-compat)
-- [X] T002 Change `ITransitHubPublisher.PublishBatchAsync` signature to `(string city, List<EventEnvelope> batch, CancellationToken ct = default)` in `src/ChefKnifeStudios.MartaJazz.Shared/ITransitHubPublisher.cs`
+- [X] T001 [P] Add `string? City = null` to `RouteShapeProperties` record in `src/ChefKnifeStudios.TransitJazz.Shared/GtfsData/RouteShapeFeature.cs` (additive, nullable for back-compat)
+- [X] T002 Change `ITransitHubPublisher.PublishBatchAsync` signature to `(string city, List<EventEnvelope> batch, CancellationToken ct = default)` in `src/ChefKnifeStudios.TransitJazz.Shared/ITransitHubPublisher.cs`
 
 **Checkpoint**: Shared contracts updated; solution will not compile until publisher callers (T012) and worker (T010) are updated â€” expected mid-refactor.
 
@@ -52,13 +52,13 @@ This is the load-bearing core of Slice 1.
 
 **âš ï¸ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [X] T003 Create `Cities/ITransitCity.cs` (interface: `string Name`, `Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)`, `bool EmitsTelemetry`) in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Cities/` per `contracts/itransitcity.md`
-- [X] T004 [P] Create `Cities/CityConfig.cs` binding model (`Name`, `GtfsRtUrls[]`, `StaticZipUrls[]`, `RailRealtime{BaseUrl,Enabled}?`, `RailRouteIdMap?`, `ApiKeyEnvVar?`, `EmitsTelemetry`) in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Cities/` per `contracts/city-config.md`
-- [X] T005 Key `ILastBatchCache` by city â€” change to `Current(string city)` / `Set(string city, IReadOnlyList<EventEnvelope> batch)` backed by `Dictionary<string, LastBatchCache>` (preserve per-vehicle upsert + stale-skip logic) in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/SignalR/ILastBatchCache.cs`
-- [X] T006 Update `WorkerTransitHub.PublishBatch` to `(string city, List<EventEnvelope> batch)` â†’ `_lastBatchCache.Set(city, batch)` â†’ `Clients.Group(city).SendAsync("ReceiveBatch", batch)` in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/SignalR/WorkerTransitHub.cs` per `contracts/signalr-transport.md`
-- [X] T007 Add `JoinCity(string city)` to `TransitHub` â†’ `Groups.AddToGroupAsync(...)` + immediate replay of `_lastBatchCache.Current(city)` to `Clients.Caller`; inject `ILastBatchCache` into `TransitHub` in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/SignalR/TransitHub.cs`
-- [X] T008 Make worker route index per-city â€” change `_routeIndex` to `Dictionary<string city, IReadOnlyDictionary<string routeId, RoutePoint[]>>`, update `BuildRouteIndex`, `InitializeRouteIndexAsync`, `RefreshRouteIndexAsync` to partition the shapes response by `RouteShapeProperties.City` (single HTTP call, no N round-trips) in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Worker.cs`
-- [X] T009 Make worker vehicle-state cache per-city (key by `(city, vehicleId)` or per-city dictionary) so identical vehicle IDs across cities never collide; update prune logic in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Worker.cs`
+- [X] T003 Create `Cities/ITransitCity.cs` (interface: `string Name`, `Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)`, `bool EmitsTelemetry`) in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Cities/` per `contracts/itransitcity.md`
+- [X] T004 [P] Create `Cities/CityConfig.cs` binding model (`Name`, `GtfsRtUrls[]`, `StaticZipUrls[]`, `RailRealtime{BaseUrl,Enabled}?`, `RailRouteIdMap?`, `ApiKeyEnvVar?`, `EmitsTelemetry`) in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Cities/` per `contracts/city-config.md`
+- [X] T005 Key `ILastBatchCache` by city â€” change to `Current(string city)` / `Set(string city, IReadOnlyList<EventEnvelope> batch)` backed by `Dictionary<string, LastBatchCache>` (preserve per-vehicle upsert + stale-skip logic) in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/SignalR/ILastBatchCache.cs`
+- [X] T006 Update `WorkerTransitHub.PublishBatch` to `(string city, List<EventEnvelope> batch)` â†’ `_lastBatchCache.Set(city, batch)` â†’ `Clients.Group(city).SendAsync("ReceiveBatch", batch)` in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/SignalR/WorkerTransitHub.cs` per `contracts/signalr-transport.md`
+- [X] T007 Add `JoinCity(string city)` to `TransitHub` â†’ `Groups.AddToGroupAsync(...)` + immediate replay of `_lastBatchCache.Current(city)` to `Clients.Caller`; inject `ILastBatchCache` into `TransitHub` in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/SignalR/TransitHub.cs`
+- [X] T008 Make worker route index per-city â€” change `_routeIndex` to `Dictionary<string city, IReadOnlyDictionary<string routeId, RoutePoint[]>>`, update `BuildRouteIndex`, `InitializeRouteIndexAsync`, `RefreshRouteIndexAsync` to partition the shapes response by `RouteShapeProperties.City` (single HTTP call, no N round-trips) in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Worker.cs`
+- [X] T009 Make worker vehicle-state cache per-city (key by `(city, vehicleId)` or per-city dictionary) so identical vehicle IDs across cities never collide; update prune logic in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Worker.cs`
 
 **Checkpoint**: City contract + per-city keying for index, cache, and transport exist. Server-side fan-out is group-scoped. Ready for the loop + concrete city.
 
@@ -74,16 +74,16 @@ vehicles; no-param load shows Atlanta; joining mid-stream shows vehicles within 
 
 ### Tests for User Story 1
 
-- [X] T010 [P] [US1] Per-city cache isolation test (same `vehicleId` under two cities never collides; `Current(city)` returns only that city) in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/LastBatchCacheTests.cs` (INV-T3 / FR-011)
-- [X] T011 [P] [US1] `WorkerTransitHub` routing test â€” `PublishBatch(city, batch)` calls `Clients.Group(city)` and `Set(city, â€¦)`, never `Clients.All` in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/WorkerTransitHubTests.cs` (INV-T1 / SC-001)
+- [X] T010 [P] [US1] Per-city cache isolation test (same `vehicleId` under two cities never collides; `Current(city)` returns only that city) in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/LastBatchCacheTests.cs` (INV-T3 / FR-011)
+- [X] T011 [P] [US1] `WorkerTransitHub` routing test â€” `PublishBatch(city, batch)` calls `Clients.Group(city)` and `Set(city, â€¦)`, never `Clients.All` in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/WorkerTransitHubTests.cs` (INV-T1 / SC-001)
 
 ### Implementation for User Story 1
 
-- [X] T012 [US1] Thread `city` through the publisher â€” `SignalRHubPublisher.PublishBatchAsync(string city, â€¦)` calls `InvokeAsync("PublishBatch", city, batch, ct)` in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/SignalRHubPublisher.cs` (depends on T002, T006)
-- [X] T013 [US1] Convert worker to loop `IEnumerable<ITransitCity>` on the 10s tick with per-city try/catch (log `{City}` on failure); per city: `FetchVehiclesAsync` â†’ `_routeIndex[city.Name]` â†’ reconcile â†’ `PublishBatchAsync(city.Name, batch)`; loop NEVER branches on `city.Name` in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Worker.cs` (INV-1, INV-2; depends on T003, T008, T009, T012)
-- [X] T014 [US1] Add `?city=` to the route-shapes endpoint â€” `GetAllRouteShapes`/`GetAllRoutes`/`GetRouteShape` filter KV keys by `{city}:` prefix (default `marta`); retain `ReadyKey` filter in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/EndpointGroups/GtfsEndpoints.cs` per `contracts/shapes-endpoint.md` (INV-S1)
-- [X] T015 [US1] Client reads city from URL/query (default `marta`); call `InvokeAsync("JoinCity", city)` after `StartAsync` and re-invoke on `Reconnected` in `src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/SignalRNotificationService.cs` (FR-003, INV-T2/T4; depends on T007)
-- [X] T016 [US1] Client shape fetch appends `?city={city}`; surface city to `RouteFilterViewModel` and consume `RouteShapeProperties.City` in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs` (depends on T001, T014)
+- [X] T012 [US1] Thread `city` through the publisher â€” `SignalRHubPublisher.PublishBatchAsync(string city, â€¦)` calls `InvokeAsync("PublishBatch", city, batch, ct)` in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/SignalRHubPublisher.cs` (depends on T002, T006)
+- [X] T013 [US1] Convert worker to loop `IEnumerable<ITransitCity>` on the 10s tick with per-city try/catch (log `{City}` on failure); per city: `FetchVehiclesAsync` â†’ `_routeIndex[city.Name]` â†’ reconcile â†’ `PublishBatchAsync(city.Name, batch)`; loop NEVER branches on `city.Name` in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Worker.cs` (INV-1, INV-2; depends on T003, T008, T009, T012)
+- [X] T014 [US1] Add `?city=` to the route-shapes endpoint â€” `GetAllRouteShapes`/`GetAllRoutes`/`GetRouteShape` filter KV keys by `{city}:` prefix (default `marta`); retain `ReadyKey` filter in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/EndpointGroups/GtfsEndpoints.cs` per `contracts/shapes-endpoint.md` (INV-S1)
+- [X] T015 [US1] Client reads city from URL/query (default `marta`); call `InvokeAsync("JoinCity", city)` after `StartAsync` and re-invoke on `Reconnected` in `src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/SignalRNotificationService.cs` (FR-003, INV-T2/T4; depends on T007)
+- [X] T016 [US1] Client shape fetch appends `?city={city}`; surface city to `RouteFilterViewModel` and consume `RouteShapeProperties.City` in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs` (depends on T001, T014)
 - [X] T017 [US1] Unknown/unconfigured city falls back to `marta` (client default + endpoint empty-result handling never blanks the map) â€” verify across `SignalRNotificationService` and `RouteFilterViewModel` (FR-004)
 
 **Checkpoint**: Per-city scoping works end-to-end with one city registered. Cross-city isolation, default Atlanta, and mid-stream replay all functional.
@@ -104,10 +104,10 @@ telemetry); the bespoke handling lives in exactly one new `MartaCity.cs`.
 
 ### Implementation for User Story 3
 
-- [X] T018 [US3] Create `Cities/MartaCity.cs : ITransitCity` (`Name="marta"`, `EmitsTelemetry=true`) whose `FetchVehiclesAsync` fetches the MARTA bus protobuf + composes the `IRailRealtimeAdapter` JSON rail call internally and returns a merged normalized `FeedMessage`; carries the rail `vehicleId` set for `TransitMode.Rail` tagging in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Cities/` (Q7)
-- [X] T019 [US3] Retire the global `IRailRealtimeAdapter` + hardcoded `_gtfsRtUrl` singleton wiring; `RailRealtimeAdapter` now composed inside `MartaCity` (class itself unchanged) â€” update `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Program.cs` and remove the field from `Worker.cs`
-- [X] T020 [US3] Gate `PostEvent` (snap/lerp/cycle) on `city.EmitsTelemetry` â€” passed into reconciliation, never a city-name check; MARTA emits, others do not in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Worker.cs` (INV-3 / FR-015 / Q6)
-- [X] T021 [P] [US3] Telemetry-gate + loop fault-isolation tests (MARTA posts events; a city with `EmitsTelemetry=false` posts none; a throwing city does not stop others) in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/` (INV-2, INV-3)
+- [X] T018 [US3] Create `Cities/MartaCity.cs : ITransitCity` (`Name="marta"`, `EmitsTelemetry=true`) whose `FetchVehiclesAsync` fetches the MARTA bus protobuf + composes the `IRailRealtimeAdapter` JSON rail call internally and returns a merged normalized `FeedMessage`; carries the rail `vehicleId` set for `TransitMode.Rail` tagging in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Cities/` (Q7)
+- [X] T019 [US3] Retire the global `IRailRealtimeAdapter` + hardcoded `_gtfsRtUrl` singleton wiring; `RailRealtimeAdapter` now composed inside `MartaCity` (class itself unchanged) â€” update `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Program.cs` and remove the field from `Worker.cs`
+- [X] T020 [US3] Gate `PostEvent` (snap/lerp/cycle) on `city.EmitsTelemetry` â€” passed into reconciliation, never a city-name check; MARTA emits, others do not in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Worker.cs` (INV-3 / FR-015 / Q6)
+- [X] T021 [P] [US3] Telemetry-gate + loop fault-isolation tests (MARTA posts events; a city with `EmitsTelemetry=false` posts none; a throwing city does not stop others) in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/` (INV-2, INV-3)
 
 **Checkpoint**: Slice 1 complete. MARTA byte-identical end-to-end; all city-specific logic for Atlanta lives in `MartaCity.cs`.
 
@@ -123,11 +123,11 @@ secret), no `.cs`; no agency key in committed files.
 
 ### Implementation for User Story 2
 
-- [X] T022 [US2] Create the generic `Cities/GtfsRtCity.cs : ITransitCity` â€” fetches one-or-more `GtfsRtUrls` protobufs, applies optional `RailRouteIdMap` (remap `route_id`), merges, returns normalized `FeedMessage`; `EmitsTelemetry` from config; reads API key from `ApiKeyEnvVar` env var (never committed) in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Cities/` per `contracts/city-config.md` (Q8)
-- [X] T023 [US2] City registry in `Program.cs` â€” bind `Cities:` array; for each entry use a registered named impl (`MartaCity` for `marta`) else `GtfsRtCity`; register `IEnumerable<ITransitCity>` for the Worker loop in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Program.cs` (depends on T018, T022)
-- [X] T024 [US2] `GtfsStaticLoader` loops the city registry â€” load each city's `StaticZipUrls` (multi-zip merged), seed KV under `{city}:{routeId}`, set `RouteShapeProperties.City` on every shape in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs` (Q4; depends on T001)
-- [X] T025 [US2] Replace flat `Marta:` block with a `Cities:` array (marta + wmata entries) in worker `appsettings.json` and `appsettings.Development.json`; WMATA `ApiKeyEnvVar: "WMATA_API_KEY"` only â€” NO key value committed in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/` per `contracts/city-config.md` (FR-014 / SC-008)
-- [X] T026 [P] [US2] City-scoped shapes endpoint test â€” `?city=wmata` returns only `wmata:*`, zero `marta:*`; default returns the MARTA set unchanged in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/` (INV-S1, INV-S3)
+- [X] T022 [US2] Create the generic `Cities/GtfsRtCity.cs : ITransitCity` â€” fetches one-or-more `GtfsRtUrls` protobufs, applies optional `RailRouteIdMap` (remap `route_id`), merges, returns normalized `FeedMessage`; `EmitsTelemetry` from config; reads API key from `ApiKeyEnvVar` env var (never committed) in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Cities/` per `contracts/city-config.md` (Q8)
+- [X] T023 [US2] City registry in `Program.cs` â€” bind `Cities:` array; for each entry use a registered named impl (`MartaCity` for `marta`) else `GtfsRtCity`; register `IEnumerable<ITransitCity>` for the Worker loop in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Program.cs` (depends on T018, T022)
+- [X] T024 [US2] `GtfsStaticLoader` loops the city registry â€” load each city's `StaticZipUrls` (multi-zip merged), seed KV under `{city}:{routeId}`, set `RouteShapeProperties.City` on every shape in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs` (Q4; depends on T001)
+- [X] T025 [US2] Replace flat `Marta:` block with a `Cities:` array (marta + wmata entries) in worker `appsettings.json` and `appsettings.Development.json`; WMATA `ApiKeyEnvVar: "WMATA_API_KEY"` only â€” NO key value committed in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/` per `contracts/city-config.md` (FR-014 / SC-008)
+- [X] T026 [P] [US2] City-scoped shapes endpoint test â€” `?city=wmata` returns only `wmata:*`, zero `marta:*`; default returns the MARTA set unchanged in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/` (INV-S1, INV-S3)
 
 **Checkpoint**: Two cities live. Adding WMATA required config + a secret only. Both cities isolated end-to-end.
 

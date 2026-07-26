@@ -173,13 +173,13 @@ jobs:
       - name: Publish Blazor app
         run: |
           dotnet publish \
-            src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/ChefKnifeStudios.MartaJazz.Client.WebApp.csproj \
+            src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj \
             -c Release /p:BlazorEnableCompression=false
 
       - uses: actions/upload-artifact@v4
         with:
           name: blazor-client
-          path: src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/bin/Release/net10.0/publish/wwwroot
+          path: src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/bin/Release/net10.0/publish/wwwroot
 
   deploy:
     needs: build

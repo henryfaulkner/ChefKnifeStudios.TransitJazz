@@ -20,18 +20,18 @@ jobs:
       - name: Stamp TTFN probe version (feature 045)
         run: |
           sed -i "s/SET-PER-DEPLOY/${GITHUB_SHA::7}/" \
-            src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/transit-synth.js
+            src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/transit-synth.js
 
       - name: Publish Blazor app
         run: |
           dotnet publish \
-            src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/ChefKnifeStudios.MartaJazz.Client.WebApp.csproj \
+            src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj \
             -c Release /p:BlazorEnableCompression=false
 
       - uses: actions/upload-artifact@v4
         with:
           name: blazor-client
-          path: src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/bin/Release/net10.0/publish/wwwroot
+          path: src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/bin/Release/net10.0/publish/wwwroot
 
   deploy:
     needs: build

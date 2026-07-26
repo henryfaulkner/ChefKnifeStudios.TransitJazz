@@ -9,7 +9,7 @@ traceability against the spec's Key Entities section.
 
 What "compatible" concretely means is not defined by this feature or by the design doc —
 it is defined by the actual behavior of
-`src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker`, the running component a
+`src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker`, the running component a
 candidate feed would eventually plug into. The `gtfs-compatibility` function this feature
 delegates to already encodes the load-bearing rule (route_id + lat/lon required, alignment
 against `RouteJoinKey`); this feature's own contribution is grounding a few report fields

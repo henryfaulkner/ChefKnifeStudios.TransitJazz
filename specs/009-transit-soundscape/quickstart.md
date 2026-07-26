@@ -7,7 +7,7 @@ Manual verification protocol mapped 1:1 to the spec's Success Criteria. Run all 
 
 ## Prerequisites
 
-- AppHost running locally (`dotnet run --project src/Orchestration/ChefKnifeStudios.MartaJazz.AppHost`) OR pointed at a deployed build.
+- AppHost running locally (`dotnet run --project src/Orchestration/ChefKnifeStudios.TransitJazz.AppHost`) OR pointed at a deployed build.
 - MARTA service hours: tests assume at least one active bus is in motion. If running off-hours (late night / pre-dawn), skip the listening-based tests and verify only the silent-system behavior (edge case + SC-007).
 - Browser: Chrome or Edge latest. Open the **devtools console** before navigating to `/transit-map` so the pre-interaction phase is captured.
 
