@@ -5,7 +5,7 @@ in-app event payloads. No database, no backend schema.
 
 ## Entity: `Settings` (persisted model)
 
-`ChefKnifeStudios.MartaJazz.Client.Shared.Models.Settings` — a `partial class : ObservableObject`
+`ChefKnifeStudios.TransitJazz.Client.Shared.Models.Settings` — a `partial class : ObservableObject`
 (CommunityToolkit.Mvvm). One `bool` property per setting; the blade reflects over these.
 
 | Property (generated) | Backing field | Type | `[property: Description]` value (resource KEY) | Default |
@@ -46,7 +46,7 @@ which already owns light/dark `MatTheme` via `ThemeChangedEventArgs`. This featu
 
 ## Event payloads (in-app bus `IEventArgs`)
 
-All implement the existing `ChefKnifeStudios.MartaJazz.Client.Core.Services.IEventArgs` marker. Posted on the
+All implement the existing `ChefKnifeStudios.TransitJazz.Client.Core.Services.IEventArgs` marker. Posted on the
 existing singleton `IEventNotificationService`. Full accept/reject behavior in `contracts/settings-events.md`.
 
 ### `BladeEventArgs` — open/close the blade

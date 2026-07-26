@@ -1,8 +1,8 @@
 # Logging Sidecar Service Overview
 
-The Event and EventData model separation should be very, very similar to the one used for SignalR events within ChefKnifeStudios.MartaJazz.
+The Event and EventData model separation should be very, very similar to the one used for SignalR events within ChefKnifeStudios.TransitJazz.
 
-Create this as a sidecar service within the ChefKnifeStudios.MartaJazz.Server.TransitDataWorker project. Consolidate all added files for logging to a Logging directory.
+Create this as a sidecar service within the ChefKnifeStudios.TransitJazz.Server.TransitDataWorker project. Consolidate all added files for logging to a Logging directory.
 
 ## Definitions
 

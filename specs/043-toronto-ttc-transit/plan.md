@@ -23,7 +23,7 @@ The complete change set is: one `Cities:` entry in the Worker `appsettings.json`
 **Constraints**: Additive only — no behavior change for `marta`/`wmata`/`mbta`/`nymta`. Both TTC feeds keyless. The static URL contains a literal space that MUST be URL-encoded/quoted in config.
 **Scale/Scope**: 233 static routes (225 with shapes), 165 distinct RT route IDs, ~916 live route-attributed surface vehicles. Change = 4 config/constant/UI touch-points, zero new classes.
 
-**On-disk naming note**: the solution's root namespace/folders are `ChefKnifeStudios.MartaJazz.*` (not `TransitJazz`). All references below use the `MartaJazz` convention. The `TransitJazz` name appears only in the repo path and product-facing docs.
+**On-disk naming note**: the solution's root namespace/folders are `ChefKnifeStudios.TransitJazz.*` (not `TransitJazz`). All references below use the `MartaJazz` convention. The `TransitJazz` name appears only in the repo path and product-facing docs.
 
 ## Constitution Check
 
@@ -65,17 +65,17 @@ specs/043-toronto-ttc-transit/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   └── CityNames.cs                                      # + Ttc = "ttc"
 │
-├── Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+├── Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 │   ├── Program.cs                                        # UNCHANGED (ttc hits existing else arm → GtfsRtCity)
 │   └── appsettings.json                                  # + ttc Cities: entry (keyless, no rail, no normalization, telemetry true)
 │
-├── Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/
+├── Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/
 │   └── appsettings.json                                  # + ttc Cities: entry (static-zip loader parity)
 │
-└── Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+└── Client/ChefKnifeStudios.TransitJazz.Client.Shared/
     └── Components/FABs/CityFab.razor                     # + "Toronto, ON" menu button + HandleTtcClicked (#ttc) handler
 ```
 

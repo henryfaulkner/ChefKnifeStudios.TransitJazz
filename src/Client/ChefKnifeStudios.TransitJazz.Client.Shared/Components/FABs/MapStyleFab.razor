@@ -1,0 +1,34 @@
+@using ChefKnifeStudios.TransitJazz.Client.Core.Services
+@using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Models
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services
+@implements IDisposable
+@inject IEventNotificationService EventNotificationService
+@inject ISettingsService SettingsService
+
+<div class="mapstyle-fab-container">
+    <MatFAB Icon="@GetIcon()"
+            Mini="true"
+            @onclick="HandleToggleMapStyle" />
+</div>
+
+@code {
+    Settings _settings = new();
+
+    protected override void OnInitialized()
+    {
+        _settings = SettingsService.GetSettings();
+    }
+
+    string GetIcon() => _settings.IsStreetMapEnabled ? "map" : "layers";
+
+    void HandleToggleMapStyle()
+    {
+        var newValue = !_settings.IsStreetMapEnabled;
+        SettingsService.SetSettingValue(nameof(Settings.IsStreetMapEnabled), newValue);
+        _settings = SettingsService.GetSettings();
+        EventNotificationService.PostEvent(this, new GisSettingChangedEventArgs { IsStreetMapEnabled = _settings.IsStreetMapEnabled });
+    }
+
+    public void Dispose() { }
+}

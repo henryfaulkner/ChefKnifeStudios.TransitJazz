@@ -1,13 +1,13 @@
 # Contract: Map-Style Bus Event
 
 Decouples the Settings Blade toggle from the map, via the existing `IEventNotificationService` singleton bus
-(`ChefKnifeStudios.MartaJazz.Client.Core.Services`). Handlers are synchronous `void`; consumers MUST guard the
+(`ChefKnifeStudios.TransitJazz.Client.Core.Services`). Handlers are synchronous `void`; consumers MUST guard the
 event type and ignore others.
 
 ## Event: GisSettingChangedEventArgs
 
 ```csharp
-namespace ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs;
+namespace ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs;
 
 public class GisSettingChangedEventArgs : IEventArgs
 {

@@ -20,8 +20,8 @@ description: "Task list for Mobile Map Controls & Wider Default Zoom"
 ## Path Conventions
 
 Front-end-only feature. Two edit sites:
-- `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`
-- `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js`
+- `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`
+- `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js`
 
 ---
 
@@ -37,8 +37,8 @@ Front-end-only feature. Two edit sites:
 
 **Purpose**: Locate the exact change sites so all stories edit the right lines. No code change here.
 
-- [x] T002 [P] Confirm the default zoom site: open `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` and verify `DefaultCameraOptions => new() { Center = new Position(33.749, -84.388), Zoom = 9.5 }` (the value to change in US1).
-- [x] T003 [P] Confirm the interop site: open `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js` and verify the `ChefMap.createMap` `new maplibregl.Map({...})` options include `minZoom: 7, maxZoom: 18, dragRotate: false, touchZoomRotate: false` and the existing ctrl+drag handler below it (the lines US2/US3 modify).
+- [x] T002 [P] Confirm the default zoom site: open `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` and verify `DefaultCameraOptions => new() { Center = new Position(33.749, -84.388), Zoom = 9.5 }` (the value to change in US1).
+- [x] T003 [P] Confirm the interop site: open `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js` and verify the `ChefMap.createMap` `new maplibregl.Map({...})` options include `minZoom: 7, maxZoom: 18, dragRotate: false, touchZoomRotate: false` and the existing ctrl+drag handler below it (the lines US2/US3 modify).
 
 **Checkpoint**: Both edit sites located; user stories can proceed.
 
@@ -52,7 +52,7 @@ Front-end-only feature. Two edit sites:
 
 ### Implementation for User Story 1
 
-- [x] T004 [P] [US1] In `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`, change `DefaultCameraOptions` `Zoom = 9.5` to `Zoom = 8.5` (center unchanged). This is within `CameraOptions`' `[1,24]` clamp and above `minZoom: 7`, so no model change is needed (data-model.md).
+- [x] T004 [P] [US1] In `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`, change `DefaultCameraOptions` `Zoom = 9.5` to `Zoom = 8.5` (center unchanged). This is within `CameraOptions`' `[1,24]` clamp and above `minZoom: 7`, so no model change is needed (data-model.md).
 
 **Checkpoint**: First load shows a wider extent (FR-001, FR-002, SC-001). MVP deliverable on its own.
 

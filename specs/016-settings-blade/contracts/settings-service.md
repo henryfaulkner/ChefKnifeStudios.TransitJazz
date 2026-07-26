@@ -2,10 +2,10 @@
 
 Persistence of the `Settings` model to browser local storage. Wraps the **already-registered** synchronous
 `ISyncLocalStorageService` (Blazored.LocalStorage). Reproduces the reference design document's
-`SettingsService` verbatim, adapted to the `ChefKnifeStudios.MartaJazz` namespace.
+`SettingsService` verbatim, adapted to the `ChefKnifeStudios.TransitJazz` namespace.
 
 ```csharp
-namespace ChefKnifeStudios.MartaJazz.Client.Shared.Services;
+namespace ChefKnifeStudios.TransitJazz.Client.Shared.Services;
 
 public interface ISettingsService
 {

@@ -1,7 +1,7 @@
 # Contract: `Cities:` configuration array
 
 **Location**: worker `appsettings.json` / `appsettings.Development.json`
-(`src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`). Replaces the flat `Marta:`
+(`src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`). Replaces the flat `Marta:`
 block.
 
 ## Shape

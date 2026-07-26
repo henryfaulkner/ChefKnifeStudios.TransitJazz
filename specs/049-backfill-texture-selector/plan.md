@@ -101,7 +101,7 @@ Frontend-only. All edits live under `src/Client/` plus the standalone audition t
 under `tools/`. Concrete touch-points (verified against the current tree):
 
 ```text
-src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/
 ├── wwwroot/js/transit-synth.js                    # EDIT: _backfillMode/_percussion state;
 │                                                  #   setBackfillTexture export; _applyBackfillLayer
 │                                                  #   choke point; buildPercussion; getMasterBus +
@@ -115,7 +115,7 @@ src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
 ├── Components/FABs/BackfillTextureFab.razor.css    # NEW: FAB styling (light + dark)
 └── Resources/RouteFilterResources.resx            # EDIT: EN menu label keys
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/
+src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/
 ├── Layout/MainLayout.razor                        # EDIT: mount <BackfillTextureFab />
 └── Pages/TransitMap.razor.cs                      # EDIT: push persisted texture on init
                                                    #   (beside SetAudioEnabledAsync, ~line 110)

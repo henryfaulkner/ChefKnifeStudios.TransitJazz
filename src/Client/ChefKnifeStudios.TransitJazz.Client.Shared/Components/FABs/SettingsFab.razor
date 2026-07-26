@@ -1,0 +1,44 @@
+@using ChefKnifeStudios.TransitJazz.Client.Core.Services
+@using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
+@implements IDisposable
+@inject IEventNotificationService EventNotificationService
+
+@if (_showInDebug)
+{
+    <div class="settings-fab-container">
+        <MatFAB Icon="settings" Mini="true" @onclick="HandleFabClicked" />
+    </div>
+}
+
+@code {
+#if DEBUG
+    bool _showInDebug = true;
+#else
+    bool _showInDebug = false;
+#endif
+
+    bool _isOpen;
+
+    protected override void OnInitialized()
+    {
+        EventNotificationService.EventReceived += HandleEventReceived;
+    }
+
+    void HandleFabClicked()
+    {
+        var type = _isOpen ? BladeEventArgs.Types.Close : BladeEventArgs.Types.Settings;
+        EventNotificationService.PostEvent(this, new BladeEventArgs { Type = type });
+    }
+
+    void HandleEventReceived(object sender, IEventArgs e)
+    {
+        if (e is not BladeEventArgs blade) return;
+        _isOpen = blade.Type == BladeEventArgs.Types.Settings;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        EventNotificationService.EventReceived -= HandleEventReceived;
+    }
+}

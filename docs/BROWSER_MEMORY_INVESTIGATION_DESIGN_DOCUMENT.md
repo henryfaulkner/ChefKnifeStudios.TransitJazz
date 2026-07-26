@@ -175,7 +175,7 @@ budget:
 2. **The JS heap** — MapLibre GL (WebGL tiles, vector geometry, GeoJSON sources), Tone.js
    (decoded audio buffers + Web Audio graph), and the hand-written animator / tracker /
    pulse modules under
-   `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/`.
+   `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/`.
 
 A leak in *either* heap shows up as "the browser tab is using a lot of RAM." Both heaps
 have problems here.
@@ -188,7 +188,7 @@ Ordered by impact. Severity = (size of growth) × (how continuously it grows).
 
 ### 3.1 — CRITICAL: Vehicles are never evicted (`vehicle-animator.js`)
 
-**File:** `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/vehicle-animator.js`
+**File:** `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/vehicle-animator.js`
 
 `ChefMapAnimator.vehicles` (line 2) and `ChefMapAnimator.routeGeometry` (line 3) are plain
 objects used as maps keyed by vehicle ID / route ID. Throughout
@@ -214,7 +214,7 @@ Consequences:
 
 ### 3.2 — CRITICAL (paired): Checkpoint tracker vehicle state never pruned (`checkpoint-tracker.js`)
 
-**File:** `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/checkpoint-tracker.js`
+**File:** `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/checkpoint-tracker.js`
 
 `_vehicleState` (line 5, `Map<vehicleId, {...}>`) gains an entry on first observation of
 each vehicle (`_vehicleState.set(...)` at line 99) and is **only ever cleared wholesale**
@@ -232,7 +232,7 @@ Two hot paths allocate continuously:
   `{ type: 'FeatureCollection', features }` object **every animation frame**
   (`vehicle-animator.js:187,241`), ~60×/second.
 - **.NET side:** `HandleVehicleBatchAsync`
-  (`src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs:395–433`)
+  (`src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs:395–433`)
   runs `.Where().Select().SelectMany().ToArray()` (lines 404–408), then a second
   `.Where(...).ToArray()` (line 410), then projects ~186 records into anonymous objects
   (lines 414–426) which are JSON-serialized across the JS interop boundary on **every ~10 s
@@ -245,7 +245,7 @@ it spiky.
 
 ### 3.4 — MODERATE (conditional): `_pendingBatches` unbounded if the map never readies
 
-**File:** `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs:56`
+**File:** `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs:56`
 
 `_pendingBatches` accumulates any batch that arrives before the map signals ready
 (`HandleVehicleBatchAsync` → `_pendingBatches.Add(batch)` at line 399). It is drained
@@ -258,7 +258,7 @@ flaky mobile sessions specifically — relevant given the current branch is
 
 ### 3.5 — MINOR: Tone.js sampler cache only grows (`transit-synth.js`)
 
-**File:** `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/transit-synth.js`
+**File:** `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/transit-synth.js`
 
 `_instrumentCache` (line 7) holds one `T.Sampler` per route (set at line 87), each owning
 decoded MP3 audio buffers fetched from the soundfont CDN (lines 58–65). It is bounded by
@@ -433,10 +433,10 @@ the symptom and only §0/§3.6/§3.7 mattered.
 
 ## 7. Files referenced
 
-- `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/vehicle-animator.js`
-- `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/checkpoint-tracker.js`
-- `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/checkpoint-pulse.js`
-- `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/transit-synth.js`
-- `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js`
-- `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`
-- `src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/SignalRNotificationService.cs`
+- `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/vehicle-animator.js`
+- `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/checkpoint-tracker.js`
+- `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/checkpoint-pulse.js`
+- `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/transit-synth.js`
+- `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js`
+- `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`
+- `src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/SignalRNotificationService.cs`

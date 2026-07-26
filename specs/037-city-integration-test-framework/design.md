@@ -236,7 +236,7 @@ specs/037-.../fixtures/<city>/vehicles.pb
 
 ### 4.4 Test project layout
 
-Extends the existing `ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests` (static +
+Extends the existing `ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests` (static +
 endpoints) and `…TransitDataWorker.Tests` (index + snap), keeping the split that
 already exists rather than inventing a third project:
 

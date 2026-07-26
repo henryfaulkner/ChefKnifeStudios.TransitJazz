@@ -7,7 +7,7 @@ redefined.
 
 ---
 
-## Shared DTOs (WebAPI produces, Worker consumes — `src/ChefKnifeStudios.MartaJazz.Shared/GtfsData/`)
+## Shared DTOs (WebAPI produces, Worker consumes — `src/ChefKnifeStudios.TransitJazz.Shared/GtfsData/`)
 
 ### `SubwayStopOffset` (new file `SubwayStopOffset.cs`)
 

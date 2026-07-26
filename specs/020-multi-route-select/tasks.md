@@ -24,8 +24,8 @@ Foundational phase and each story then wires one consumer to them.
 
 ## Path Conventions
 
-- Shared RCL: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`
-- WASM host: `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`
+- Shared RCL: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`
+- WASM host: `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/`
 
 ---
 
@@ -45,7 +45,7 @@ the single source of truth that ALL five stories read. Per contract `route-selec
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete. Every consumer (grid, map,
 bus count, blurb, tones) binds to these members.
 
-- [x] T002 In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs`, extend `IRouteFilterViewModel` with the new members from contract `route-selection-viewmodel.md`: add `void SelectAll()`, `bool IsSingleSelection { get; }`, and `IReadOnlyCollection<string> SelectedRouteIds { get; }` (keep existing `SelectRoute`, `ClearSelection`, `HasSelection`, `SelectedRouteId`, `ActiveBusCount`)
+- [x] T002 In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs`, extend `IRouteFilterViewModel` with the new members from contract `route-selection-viewmodel.md`: add `void SelectAll()`, `bool IsSingleSelection { get; }`, and `IReadOnlyCollection<string> SelectedRouteIds { get; }` (keep existing `SelectRoute`, `ClearSelection`, `HasSelection`, `SelectedRouteId`, `ActiveBusCount`)
 - [x] T003 In `RouteFilterViewModel.cs`, change `SelectRoute(RouteItem)` from set-one-clear-rest to a **toggle**: rebuild `RouteItems` with the acted route's `IsSelected` flipped and all others unchanged (reassign the `RouteItems` property so `PropertyChanged` fires — preserve the existing in-place-mutation caveat comment). Satisfies INV-1/INV-2 and acceptance vectors 1–3
 - [x] T004 In `RouteFilterViewModel.cs`, implement `SelectAll()` (rebuild `RouteItems` with every `IsSelected = true`; safe no-op when the list is empty) and confirm `ClearSelection()` empties the set (already does). Satisfies vectors 4–6
 - [x] T005 In `RouteFilterViewModel.cs`, implement the derived members: `SelectedRouteIds` = `RouteItems.Where(x => x.IsSelected).Select(x => x.RouteId)` materialized; `IsSingleSelection` = `SelectedRouteIds.Count == 1`; redefine `SelectedRouteId` to return the single id only when `IsSingleSelection` else `null`; ensure `HasSelection` = set non-empty (INV-1..INV-3)
@@ -67,11 +67,11 @@ two remain; map emphasizes the selected set and blurs the rest.
 
 ### Implementation for User Story 1
 
-- [x] T008 [US1] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteFilters.razor.cs`, change the interaction to a **persistent toggle**: remove `HandleMouseOut → ClearSelection()`; add a `HandleSelect(RouteItem)` that calls `RouteFilterViewModel.SelectRoute(item)` (per research Decision 2, prefer a click/tap toggle over hover). Keep the `PropertyChanged` subscription (already filters `RouteItems`/`HasSelection`/`ActiveBusCount`)
-- [x] T009 [US1] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteFilters.razor`, bind the toggle to `@onclick` (web click + mobile tap) and remove the `@onmouseover`/`@onmouseout` handlers; keep the de-emphasis class `route-filters__route-filter-disabled` driven by `HasSelection && !routeItem.IsSelected` (now reflects set membership for any number of selected routes)
-- [x] T010 [P] [US1] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js`, add `ChefMap.focusRoutes(containerDivId, routeIds)` per contract `map-multi-focus-interop.md`: build a `Set` from `routeIds`, iterate every `route-layer-*`, derive `routeId` from the layer id, emphasize layers in the set (opacity 0.95, `_routeColors[id]`) and blur the rest (opacity 0.3, grey). Leave existing `focusRoute`/`clearRouteFocus` intact
-- [x] T011 [P] [US1] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/Map.razor.Helper.cs`, add `public async Task FocusRoutesAsync(IEnumerable<string> routeIds)` wrapping `JsRuntime.InvokeVoidAsync("ChefMap.focusRoutes", ElementId, routeIds)` with the same try/catch console-log pattern as `FocusRouteAsync`
-- [x] T012 [US1] In `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`, update `OnRouteFilterPropertyChanged` to drive multi-focus: when `SelectedRouteIds` is non-empty call `_map.FocusRoutesAsync(SelectedRouteIds)`, else `_map.ClearRouteFocusAsync()` (replaces the current single `SelectedRouteId`/`FocusRouteAsync` branch); keep the `_mapReady`/`_map is null` guard and the `RouteItems`/`HasSelection` property filter
+- [x] T008 [US1] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteFilters.razor.cs`, change the interaction to a **persistent toggle**: remove `HandleMouseOut → ClearSelection()`; add a `HandleSelect(RouteItem)` that calls `RouteFilterViewModel.SelectRoute(item)` (per research Decision 2, prefer a click/tap toggle over hover). Keep the `PropertyChanged` subscription (already filters `RouteItems`/`HasSelection`/`ActiveBusCount`)
+- [x] T009 [US1] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteFilters.razor`, bind the toggle to `@onclick` (web click + mobile tap) and remove the `@onmouseover`/`@onmouseout` handlers; keep the de-emphasis class `route-filters__route-filter-disabled` driven by `HasSelection && !routeItem.IsSelected` (now reflects set membership for any number of selected routes)
+- [x] T010 [P] [US1] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js`, add `ChefMap.focusRoutes(containerDivId, routeIds)` per contract `map-multi-focus-interop.md`: build a `Set` from `routeIds`, iterate every `route-layer-*`, derive `routeId` from the layer id, emphasize layers in the set (opacity 0.95, `_routeColors[id]`) and blur the rest (opacity 0.3, grey). Leave existing `focusRoute`/`clearRouteFocus` intact
+- [x] T011 [P] [US1] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/Map.razor.Helper.cs`, add `public async Task FocusRoutesAsync(IEnumerable<string> routeIds)` wrapping `JsRuntime.InvokeVoidAsync("ChefMap.focusRoutes", ElementId, routeIds)` with the same try/catch console-log pattern as `FocusRouteAsync`
+- [x] T012 [US1] In `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`, update `OnRouteFilterPropertyChanged` to drive multi-focus: when `SelectedRouteIds` is non-empty call `_map.FocusRoutesAsync(SelectedRouteIds)`, else `_map.ClearRouteFocusAsync()` (replaces the current single `SelectedRouteId`/`FocusRouteAsync` branch); keep the `_mapReady`/`_map is null` guard and the `RouteItems`/`HasSelection` property filter
 - [x] T013 [US1] In `TransitMap.razor.cs`, re-apply the current focus after a basemap style swap (spec edge case / Principle VII): in the `GisSettingChangedEventArgs` handler, after the post-`style.load` `RenderRoutesAsync()`, if `RouteFilterViewModel.SelectedRouteIds` is non-empty call `_map.FocusRoutesAsync(SelectedRouteIds)` so the selection's blur survives the swap
 
 **Checkpoint**: Multiple routes can be selected and persist; the grid and map reflect the selected set;
@@ -89,10 +89,10 @@ changes without waiting for a new batch; clear → count = all buses.
 
 ### Implementation for User Story 2
 
-- [x] T014 [US2] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs`, retain the last batch's per-route running counts: in `OnNotificationReceived`, build a `Dictionary<string,int>` of `routeId → running count` from the `VehiclePositionBatchEvent` records (route via `route_short_name`, Principle VI) and store it on a field (replacing the current straight `Sum`)
+- [x] T014 [US2] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs`, retain the last batch's per-route running counts: in `OnNotificationReceived`, build a `Dictionary<string,int>` of `routeId → running count` from the `VehiclePositionBatchEvent` records (route via `route_short_name`, Principle VI) and store it on a field (replacing the current straight `Sum`)
 - [x] T015 [US2] In `RouteFilterViewModel.cs`, add a `RecomputeActiveBusCount()` helper applying the rule: `HasSelection ? sum of snapshot counts for routes in SelectedRouteIds : sum of all snapshot counts`. It MUST allow the count to drop to 0 for a non-empty selection whose routes have no running buses (do not keep a stale prior value — remove the existing `if (count > 0)` guard's stickiness)
 - [x] T016 [US2] In `RouteFilterViewModel.cs`, call `RecomputeActiveBusCount()` from BOTH triggers (FR-007): (a) at the end of `OnNotificationReceived` after refreshing the snapshot, and (b) at the end of each selection mutator (`SelectRoute`, `SelectAll`, `ClearSelection`) so the count tracks selection changes between batches
-- [x] T017 [US2] Verify `BusesRunningLabel` needs no change: it already binds `RouteFilterViewModel.ActiveBusCount` and subscribes to `PropertyChanged(ActiveBusCount)`. Confirm the scoped value renders in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/BusesRunningLabel.razor` (no edit expected; record if one is needed)
+- [x] T017 [US2] Verify `BusesRunningLabel` needs no change: it already binds `RouteFilterViewModel.ActiveBusCount` and subscribes to `PropertyChanged(ActiveBusCount)`. Confirm the scoped value renders in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/BusesRunningLabel.razor` (no edit expected; record if one is needed)
 
 **Checkpoint**: The count is selection-scoped when active, unscoped when empty, and updates on selection
 change. US1 + US2 both work independently.
@@ -109,7 +109,7 @@ clear → all routes audible.
 
 ### Implementation for User Story 3
 
-- [x] T018 [US3] In `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`, gate `OnCrossingsAsync` by the selected set per contract `tone-scoping.md`: keep the existing `if (!_audioEnabled) return;` FIRST (mute dominant, FR-009); read `var selected = RouteFilterViewModel.SelectedRouteIds;` and inside the loop `if (selected.Count > 0 && !selected.Contains(crossing.RouteId)) continue;` before `TriggerNoteAsync`. Preserve the existing per-crossing try/catch
+- [x] T018 [US3] In `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`, gate `OnCrossingsAsync` by the selected set per contract `tone-scoping.md`: keep the existing `if (!_audioEnabled) return;` FIRST (mute dominant, FR-009); read `var selected = RouteFilterViewModel.SelectedRouteIds;` and inside the loop `if (selected.Count > 0 && !selected.Contains(crossing.RouteId)) continue;` before `TriggerNoteAsync`. Preserve the existing per-crossing try/catch
 - [x] T019 [US3] Confirm tone-scope guarantees by inspection against contract table (muted=NO; empty+on=YES all; in-set+on=YES; not-in-set+on=NO) and verify the crossing's `RouteId` (`CrossingEventDto.RouteId`) is `route_short_name` so `selected.Contains` is a direct ordinal match (Principle VI); adjust the comparison to ordinal if needed
 - [x] T020 [US3] Check for any held-note (`triggerAttack`/`triggerRelease`) emission path outside `OnCrossingsAsync` (search the synth interop usage in TransitMap / CheckpointTracker wiring); if held notes are emitted elsewhere, apply the identical `selected.Count == 0 || selected.Contains(routeId)` gate there too (per contract `tone-scoping.md` Non-goals note). If no separate path exists, record that the single gate suffices
 
@@ -127,9 +127,9 @@ the unscoped default; both are safe no-ops while routes are still loading.
 
 ### Implementation for User Story 4
 
-- [x] T021 [P] [US4] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Resources/RouteFilterResources.resx`, add two EN strings (Principle XII, no inline copy): `SelectAllRoutes` = "Select all" and `ClearSelections` = "Clear selections" (`.es` deferred, consistent with 015/016/017)
-- [x] T022 [US4] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteFilters.razor.cs`, add `HandleSelectAll()` → `RouteFilterViewModel.SelectAll()` and `HandleClearSelections()` → `RouteFilterViewModel.ClearSelection()`
-- [x] T023 [US4] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteFilters.razor`, render the two controls (labels from `Loc["SelectAllRoutes"]` / `Loc["ClearSelections"]`) wired to the handlers, placed with the grid so they do not occlude map data (Principle X — no regression). Buttons are safe no-ops when no routes are loaded (VM handles the empty case)
+- [x] T021 [P] [US4] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Resources/RouteFilterResources.resx`, add two EN strings (Principle XII, no inline copy): `SelectAllRoutes` = "Select all" and `ClearSelections` = "Clear selections" (`.es` deferred, consistent with 015/016/017)
+- [x] T022 [US4] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteFilters.razor.cs`, add `HandleSelectAll()` → `RouteFilterViewModel.SelectAll()` and `HandleClearSelections()` → `RouteFilterViewModel.ClearSelection()`
+- [x] T023 [US4] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteFilters.razor`, render the two controls (labels from `Loc["SelectAllRoutes"]` / `Loc["ClearSelections"]`) wired to the handlers, placed with the grid so they do not occlude map data (Principle X — no regression). Buttons are safe no-ops when no routes are loaded (VM handles the empty case)
 
 **Checkpoint**: Bulk select/clear work; clear returns the app to its unscoped default. US1–US4 independent.
 
@@ -144,7 +144,7 @@ zero → hidden.
 
 ### Implementation for User Story 5
 
-- [x] T024 [US5] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteBlurbBar.razor.cs`, gate visibility on `IsSingleSelection` (FR-004): in `OnViewModelPropertyChanged`, set `_blurb = RouteFilterViewModel.IsSingleSelection ? RouteBlurbStore.GetForRoute(RouteFilterViewModel.SelectedRouteId!) : null;` so zero/two-plus selections hide the bar; keep the in-place update on single→single (FR-005) and the existing `RouteItems`/`HasSelection` subscription filter
+- [x] T024 [US5] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteBlurbBar.razor.cs`, gate visibility on `IsSingleSelection` (FR-004): in `OnViewModelPropertyChanged`, set `_blurb = RouteFilterViewModel.IsSingleSelection ? RouteBlurbStore.GetForRoute(RouteFilterViewModel.SelectedRouteId!) : null;` so zero/two-plus selections hide the bar; keep the in-place update on single→single (FR-005) and the existing `RouteItems`/`HasSelection` subscription filter
 
 **Checkpoint**: Blurb is a true single-route detail view. All five stories independently functional.
 

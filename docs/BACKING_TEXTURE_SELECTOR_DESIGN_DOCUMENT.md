@@ -1,7 +1,7 @@
 # Selectable Backfill Texture — Design Document
 
 **Status:** DESIGN — ready to implement, pending a percussion-audition pass (§9).
-**Component:** `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/transit-synth.js`
+**Component:** `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/transit-synth.js`
 (engine) + a new `BackfillTextureFab.razor` (UI) + `Settings.cs`/interop plumbing +
 an **iteration on `tools/instrument-compat/`** (audition surface, §9).
 **Depends on:** the shipped synth build (Tone.js v15 Sampler chain + master bus already in

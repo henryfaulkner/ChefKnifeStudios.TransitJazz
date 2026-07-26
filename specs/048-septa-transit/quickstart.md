@@ -12,7 +12,7 @@ reachability + a live smoke test + the new unit tests for the nested-zip logic.
 ## Steps
 
 ### 1. Add the `Septa` constant
-`src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs` → add `public const string Septa = "septa";`.
+`src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs` → add `public const string Septa = "septa";`.
 
 ### 2. Add the Worker `Cities:` entry
 `src/Server/…TransitDataWorker/appsettings.json` → append the canonical `septa` object

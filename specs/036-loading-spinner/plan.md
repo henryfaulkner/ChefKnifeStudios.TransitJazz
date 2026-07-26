@@ -71,7 +71,7 @@ specs/036-loading-spinner/
 ### Source Code (repository root)
 
 ```text
-src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/wwwroot/
+src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/wwwroot/
 ├── index.html           # MODIFIED: spinner markup inside #app + inline pre-boot theme script
 └── css/
     └── app.css          # MODIFIED: spinner + keyframes CSS with light/dark variants

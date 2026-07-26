@@ -3,7 +3,7 @@
 ## C# contract
 
 ```csharp
-namespace ChefKnifeStudios.MartaJazz.Shared.GtfsData;
+namespace ChefKnifeStudios.TransitJazz.Shared.GtfsData;
 
 public sealed record RouteShapeProperties(
     string RouteId,

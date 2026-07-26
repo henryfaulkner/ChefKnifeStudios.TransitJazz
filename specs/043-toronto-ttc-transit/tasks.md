@@ -19,14 +19,14 @@ enable US1 and US2); each user-story phase is then an independently-runnable ver
 
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: Which user story this task belongs to (US1, US2, US3)
-- Exact file paths are included. Root namespace is `ChefKnifeStudios.MartaJazz.*` (repo path says TransitJazz).
+- Exact file paths are included. Root namespace is `ChefKnifeStudios.TransitJazz.*` (repo path says TransitJazz).
 
 ## Path Conventions
 
-- Shared: `src/ChefKnifeStudios.MartaJazz.Shared/`
-- Worker: `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`
-- WebAPI: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/`
-- Client: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`
+- Shared: `src/ChefKnifeStudios.TransitJazz.Shared/`
+- Worker: `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`
+- WebAPI: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/`
+- Client: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`
 
 ---
 
@@ -45,10 +45,10 @@ enable US1 and US2); each user-story phase is then an independently-runnable ver
 
 **⚠️ CRITICAL**: No user story verification can begin until this phase is complete.
 
-- [X] T003 [P] Add `public const string Ttc = "ttc";` to the `CityNames` class in `src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs` (alongside `Marta`/`Wmata`/`Mbta`/`Nymta`).
-- [X] T004 [P] Add the canonical `ttc` entry to the `Cities:` array in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.json`, exactly per `specs/043-toronto-ttc-transit/contracts/city-config.md` (Name `ttc`; one keyless `GtfsRtUrls` entry; one `%20`-encoded `StaticZipUrls` entry; `EmitsTelemetry: true`; NO `RailRealtime`, `RailRouteIdMap`, `RouteIdNormalization`, or `ApiKeyEnvVar`).
-- [X] T005 [P] Add the **identical** `ttc` entry to the `Cities:` array in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.json` (static-zip loader parity — must byte-match T004's entry so shapes and live vehicles agree).
-- [X] T006 Add the Toronto picker button + hash handler to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/CityFab.razor` per `specs/043-toronto-ttc-transit/contracts/city-picker.md`: a `MatListItem`/`MatButton` `Label="Toronto, ON"` `@onclick="HandleTtcClicked"` `Disabled="@(CurrentCity == CityNames.Ttc)"`, plus `async Task HandleTtcClicked()` setting `location.hash='ttc';location.reload()` (mirror `HandleMbtaClicked`).
+- [X] T003 [P] Add `public const string Ttc = "ttc";` to the `CityNames` class in `src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs` (alongside `Marta`/`Wmata`/`Mbta`/`Nymta`).
+- [X] T004 [P] Add the canonical `ttc` entry to the `Cities:` array in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json`, exactly per `specs/043-toronto-ttc-transit/contracts/city-config.md` (Name `ttc`; one keyless `GtfsRtUrls` entry; one `%20`-encoded `StaticZipUrls` entry; `EmitsTelemetry: true`; NO `RailRealtime`, `RailRouteIdMap`, `RouteIdNormalization`, or `ApiKeyEnvVar`).
+- [X] T005 [P] Add the **identical** `ttc` entry to the `Cities:` array in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json` (static-zip loader parity — must byte-match T004's entry so shapes and live vehicles agree).
+- [X] T006 Add the Toronto picker button + hash handler to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/CityFab.razor` per `specs/043-toronto-ttc-transit/contracts/city-picker.md`: a `MatListItem`/`MatButton` `Label="Toronto, ON"` `@onclick="HandleTtcClicked"` `Disabled="@(CurrentCity == CityNames.Ttc)"`, plus `async Task HandleTtcClicked()` setting `location.hash='ttc';location.reload()` (mirror `HandleMbtaClicked`).
 - [X] T007 Rebuild the solution (`dotnet build`) and confirm it compiles with no new warnings after T003–T006.
 
 **Checkpoint**: TTC is registered end-to-end (Shared constant + Worker feed + WebAPI shapes + picker). User-story verification can now begin.
@@ -147,7 +147,7 @@ enable US1 and US2); each user-story phase is then an independently-runnable ver
 
 ```bash
 # The three config/constant edits touch different files — do them together:
-Task: "Add Ttc constant in src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs"          # T003
+Task: "Add Ttc constant in src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs"          # T003
 Task: "Add ttc Cities: entry in TransitDataWorker/appsettings.json"                      # T004
 Task: "Add ttc Cities: entry in WebAPI/appsettings.json"                                 # T005
 # Then T006 (CityFab.razor), then T007 rebuild.

@@ -10,9 +10,9 @@ This feature has no application data model — it is pure CI/CD infrastructure. 
 |-------|-------|
 | Trigger | `push` to `main` |
 | Runner | `ubuntu-latest` |
-| Build project | `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/ChefKnifeStudios.MartaJazz.Client.WebApp.csproj` |
+| Build project | `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj` |
 | Publish configuration | `Release`, `/p:BlazorEnableCompression=false` |
-| Artifact output path | `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/bin/Release/net10.0/publish/wwwroot` |
+| Artifact output path | `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/bin/Release/net10.0/publish/wwwroot` |
 | Artifact name | `blazor-client` |
 | Environment header | `{"headers":{"Blazor-Environment":"Production"}}` |
 | Deploy target | Azure Static Web App (via `AZURE_STATIC_WEB_APP_TOKEN`) |

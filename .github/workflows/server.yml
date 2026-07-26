@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, debt\rename-namespace]
 
 env:
   REGISTRY: chefknife.azurecr.io

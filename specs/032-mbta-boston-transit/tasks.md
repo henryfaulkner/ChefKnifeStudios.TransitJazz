@@ -19,7 +19,7 @@ description: "Task list for feature: Add Boston (MBTA) as a Transit City"
 
 ## Path Conventions
 
-Web app — real paths from plan.md. Worker: `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`. WebAPI: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/`. Shared: `src/ChefKnifeStudios.MartaJazz.Shared/`. Client RCL: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`.
+Web app — real paths from plan.md. Worker: `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`. WebAPI: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/`. Shared: `src/ChefKnifeStudios.TransitJazz.Shared/`. Client RCL: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`.
 
 ---
 
@@ -27,7 +27,7 @@ Web app — real paths from plan.md. Worker: `src/Server/ChefKnifeStudios.MartaJ
 
 **Purpose**: Nothing to scaffold — this feature consumes the merged feature-031 multi-city machinery (`ITransitCity`, `GtfsRtCity`, `CityConfig`, `Cities:` config arrays, per-city SignalR groups). No new projects, files, or dependencies.
 
-- [X] T001 Confirm the 031 multi-city machinery is present before starting: `GtfsRtCity` auto-registration for non-`marta` cities exists at `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Program.cs:39-42`, and `GtfsStaticLoader.LoadCityEntries()` iterates `Cities:` at `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs:59-86`. (Read-only sanity check; no edits.)
+- [X] T001 Confirm the 031 multi-city machinery is present before starting: `GtfsRtCity` auto-registration for non-`marta` cities exists at `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Program.cs:39-42`, and `GtfsStaticLoader.LoadCityEntries()` iterates `Cities:` at `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs:59-86`. (Read-only sanity check; no edits.)
 
 ---
 
@@ -37,7 +37,7 @@ Web app — real paths from plan.md. Worker: `src/Server/ChefKnifeStudios.MartaJ
 
 **⚠️ CRITICAL**: T002 must land before T007 (CityFab references `CityNames.Mbta`).
 
-- [X] T002 Add `public const string Mbta = "mbta";` to `CityNames` in `src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs` (next to `Marta`/`Wmata`).
+- [X] T002 Add `public const string Mbta = "mbta";` to `CityNames` in `src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs` (next to `Marta`/`Wmata`).
 
 **Checkpoint**: The stable city key exists; user-story config and UI can reference it.
 
@@ -51,10 +51,10 @@ Web app — real paths from plan.md. Worker: `src/Server/ChefKnifeStudios.MartaJ
 
 **Note**: The four config edits are the same JSON object (contracts/mbta-city-config.md). They are in four different files, so they are parallelizable, but they are tiny — apply together.
 
-- [X] T003 [P] [US1] Append the MBTA entry (Name `mbta`, single `GtfsRtUrls`, single `StaticZipUrls`, `EmitsTelemetry:false`, **no** `ApiKeyEnvVar`/`RailRealtime`/`RailRouteIdMap`) to the `Cities` array in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.json`. Use the exact object from `contracts/mbta-city-config.md`.
-- [X] T004 [P] [US1] Append the same MBTA entry to the `Cities` array in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.Development.json`.
-- [X] T005 [P] [US1] Append the same MBTA entry to the `Cities` array in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.json`.
-- [X] T006 [P] [US1] Append the same MBTA entry to the `Cities` array in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.Development.json`.
+- [X] T003 [P] [US1] Append the MBTA entry (Name `mbta`, single `GtfsRtUrls`, single `StaticZipUrls`, `EmitsTelemetry:false`, **no** `ApiKeyEnvVar`/`RailRealtime`/`RailRouteIdMap`) to the `Cities` array in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json`. Use the exact object from `contracts/mbta-city-config.md`.
+- [X] T004 [P] [US1] Append the same MBTA entry to the `Cities` array in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.Development.json`.
+- [X] T005 [P] [US1] Append the same MBTA entry to the `Cities` array in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json`.
+- [X] T006 [P] [US1] Append the same MBTA entry to the `Cities` array in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.Development.json`.
 
 **Checkpoint**: Run worker + WebAPI. Worker logs MBTA vehicles published each cycle (~300); WebAPI logs `city mbta loaded N route shapes` (~hundreds). US1 is functional via direct `#mbta` URL — no picker entry yet.
 
@@ -68,7 +68,7 @@ Web app — real paths from plan.md. Worker: `src/Server/ChefKnifeStudios.MartaJ
 
 **Depends on**: T002 (`CityNames.Mbta`).
 
-- [X] T007 [US2] Add a "Boston, MA" `MatListItem` (mirroring the WMATA item, `Disabled="@(CurrentCity == CityNames.Mbta)"`) and a `HandleMbtaClicked` handler (mirroring `HandleWmataClicked`, setting `location.hash='mbta'`) in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/CityFab.razor`.
+- [X] T007 [US2] Add a "Boston, MA" `MatListItem` (mirroring the WMATA item, `Disabled="@(CurrentCity == CityNames.Mbta)"`) and a `HandleMbtaClicked` handler (mirroring `HandleWmataClicked`, setting `location.hash='mbta'`) in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/CityFab.razor`.
 
 **Checkpoint**: All three cities selectable from the picker; US1 + US2 both work.
 

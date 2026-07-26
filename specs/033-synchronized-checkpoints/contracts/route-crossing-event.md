@@ -7,7 +7,7 @@ publisher, or client-wiring change.
 ## Shape
 
 ```csharp
-namespace ChefKnifeStudios.MartaJazz.Shared.Events;
+namespace ChefKnifeStudios.TransitJazz.Shared.Events;
 
 public sealed record RouteCrossingBatchEvent(
     IEnumerable<RouteCrossingBatchEvent.RouteCrossingRecord> BatchRecords

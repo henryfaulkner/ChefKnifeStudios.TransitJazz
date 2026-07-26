@@ -43,7 +43,7 @@ used by `GtfsStaticLoader`). No new NuGet packages.
 **Storage**: In-memory only. Station/offset data is served from the WebAPI's existing
 `IKeyValueRepository<string>` (same store as route shapes) and cached in-process by
 `NymtaCity`. No database, no persisted artifact.
-**Testing**: xUnit (`ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests` and
+**Testing**: xUnit (`ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests` and
 `...WebAPI.Tests`), following the existing `CityLoopTests` / `FailureIsolationTests` style
 (pure unit tests over synthesis math and fault isolation; no live-feed dependency).
 **Target Platform**: Linux container (`TransitDataWorker` Docker image + WebAPI container).
@@ -104,11 +104,11 @@ specs/040-nymta-subway-interpolation/
 
 ### Source Code (repository root)
 
-Real project layout (note: root namespace is `ChefKnifeStudios.MartaJazz`, projects live
+Real project layout (note: root namespace is `ChefKnifeStudios.TransitJazz`, projects live
 under `src/Server/`; the constitution's tree is aspirational — trust these paths):
 
 ```text
-src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 ├── Cities/
 │   ├── ITransitCity.cs              # unchanged (contract already fits)
 │   ├── MartaCity.cs                 # precedent to copy (bus + rail merge)
@@ -123,7 +123,7 @@ src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
 ├── Worker.cs                        # UNCHANGED (the whole point)
 └── Program.cs                       # + one registration branch: NymtaCity for CityNames.Nymta
 
-src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/
+src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/
 ├── GtfsStatic/
 │   ├── GtfsStaticLoader.cs          # + parse stops.txt + stop_times.txt → offset table (subway city only)
 │   └── SubwayStopOffsetBuilder.cs   # NEW — the stop→shape-offset derivation, keyed by {city}
@@ -131,16 +131,16 @@ src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/
 │   └── GtfsEndpoints.cs             # + MapGet /gtfs/subway/stop-offsets
 └── Program.cs                       # unchanged (endpoint auto-mapped via MapGtfsEndpoints)
 
-src/ChefKnifeStudios.MartaJazz.Shared/
+src/ChefKnifeStudios.TransitJazz.Shared/
 ├── CityNames.cs                     # + public const string Nymta = "nymta";
 ├── ApiEndpoints.cs                  # + Gtfs.GetSubwayStopOffsets = "/gtfs/subway/stop-offsets"
 └── GtfsData/
     └── SubwayStopOffset.cs          # NEW — shared DTO for the endpoint payload (WebAPI↔Worker)
 
-src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/
+src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/
 └── SubwaySynthesisTests.cs          # NEW — synthesis math, endpoint-cache, fault isolation
 
-src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/
+src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/
 └── SubwayStopOffsetBuilderTests.cs  # NEW — stops.txt/stop_times.txt → offset table
 
 appsettings.json (Worker + WebAPI)   # + "nymta" Cities: entry (subway static zip + 8 RT URLs)

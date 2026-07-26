@@ -10,7 +10,7 @@ End-to-end verification, from unit test to buses on the map. Assumes the solutio
 ## 1. Unit test — `RouteIdNormalizer` (fastest inner loop)
 
 ```pwsh
-dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests `
+dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests `
   --filter "FullyQualifiedName~RouteIdNormalizerTests"
 ```
 
@@ -19,7 +19,7 @@ dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests
 ## 2. Regression guard — existing cities unchanged
 
 ```pwsh
-dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests
+dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests
 ```
 
 **Expect**: all pre-existing tests (`CityLoopTests`, `NoNymtaLeakageTests`, `FailureIsolationTests`, etc.) still green — proves the new normalization step is inert for `marta`/`wmata`/`mbta`/`nymta` (SC-004).

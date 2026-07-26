@@ -7,7 +7,7 @@ This feature introduces **no new types**. It reuses existing entities with a new
 ### TTC `CityConfig` entry
 
 The only new "data" is one element in the `Cities:` config array, bound to the existing
-`ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Cities.CityConfig`.
+`ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities.CityConfig`.
 
 | Field | Value for TTC | Notes |
 |-------|---------------|-------|

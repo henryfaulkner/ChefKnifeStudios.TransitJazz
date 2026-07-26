@@ -19,10 +19,10 @@ description: "Task list for Stale Snapshot Filter implementation"
 
 ## Path Conventions
 
-Real codebase namespace is `ChefKnifeStudios.MartaJazz.*` (the constitution's `TransitJazz.*` is stale). Paths:
+Real codebase namespace is `ChefKnifeStudios.TransitJazz.*` (the constitution's `TransitJazz.*` is stale). Paths:
 
-- Production: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/SignalR/ILastBatchCache.cs`
-- Tests: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/LastBatchCacheTests.cs`
+- Production: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/SignalR/ILastBatchCache.cs`
+- Tests: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/LastBatchCacheTests.cs`
 
 ---
 
@@ -30,7 +30,7 @@ Real codebase namespace is `ChefKnifeStudios.MartaJazz.*` (the constitution's `T
 
 **Purpose**: Confirm the working surface before touching code. No new project, package, or scaffolding is required.
 
-- [X] T001 Confirm branch `023-stale-snapshot-filter` is checked out and the WebAPI solution builds clean as a baseline: `dotnet build src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/ChefKnifeStudios.MartaJazz.Server.WebAPI.csproj` and `dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests.csproj` (all existing tests green).
+- [X] T001 Confirm branch `023-stale-snapshot-filter` is checked out and the WebAPI solution builds clean as a baseline: `dotnet build src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj` and `dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.csproj` (all existing tests green).
 
 ---
 
@@ -40,8 +40,8 @@ Real codebase namespace is `ChefKnifeStudios.MartaJazz.*` (the constitution's `T
 
 **⚠️ CRITICAL**: No user story is verifiable until this phase is complete (all three stories test the same class).
 
-- [X] T002 Add a test-data factory overload to `LastBatchCacheTests.cs` that builds an `EventEnvelope` batch from explicit records with controllable `VehicleId`, position (`CurrentNearestLat`/`CurrentNearestLon`), and `IsStale` — keeping the existing `MakeBatch(params string[])` intact so untouched tests still compile. File: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/LastBatchCacheTests.cs`.
-- [X] T003 Rewrite the `LastBatchCache` class body in `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/SignalR/ILastBatchCache.cs` per `data-model.md`/`quickstart.md`: add `private readonly object _gate`, `private readonly Dictionary<string, RouteNearestPointBatchEvent.RouteNearestPointRecord> _vehicles`, and `private IReadOnlyList<EventEnvelope> _current = Array.Empty<EventEnvelope>()`. Leave the `ILastBatchCache` interface declaration byte-for-byte unchanged.
+- [X] T002 Add a test-data factory overload to `LastBatchCacheTests.cs` that builds an `EventEnvelope` batch from explicit records with controllable `VehicleId`, position (`CurrentNearestLat`/`CurrentNearestLon`), and `IsStale` — keeping the existing `MakeBatch(params string[])` intact so untouched tests still compile. File: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/LastBatchCacheTests.cs`.
+- [X] T003 Rewrite the `LastBatchCache` class body in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/SignalR/ILastBatchCache.cs` per `data-model.md`/`quickstart.md`: add `private readonly object _gate`, `private readonly Dictionary<string, RouteNearestPointBatchEvent.RouteNearestPointRecord> _vehicles`, and `private IReadOnlyList<EventEnvelope> _current = Array.Empty<EventEnvelope>()`. Leave the `ILastBatchCache` interface declaration byte-for-byte unchanged.
 - [X] T004 Implement `Set(batch)` merge under `lock (_gate)` in `ILastBatchCache.cs`: null-guard the batch; for each envelope where `Payload is RouteNearestPointBatchEvent rnp`, iterate `rnp.BatchRecords` — skip `IsStale == true`, upsert `_vehicles[rec.VehicleId] = rec` otherwise; skip non-matching payloads (defensive). (Implements merge rule R4/R6, FR-003–FR-006, FR-008.)
 - [X] T005 Implement the snapshot rebuild + publish at the end of `Set` in `ILastBatchCache.cs`: if `_vehicles.Count == 0` set `_current = Array.Empty<EventEnvelope>()`, else build a single-element list `[ EventEnvelope(nameof(RouteNearestPointBatchEvent), DateTimeOffset.UtcNow, new RouteNearestPointBatchEvent(_vehicles.Values.ToList())) ]`; publish via `Volatile.Write(ref _current, …)`. Keep `Current => Volatile.Read(ref _current)`. (Implements R3/R5/R7, FR-002, FR-011, FR-012, FR-013.)
 
@@ -77,7 +77,7 @@ Real codebase namespace is `ChefKnifeStudios.MartaJazz.*` (the constitution's `T
 
 ### Tests for User Story 2 ⚠️
 
-- [X] T010 [P] [US2] Confirm the existing `WorkerTransitHubTests.PublishBatch_StillRelays` and `PublishBatch_CachesBatch` still pass unchanged, proving the relay path is untouched (FR-009/FR-010). File: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/WorkerTransitHubTests.cs`.
+- [X] T010 [P] [US2] Confirm the existing `WorkerTransitHubTests.PublishBatch_StillRelays` and `PublishBatch_CachesBatch` still pass unchanged, proving the relay path is untouched (FR-009/FR-010). File: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/WorkerTransitHubTests.cs`.
 - [X] T011 [P] [US2] Add test: a batch containing both non-stale and stale records, when relayed, is forwarded in full (stale records included) — assert the relayed argument is reference-equal/sequence-equal to the input batch, confirming filtering touches only the cache. File: `WorkerTransitHubTests.cs`.
 
 ### Implementation for User Story 2

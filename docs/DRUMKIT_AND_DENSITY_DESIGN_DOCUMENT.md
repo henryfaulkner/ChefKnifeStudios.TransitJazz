@@ -14,7 +14,7 @@
 **Status:** DEFERRED — parked pending a decision on what data should drive percussion.
 **Depends on:** `docs/SYNTH_REFACTOR_DESIGN_DOCUMENT.md` (the pure-synthesis engine this
 drumkit would plug into) landing first.
-**Component (future):** `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/transit-synth.js`
+**Component (future):** `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/transit-synth.js`
 
 ---
 

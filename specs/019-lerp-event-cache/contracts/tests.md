@@ -2,11 +2,11 @@
 
 Pure unit tests only — **integration tests are out of scope for this feature.**
 
-New xUnit project: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests`.
+New xUnit project: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests`.
 
 ## Project setup
 
-`.csproj` mirrors `ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests`:
+`.csproj` mirrors `ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests`:
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
@@ -27,8 +27,8 @@ New xUnit project: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests`.
          prefer a hand-written fake if it keeps the dependency out. -->
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\ChefKnifeStudios.MartaJazz.Server.WebAPI\ChefKnifeStudios.MartaJazz.Server.WebAPI.csproj" />
-    <ProjectReference Include="..\..\ChefKnifeStudios.MartaJazz.Shared\ChefKnifeStudios.MartaJazz.Shared.csproj" />
+    <ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.WebAPI\ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj" />
+    <ProjectReference Include="..\..\ChefKnifeStudios.TransitJazz.Shared\ChefKnifeStudios.TransitJazz.Shared.csproj" />
   </ItemGroup>
 </Project>
 ```
@@ -74,7 +74,7 @@ Integration tests are not part of this feature. The following are verified manua
 ## Run
 
 ```pwsh
-dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests
+dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests
 # or target this feature's tests across the solution:
 dotnet test --filter "FullyQualifiedName~LastBatchCache|FullyQualifiedName~WorkerTransitHub"
 ```

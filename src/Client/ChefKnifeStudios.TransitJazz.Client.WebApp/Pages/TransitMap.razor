@@ -1,0 +1,77 @@
+@page "/"
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Components
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<RouteFilterResources> Loc
+
+<div class="transit-map-container">
+    @if (!_audioUnlocked)
+    {
+        <AudioUnlockOverlay OnEnable="EnableAudioAsync" />
+    }
+
+    <div id="@_accordionElementId" class="transit-map__accordion @(_isMobile ? "transit-map__accordion-mobile" : "") @(_audioUnlocked ? "transit-map__accordion-unlocked" : "")">
+        <MatAccordion Class="">
+            <MatExpansionPanel @bind-Expanded="_accordionExpanded">
+                <MatExpansionPanelSummary>
+                    <MatExpansionPanelHeader>@Loc["RoutesLabel"]</MatExpansionPanelHeader>
+                    <MatExpansionPanelSubHeader>
+                        @if (_isMobile)
+                        {
+                            <TransitRunningLabel />
+                        }
+                    </MatExpansionPanelSubHeader>
+                </MatExpansionPanelSummary>
+                <MatExpansionPanelDetails>
+                    <RouteFilters />
+                </MatExpansionPanelDetails>
+            </MatExpansionPanel>
+        </MatAccordion>
+    </div>
+
+    @if (!_isMobile)
+    {
+        <div class="transit-map__top-text">
+            <TransitRunningLabel />
+        </div>
+    }
+
+    <Map CameraOptions="DefaultCameraOptions"
+        OnMapReady="OnMapReadyAsync"
+        OnMapBodyClicked="OnMapBodyClickedAsync"
+        OnBusMarkerClicked="OnVehicleMarkerClickedAsync"
+    />
+    <RouteBlurbBar />
+</div>
+
+<style>
+    .transit-map__accordion {
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 425px;
+        z-index: 10;
+    }
+
+    .transit-map__accordion-mobile {
+        width: 100%;
+    }
+
+    .transit-map__accordion-unlocked {
+        z-index: 80;
+    }
+
+    .transit-map__top-text {
+        position: absolute;
+        left: 50%;
+        top: 24px;
+        transform: translateX(-50%);
+        z-index: 10;
+        padding: 0.5rem 1rem;
+        user-select: none;
+        pointer-events: none;
+    }
+
+</style>
+

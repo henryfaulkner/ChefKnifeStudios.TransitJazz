@@ -36,7 +36,7 @@ So: ~111k coordinate pairs marshalled across the WASM↔JS boundary **~3×** (~3
 
 **Decision (confirmed with stakeholder):** simplify **server-side, at ingest**, not client-side. Rationale: it happens once at GTFS load, shrinks what's *stored*, shrinks *every* serve, and shrinks the 2.4 MB download itself — so the client never even pays to receive or parse the dense geometry.
 
-**Where:** `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs`, in `StartAsync`, on the `points` list **before** `BuildLineStringFeature` (line ~53). This is the single ingest point; it runs once per data load.
+**Where:** `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs`, in `StartAsync`, on the `points` list **before** `BuildLineStringFeature` (line ~53). This is the single ingest point; it runs once per data load.
 
 **Algorithm:** Ramer–Douglas–Peucker (RDP) line simplification on the ordered `(Lat, Lon, Seq)` points.
 - Implement a small static RDP helper in C# (no new NuGet dependency — it's ~30 lines). Operate on the lon/lat sequence; use perpendicular distance. For geographic coordinates at city scale a planar (equirectangular-projected) perpendicular distance is perfectly adequate — convert degrees→meters with a cos(lat) longitude scale, or simply use a degree-space epsilon tuned empirically (see tolerance below).
@@ -57,7 +57,7 @@ So: ~111k coordinate pairs marshalled across the WASM↔JS boundary **~3×** (~3
 
 **Why:** 86 `addLayer` calls each force a MapLibre style re-validation. One source + one layer styled by a per-feature `color` property is dramatically cheaper to add and to restyle. It also fixes `focusRoutes`/`clearRouteFocus`/`focusRoute` (`map-interop.js`), which currently **iterate every `route-layer-*` layer** calling `setPaintProperty` per layer.
 
-**JS (`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js`):**
+**JS (`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js`):**
 - Add **one** source `routes` (FeatureCollection of LineStrings, each feature carries `properties.routeId` and `properties.color`) and **one** layer `routes-layer` (`type: 'line'`), inserted beneath `vehicles-layer` (preserve current z-order: routes under vehicles under trigger-points/pulse).
 - `line-color`: data-driven — `['coalesce', ['get', 'color'], '#6b7280']` for the base, OR drive focus via **feature-state** (preferred) so focus/unfocus is a `setFeatureState` call, not a paint rebuild.
 - **Focus/hover** (`focusRoutes`, `focusRoute`, `clearRouteFocus`): reimplement using `line-opacity`/`line-color` expressions keyed off feature-state (`['case', ['boolean', ['feature-state','focused'], false], 0.95, 0.3]`) or a `match` expression on `routeId`. Set feature-state via `map.setFeatureState({source:'routes', id: <featureId>}, {focused:true})`. NOTE: feature-state requires each feature to have a stable **`id`** (numeric or string) — assign `feature.id = routeId` (or an index) when building the collection.
@@ -101,7 +101,7 @@ So: ~111k coordinate pairs marshalled across the WASM↔JS boundary **~3×** (~3
 
 | File | Change | Tranche-2 part |
 |---|---|---|
-| `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs` | Add RDP `Simplify(...)` static helper + `SimplifyToleranceMeters` const; simplify `points` before `BuildLineStringFeature`. | #1 |
+| `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs` | Add RDP `Simplify(...)` static helper + `SimplifyToleranceMeters` const; simplify `points` before `BuildLineStringFeature`. | #1 |
 | `src/Client/.../wwwroot/js/map-interop.js` | New `routes` single source/layer + data-driven/feature-state color; rewrite `focusRoutes`/`focusRoute`/`clearRouteFocus`; new `addAllRoutes`; update `setMapStyle` restore for the single routes source. | #2, #3 |
 | `src/Client/.../Components/Map.razor.Helper.cs` | Add `AddAllRoutesAsync`. (Old `AddRouteShapeFeatureAsync`/`LoadRouteGeometryForAnimationAsync` may be retired or kept unused — prefer removing dead paths.) | #3 |
 | `src/Client/.../Pages/TransitMap.razor.cs` | Rewrite `RenderRoutesAsync` to build one payload + single call; drop per-route `Task.Delay(1)`/`StateHasChanged`; defer `ConfigureTrackerForRouteAsync` loop past first-interactive. | #3, #4 |

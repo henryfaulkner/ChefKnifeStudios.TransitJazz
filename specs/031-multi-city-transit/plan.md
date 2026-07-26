@@ -45,7 +45,7 @@ GtfsStaticLoader + GtfsEndpoints), Client (SignalR service + shape fetch + Route
 worker config.
 
 **Note on namespaces**: the design doc uses the logical product name `TransitJazz`; the actual
-source root namespace is `ChefKnifeStudios.MartaJazz` under `src/`. All file references below use the
+source root namespace is `ChefKnifeStudios.TransitJazz` under `src/`. All file references below use the
 real paths.
 
 ## Constitution Check
@@ -92,12 +92,12 @@ specs/031-multi-city-transit/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   ├── GtfsData/RouteShapeFeature.cs              # ADD: string? City to RouteShapeProperties
 │   └── ITransitHubPublisher.cs                    # CHANGE: PublishBatchAsync(string city, …)
 │
 ├── Server/
-│   ├── ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+│   ├── ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 │   │   ├── Cities/                                # NEW folder
 │   │   │   ├── ITransitCity.cs                    # NEW: strategy interface (§3)
 │   │   │   ├── GtfsRtCity.cs                      # NEW: generic config-driven impl
@@ -108,7 +108,7 @@ src/
 │   │   ├── RailRealtime/RailRealtimeAdapter.cs    # UNCHANGED class; DI registration retired, composed into MartaCity
 │   │   └── Program.cs                             # CHANGE: bind Cities:; register named impls else GtfsRtCity
 │   │
-│   └── ChefKnifeStudios.MartaJazz.Server.WebAPI/
+│   └── ChefKnifeStudios.TransitJazz.Server.WebAPI/
 │       ├── SignalR/TransitHub.cs                  # CHANGE: add JoinCity(string); on join replay cache.Current(city)
 │       ├── SignalR/WorkerTransitHub.cs            # CHANGE: PublishBatch(city, batch) → cache per city → Clients.Group(city)
 │       ├── SignalR/ILastBatchCache.cs             # CHANGE: key cache by city — Set(city, batch)/Current(city)
@@ -116,11 +116,11 @@ src/
 │       └── EndpointGroups/GtfsEndpoints.cs        # CHANGE: /gtfs/routes/shapes accepts ?city=; keys {city}:{routeId}
 │
 └── Client/
-    ├── ChefKnifeStudios.MartaJazz.Client.Core/Services/SignalRNotificationService.cs  # CHANGE: read city from URL; JoinCity(city) after connect
-    └── ChefKnifeStudios.MartaJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs    # CHANGE: pass ?city=; consume RouteShapeProperties.City
+    ├── ChefKnifeStudios.TransitJazz.Client.Core/Services/SignalRNotificationService.cs  # CHANGE: read city from URL; JoinCity(city) after connect
+    └── ChefKnifeStudios.TransitJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs    # CHANGE: pass ?city=; consume RouteShapeProperties.City
 
 # Config
-src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings*.json       # CHANGE: flat Marta: → Cities: array; WMATA key via CA secret/env var
+src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings*.json       # CHANGE: flat Marta: → Cities: array; WMATA key via CA secret/env var
 ```
 
 **Structure Decision**: Web application (constitution Principle I). No new projects. The only new

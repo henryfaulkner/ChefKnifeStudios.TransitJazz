@@ -33,15 +33,15 @@ reference `Server.WebAPI` directly.
 
 ```
 src/Server/
-  ChefKnifeStudios.MartaJazz.Server.Core/
+  ChefKnifeStudios.TransitJazz.Server.Core/
     Interfaces/
       IKeyValueRepository.cs
-  ChefKnifeStudios.MartaJazz.Server.BL/
+  ChefKnifeStudios.TransitJazz.Server.BL/
     Services/
       TestService.cs                  ← empty placeholder, delete
-  ChefKnifeStudios.MartaJazz.Server.Infrastructure/
+  ChefKnifeStudios.TransitJazz.Server.Infrastructure/
     InMemoryKeyValueRepository.cs
-  ChefKnifeStudios.MartaJazz.Server.WebAPI/
+  ChefKnifeStudios.TransitJazz.Server.WebAPI/
     EndpointGroups/
       GtfsEndpoints.cs
       TestEndpoints.cs
@@ -51,14 +51,14 @@ src/Server/
       TransitHub.cs
       WorkerTransitHub.cs
     Program.cs
-  ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/   ← unchanged
+  ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/   ← unchanged
 ```
 
 ### After
 
 ```
 src/Server/
-  ChefKnifeStudios.MartaJazz.Server.WebAPI/
+  ChefKnifeStudios.TransitJazz.Server.WebAPI/
     EndpointGroups/
       GtfsEndpoints.cs
       TestEndpoints.cs
@@ -72,7 +72,7 @@ src/Server/
       TransitHub.cs
       WorkerTransitHub.cs
     Program.cs
-  ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/   ← unchanged
+  ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/   ← unchanged
 ```
 
 ---
@@ -93,22 +93,22 @@ not already exist.
 
 | File | Old namespace | New namespace |
 |---|---|---|
-| `IKeyValueRepository.cs` | `ChefKnifeStudios.MartaJazz.Server.Core.Interfaces` | `ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces` |
-| `InMemoryKeyValueRepository.cs` | `ChefKnifeStudios.MartaJazz.Server.Infrastructure` | `ChefKnifeStudios.MartaJazz.Server.WebAPI.Repositories` |
+| `IKeyValueRepository.cs` | `ChefKnifeStudios.TransitJazz.Server.Core.Interfaces` | `ChefKnifeStudios.TransitJazz.Server.WebAPI.Interfaces` |
+| `InMemoryKeyValueRepository.cs` | `ChefKnifeStudios.TransitJazz.Server.Infrastructure` | `ChefKnifeStudios.TransitJazz.Server.WebAPI.Repositories` |
 
 ### 3. Update `using` directives in `Program.cs`
 
 Remove:
 ```csharp
-using ChefKnifeStudios.MartaJazz.Server.Core.Interfaces;
-using ChefKnifeStudios.MartaJazz.Server.Infrastructure;
-using ChefKnifeStudios.MartaJazz.Server.BL.Services;
+using ChefKnifeStudios.TransitJazz.Server.Core.Interfaces;
+using ChefKnifeStudios.TransitJazz.Server.Infrastructure;
+using ChefKnifeStudios.TransitJazz.Server.BL.Services;
 ```
 
 Add:
 ```csharp
-using ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces;
-using ChefKnifeStudios.MartaJazz.Server.WebAPI.Repositories;
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.Interfaces;
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.Repositories;
 ```
 
 No logic changes required in `Program.cs` — the DI registration line stays identical:
@@ -120,20 +120,20 @@ builder.Services.AddSingleton(typeof(IKeyValueRepository<>), typeof(InMemoryKeyV
 
 Remove:
 ```csharp
-using ChefKnifeStudios.MartaJazz.Server.Core.Interfaces;
+using ChefKnifeStudios.TransitJazz.Server.Core.Interfaces;
 ```
 
 Add:
 ```csharp
-using ChefKnifeStudios.MartaJazz.Server.WebAPI.Interfaces;
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.Interfaces;
 ```
 
 ### 5. Update `Server.WebAPI.csproj`
 
 Remove the project references to the three eliminated projects:
 ```xml
-<ProjectReference Include="..\ChefKnifeStudios.MartaJazz.Server.BL\..." />
-<ProjectReference Include="..\ChefKnifeStudios.MartaJazz.Server.Infrastructure\..." />
+<ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.BL\..." />
+<ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.Infrastructure\..." />
 ```
 
 `Server.Core` was never directly referenced by `Server.WebAPI.csproj` (only transitively
@@ -141,7 +141,7 @@ via BL), so no explicit removal is needed for it. Verify the final `<ItemGroup>`
 project references contains only `ServiceDefaults`:
 ```xml
 <ItemGroup>
-  <ProjectReference Include="..\..\ChefKnifeStudios.MartaJazz.ServiceDefaults\..." />
+  <ProjectReference Include="..\..\ChefKnifeStudios.TransitJazz.ServiceDefaults\..." />
 </ItemGroup>
 ```
 
@@ -166,17 +166,17 @@ consolidated package list:
 ### 6. Delete the three eliminated projects
 
 Delete these directories entirely:
-- `src/Server/ChefKnifeStudios.MartaJazz.Server.Core/`
-- `src/Server/ChefKnifeStudios.MartaJazz.Server.BL/`
-- `src/Server/ChefKnifeStudios.MartaJazz.Server.Infrastructure/`
+- `src/Server/ChefKnifeStudios.TransitJazz.Server.Core/`
+- `src/Server/ChefKnifeStudios.TransitJazz.Server.BL/`
+- `src/Server/ChefKnifeStudios.TransitJazz.Server.Infrastructure/`
 
 ### 7. Remove projects from the solution file
 
 Open the `.sln` file at the repository root and remove the three `Project(...)` blocks and
 their corresponding `GlobalSection` entries for:
-- `ChefKnifeStudios.MartaJazz.Server.Core`
-- `ChefKnifeStudios.MartaJazz.Server.BL`
-- `ChefKnifeStudios.MartaJazz.Server.Infrastructure`
+- `ChefKnifeStudios.TransitJazz.Server.Core`
+- `ChefKnifeStudios.TransitJazz.Server.BL`
+- `ChefKnifeStudios.TransitJazz.Server.Infrastructure`
 
 ### 8. Verify the `AppHost` is unaffected
 
@@ -200,7 +200,7 @@ changes needed there.
 After the consolidation, confirm:
 
 - [ ] `dotnet build` succeeds from the solution root with zero errors
-- [ ] `dotnet run --project src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI` starts
+- [ ] `dotnet run --project src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI` starts
       without errors
 - [ ] The Aspire AppHost launches both `Server.WebAPI` and `Server.TransitDataWorker`
       successfully

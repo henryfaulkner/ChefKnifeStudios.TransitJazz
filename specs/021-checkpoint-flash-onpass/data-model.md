@@ -4,7 +4,7 @@ This feature is frontend-only and introduces **no persisted server/shared data**
 
 ## 1. Settings (extended)
 
-`ChefKnifeStudios.MartaJazz.Client.Shared/Models/Settings.cs` — `ObservableObject`, persisted by `ISettingsService` as one JSON blob in local storage (key `"Setting"`).
+`ChefKnifeStudios.TransitJazz.Client.Shared/Models/Settings.cs` — `ObservableObject`, persisted by `ISettingsService` as one JSON blob in local storage (key `"Setting"`).
 
 | Field | Type | Default | `[Description]` resx key | Notes |
 |-------|------|---------|--------------------------|-------|
@@ -20,7 +20,7 @@ This feature is frontend-only and introduces **no persisted server/shared data**
 
 ## 2. BusVisibilitySettingChangedEventArgs (new client event)
 
-`ChefKnifeStudios.MartaJazz.Client.Shared/EventArgs/BusVisibilitySettingChangedEventArgs.cs` — implements `IEventArgs`; carried on the existing in-process `IEventNotificationService` bus. Shape mirrors `GisSettingChangedEventArgs`.
+`ChefKnifeStudios.TransitJazz.Client.Shared/EventArgs/BusVisibilitySettingChangedEventArgs.cs` — implements `IEventArgs`; carried on the existing in-process `IEventNotificationService` bus. Shape mirrors `GisSettingChangedEventArgs`.
 
 | Field | Type | Notes |
 |-------|------|-------|

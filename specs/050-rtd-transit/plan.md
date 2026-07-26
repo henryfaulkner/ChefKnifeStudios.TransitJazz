@@ -58,7 +58,7 @@ WMATA and is O(vehicle count) dictionary lookups.
 route-attributed vehicles (54 rail). Change = 4 config/constant/UI touch-points (same shape as
 TTC/SEPTA's live-vehicle path), zero new production code, zero new tests.
 
-**On-disk naming note**: the solution's root namespace/folders are `ChefKnifeStudios.MartaJazz.*`
+**On-disk naming note**: the solution's root namespace/folders are `ChefKnifeStudios.TransitJazz.*`
 (not `TransitJazz`). All references below use the `MartaJazz` convention. The `TransitJazz` name
 appears only in the repo path and product-facing docs.
 
@@ -108,24 +108,24 @@ specs/050-rtd-transit/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   └── CityNames.cs                                      # + Rtd = "rtd"
 │
-├── Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+├── Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 │   ├── Program.cs                                        # UNCHANGED (rtd hits existing else arm → GtfsRtCity)
 │   └── appsettings.json                                  # + rtd Cities: entry (keyless, RailRouteIdMap, telemetry true)
 │
-├── Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/
+├── Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/
 │   ├── appsettings.json                                  # + rtd Cities: entry (static-zip loader parity, byte-identical to Worker's)
 │   └── GtfsStatic/GtfsStaticLoader.cs                    # UNCHANGED (RTD's zip is a normal flat zip behind a followed 308 redirect)
 │
-└── Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+└── Client/ChefKnifeStudios.TransitJazz.Client.Shared/
     ├── Components/FABs/CityFab.razor                     # + "Denver, CO" menu button + HandleRtdClicked (#rtd) handler
     ├── Components/FABs/InfoFab.razor                      # + RtdOverlay switch arm
     ├── Components/AudioUnlockOverlay.razor                 # + RtdAudioOverlay switch arm
     └── Resources/RouteFilterResources.resx                 # + Rtd* overlay/info copy keys
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs   # + _cityCenter[CityNames.Rtd] entry (Denver Union Station / downtown transit core)
+src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs   # + _cityCenter[CityNames.Rtd] entry (Denver Union Station / downtown transit core)
 ```
 
 **Structure Decision**: Web application (decoupled Worker + WebAPI + Blazor WASM), matching the

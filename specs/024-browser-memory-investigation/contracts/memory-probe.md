@@ -1,6 +1,6 @@
 # Contract: `window.MemoryProbe` (in-app memory attribution)
 
-**File**: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/memory-probe.js`
+**File**: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/memory-probe.js`
 **Loaded by**: `index.html` (already wired). Promoted from "delete-once-solved diagnostic" to a
 supported attribution tool (kept, documented in quickstart).
 

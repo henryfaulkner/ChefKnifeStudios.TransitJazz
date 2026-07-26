@@ -2,7 +2,7 @@ services:
   chefknifestudios.martajazz.server.webapi:
     build:
       context: .
-      dockerfile: ./src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/Dockerfile
+      dockerfile: ./src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/Dockerfile
     image: ${CONTAINER_REGISTRY:-localhost:5000}/chefknifestudios.martajazz.server.webapi:${CONTAINER_TAG:-latest}
     ports:
       - "5268:8080"

@@ -10,7 +10,7 @@ Build/test/run verification for the single-table telemetry redesign. All command
 ## 1. C# unit tests (schema + pipeline)
 
 ```powershell
-dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests.csproj
+dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.csproj
 ```
 
 Expect:
@@ -30,7 +30,7 @@ Expect the accept/reject vectors in contracts/query-validator.md to pass: `telem
 ## 3. Build the whole worker
 
 ```powershell
-dotnet build src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.csproj
+dotnet build src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.csproj
 ```
 
 Expect no references to the deleted `SnapEventArgs`/`LerpEventArgs`/`CycleEventArgs`/`LogEventArgs`/`TelemetryColumns` anywhere (compile fails loudly if `Worker.cs` still posts the old types).

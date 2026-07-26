@@ -29,7 +29,7 @@ value (post any `RailRouteIdMap` remap) wherever consumed as a lookup key.
 
 ## Rename Inventory
 
-### `src/ChefKnifeStudios.MartaJazz.Shared/`
+### `src/ChefKnifeStudios.TransitJazz.Shared/`
 
 | File | Line(s) | Before | After |
 |---|---|---|---|
@@ -38,7 +38,7 @@ value (post any `RailRouteIdMap` remap) wherever consumed as a lookup key.
 | `Events/RouteNearestPointBatchEvent.cs` | 33 | `RouteNearestPointRecord(string VehicleId, string RouteId, ...)` | `RouteNearestPointRecord(string VehicleId, string RouteJoinKey, ...)` |
 | `Events/RouteCrossingBatchEvent.cs` | 11 | `RouteCrossingRecord(string VehicleId, string RouteId, ...)` | `RouteCrossingRecord(string VehicleId, string RouteJoinKey, ...)` |
 
-### `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`
+### `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`
 
 | File | Line(s) | Before | After |
 |---|---|---|---|
@@ -53,7 +53,7 @@ value (post any `RailRouteIdMap` remap) wherever consumed as a lookup key.
 | `VehicleState.cs` | 18-30 | `record VehicleState(..., string RouteId, ...)` + XML doc "The GTFS route identifier the vehicle is currently snapped to." | `record VehicleState(..., string RouteJoinKey, ...)` + doc updated to "The route join key (see RouteShapeProperties.JoinKey) the vehicle is currently snapped to." |
 | `Cities/GtfsRtCity.cs` | 37, 60-68 | `ApplyRailRouteIdMap`, `config.RailRouteIdMap`, `entity.Vehicle.Trip.RouteId` | **UNCHANGED** — operates entirely on GTFS-RT wire values (see research.md R2) |
 
-### `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`
+### `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`
 
 | File | Line(s) | Before | After |
 |---|---|---|---|
@@ -68,7 +68,7 @@ value (post any `RailRouteIdMap` remap) wherever consumed as a lookup key.
 | `wwwroot/js/map-interop.js` | 289-525 | GeoJSON property `routeId`, `_routeColorsByRouteId`, `_triggerPointFeatures[routeId]`, MapLibre `['get', 'routeId']` match expressions, `route.routeId` | Renamed to `routeJoinKey`, `_routeColorsByRouteJoinKey`, `_triggerPointFeatures[routeJoinKey]`, `['get', 'routeJoinKey']`, `route.routeJoinKey` |
 | `wwwroot/js/vehicle-animator.js` | 101-459 | `state.routeId`, `rec.routeId`, `this.routeGeometry[routeId]` | `state.routeJoinKey`, `rec.routeJoinKey`, `this.routeGeometry[routeJoinKey]` |
 
-### `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`
+### `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/`
 
 | File | Line(s) | Before | After |
 |---|---|---|---|

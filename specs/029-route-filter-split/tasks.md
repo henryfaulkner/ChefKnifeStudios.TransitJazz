@@ -23,9 +23,9 @@ foundational prerequisite shared by all three stories.
 ## Path Conventions
 
 3-tier solution. Real paths:
-- Shared: `src/ChefKnifeStudios.MartaJazz.Shared/`
-- Server: `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/`
-- Client: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`
+- Shared: `src/ChefKnifeStudios.TransitJazz.Shared/`
+- Server: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/`
+- Client: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`
 
 ---
 
@@ -41,13 +41,13 @@ foundational prerequisite shared by all three stories.
 
 **Purpose**: Thread the static transit mode from GTFS parse → GeoJSON → client `RouteItem`. Every
 user story depends on `RouteItem.Mode` existing and being populated. `TransitMode` enum already
-exists in `src/ChefKnifeStudios.MartaJazz.Shared/Events/RouteNearestPointBatchEvent.cs` — reuse it,
+exists in `src/ChefKnifeStudios.TransitJazz.Shared/Events/RouteNearestPointBatchEvent.cs` — reuse it,
 do NOT create or move it.
 
-- [X] T002 Add `TransitMode Mode = TransitMode.Bus` as the last positional param of the `RouteShapeProperties` record in `src/ChefKnifeStudios.MartaJazz.Shared/GtfsData/RouteShapeFeature.cs` (default `Bus` for backward compat)
-- [X] T003 In `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs`, extend `ParseRouteMetadata` to read the `route_type` column from `routes.txt` and map `1 → TransitMode.Rail`, all other/missing values → `TransitMode.Bus`; add `TransitMode Mode` to the returned metadata tuple
+- [X] T002 Add `TransitMode Mode = TransitMode.Bus` as the last positional param of the `RouteShapeProperties` record in `src/ChefKnifeStudios.TransitJazz.Shared/GtfsData/RouteShapeFeature.cs` (default `Bus` for backward compat)
+- [X] T003 In `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs`, extend `ParseRouteMetadata` to read the `route_type` column from `routes.txt` and map `1 → TransitMode.Rail`, all other/missing values → `TransitMode.Bus`; add `TransitMode Mode` to the returned metadata tuple
 - [X] T004 In the same file, pass the parsed `Mode` through the storage loop into `BuildLineStringFeature` and append `"mode":"Rail"`/`"Bus"` (string form) to the hand-serialized `properties` object — see `contracts/geojson-mode-property.md`
-- [X] T005 Add `public TransitMode Mode { get; init; }` to the `RouteItem` class in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs`
+- [X] T005 Add `public TransitMode Mode { get; init; }` to the `RouteItem` class in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs`
 - [X] T006 In `RouteFilterViewModel.BuildRouteItems()`, set `Mode = x.Properties.Mode` on each new `RouteItem`; ensure `SelectRoute` and `ClearSelection` also copy `Mode` through when they rebuild `RouteItem`s (else pills lose their section on selection). Do NOT touch `_railVehicleIds` or the active-count logic.
 
 **Checkpoint**: After T006, `RouteItem.Mode` is correct from first paint; build still passes.
@@ -62,8 +62,8 @@ first paint.
 **Independent Test**: Open the filter; RED/GOLD/BLUE/GREEN appear under "Rail", numbered routes under
 "Buses", correct from first paint (no flash of rail among buses).
 
-- [X] T007 [US1] Add `Rail` (value `"Rail"`) and `Buses` (value `"Buses"`) section-label keys to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Resources/RouteFilterResources.resx` (dedicated section-label keys; do NOT reuse `SettingBusesVisible`)
-- [X] T008 [US1] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteFilters.razor`, replace the single `@foreach (var routeItem in RouteFilterViewModel.RouteItems)` with two sections: a Rail section (`@Loc["Rail"]` label + pills where `Mode == TransitMode.Rail`) above a Buses section (`@Loc["Buses"]` label + pills where `Mode == TransitMode.Bus`). Keep each pill's existing markup/handlers (`HandleSelect`, `HandleMouseOver/Out`, disabled-class logic) unchanged; only the iteration source is split.
+- [X] T007 [US1] Add `Rail` (value `"Rail"`) and `Buses` (value `"Buses"`) section-label keys to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Resources/RouteFilterResources.resx` (dedicated section-label keys; do NOT reuse `SettingBusesVisible`)
+- [X] T008 [US1] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteFilters.razor`, replace the single `@foreach (var routeItem in RouteFilterViewModel.RouteItems)` with two sections: a Rail section (`@Loc["Rail"]` label + pills where `Mode == TransitMode.Rail`) above a Buses section (`@Loc["Buses"]` label + pills where `Mode == TransitMode.Bus`). Keep each pill's existing markup/handlers (`HandleSelect`, `HandleMouseOver/Out`, disabled-class logic) unchanged; only the iteration source is split.
 - [X] T009 [US1] Add CSS for the Rail section as a compact flex row above the existing `repeat(6, 1fr)` bus grid, plus thin section-label styling, in the RouteFilters stylesheet (locate the existing `.route-filters__*` styles and extend); leave the bus grid layout unchanged
 
 **Checkpoint**: Rail and Bus sections render with correct labels and grouping from first paint.

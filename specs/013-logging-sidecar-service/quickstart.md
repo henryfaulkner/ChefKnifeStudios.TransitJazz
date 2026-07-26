@@ -4,7 +4,7 @@ How to build, run, and verify the sidecar end-to-end. Assumes the .NET 10 SDK an
 
 ## 1. Dependencies
 
-Add to `ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.csproj`:
+Add to `ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.csproj`:
 
 ```xml
 <PackageReference Include="Parquet.Net" Version="5.*" />
@@ -37,9 +37,9 @@ Authenticate locally with `az login` (resolved by `DefaultAzureCredential`). In 
 ## 3. Build & run
 
 ```powershell
-dotnet build src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker
+dotnet build src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker
 # Run via Aspire AppHost (recommended — wires the API the worker depends on):
-dotnet run --project src/ChefKnifeStudios.MartaJazz.AppHost
+dotnet run --project src/ChefKnifeStudios.TransitJazz.AppHost
 ```
 
 The worker polls the live GTFS-RT feed every 10s and, with the sidecar enabled, posts Snap/Lerp/Cycle events that flush to blob every interval.
@@ -61,7 +61,7 @@ The worker polls the live GTFS-RT feed every 10s and, with the sidecar enabled, 
 ## 5. Automated tests
 
 ```powershell
-dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests
+dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests
 ```
 
 Covers: parquet schema round-trip (write→read columns match the contract), partition-path derivation (UTC date + unique part name), channel `DropWrite` load-shedding + drop counting, and persistence-failure isolation (failure swallowed, counter incremented, no throw).

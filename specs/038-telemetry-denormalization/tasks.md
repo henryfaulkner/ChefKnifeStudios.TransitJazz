@@ -19,8 +19,8 @@ description: "Task list for Telemetry Denormalization (feature 038)"
 ## Path Conventions
 
 Paths are the real repo layout from plan.md:
-- Worker: `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`
-- Worker tests: `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/`
+- Worker: `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`
+- Worker tests: `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/`
 - Go validator: `tools/telemetry-mcp/internal/validate/`
 - Docs: `.claude/skills/mj-data-explorer/references/`
 
@@ -30,7 +30,7 @@ Paths are the real repo layout from plan.md:
 
 **Purpose**: No new project/deps — the change is inside the existing TransitDataWorker + its test project + the Go tool. This phase only establishes the branch state and confirms the toolchain.
 
-- [ ] T001 Confirm on branch `038-telemetry-denormalization` and that `dotnet build src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.csproj` and `go build ./...` (in `tools/telemetry-mcp`) both succeed on the current `main` state (baseline green before changes).
+- [ ] T001 Confirm on branch `038-telemetry-denormalization` and that `dotnet build src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.csproj` and `go build ./...` (in `tools/telemetry-mcp`) both succeed on the current `main` state (baseline green before changes).
 
 ---
 
@@ -40,10 +40,10 @@ Paths are the real repo layout from plan.md:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 [P] Add `TelemetryEvent` record in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Logging/TelemetryEvent.cs` implementing `IEventArgs`, with all 17 `[ParquetColumn(Name = "…")]` snake_case properties exactly per `contracts/telemetry-event-schema.md` (common: event_type/event_id/observation_utc; per-city-only: city_name/feed_freshness_seconds; full-cycle-only: cities_processed_count/cities_processed_csv; shared nullable: time_taken_seconds/health_ok/tones_emitted/vehicles_processed/gc_heap_bytes/process_working_set_bytes/vehicle_state_cache_size/crossing_baseline_cache_size/route_index_size/route_trigger_point_cache_size).
-- [ ] T003 Rewrite `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Logging/ParquetLoggingService.cs`: replace the three `ConcurrentBag`s with one `ConcurrentBag<TelemetryEvent>`; `Accumulate` becomes a single `.Add((TelemetryEvent)e)` (no type switch); replace the three `Flush*Async` + hand-built `ParquetSchema`/`DataColumn` code with one `FlushAsync` using `await ParquetSerializer.SerializeAsync(rows, ms)` (Snappy if exposed via options — see research R1); keep `UploadAsync`/`RecordPersistFailure`/container-ensure logic. (Depends on T002)
+- [ ] T002 [P] Add `TelemetryEvent` record in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Logging/TelemetryEvent.cs` implementing `IEventArgs`, with all 17 `[ParquetColumn(Name = "…")]` snake_case properties exactly per `contracts/telemetry-event-schema.md` (common: event_type/event_id/observation_utc; per-city-only: city_name/feed_freshness_seconds; full-cycle-only: cities_processed_count/cities_processed_csv; shared nullable: time_taken_seconds/health_ok/tones_emitted/vehicles_processed/gc_heap_bytes/process_working_set_bytes/vehicle_state_cache_size/crossing_baseline_cache_size/route_index_size/route_trigger_point_cache_size).
+- [ ] T003 Rewrite `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Logging/ParquetLoggingService.cs`: replace the three `ConcurrentBag`s with one `ConcurrentBag<TelemetryEvent>`; `Accumulate` becomes a single `.Add((TelemetryEvent)e)` (no type switch); replace the three `Flush*Async` + hand-built `ParquetSchema`/`DataColumn` code with one `FlushAsync` using `await ParquetSerializer.SerializeAsync(rows, ms)` (Snappy if exposed via options — see research R1); keep `UploadAsync`/`RecordPersistFailure`/container-ensure logic. (Depends on T002)
 - [ ] T004 Update `BuildBlobPath` in `ParquetLoggingService.cs` to drop the `{dataset}/` segment → `dt={yyyy-MM-dd}/part-{yyyyMMddTHHmmssfffZ}-{shortGuid}.parquet` per `contracts/blob-layout.md` (verify the query-bridge source template resolves `{dataset}`→container `telemetry`; adjust prefix if the bridge needs a literal `telemetry/`). (Depends on T003)
-- [ ] T005 [P] Delete retired files: `Logging/SnapEventArgs.cs`, `Logging/LerpEventArgs.cs`, `Logging/CycleEventArgs.cs`, `Logging/LogEventArgs.cs`, `Logging/TelemetryColumns.cs` under `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Logging/`.
+- [ ] T005 [P] Delete retired files: `Logging/SnapEventArgs.cs`, `Logging/LerpEventArgs.cs`, `Logging/CycleEventArgs.cs`, `Logging/LogEventArgs.cs`, `Logging/TelemetryColumns.cs` under `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Logging/`.
 - [ ] T006 Verify `ILoggingService.cs`, `LogEventWorker.cs`, `IEventNotificationService.cs`, `LoggingOptions.cs`, and `Program.cs` DI registrations need **no** change (interface/`IEventArgs`-based) — read them, confirm, and note in the commit message. (Depends on T003)
 
 **Checkpoint**: `TelemetryEvent` + single-buffer service exist; old event types gone. Worker.cs still references old types (compile red) — resolved in Phase 3.
@@ -58,7 +58,7 @@ Paths are the real repo layout from plan.md:
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T007 [P] [US1] Add `TelemetryEventSchemaTests.cs` in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/` per `contracts/telemetry-event-schema.md` §"Schema test contract": serialize a PerCityCycle row (city fields set, full-cycle fields null) + a FullCycle row (full-cycle set, city fields null), assert all 17 columns/types present and non-applicable columns are null on each row. (Depends on T002; covers US1 + US2)
+- [ ] T007 [P] [US1] Add `TelemetryEventSchemaTests.cs` in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/` per `contracts/telemetry-event-schema.md` §"Schema test contract": serialize a PerCityCycle row (city fields set, full-cycle fields null) + a FullCycle row (full-cycle set, city fields null), assert all 17 columns/types present and non-applicable columns are null on each row. (Depends on T002; covers US1 + US2)
 - [ ] T008 [P] [US1] Delete `SnapParquetSchemaTests.cs`, `LerpParquetSchemaTests.cs`, `CycleParquetSchemaTests.cs` from the Tests project.
 - [ ] T009 [P] [US1] Update `PartitionPathTests.cs` to assert the new `dt=…/part-*.parquet` path with NO `snap|lerp|cycle` segment (contracts/blob-layout.md §PartitionPathTests). (Depends on T004)
 

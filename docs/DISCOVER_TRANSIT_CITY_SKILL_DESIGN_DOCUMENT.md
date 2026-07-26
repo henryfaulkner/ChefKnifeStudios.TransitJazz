@@ -80,7 +80,7 @@ Two standing repo constraints also bind this skill:
   branch*, never `main`. Committing the single doc file to a feature branch is acceptable
   because it is explicitly the user-chosen deliverable (D3) — but the branch must never be
   merged by the skill.
-- **Root namespace is `ChefKnifeStudios.MartaJazz.*`** even though the repo folder is
+- **Root namespace is `ChefKnifeStudios.TransitJazz.*`** even though the repo folder is
   `TransitJazz`. Irrelevant to this skill (it writes docs, not code) but noted so the
   builder isn't confused by paths.
 

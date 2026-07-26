@@ -7,7 +7,7 @@
 
 **Organization**: Grouped by user story. US1 (buses on map) + US2 (route matching) are co-critical P1; US3 (second operator) is P2. The MVP is US1+US2 together, because a bus map without route matching is not viable.
 
-**On-disk namespace note**: solution folders are `ChefKnifeStudios.MartaJazz.*` (not `TransitJazz`). Paths below are exact.
+**On-disk namespace note**: solution folders are `ChefKnifeStudios.TransitJazz.*` (not `TransitJazz`). Paths below are exact.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -26,8 +26,8 @@ No project scaffolding needed — all target projects exist. Nothing to do here.
 
 **Purpose**: The shared constant + config field every story depends on. Small, must land first.
 
-- [X] **T001** [FOUND] Add `public const string NymtaBus = "nymta-bus";` to `src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs`.
-- [X] **T002** [FOUND] Add `public string[] RouteIdNormalization { get; set; } = [];` to `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Cities/CityConfig.cs`. (Default `[]` ⇒ inert for all existing cities.)
+- [X] **T001** [FOUND] Add `public const string NymtaBus = "nymta-bus";` to `src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs`.
+- [X] **T002** [FOUND] Add `public string[] RouteIdNormalization { get; set; } = [];` to `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Cities/CityConfig.cs`. (Default `[]` ⇒ inert for all existing cities.)
 
 **Checkpoint**: Constant + config field exist; stories can proceed.
 
@@ -43,11 +43,11 @@ No project scaffolding needed — all target projects exist. Nothing to do here.
 
 ### Tests for User Story 2 (write FIRST, ensure they FAIL before T004) ⚠️
 
-- [X] **T003** [P] [US2] Create `RouteIdNormalizerTests` in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/RouteIdNormalizerTests.cs` — xUnit `[Theory]`/`[InlineData]` covering all 12 accept vectors + invariants from `contracts/route-id-normalizer.md`. (Will not compile until T004 exists — that is the intended red state.)
+- [X] **T003** [P] [US2] Create `RouteIdNormalizerTests` in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/RouteIdNormalizerTests.cs` — xUnit `[Theory]`/`[InlineData]` covering all 12 accept vectors + invariants from `contracts/route-id-normalizer.md`. (Will not compile until T004 exists — that is the intended red state.)
 
 ### Implementation for User Story 2
 
-- [X] **T004** [US2] Create `RouteIdNormalizer` static class in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Cities/RouteIdNormalizer.cs`: `Apply(string, IReadOnlyList<string>)` folding named steps `uppercase` / `plusToSbs` / `stripLeadingZeros` (regex `^([A-Z]+)0*(\d.*)$`), default arm = no-op passthrough (never throws). Per `data-model.md` §2 and the contract.
+- [X] **T004** [US2] Create `RouteIdNormalizer` static class in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Cities/RouteIdNormalizer.cs`: `Apply(string, IReadOnlyList<string>)` folding named steps `uppercase` / `plusToSbs` / `stripLeadingZeros` (regex `^([A-Z]+)0*(\d.*)$`), default arm = no-op passthrough (never throws). Per `data-model.md` §2 and the contract.
 - [X] **T005** [US2] Wire normalization into the RT pipeline: in `src/Server/.../Cities/GtfsRtCity.cs`, add `void ApplyRouteIdNormalization(FeedMessage feed)` (early-return when `config.RouteIdNormalization is not { Length: > 0 }`; else rewrite each `entity.Vehicle?.Trip?.RouteId` via `RouteIdNormalizer.Apply`) and call it right after the existing `ApplyRailRouteIdMap(merged);` at line ~37.
 - [X] **T006** [US2] Verify T003 now passes (`dotnet test ...TransitDataWorker.Tests --filter RouteIdNormalizerTests`).
 
@@ -64,10 +64,10 @@ No project scaffolding needed — all target projects exist. Nothing to do here.
 ### Implementation for User Story 1
 
 - [X] **T007** [US1] Resolve the credential mechanism (research R4): verify whether the Worker's config layering expands `${NYMTA_BUS_API_KEY}` inside a `GtfsRtUrls` string. If yes → use the pre-templated URL (below). If no → add `public string ApiKeyQueryParam { get; set; } = "api_key";` to `CityConfig.cs` and change `GtfsRtCity.FetchFeedAsync`'s `?api_key=` to use `config.ApiKeyQueryParam`; set `"key"` for `nymta-bus`. **Ensure no live key is committed either way.**
-- [X] **T008** [US1] Add the `nymta-bus` entry to `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.json` `Cities:` array per `contracts/city-config.md` (RT URL, 6 static zips, `RouteIdNormalization`, `EmitsTelemetry: true`, credential per T007). Mirror into `appsettings.Development.json` if that file carries a `Cities:` block.
-- [X] **T009** [US1] Add the identical `nymta-bus` entry to `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.json` `Cities:` array (WebAPI's `GtfsStaticLoader` needs `StaticZipUrls`; RT/normalization fields harmlessly present). Mirror Development variant if present.
-- [X] **T010** [P] [US1] Add resx key `CityNymtaBus` (value e.g. "New York Buses") to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Resources/RouteFilterResources.resx` (Principle XII — no inline copy for the new label).
-- [X] **T011** [US1] Add a "New York Buses" button to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/CityFab.razor`: a `MatButton` bound to a new `HandleNymtaBusClicked` handler doing `location.hash='nymta-bus';location.reload()`, `Disabled="@(CurrentCity == CityNames.NymtaBus)"`, `Label` from `IStringLocalizer<RouteFilterResources>["CityNymtaBus"]`. (Inject `IStringLocalizer` if not already; existing inline labels left as-is per research R5.)
+- [X] **T008** [US1] Add the `nymta-bus` entry to `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json` `Cities:` array per `contracts/city-config.md` (RT URL, 6 static zips, `RouteIdNormalization`, `EmitsTelemetry: true`, credential per T007). Mirror into `appsettings.Development.json` if that file carries a `Cities:` block.
+- [X] **T009** [US1] Add the identical `nymta-bus` entry to `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json` `Cities:` array (WebAPI's `GtfsStaticLoader` needs `StaticZipUrls`; RT/normalization fields harmlessly present). Mirror Development variant if present.
+- [X] **T010** [P] [US1] Add resx key `CityNymtaBus` (value e.g. "New York Buses") to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Resources/RouteFilterResources.resx` (Principle XII — no inline copy for the new label).
+- [X] **T011** [US1] Add a "New York Buses" button to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/CityFab.razor`: a `MatButton` bound to a new `HandleNymtaBusClicked` handler doing `location.hash='nymta-bus';location.reload()`, `Disabled="@(CurrentCity == CityNames.NymtaBus)"`, `Label` from `IStringLocalizer<RouteFilterResources>["CityNymtaBus"]`. (Inject `IStringLocalizer` if not already; existing inline labels left as-is per research R5.)
 
 **Checkpoint**: End-to-end MVP — NYC buses render and move, route-matched, telemetry on.
 

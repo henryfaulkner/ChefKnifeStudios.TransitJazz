@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transit Jazz</title>
+    <link href="css/variables.css" rel="stylesheet" />
+    <link href="css/mdc-overrides.css" rel="stylesheet" />
+    <link href="css/app.css" rel="stylesheet" />
+    <link href="_content/MatBlazor/dist/matBlazor.css" rel="stylesheet" />
+    <link href="ChefKnifeStudios.TransitJazz.Client.WebApp.styles.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4/dist/maplibre-gl.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+    <link rel="manifest" href="/favicon/site.webmanifest">
+    <base href="/" />
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="8cc342c0-8f60-4509-807b-3ccab751c695" data-auto-track="false"></script>
+    <script>
+        try {
+            var s = localStorage.getItem("Setting");
+            if (s) {
+                var o = JSON.parse(s);
+                var key = Object.keys(o).find(function(k) { return k.toLowerCase() === "isdarkmodeenabled"; });
+                var isDark = key !== undefined && !!o[key];
+                document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+            } else {
+                document.documentElement.setAttribute("data-theme", "light");
+            }
+        } catch (e) {
+            document.documentElement.setAttribute("data-theme", "light");
+        }
+    </script>
+</head>
+<body>
+    <div id="app">
+        <div class="app-loader">
+            <div class="app-loader__ring"></div>
+            <span class="app-loader__label">loading...</span>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <script src="_content/MatBlazor/dist/matBlazor.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4/dist/maplibre-gl.js"></script>
+    <script src="_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/map-interop.js"></script>
+    <script src="_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/vehicle-animator.js"></script>
+    <script src="js/umami-city.js"></script>
+</body>
+</html>

@@ -25,7 +25,7 @@ Technical approach: data-processing code posts marker event-args onto an in-proc
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-> Note: The constitution (v3.0.0) uses the legacy `ChefKnifeStudios.TransitJazz.*` namespace; the live solution uses `ChefKnifeStudios.MartaJazz.*`. This plan targets the actual `MartaJazz` projects. Flagged as a pre-existing doc drift, not introduced here.
+> Note: The constitution (v3.0.0) uses the legacy `ChefKnifeStudios.TransitJazz.*` namespace; the live solution uses `ChefKnifeStudios.TransitJazz.*`. This plan targets the actual `MartaJazz` projects. Flagged as a pre-existing doc drift, not introduced here.
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
@@ -61,10 +61,10 @@ specs/013-logging-sidecar-service/
 ### Source Code (repository root)
 
 ```text
-src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 ├── Worker.cs                         # EDIT: assign CycleId, post Snap/Lerp/Cycle events at existing points
 ├── Program.cs                        # EDIT: register Logging DI (notification service, LogEventWorker, sink, options)
-├── ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.csproj  # EDIT: add Parquet.Net + Azure.Storage.Blobs
+├── ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.csproj  # EDIT: add Parquet.Net + Azure.Storage.Blobs
 └── Logging/                          # NEW — all logging-sidecar files (FR-013)
     ├── IEventNotificationService.cs  # IEventArgs, EventReceivedEventHandler, IEventNotificationService, EventNotificationService
     ├── LogEventArgs.cs               # abstract base : IEventArgs
@@ -77,7 +77,7 @@ src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
     ├── LoggingOptions.cs             # bound config: container, flush interval, channel capacity, blob URI
     └── TelemetryColumns.cs           # canonical column-name constants (downstream query-tool contract)
 
-src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/   # NEW test project
+src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/   # NEW test project
 ├── ParquetSchemaTests.cs
 ├── PartitionPathTests.cs
 ├── ChannelLoadSheddingTests.cs

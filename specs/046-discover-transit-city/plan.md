@@ -20,7 +20,7 @@ tie-break rule; discovers the authority's GTFS-RT vehicle-position, static GTFS,
 entirely to the existing `mj-gtfs` skill (never reimplementing fetch/decode); evaluates
 compatibility using the existing `gtfs-compatibility` interpretation rules **grounded
 directly in the real `TransitDataWorker` source** (`src/Server/
-ChefKnifeStudios.MartaJazz.Server.TransitDataWorker`) rather than only the generic skill
+ChefKnifeStudios.TransitJazz.Server.TransitDataWorker`) rather than only the generic skill
 docs — distinguishing the platform's config-only extension points (`CityConfig`'s
 `ApiKeyEnvVar`, `RouteIdNormalization`, `RailRouteIdMap`) from what genuinely needs new
 code (a bespoke `ITransitCity` implementation or `RailRealtimeAdapter`-style class), and
@@ -57,7 +57,7 @@ introduced).
 interpretation rules), `WebSearch` tool (open-discovery fallback + authority resolution),
 `git` + `gh` CLI (branch/PR delivery), `/schedule` (recurring cloud invocation). The
 **ground-truth authority** for what "compatible" concretely requires is
-`src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker` itself (read directly,
+`src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker` itself (read directly,
 2026-07-25) — specifically `Cities/ITransitCity.cs`, `Cities/CityConfig.cs`,
 `Cities/GtfsRtCity.cs`, `Cities/RouteIdNormalizer.cs`, `RailRealtime/RailRealtimeAdapter.cs`,
 and `Worker.cs`'s `ResolveCategory`/`ProcessSpatialReconciliationAsync` — not merely the

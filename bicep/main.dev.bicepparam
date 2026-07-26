@@ -10,5 +10,5 @@ param containerRegistryResourceGroup = 'general'
 
 param serverImageTag = 'latest'
 
-param repositoryUrl = 'https://github.com/henryfaulkner/ChefKnifeStudios.MartaJazz'
+param repositoryUrl = 'https://github.com/henryfaulkner/ChefKnifeStudios.TransitJazz'
 param repositoryToken = ''

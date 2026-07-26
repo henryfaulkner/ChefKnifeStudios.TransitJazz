@@ -33,11 +33,11 @@ No tests are requested — this is a pure cleanup (delete/edit, no new logic exc
 **Independent Test**: `dotnet build ChefKnifeStudios.TransitJazz.sln` passes with 0 errors after all B-batch deletions.
 
 - [ ] T003 [US1] Delete `src/BusDataPoc/` directory entirely — not in .sln, contains ~80 MB build artifacts, zero production references
-- [X] T004 [P] [US1] Delete `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/EventMapper.cs` — 119-line static class, zero callers confirmed
-- [X] T005 [P] [US1] Delete `src/ChefKnifeStudios.MartaJazz.Shared/JsonFlattener.cs` — 53-line utility, zero callers confirmed
-- [X] T006 [P] [US1] Delete `src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/EndpointsServices/Discard.cs` — 7-line singleton sentinel, zero callers confirmed
-- [X] T007 [P] [US1] Delete `src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/JsInterop/AudioPlayerJsInterop.cs` — Client.Core duplicate; DI wires the Client.Shared version (`builder.Services.AddSingleton<IAudioPlayerJsInterop, AudioPlayerJsInterop>()` in Client.WebApp/Program.cs line 57 references the Shared copy)
-- [X] T008 [US1] Delete `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/SignalRTest.razor` — debug test page compiled into production; verify no nav links point to `@page "/signalr-test"` before deleting (grep for `signalr-test` in .razor and .cs files)
+- [X] T004 [P] [US1] Delete `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/EventMapper.cs` — 119-line static class, zero callers confirmed
+- [X] T005 [P] [US1] Delete `src/ChefKnifeStudios.TransitJazz.Shared/JsonFlattener.cs` — 53-line utility, zero callers confirmed
+- [X] T006 [P] [US1] Delete `src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/EndpointsServices/Discard.cs` — 7-line singleton sentinel, zero callers confirmed
+- [X] T007 [P] [US1] Delete `src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/JsInterop/AudioPlayerJsInterop.cs` — Client.Core duplicate; DI wires the Client.Shared version (`builder.Services.AddSingleton<IAudioPlayerJsInterop, AudioPlayerJsInterop>()` in Client.WebApp/Program.cs line 57 references the Shared copy)
+- [X] T008 [US1] Delete `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/SignalRTest.razor` — debug test page compiled into production; verify no nav links point to `@page "/signalr-test"` before deleting (grep for `signalr-test` in .razor and .cs files)
 
 **Checkpoint**: `dotnet build` → 0 errors. No `CS0246` (type not found) errors.
 
@@ -49,10 +49,10 @@ No tests are requested — this is a pure cleanup (delete/edit, no new logic exc
 
 **Independent Test**: `dotnet restore && dotnet build` passes. Lockfile no longer references the three removed packages. No `using` statements for removed namespaces remain.
 
-- [X] T009 [US2] Remove `<PackageReference Include="Microsoft.Identity.Web" Version="3.8.2" />` from `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/ChefKnifeStudios.MartaJazz.Server.WebAPI.csproj`
-- [X] T010 [US2] Delete the three dead commented auth lines from `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/Program.cs`: `//app.UseAuthentication();` (line ~103), `//app.UseAuthorization();` (line ~104), `//.RequireAuthorization("TransitDataPublisher");` (line ~123)
-- [X] T011 [P] [US2] Remove `<PackageReference Include="StackExchange.Redis" Version="2.9.17" />` from `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/ChefKnifeStudios.MartaJazz.Server.WebAPI.csproj` — verify no `using StackExchange.Redis` remains in any .cs file
-- [X] T012 [P] [US2] Remove `<PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.4.0" />` from `src/Server/ChefKnifeStudios.MartaJazz.ServiceDefaults/ChefKnifeStudios.MartaJazz.ServiceDefaults.csproj` — verify no `UseAzureMonitor()` call or `using Azure.Monitor` remains
+- [X] T009 [US2] Remove `<PackageReference Include="Microsoft.Identity.Web" Version="3.8.2" />` from `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj`
+- [X] T010 [US2] Delete the three dead commented auth lines from `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/Program.cs`: `//app.UseAuthentication();` (line ~103), `//app.UseAuthorization();` (line ~104), `//.RequireAuthorization("TransitDataPublisher");` (line ~123)
+- [X] T011 [P] [US2] Remove `<PackageReference Include="StackExchange.Redis" Version="2.9.17" />` from `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj` — verify no `using StackExchange.Redis` remains in any .cs file
+- [X] T012 [P] [US2] Remove `<PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.4.0" />` from `src/Server/ChefKnifeStudios.TransitJazz.ServiceDefaults/ChefKnifeStudios.TransitJazz.ServiceDefaults.csproj` — verify no `UseAzureMonitor()` call or `using Azure.Monitor` remains
 
 **Checkpoint**: `dotnet restore && dotnet build` → 0 errors.
 
@@ -64,12 +64,12 @@ No tests are requested — this is a pure cleanup (delete/edit, no new logic exc
 
 **Independent Test**: `dotnet build` → 0 errors. Grep confirms zero `Console.WriteLine` calls in non-debug production paths. LogEventWorker bare `catch { }` blocks are gone.
 
-- [X] T013 [P] [US5] Delete commented `//[Authorize(Policy = "TransitDataPublisher")]` line from `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/SignalR/WorkerTransitHub.cs` line ~11 — stale comment with no intent; auth is separately disabled at middleware level
-- [X] T014 [US5] Fix bare `catch { }` blocks in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Logging/LogEventWorker.cs` at lines ~126 and ~149 — replace each with `catch (Exception ex) { _logger.LogWarning(ex, "LogEventWorker: unexpected exception."); }`. Leave `catch (OperationCanceledException) { }` blocks at ~120 and ~143 untouched (intentional cancellation handling)
-- [X] T015 [US5] Add `#if DEBUG` / `#endif` preprocessor guard around the `WriteBatchToDiskAsync(...)` call site in `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Worker.cs` lines ~529-546 — prevents debug JSON batch files from being written in production builds
-- [X] T016 [US5] Delete `IsAllowedRoute()` method from `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` lines ~559-561 — always returns `true`; find all call sites (grep for `IsAllowedRoute`) and either inline `true` or remove the enclosing condition
-- [X] T017 [US5] Replace 3 `Console.WriteLine` calls in `src/Client/ChefKnifeStudios.MartaJazz.Client.Core/Services/HttpService.cs` lines ~126, ~133, ~139 with `_logger.LogWarning(...)` / `_logger.LogError(...)` using the injected `ILogger<HttpService>` (add DI injection if not already present)
-- [X] T018 [US5] Delete or convert 17 `Console.WriteLine` calls in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/Map.razor.Helper.cs` — delete debug noise; convert any meaningful diagnostics to `ILogger.LogDebug(...)` if a logger is available in that partial class context
+- [X] T013 [P] [US5] Delete commented `//[Authorize(Policy = "TransitDataPublisher")]` line from `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/SignalR/WorkerTransitHub.cs` line ~11 — stale comment with no intent; auth is separately disabled at middleware level
+- [X] T014 [US5] Fix bare `catch { }` blocks in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Logging/LogEventWorker.cs` at lines ~126 and ~149 — replace each with `catch (Exception ex) { _logger.LogWarning(ex, "LogEventWorker: unexpected exception."); }`. Leave `catch (OperationCanceledException) { }` blocks at ~120 and ~143 untouched (intentional cancellation handling)
+- [X] T015 [US5] Add `#if DEBUG` / `#endif` preprocessor guard around the `WriteBatchToDiskAsync(...)` call site in `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Worker.cs` lines ~529-546 — prevents debug JSON batch files from being written in production builds
+- [X] T016 [US5] Delete `IsAllowedRoute()` method from `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` lines ~559-561 — always returns `true`; find all call sites (grep for `IsAllowedRoute`) and either inline `true` or remove the enclosing condition
+- [X] T017 [US5] Replace 3 `Console.WriteLine` calls in `src/Client/ChefKnifeStudios.TransitJazz.Client.Core/Services/HttpService.cs` lines ~126, ~133, ~139 with `_logger.LogWarning(...)` / `_logger.LogError(...)` using the injected `ILogger<HttpService>` (add DI injection if not already present)
+- [X] T018 [US5] Delete or convert 17 `Console.WriteLine` calls in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/Map.razor.Helper.cs` — delete debug noise; convert any meaningful diagnostics to `ILogger.LogDebug(...)` if a logger is available in that partial class context
 
 **Checkpoint**: `dotnet build` → 0 errors. `grep -r "Console.WriteLine" src/ --include="*.cs"` → 0 matches (BusDataPoc already deleted in Batch B).
 
@@ -81,8 +81,8 @@ No tests are requested — this is a pure cleanup (delete/edit, no new logic exc
 
 **Independent Test**: `dotnet build` → 0 errors. `grep -r "HaversineMeters" src/ --include="*.cs"` → 0 matches (definition gone, call sites updated). Route-following vehicle animation continues to work in the browser.
 
-- [X] T019 [US4] Add `public static double DistanceMeters(double lat1, double lon1, double lat2, double lon2) => DistanceKm(lat1, lon1, lat2, lon2) * 1000;` to `src/ChefKnifeStudios.MartaJazz.Shared/Geospatial/HaversineCalculator.cs`
-- [X] T020 [US4] Delete the local `HaversineMeters()` method from `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` lines ~411-427; replace all call sites in that file with `HaversineCalculator.DistanceMeters(...)` — add `using ChefKnifeStudios.MartaJazz.Shared.Geospatial;` if not already present
+- [X] T019 [US4] Add `public static double DistanceMeters(double lat1, double lon1, double lat2, double lon2) => DistanceKm(lat1, lon1, lat2, lon2) * 1000;` to `src/ChefKnifeStudios.TransitJazz.Shared/Geospatial/HaversineCalculator.cs`
+- [X] T020 [US4] Delete the local `HaversineMeters()` method from `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` lines ~411-427; replace all call sites in that file with `HaversineCalculator.DistanceMeters(...)` — add `using ChefKnifeStudios.TransitJazz.Shared.Geospatial;` if not already present
 
 **Checkpoint**: `dotnet build` → 0 errors. One `DistanceMeters` definition exists in `HaversineCalculator.cs`.
 
@@ -94,7 +94,7 @@ No tests are requested — this is a pure cleanup (delete/edit, no new logic exc
 
 **Independent Test**: App loads in browser, map renders, routes display and animate, vehicle positions update — no JS `TypeError: window.ChefMap.X is not a function` console errors.
 
-- [X] T021 [US1] Grep C# source for `InvokeAsync.*addRouteShapeFeature` and `InvokeAsync.*toggleTraffic` to confirm zero callers, then delete both dead function blocks from `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js` (lines ~125-127 for `toggleTraffic`, lines ~557-559 for `addRouteShapeFeature`)
+- [X] T021 [US1] Grep C# source for `InvokeAsync.*addRouteShapeFeature` and `InvokeAsync.*toggleTraffic` to confirm zero callers, then delete both dead function blocks from `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js` (lines ~125-127 for `toggleTraffic`, lines ~557-559 for `addRouteShapeFeature`)
 
 **Checkpoint**: Browser smoke test — map loads, route selection works, no JS console errors for missing functions.
 

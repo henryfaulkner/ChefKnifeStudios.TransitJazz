@@ -1,6 +1,6 @@
 # Contract: `checkpoint-trail.js` (RCL ES module)
 
-Path: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/checkpoint-trail.js`
+Path: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/checkpoint-trail.js`
 
 A structural sibling of `checkpoint-pulse.js`. Renders transient, route-colored, growing line segments for checkpoint crossings using one GeoJSON source + one `line` layer driven by a single `requestAnimationFrame` loop.
 

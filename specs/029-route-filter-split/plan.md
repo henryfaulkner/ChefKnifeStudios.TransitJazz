@@ -78,13 +78,13 @@ specs/029-route-filter-split/
 ### Source Code (files this feature touches)
 
 ```text
-src/ChefKnifeStudios.MartaJazz.Shared/
+src/ChefKnifeStudios.TransitJazz.Shared/
 └── GtfsData/RouteShapeFeature.cs            # add TransitMode Mode to RouteShapeProperties
 
-src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/
+src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/
 └── GtfsStatic/GtfsStaticLoader.cs           # parse route_type → Mode; serialize "mode" in GeoJSON
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/
 ├── ViewModels/RouteFilterViewModel.cs       # RouteItem.Mode; set from Properties.Mode in BuildRouteItems
 ├── Components/RouteFilters.razor            # split @foreach into Rail + Bus sections, hide-when-empty
 └── Resources/RouteFilterResources.resx      # add Rail + Buses section-label keys

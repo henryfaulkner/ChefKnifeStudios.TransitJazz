@@ -20,8 +20,8 @@ No setup or foundational phases — all tasks are targeted edits to existing com
 
 **Independent Test**: Open the app and confirm all 5 FABs (City, DarkMode, Audio, Info, MapStyle) are visible and non-overlapping.
 
-- [x] T001 [P] [US1] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/InfoFab.razor.css`, change `right: 224px` → `right: 174px`
-- [x] T002 [P] [US1] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/MapStyleFab.razor.css`, change `right: 124px` → `right: 224px`
+- [x] T001 [P] [US1] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/InfoFab.razor.css`, change `right: 224px` → `right: 174px`
+- [x] T002 [P] [US1] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/MapStyleFab.razor.css`, change `right: 124px` → `right: 224px`
 
 **Checkpoint**: Audio FAB at 124px, Info at 174px, MapStyle at 224px — no overlap. Build and visually verify.
 
@@ -33,7 +33,7 @@ No setup or foundational phases — all tasks are targeted edits to existing com
 
 **Independent Test**: Toggle dark mode; verify icon is moon when dark, sun when light.
 
-- [x] T003 [US2] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/DarkModeFab.razor`, fix `GetIcon()`: change `_settings.IsDarkModeEnabled ? "light_mode" : "dark_mode"` → `_settings.IsDarkModeEnabled ? "dark_mode" : "light_mode"`
+- [x] T003 [US2] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/DarkModeFab.razor`, fix `GetIcon()`: change `_settings.IsDarkModeEnabled ? "light_mode" : "dark_mode"` → `_settings.IsDarkModeEnabled ? "dark_mode" : "light_mode"`
 
 **Checkpoint**: Build and verify: tap DarkMode FAB → dark mode on → icon shows moon (`dark_mode`). Tap again → icon shows sun (`light_mode`).
 
@@ -51,7 +51,7 @@ All four tasks in this phase are independent (different files) and can be done i
 
 **Independent Test**: Enable dark mode, reload app (to see overlay) → overlay is dark; light mode → overlay is white.
 
-- [x] T004 [US3] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/AudioUnlockOverlay.razor`:
+- [x] T004 [US3] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/AudioUnlockOverlay.razor`:
   1. Add `@implements IDisposable`, `@inject IEventNotificationService EventNotificationService`, `@inject ISettingsService SettingsService` directives
   2. Add `bool _isDark;` field in `@code`
   3. Seed `_isDark = SettingsService.GetSettings().IsDarkModeEnabled;` in `OnInitialized`
@@ -86,13 +86,13 @@ All four tasks in this phase are independent (different files) and can be done i
 
 **Independent Test**: Enable dark mode, tap Info FAB → overlay is dark; light mode → overlay is white.
 
-- [x] T005 [US4] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/InfoFab.razor`:
+- [x] T005 [US4] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/InfoFab.razor`:
   1. Add `@implements IDisposable`, `@inject IEventNotificationService EventNotificationService`, `@inject ISettingsService SettingsService` directives
   2. Add `bool _isDark;` field in `@code`
   3. Seed `_isDark = SettingsService.GetSettings().IsDarkModeEnabled;` in `OnInitialized` (already has `OnInitialized`)
   4. Add `HandleEvent` handler and `Dispose` per plan.md subscription pattern
   5. Add `info-overlay--dark` class conditionally on the `<div class="info-overlay">` element
-- [x] T006 [US4] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/InfoFab.razor.css`, add dark overrides:
+- [x] T006 [US4] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/InfoFab.razor.css`, add dark overrides:
   ```css
   .info-overlay--dark {
       background: #1A1C1E;
@@ -121,7 +121,7 @@ All four tasks in this phase are independent (different files) and can be done i
 
 **Independent Test**: Enable dark mode; observe TransitRunningLabel count text is light against the dark basemap.
 
-- [x] T007 [US5] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/TransitRunningLabel.razor`:
+- [x] T007 [US5] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/TransitRunningLabel.razor`:
   1. Add `@implements IDisposable`, `@inject IEventNotificationService EventNotificationService`, `@inject ISettingsService SettingsService` directives
   2. Add `bool _isDark;` field in `@code` block
   3. Seed `_isDark = SettingsService.GetSettings().IsDarkModeEnabled;` in `OnInitialized` (add after existing subscription)
@@ -145,7 +145,7 @@ All four tasks in this phase are independent (different files) and can be done i
 
 **Independent Test**: Enable dark mode, expand route filter panel → section labels and bus count text are light.
 
-- [x] T008 [US6] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteFilters.razor.cs`:
+- [x] T008 [US6] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteFilters.razor.cs`:
   1. Add `using` imports for `IEventNotificationService`, `ThemeChangedEventArgs`, `ISettingsService`
   2. Inject `IEventNotificationService EventNotificationService` and `ISettingsService SettingsService`
   3. Implement `IDisposable`
@@ -153,11 +153,11 @@ All four tasks in this phase are independent (different files) and can be done i
   5. Seed `_isDark = SettingsService.GetSettings().IsDarkModeEnabled;` in `OnInitialized`
   6. Add `HandleEvent` handler (cast to `ThemeChangedEventArgs`, set `_isDark`, call `InvokeAsync(StateHasChanged)`)
   7. Add `Dispose` to unsubscribe
-- [x] T009 [US6] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteFilters.razor`, add `route-filters--dark` CSS class conditionally on the root `<div class="route-filters">`:
+- [x] T009 [US6] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteFilters.razor`, add `route-filters--dark` CSS class conditionally on the root `<div class="route-filters">`:
   ```razor
   <div class="route-filters @(_isDark ? "route-filters--dark" : "")">
   ```
-- [x] T010 [US6] In `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteFilters.razor.css`, add dark overrides:
+- [x] T010 [US6] In `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteFilters.razor.css`, add dark overrides:
   ```css
   .route-filters--dark .route-filters__bus-count {
       color: rgba(193, 199, 206, 0.7);
@@ -173,8 +173,8 @@ All four tasks in this phase are independent (different files) and can be done i
 
 ## Phase 3: Polish & QA
 
-- [x] T011 Build the solution and confirm zero new errors: `dotnet build src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/ChefKnifeStudios.MartaJazz.Client.Shared.csproj --no-restore -v q`
-- [x] T012 Build the WebApp project: `dotnet build src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/ChefKnifeStudios.MartaJazz.Client.WebApp.csproj --no-restore -v q`
+- [x] T011 Build the solution and confirm zero new errors: `dotnet build src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/ChefKnifeStudios.TransitJazz.Client.Shared.csproj --no-restore -v q`
+- [x] T012 Build the WebApp project: `dotnet build src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj --no-restore -v q`
 - [ ] T013 Manual QA per quickstart.md: verify all 6 user stories, no overlap in FAB row, correct icons, dark overlays from first paint, no GTFS re-fetch on toggle
 
 ---

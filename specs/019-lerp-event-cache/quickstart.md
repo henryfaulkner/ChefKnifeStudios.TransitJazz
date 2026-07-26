@@ -5,13 +5,13 @@ Verifies the feature end to end. Run from repo root with the Aspire AppHost (whi
 ## Prerequisites
 
 - .NET 10 SDK
-- `dotnet run` on `src/ChefKnifeStudios.MartaJazz.AppHost` (or the existing local run flow)
+- `dotnet run` on `src/ChefKnifeStudios.TransitJazz.AppHost` (or the existing local run flow)
 
 ## Build & run
 
 ```pwsh
 dotnet build ChefKnifeStudios.TransitJazz.sln
-dotnet run --project src/ChefKnifeStudios.MartaJazz.AppHost
+dotnet run --project src/ChefKnifeStudios.TransitJazz.AppHost
 ```
 
 ## Step 1 — Cold start: endpoint returns empty 200 (FR-004 / US2)
@@ -67,7 +67,7 @@ Hammer the endpoint a few times in quick succession:
 ## Step 7 — Server unit tests
 
 ```pwsh
-dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests
+dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests
 ```
 
 **Expect**: all pass —

@@ -60,7 +60,7 @@ specs/038-telemetry-denormalization/
 ### Source Code (repository root)
 
 ```text
-src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
+src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/
 ├── Worker.cs                         # MODIFY: replace 3 scattered posts with 2 end-of-cycle posts;
 │                                     #   PerCityCycle wraps the per-city try/catch (lines 55-75);
 │                                     #   FullCycle posts once after the foreach; sample memory once/tick;
@@ -80,7 +80,7 @@ src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/
 │   └── LoggingOptions.cs            # UNCHANGED (Container already defaults to "telemetry")
 └── Program.cs                        # UNCHANGED (DI registers ILoggingService/LogEventWorker by interface)
 
-src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests/
+src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/
 ├── SnapParquetSchemaTests.cs        # DELETE
 ├── LerpParquetSchemaTests.cs        # DELETE
 ├── CycleParquetSchemaTests.cs       # DELETE

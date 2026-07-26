@@ -26,11 +26,11 @@ test as US1, not a separate code path.
 
 ## Path Conventions
 
-Existing web app structure: `src/ChefKnifeStudios.MartaJazz.Shared/`,
-`src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/`,
-`src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/`,
-`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`,
-`src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`.
+Existing web app structure: `src/ChefKnifeStudios.TransitJazz.Shared/`,
+`src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/`,
+`src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/`,
+`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`,
+`src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/`.
 
 ---
 
@@ -38,7 +38,7 @@ Existing web app structure: `src/ChefKnifeStudios.MartaJazz.Shared/`,
 
 **Purpose**: The one shared constant every other task depends on.
 
-- [X] T001 Add `public const string Rtd = "rtd";` to `src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs`
+- [X] T001 Add `public const string Rtd = "rtd";` to `src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs`
 
 **Checkpoint**: `CityNames.Rtd` exists and compiles; nothing references it yet.
 
@@ -53,8 +53,8 @@ live-vehicle path).
 **⚠️ CRITICAL**: T002 and T003 MUST be byte-identical in shape (per contracts/city-config.md,
 including the 8-entry `RailRouteIdMap`) before either user story is verifiable end-to-end.
 
-- [X] T002 [P] Add the `rtd` `Cities:` entry (including the 8-entry `RailRouteIdMap`) to `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.json` per `contracts/city-config.md` (depends on T001)
-- [X] T003 [P] Add the identical `rtd` `Cities:` entry to `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.json` per `contracts/city-config.md` (depends on T001)
+- [X] T002 [P] Add the `rtd` `Cities:` entry (including the 8-entry `RailRouteIdMap`) to `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json` per `contracts/city-config.md` (depends on T001)
+- [X] T003 [P] Add the identical `rtd` `Cities:` entry to `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json` per `contracts/city-config.md` (depends on T001)
 - [X] T004 Build the solution (`dotnet build src\ChefKnifeStudios.TransitJazz.sln`) — expect 0 errors, no new warnings
 
 **Checkpoint**: `rtd` is registered in both services' config; Worker will hit the existing `else`
@@ -95,12 +95,12 @@ for crossings.
 
 ### Implementation for User Story 1
 
-- [X] T007 [P] [US1] Add the Denver `MatListItem`/`MatButton` + `HandleRtdClicked` handler to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/CityFab.razor` per `contracts/city-picker.md` (depends on T001)
-- [X] T008 [P] [US1] Add `_cityCenter[CityNames.Rtd] = (39.7539, -105.0009)` to `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` per research.md R3 (depends on T001)
-- [X] T009 [US1] Invoke the `create-audio-overlay-paragraphs` skill for Denver/RTD to write `RtdAudioOverlayHeader`/`Paragraph1`/`Paragraph2`/`Paragraph3` into `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Resources/RouteFilterResources.resx`
-- [X] T010 [US1] Wire the `CityNames.Rtd => "RtdAudioOverlay"` switch arm into `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/AudioUnlockOverlay.razor`'s `OnInitialized` (depends on T001, T009)
+- [X] T007 [P] [US1] Add the Denver `MatListItem`/`MatButton` + `HandleRtdClicked` handler to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/CityFab.razor` per `contracts/city-picker.md` (depends on T001)
+- [X] T008 [P] [US1] Add `_cityCenter[CityNames.Rtd] = (39.7539, -105.0009)` to `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` per research.md R3 (depends on T001)
+- [X] T009 [US1] Invoke the `create-audio-overlay-paragraphs` skill for Denver/RTD to write `RtdAudioOverlayHeader`/`Paragraph1`/`Paragraph2`/`Paragraph3` into `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Resources/RouteFilterResources.resx`
+- [X] T010 [US1] Wire the `CityNames.Rtd => "RtdAudioOverlay"` switch arm into `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/AudioUnlockOverlay.razor`'s `OnInitialized` (depends on T001, T009)
 - [X] T011 [P] [US1] Add the `RtdOverlayParagraph1` info-panel key (mentioning buses, light rail, and commuter rail) to `RouteFilterResources.resx` (one templated sentence, no skill invocation)
-- [X] T012 [US1] Wire the `CityNames.Rtd => "RtdOverlay"` switch arm into `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/InfoFab.razor`'s `OnInitialized` (depends on T001, T011)
+- [X] T012 [US1] Wire the `CityNames.Rtd => "RtdOverlay"` switch arm into `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/InfoFab.razor`'s `OnInitialized` (depends on T001, T011)
 - [X] T013 [US1] Build the solution again (`dotnet build src\ChefKnifeStudios.TransitJazz.sln`) — expect 0 errors, no new warnings (depends on T007, T008, T010, T012)
 - [ ] T014 [US1] Live smoke test: run Worker + WebAPI + Client, select Denver via the picker, confirm RTD buses/light rail/commuter rail render and move on the map over several poll cycles, audio plays on crossings, and the audio-unlock overlay + info panel show Denver-specific copy (depends on T002, T003, T006, T013)
 

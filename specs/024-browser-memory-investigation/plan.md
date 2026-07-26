@@ -72,14 +72,14 @@ specs/024-browser-memory-investigation/
 
 ```text
 src/Client/
-├── ChefKnifeStudios.MartaJazz.Client.WebApp/
+├── ChefKnifeStudios.TransitJazz.Client.WebApp/
 │   ├── wwwroot/
 │   │   ├── index.html                      # US1: COOP/COEP note + probe wiring; US3: window.__MJ_DEBUG bootstrap
 │   │   └── appsettings.json                # US3: Logging.LogLevel.Default Debug → Information
 │   ├── Program.cs                          # US3: drive min level from config, not hard-coded Debug
 │   └── Pages/
 │       └── TransitMap.razor.cs             # US2: route-cache de-dup; US4: collapse double ToArray, bound _pendingBatches
-└── ChefKnifeStudios.MartaJazz.Client.Shared/
+└── ChefKnifeStudios.TransitJazz.Client.Shared/
     └── wwwroot/js/
         ├── memory-probe.js                 # US1: harden measureUA / report as the supported attribution path
         ├── vehicle-animator.js             # US3: gate _log behind debug flag; US4: skip unchanged setData

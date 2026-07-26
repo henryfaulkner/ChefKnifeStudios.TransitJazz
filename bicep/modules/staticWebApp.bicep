@@ -37,7 +37,7 @@ resource swa 'Microsoft.Web/staticSites@2024-04-01' = {
     branch: branch
     repositoryToken: repositoryToken
     buildProperties: {
-      appLocation: 'src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp'
+      appLocation: 'src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp'
       apiLocation: ''
       outputLocation: 'wwwroot'
     }

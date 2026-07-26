@@ -61,10 +61,10 @@ specs/025-mobile-map-controls/
 
 ```text
 src/Client/
-├── ChefKnifeStudios.MartaJazz.Client.WebApp/
+├── ChefKnifeStudios.TransitJazz.Client.WebApp/
 │   └── Pages/
 │       └── TransitMap.razor.cs                 # EDIT: DefaultCameraOptions Zoom 9.5 → 8.5
-└── ChefKnifeStudios.MartaJazz.Client.Shared/
+└── ChefKnifeStudios.TransitJazz.Client.Shared/
     ├── Components/
     │   ├── Map.razor.cs                          # (no change expected; getMapSettings already passes zoom)
     │   └── Map.razor.Helper.cs                   # (review only — centerMap/fitBounds behavior re FR-009)

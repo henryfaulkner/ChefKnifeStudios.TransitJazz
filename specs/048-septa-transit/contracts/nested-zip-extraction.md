@@ -1,7 +1,7 @@
 # Contract: Nested-Zip Static GTFS Extraction
 
 The one genuinely new piece of production logic this feature introduces, inside
-`GtfsStaticLoader.BuildCityShapeSetAsync` (`Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs`).
+`GtfsStaticLoader.BuildCityShapeSetAsync` (`Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/GtfsStatic/GtfsStaticLoader.cs`).
 City-agnostic — not a `septa`-specific branch.
 
 ## Behavior

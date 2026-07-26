@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "ChefKnifeStudios.TransitJazz.Client.WebApp": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:52832;http://localhost:52833"
+    }
+  }
+}

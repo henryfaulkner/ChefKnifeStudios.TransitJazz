@@ -23,8 +23,8 @@ behavior US1 starts. US3 (blurb) is P2 and fully independent of the map work.
 
 ## Path Conventions
 
-- Shared RCL: `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`
-- WASM host: `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`
+- Shared RCL: `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`
+- WASM host: `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/`
 
 ---
 
@@ -33,8 +33,8 @@ behavior US1 starts. US3 (blurb) is P2 and fully independent of the map work.
 **Purpose**: Localization scaffolding + DI registration that later phases depend on. Frontend-only; no
 new packages beyond `Microsoft.Extensions.Localization` (verify it resolves under .NET 10 WASM).
 
-- [X] T001 Add `builder.Services.AddLocalization();` in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Program.cs` (place near the other service registrations).
-- [X] T002 [P] Create English resource file `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Resources/RouteFilterResources.resx` with keys `RouteBlurbPlaceholder` (value `"Route {0} — tone and Atlanta story coming soon."`) and `RouteBlurbBarAriaLabel` (value `"Route information"`). Add an empty marker class `RouteFilterResources` in `Resources/RouteFilterResources.cs` so `IStringLocalizer<RouteFilterResources>` resolves. (Spanish `.es.resx` intentionally deferred.)
+- [X] T001 Add `builder.Services.AddLocalization();` in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Program.cs` (place near the other service registrations).
+- [X] T002 [P] Create English resource file `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Resources/RouteFilterResources.resx` with keys `RouteBlurbPlaceholder` (value `"Route {0} — tone and Atlanta story coming soon."`) and `RouteBlurbBarAriaLabel` (value `"Route information"`). Add an empty marker class `RouteFilterResources` in `Resources/RouteFilterResources.cs` so `IStringLocalizer<RouteFilterResources>` resolves. (Spanish `.es.resx` intentionally deferred.)
 - [X] T003 Verify the Shared RCL `.csproj` includes the `Resources/` `.resx` as `EmbeddedResource` (add `<EmbeddedResource Include="Resources\**\*.resx" />` only if not already covered by the default SDK glob) — confirm with a `dotnet build` of the Shared project.
 
 **Checkpoint**: Localization seam exists; `IStringLocalizer<RouteFilterResources>` resolves an English placeholder.
@@ -48,7 +48,7 @@ complete before any user story.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [X] T004 Add a read-only convenience member to the route-filter VM: `string? SelectedRouteId => RouteItems.FirstOrDefault(x => x.IsSelected)?.RouteId;` — declare it on `IRouteFilterViewModel` and implement on `RouteFilterViewModel` in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs`. No behavior change; `using System.Linq;` already present.
+- [X] T004 Add a read-only convenience member to the route-filter VM: `string? SelectedRouteId => RouteItems.FirstOrDefault(x => x.IsSelected)?.RouteId;` — declare it on `IRouteFilterViewModel` and implement on `RouteFilterViewModel` in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/ViewModels/RouteFilterViewModel.cs`. No behavior change; `using System.Linq;` already present.
 
 **Checkpoint**: Consumers can read the single focused route id from the existing VM without re-deriving it.
 
@@ -64,9 +64,9 @@ move to another input → emphasis moves; at most one emphasized. (quickstart §
 
 ### Implementation for User Story 1
 
-- [X] T005 [US1] Add `ChefMap.focusRoute(containerDivId, routeId)` to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/map-interop.js`: lazily init `ChefMap._preFocusColors = {}`; enumerate `map.getStyle().layers` for ids starting `route-layer-`; stash original `line-color` per layer; set the focused `route-layer-<routeId>` to `line-opacity` 0.95 with its own (stashed) color; guard every `getLayer`/`setPaintProperty` so a missing focused layer does not throw. (Non-focused greying is added in US2 — keep the iteration loop ready for it.) Per `contracts/chefmap-focus-interop.md`.
-- [X] T006 [US1] Add the C# interop wrapper `FocusRouteAsync(string routeId)` to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/Map.razor.Helper.cs`, following the existing try/catch + `Console.WriteLine` pattern (invokes `ChefMap.focusRoute`, args `ElementId, routeId`).
-- [X] T007 [US1] In `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`: inject `IRouteFilterViewModel`; subscribe to its `PropertyChanged` in `OnInitializedAsync`; on `RouteItems`/`HasSelection` change, when `SelectedRouteId is { } id` call `await _map.FocusRouteAsync(id)`; unsubscribe in `DisposeAsync`. Guard on `_mapReady && _map is not null`.
+- [X] T005 [US1] Add `ChefMap.focusRoute(containerDivId, routeId)` to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/map-interop.js`: lazily init `ChefMap._preFocusColors = {}`; enumerate `map.getStyle().layers` for ids starting `route-layer-`; stash original `line-color` per layer; set the focused `route-layer-<routeId>` to `line-opacity` 0.95 with its own (stashed) color; guard every `getLayer`/`setPaintProperty` so a missing focused layer does not throw. (Non-focused greying is added in US2 — keep the iteration loop ready for it.) Per `contracts/chefmap-focus-interop.md`.
+- [X] T006 [US1] Add the C# interop wrapper `FocusRouteAsync(string routeId)` to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/Map.razor.Helper.cs`, following the existing try/catch + `Console.WriteLine` pattern (invokes `ChefMap.focusRoute`, args `ElementId, routeId`).
+- [X] T007 [US1] In `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`: inject `IRouteFilterViewModel`; subscribe to its `PropertyChanged` in `OnInitializedAsync`; on `RouteItems`/`HasSelection` change, when `SelectedRouteId is { } id` call `await _map.FocusRouteAsync(id)`; unsubscribe in `DisposeAsync`. Guard on `_mapReady && _map is not null`.
 
 **Checkpoint**: Focusing a route emphasizes its line on the map (other routes not yet de-emphasized — completed in US2).
 
@@ -85,8 +85,8 @@ unfocus → all restore to opacity 0.85 + original color immediately; fresh load
 
 - [X] T008 [US2] Extend `ChefMap.focusRoute` in `src/Client/.../wwwroot/js/map-interop.js`: in the same layer loop from T005, for every NON-focused `route-layer-*` set `line-opacity` 0.15 and `line-color` `'#9ca3af'`. Keep idempotency — calling with a new `routeId` re-evaluates all layers to the new target (supports direct route→route switch with no intermediate "all normal" frame). Per `contracts/chefmap-focus-interop.md`.
 - [X] T009 [US2] Add `ChefMap.clearRouteFocus(containerDivId)` to `src/Client/.../wwwroot/js/map-interop.js`: for each `route-layer-*` set `line-opacity` 0.85 (creation default) and restore `line-color` from `ChefMap._preFocusColors[id]`; then reset `ChefMap._preFocusColors = {}`. Do not set any paint transition (keeps teardown immediate per Principle XI).
-- [X] T010 [US2] Add the C# wrapper `ClearRouteFocusAsync()` to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/Map.razor.Helper.cs` (invokes `ChefMap.clearRouteFocus`, arg `ElementId`; same try/catch pattern).
-- [X] T011 [US2] In `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs`, extend the `PropertyChanged` handler from T007: when `SelectedRouteId is null` call `await _map.ClearRouteFocusAsync()` (the focused branch from T007 now produces full highlight+blur via the extended `focusRoute`).
+- [X] T010 [US2] Add the C# wrapper `ClearRouteFocusAsync()` to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/Map.razor.Helper.cs` (invokes `ChefMap.clearRouteFocus`, arg `ElementId`; same try/catch pattern).
+- [X] T011 [US2] In `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs`, extend the `PropertyChanged` handler from T007: when `SelectedRouteId is null` call `await _map.ClearRouteFocusAsync()` (the focused branch from T007 now produces full highlight+blur via the extended `focusRoute`).
 
 **Checkpoint**: Full map single-focus works — one route emphasized, all others greyed, instant restore on unfocus. Map-side feature complete and independently demoable.
 
@@ -104,12 +104,12 @@ naming the route; switch focus → text swaps with no close/reopen; unfocus → 
 
 ### Implementation for User Story 3
 
-- [X] T012 [P] [US3] Create the blurb record `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Data/RouteBlurb.cs`: `public sealed record RouteBlurb(string RouteId, string ToneDescription, string Significance, bool IsPlaceholder = false);` Per `data-model.md`.
-- [X] T013 [US3] Create `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Data/RouteBlurbStore.cs` with `IRouteBlurbStore { RouteBlurb GetForRoute(string routeId); }` and an implementation: ctor takes `IStringLocalizer<RouteFilterResources>`; an authored `Dictionary<string,RouteBlurb>` (ordinal, MAY be empty at ship); on miss return a placeholder built from `string.Format(localizer["RouteBlurbPlaceholder"], routeId)` with `IsPlaceholder:true`; never returns null. Per `contracts/route-blurb-store.md`. (Depends on T002, T012.)
-- [X] T014 [US3] Register the store in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Program.cs`: `builder.Services.AddSingleton<IRouteBlurbStore, RouteBlurbStore>();`
-- [X] T015 [P] [US3] Create `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteBlurbBar.razor.css`: full-width bottom overlay (`position:absolute; left:0; right:0; bottom:0;`), semi-transparent dark background (`rgba(0,0,0,0.65)`), light text, z-index above the map; **in** = fade/slide transition ≤100ms; **out** = no exit animation (visibility gated by render, not a timed transition). Per `contracts/route-blurb-store.md`.
-- [X] T016 [US3] Create `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/RouteBlurbBar.razor` + `RouteBlurbBar.razor.cs`: inject `IRouteFilterViewModel` and `IRouteBlurbStore` (and `IStringLocalizer<RouteFilterResources>` for the aria-label); subscribe to VM `PropertyChanged`; when `SelectedRouteId is null` render nothing/hidden, else bind `RouteBlurb = store.GetForRoute(id)` and render `ToneDescription` + `Significance`; on R→S keep the element mounted and swap content (FR-008); implement `IDisposable` to unsubscribe (mirror `RouteFilters.razor.cs`). Per `contracts/route-blurb-store.md`. (Depends on T013.)
-- [X] T017 [US3] Render `<RouteBlurbBar />` inside the map container in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor` (within `.transit-map-container`, after `<Map ... />`, so it overlays the map).
+- [X] T012 [P] [US3] Create the blurb record `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Data/RouteBlurb.cs`: `public sealed record RouteBlurb(string RouteId, string ToneDescription, string Significance, bool IsPlaceholder = false);` Per `data-model.md`.
+- [X] T013 [US3] Create `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Data/RouteBlurbStore.cs` with `IRouteBlurbStore { RouteBlurb GetForRoute(string routeId); }` and an implementation: ctor takes `IStringLocalizer<RouteFilterResources>`; an authored `Dictionary<string,RouteBlurb>` (ordinal, MAY be empty at ship); on miss return a placeholder built from `string.Format(localizer["RouteBlurbPlaceholder"], routeId)` with `IsPlaceholder:true`; never returns null. Per `contracts/route-blurb-store.md`. (Depends on T002, T012.)
+- [X] T014 [US3] Register the store in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Program.cs`: `builder.Services.AddSingleton<IRouteBlurbStore, RouteBlurbStore>();`
+- [X] T015 [P] [US3] Create `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteBlurbBar.razor.css`: full-width bottom overlay (`position:absolute; left:0; right:0; bottom:0;`), semi-transparent dark background (`rgba(0,0,0,0.65)`), light text, z-index above the map; **in** = fade/slide transition ≤100ms; **out** = no exit animation (visibility gated by render, not a timed transition). Per `contracts/route-blurb-store.md`.
+- [X] T016 [US3] Create `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/RouteBlurbBar.razor` + `RouteBlurbBar.razor.cs`: inject `IRouteFilterViewModel` and `IRouteBlurbStore` (and `IStringLocalizer<RouteFilterResources>` for the aria-label); subscribe to VM `PropertyChanged`; when `SelectedRouteId is null` render nothing/hidden, else bind `RouteBlurb = store.GetForRoute(id)` and render `ToneDescription` + `Significance`; on R→S keep the element mounted and swap content (FR-008); implement `IDisposable` to unsubscribe (mirror `RouteFilters.razor.cs`). Per `contracts/route-blurb-store.md`. (Depends on T013.)
+- [X] T017 [US3] Render `<RouteBlurbBar />` inside the map container in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor` (within `.transit-map-container`, after `<Map ... />`, so it overlays the map).
 
 **Checkpoint**: Blurb bar appears with placeholder on focus, swaps on focus change, vanishes instantly on unfocus.
 
@@ -122,7 +122,7 @@ naming the route; switch focus → text swaps with no close/reopen; unfocus → 
 - [X] T018 Run `quickstart.md` §4 (consistency): rapid focus sweep then leave the grid → map fully un-blurred AND blurb gone; nothing stuck (FR-010, SC-004).
 - [X] T019 [P] Verify `quickstart.md` §5 (style-swap resilience) if the GIS toggle is reachable: focus a route, toggle basemap → highlight/blur on data layers preserved (Principle VII). If GIS toggle not yet wired, note as N/A.
 - [X] T020 [P] Confirm no hardcoded placeholder string literal remains in `RouteBlurbStore`/`RouteBlurbBar` (FR-011 English-only seam) — placeholder comes only from `RouteFilterResources.resx`.
-- [X] T021 Run `dotnet build src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/ChefKnifeStudios.MartaJazz.Client.WebApp.csproj` and confirm it succeeds with no new warnings introduced by this feature.
+- [X] T021 Run `dotnet build src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj` and confirm it succeeds with no new warnings introduced by this feature.
 
 ---
 

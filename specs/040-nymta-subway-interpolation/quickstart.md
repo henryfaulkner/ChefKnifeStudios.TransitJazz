@@ -15,8 +15,8 @@ independently checkable.
 
 ```powershell
 dotnet build ChefKnifeStudios.TransitJazz.sln
-dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests
-dotnet test src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker.Tests
+dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests
+dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests
 ```
 
 **Expect**: `SubwayStopOffsetBuilderTests` (INV-E1–E6) and `SubwaySynthesisTests`

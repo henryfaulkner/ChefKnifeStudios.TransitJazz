@@ -8,7 +8,7 @@ description: Orchestration checklist for onboarding a new transit agency/city to
 A new city touches the same ~8 places every time. This skill is the checklist and
 ordering — each step delegates to an existing skill/command rather than duplicating it.
 
-Root namespace is `ChefKnifeStudios.MartaJazz.*` even though the repo folder says
+Root namespace is `ChefKnifeStudios.TransitJazz.*` even though the repo folder says
 `TransitJazz` (see `CLAUDE.md`). **Never auto-commit** — commits are the user's to make.
 
 ## Order of operations
@@ -44,7 +44,7 @@ reasons from, and it's where the fork decision below gets made explicit.
 
 ## 2. Fork decision — config-only vs. bespoke adapter
 
-Check `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/Program.cs` — city
+Check `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/Program.cs` — city
 construction is a 3-way branch:
 
 ```csharp
@@ -83,12 +83,12 @@ If the city is config-only, `/speckit-plan` should produce `contracts/city-confi
 These are what `/speckit-implement` actually executes for a config-only city. Do them in
 this order; steps 5a/5b are parallel (different files), 6 is independent, then build.
 
-**a. `CityNames` constant** — `src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs`:
+**a. `CityNames` constant** — `src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs`:
 ```csharp
 public const string {Agency} = "{lowercase-slug}";
 ```
 
-**b. Worker `Cities:` entry** — `src/Server/ChefKnifeStudios.MartaJazz.Server.TransitDataWorker/appsettings.json`,
+**b. Worker `Cities:` entry** — `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json`,
 appended to the `Cities:` array. Only include fields the agency actually needs (omit
 `RailRealtime`/`RailRouteIdMap`/`RouteIdNormalization`/`ApiKeyEnvVar` if unused — see TTC's
 entry for the minimal keyless shape, WMATA's for `RailRouteIdMap`, NYMTA's for
@@ -103,11 +103,11 @@ entry for the minimal keyless shape, WMATA's for `RailRouteIdMap`, NYMTA's for
 ```
 Percent-encode any literal spaces in URLs (`%20`) — do not rely on the HTTP client to do it.
 
-**c. WebAPI `Cities:` entry** — `src/Server/ChefKnifeStudios.MartaJazz.Server.WebAPI/appsettings.json`.
+**c. WebAPI `Cities:` entry** — `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json`.
 **Must be byte-identical** to (b) — this drives `GtfsStaticLoader` shape loading; the Worker
 entry drives the live fetch. If they diverge, shapes and live vehicles disagree.
 
-**d. `CityFab.razor` picker button** — `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/CityFab.razor`.
+**d. `CityFab.razor` picker button** — `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/CityFab.razor`.
 Add a `MatListItem`/`MatButton` and a handler mirroring the existing ones (e.g.
 `HandleTtcClicked`):
 ```razor
@@ -130,7 +130,7 @@ warnings unrelated to city onboarding).
 
 ## 7. Map origin coordinate
 
-`src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` —
+`src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` —
 `_cityCenter` dictionary (single source of truth for initial camera position):
 ```csharp
 [CityNames.{Agency}] = (lat, lon),
@@ -143,10 +143,10 @@ not Toronto's geographic center). Same zoom defaults apply to every city (`_isMo
 
 Invoke the `create-audio-overlay-paragraphs` skill with the new city as the argument. It
 writes the header + 3 paragraphs into
-`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Resources/RouteFilterResources.resx`
+`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Resources/RouteFilterResources.resx`
 as `{Prefix}Header`/`{Prefix}Paragraph1`/`{Prefix}Paragraph2`/`{Prefix}Paragraph3`, and — if
 it hasn't already — must wire the prefix into
-`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/AudioUnlockOverlay.razor`'s
+`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/AudioUnlockOverlay.razor`'s
 `OnInitialized` switch:
 ```csharp
 CityNames.{Agency} => "{Prefix}AudioOverlay",
@@ -163,7 +163,7 @@ single templated sentence, not creative writing). Add to `RouteFilterResources.r
   <value>Every dot is a real {AGENCY} vehicle, pulled live and turned into sound. {vehicle types, e.g. "Buses and streetcars"} move through {City} in real time, and the map plays what they're doing right now.</value>
 </data>
 ```
-Wire it into `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/InfoFab.razor`'s
+Wire it into `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/InfoFab.razor`'s
 `OnInitialized` switch:
 ```csharp
 CityNames.{Agency} => "{Prefix}Overlay",

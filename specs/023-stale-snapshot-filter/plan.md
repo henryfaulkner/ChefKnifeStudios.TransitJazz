@@ -12,14 +12,14 @@ The cold-start snapshot served by `GET /transit/last-batch` can be entirely stal
 **Language/Version**: C# / .NET 10.0  
 **Primary Dependencies**: ASP.NET Core (Minimal API + SignalR), xUnit (tests). No new packages.  
 **Storage**: In-process memory only (the `LastBatchCache` singleton's per-vehicle dictionary). No persistence, no Redis.  
-**Testing**: xUnit in `ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests` (`dotnet test`).  
+**Testing**: xUnit in `ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests` (`dotnet test`).  
 **Target Platform**: Linux/Windows server (ASP.NET Core WebAPI host).  
 **Project Type**: Web service (server-side component of the decoupled architecture).  
 **Performance Goals**: Snapshot read (`Current`) remains a cheap lock-free `Volatile.Read` of a prebuilt reference; merge cost is O(records in batch) per ~10s publish, well within headroom.  
 **Constraints**: Read-modify-write merge must be thread-safe (lock); reads must never observe a torn/partial state; live broadcast byte-for-byte unchanged; bounded memory (one entry per VehicleId ever seen — hundreds, not millions).  
 **Scale/Scope**: One MARTA fleet (hundreds of buses); a single in-process singleton; ~186 records per batch observed.
 
-**Note on namespaces**: The constitution lists `ChefKnifeStudios.TransitJazz.*`; the actual code uses `ChefKnifeStudios.MartaJazz.*`. This plan follows the **real codebase namespaces**.
+**Note on namespaces**: The constitution lists `ChefKnifeStudios.TransitJazz.*`; the actual code uses `ChefKnifeStudios.TransitJazz.*`. This plan follows the **real codebase namespaces**.
 
 ## Constitution Check
 
@@ -56,13 +56,13 @@ specs/023-stale-snapshot-filter/
 
 ```text
 src/
-├── ChefKnifeStudios.MartaJazz.Shared/
+├── ChefKnifeStudios.TransitJazz.Shared/
 │   └── Events/
 │       ├── EventEnvelope.cs                  # UNCHANGED (read-only reference)
 │       └── RouteNearestPointBatchEvent.cs    # UNCHANGED (IsStale flag lives here)
 │
 └── Server/
-    ├── ChefKnifeStudios.MartaJazz.Server.WebAPI/
+    ├── ChefKnifeStudios.TransitJazz.Server.WebAPI/
     │   ├── SignalR/
     │   │   ├── ILastBatchCache.cs            # MODIFIED — LastBatchCache impl rewritten; interface UNCHANGED
     │   │   └── WorkerTransitHub.cs           # UNCHANGED (still Set(batch) + relay full batch)
@@ -70,7 +70,7 @@ src/
     │   │   └── TransitEndpoints.cs           # UNCHANGED (still returns cache.Current)
     │   └── Program.cs                        # UNCHANGED (AddSingleton already correct)
     │
-    └── ChefKnifeStudios.MartaJazz.Server.WebAPI.Tests/
+    └── ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/
         ├── LastBatchCacheTests.cs            # MODIFIED — rewrite 3 inverted tests, add 6 new, richer factory
         └── WorkerTransitHubTests.cs          # UNCHANGED (both hub tests stay green)
 ```

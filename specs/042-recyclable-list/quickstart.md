@@ -2,7 +2,7 @@
 
 `RecyclableList<T>` is a drop-in `List<T>` replacement whose backing array is **rented from `ArrayPool<T>.Shared`** instead of heap-allocated. It realizes its benefit **only when disposed** — always use `using`.
 
-Namespace: `using ChefKnifeStudios.MartaJazz.Shared.Collections;`
+Namespace: `using ChefKnifeStudios.TransitJazz.Shared.Collections;`
 
 ## Use case 1 — temporary method-scope collection (P1)
 
@@ -47,7 +47,7 @@ public IEnumerable<Foo> GetFoos()
 Run the new test project:
 
 ```powershell
-dotnet test src/ChefKnifeStudios.MartaJazz.Shared.Tests/ChefKnifeStudios.MartaJazz.Shared.Tests.csproj
+dotnet test src/ChefKnifeStudios.TransitJazz.Shared.Tests/ChefKnifeStudios.TransitJazz.Shared.Tests.csproj
 ```
 
 | # | Test | Confirms |
@@ -67,4 +67,4 @@ dotnet test src/ChefKnifeStudios.MartaJazz.Shared.Tests/ChefKnifeStudios.MartaJa
 
 - Both new source files + the new test project build under the solution; `dotnet test` for the Shared.Tests project is green.
 - No new failures in the existing Server test projects (CI builds the whole solution).
-- No new package references added to `ChefKnifeStudios.MartaJazz.Shared.csproj`.
+- No new package references added to `ChefKnifeStudios.TransitJazz.Shared.csproj`.

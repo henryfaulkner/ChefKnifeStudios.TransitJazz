@@ -2,13 +2,13 @@
 
 The UI contract between the FAB, the blade, and the effect consumers. All events ride the **existing**
 `IEventNotificationService` (singleton) and implement the **existing** `IEventArgs` marker
-(`ChefKnifeStudios.MartaJazz.Client.Core.Services`). Handler delegate is **synchronous**:
+(`ChefKnifeStudios.TransitJazz.Client.Core.Services`). Handler delegate is **synchronous**:
 `void EventReceivedEventHandler(object sender, IEventArgs e)`.
 
 ## `BladeEventArgs`
 
 ```csharp
-namespace ChefKnifeStudios.MartaJazz.Client.Shared.EventArgs;
+namespace ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs;
 
 public class BladeEventArgs : IEventArgs
 {

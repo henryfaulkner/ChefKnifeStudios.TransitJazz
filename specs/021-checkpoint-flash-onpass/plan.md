@@ -58,10 +58,10 @@ specs/021-checkpoint-flash-onpass/
 
 ### Source Code (repository root)
 
-All changes are under `src/Client/`. Namespace root is `ChefKnifeStudios.MartaJazz`.
+All changes are under `src/Client/`. Namespace root is `ChefKnifeStudios.TransitJazz`.
 
 ```text
-src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
+src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/
 ├── Models/
 │   └── Settings.cs                        # ADD bool IsBusesVisible (default false), [Description("SettingBusesVisible")]
 ├── EventArgs/
@@ -76,7 +76,7 @@ src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/
     ├── map-interop.js                     # ADD checkpoint-pulse source+layer setup + delegate to pulse module; re-add on style.load
     └── checkpoint-pulse.js                # NEW ES module: pulse(routeId, triggerIndex, color), RAF loop, reset()
 
-src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/
+src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/
 └── Pages/TransitMap.razor.cs              # SPLIT OnCrossingsAsync (audio vs pulse); handle BusVisibilitySettingChangedEventArgs;
                                            #   honor IsBusesVisible on initial render + after basemap swap
 ```

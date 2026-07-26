@@ -3,7 +3,7 @@
 **Feature Branch**: `042-recyclable-list`
 **Created**: 2026-07-13
 **Status**: Draft
-**Input**: User description: "docs/RECYCLABLE_LIST.md implement in the ChefKnifeStudios.MartaJazz.Shared C# project"
+**Input**: User description: "docs/RECYCLABLE_LIST.md implement in the ChefKnifeStudios.TransitJazz.Shared C# project"
 
 ## Clarifications
 

@@ -11,7 +11,7 @@ reachability + a live smoke test (there is no new unit-testable code).
 ## Steps
 
 ### 1. Add the `Ttc` constant
-`src/ChefKnifeStudios.MartaJazz.Shared/CityNames.cs` → add `public const string Ttc = "ttc";`.
+`src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs` → add `public const string Ttc = "ttc";`.
 
 ### 2. Add the Worker `Cities:` entry
 `src/Server/…TransitDataWorker/appsettings.json` → append the canonical `ttc` object

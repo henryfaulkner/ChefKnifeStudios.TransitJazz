@@ -26,8 +26,8 @@ that story independently demonstrable.
 ## Path Conventions
 
 Frontend-only Blazor WASM slice. Shared code lives in
-`src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/`; the WASM app in
-`src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/`; the audition tool in
+`src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/`; the WASM app in
+`src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/`; the audition tool in
 `tools/instrument-compat/`.
 
 ---
@@ -58,7 +58,7 @@ drives and persists them.
 
 ### JS engine — `transit-synth.js` (single file; tasks sequential, same file)
 
-- [ ] T006 Add `PERCUSSION_*` constants (from T003) grouped with the existing `NOISE_*` constants (~L204), plus module state `let _backfillMode = 'noise';` and `let _percussion = null;` in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/wwwroot/js/transit-synth.js` per contracts/synth-engine.md
+- [ ] T006 Add `PERCUSSION_*` constants (from T003) grouped with the existing `NOISE_*` constants (~L204), plus module state `let _backfillMode = 'noise';` and `let _percussion = null;` in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/wwwroot/js/transit-synth.js` per contracts/synth-engine.md
 - [ ] T007 Add `buildPercussion(T)` (MembraneSynth kick + MetalSynth rim → per-voice filter/volume → `Tone.Volume(PERCUSSION_VOLUME_DB)` → `getMasterBus(T).input`, humanized, on a slow `Tone.Loop`) in `transit-synth.js` per contracts/synth-engine.md
 - [ ] T008 Add the `_applyBackfillLayer()` choke point reconciling `_audioEnabled × _backfillMode` → exactly one running layer (muted → stop both; enabled+noise → noise only; enabled+percussion → build-lazy + percussion only) in `transit-synth.js` (INV-2, data-model running-state table)
 - [ ] T009 Add the `export function setBackfillTexture(mode)` (normalize to `'noise'`/`'percussion'`; early-return recording the flag if `!_masterBus`; else defensive context-resume + `_applyBackfillLayer()`) in `transit-synth.js` (INV-4)
@@ -68,16 +68,16 @@ drives and persists them.
 
 ### C# settings + interop
 
-- [ ] T013 [P] Add `public enum BackfillTexture { Noise, Percussion }`, the `[ObservableProperty] [HiddenSetting] BackfillTexture _backfillTexture = BackfillTexture.Noise;` property, and bump `CurrentVersion` 4 → 5 in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Models/Settings.cs` per contracts/settings-interop.md (SETT-1..SETT-3)
-- [ ] T014 [P] Add `Task SetBackfillTextureAsync(string mode);` to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Services/JsInterop/ITransitSynthJsInterop.cs` (INT-1) with an XML-doc summary matching the SetAudioEnabledAsync style
-- [ ] T015 Implement `SetBackfillTextureAsync` (invoke `setBackfillTexture` on the shared `_moduleTask` instance; try/catch + `LogError`) in `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Services/JsInterop/TransitSynthJsInterop.cs` per contracts/settings-interop.md (INT-2, INT-3) — depends on T014
-- [ ] T016 [P] Add EN resource keys `BackfillNoise` ("Ambient noise") and `BackfillPercussion` ("Lo-fi percussion") to `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Resources/RouteFilterResources.resx` (RES-1)
+- [ ] T013 [P] Add `public enum BackfillTexture { Noise, Percussion }`, the `[ObservableProperty] [HiddenSetting] BackfillTexture _backfillTexture = BackfillTexture.Noise;` property, and bump `CurrentVersion` 4 → 5 in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Models/Settings.cs` per contracts/settings-interop.md (SETT-1..SETT-3)
+- [ ] T014 [P] Add `Task SetBackfillTextureAsync(string mode);` to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Services/JsInterop/ITransitSynthJsInterop.cs` (INT-1) with an XML-doc summary matching the SetAudioEnabledAsync style
+- [ ] T015 Implement `SetBackfillTextureAsync` (invoke `setBackfillTexture` on the shared `_moduleTask` instance; try/catch + `LogError`) in `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Services/JsInterop/TransitSynthJsInterop.cs` per contracts/settings-interop.md (INT-2, INT-3) — depends on T014
+- [ ] T016 [P] Add EN resource keys `BackfillNoise` ("Ambient noise") and `BackfillPercussion` ("Lo-fi percussion") to `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Resources/RouteFilterResources.resx` (RES-1)
 
 ### FAB component + mount
 
-- [ ] T017 Create `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/BackfillTextureFab.razor` (`graphic_eq` MatFAB + MatMenu list; reads persisted `BackfillTexture` in `OnInitialized`; active option `Disabled`; on `Select` → `SettingsService.SetSettingValue(nameof(Settings.BackfillTexture), mode)` then `TransitSynth.SetBackfillTextureAsync(mode.ToString().ToLowerInvariant())`; labels via `IStringLocalizer<RouteFilterResources>`; NO event bus) per contracts/backfill-fab.md (FAB-1..FAB-4) — depends on T013, T015, T016
-- [ ] T018 [P] Create `src/Client/ChefKnifeStudios.MartaJazz.Client.Shared/Components/FABs/BackfillTextureFab.razor.css` mirroring a sibling FAB's container styling, with BOTH light and dark renderings for every color-bearing rule (Principle XIII; FAB-5)
-- [ ] T019 Mount `<BackfillTextureFab />` inside the `<MatThemeProvider>` block alongside the existing FABs in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Layout/MainLayout.razor` (MOUNT-1) — depends on T017
+- [ ] T017 Create `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/BackfillTextureFab.razor` (`graphic_eq` MatFAB + MatMenu list; reads persisted `BackfillTexture` in `OnInitialized`; active option `Disabled`; on `Select` → `SettingsService.SetSettingValue(nameof(Settings.BackfillTexture), mode)` then `TransitSynth.SetBackfillTextureAsync(mode.ToString().ToLowerInvariant())`; labels via `IStringLocalizer<RouteFilterResources>`; NO event bus) per contracts/backfill-fab.md (FAB-1..FAB-4) — depends on T013, T015, T016
+- [ ] T018 [P] Create `src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/BackfillTextureFab.razor.css` mirroring a sibling FAB's container styling, with BOTH light and dark renderings for every color-bearing rule (Principle XIII; FAB-5)
+- [ ] T019 Mount `<BackfillTextureFab />` inside the `<MatThemeProvider>` block alongside the existing FABs in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Layout/MainLayout.razor` (MOUNT-1) — depends on T017
 
 **Checkpoint**: Engine, settings, interop, and a mounted FAB exist. User-story slices can now be verified.
 
@@ -109,7 +109,7 @@ no re-selection; a fresh profile hears the default; old-version settings fall ba
 
 **Independent Test**: quickstart.md D1/D7/D10.
 
-- [ ] T022 [US2] Push the persisted texture to JS on startup: add `_ = TransitSynth.SetBackfillTextureAsync(settings.BackfillTexture.ToString().ToLowerInvariant());` beside the existing `SetAudioEnabledAsync` call (~L110) in `src/Client/ChefKnifeStudios.MartaJazz.Client.WebApp/Pages/TransitMap.razor.cs` per contracts/backfill-fab.md (INIT-1, INIT-2)
+- [ ] T022 [US2] Push the persisted texture to JS on startup: add `_ = TransitSynth.SetBackfillTextureAsync(settings.BackfillTexture.ToString().ToLowerInvariant());` beside the existing `SetAudioEnabledAsync` call (~L110) in `src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/Pages/TransitMap.razor.cs` per contracts/backfill-fab.md (INIT-1, INIT-2)
 - [ ] T023 [US2] Verify D7 (select percussion → reload → unlock → percussion plays from first unlock, no re-selection) and D1 (fresh profile hears the default ambient noise) per quickstart.md — FR-005, FR-006, SC-002, SC-003
 - [ ] T024 [US2] Verify D10 (simulate a Version-4 saved blob → load → settings fall back to defaults cleanly, backfill = Noise, no error) per quickstart.md — US2 scenario 3 (relies on the T013 CurrentVersion 4→5 guard)
 
