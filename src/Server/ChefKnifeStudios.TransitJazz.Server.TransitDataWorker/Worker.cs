@@ -63,6 +63,7 @@ public class Worker(
             int tickTonesEmitted = 0, tickVehiclesProcessed = 0;
             int tickVehicleStateCacheSize = 0, tickCrossingBaselineCacheSize = 0, tickRouteIndexSize = 0, tickRouteTriggerPointCacheSize = 0;
             int tickCrossingsSuppressedFirstSeen = 0, tickCrossingsSuppressedDeltaLeq0 = 0, tickCrossingsSuppressedTeleport = 0, tickCrossingsSuppressedTransfer = 0;
+            long tickBatchWireBytes = 0;
 
             foreach (var city in cities)
             {
@@ -115,7 +116,8 @@ public class Worker(
                         crossings_suppressed_first_seen = result.CrossingsSuppressedFirstSeen,
                         crossings_suppressed_delta_leq0 = result.CrossingsSuppressedDeltaLeq0,
                         crossings_suppressed_teleport = result.CrossingsSuppressedTeleport,
-                        crossings_suppressed_transfer = result.CrossingsSuppressedTransfer
+                        crossings_suppressed_transfer = result.CrossingsSuppressedTransfer,
+                        batch_wire_bytes = result.BatchWireBytes
                     });
 
                     processedCities.Add(city.Name);
@@ -130,6 +132,7 @@ public class Worker(
                     tickCrossingsSuppressedDeltaLeq0 += result.CrossingsSuppressedDeltaLeq0;
                     tickCrossingsSuppressedTeleport += result.CrossingsSuppressedTeleport;
                     tickCrossingsSuppressedTransfer += result.CrossingsSuppressedTransfer;
+                    tickBatchWireBytes += result.BatchWireBytes ?? 0;
                 }
             }
 
@@ -156,7 +159,8 @@ public class Worker(
                     crossings_suppressed_first_seen = tickCrossingsSuppressedFirstSeen,
                     crossings_suppressed_delta_leq0 = tickCrossingsSuppressedDeltaLeq0,
                     crossings_suppressed_teleport = tickCrossingsSuppressedTeleport,
-                    crossings_suppressed_transfer = tickCrossingsSuppressedTransfer
+                    crossings_suppressed_transfer = tickCrossingsSuppressedTransfer,
+                    batch_wire_bytes = tickBatchWireBytes
                 });
             }
         }
@@ -164,7 +168,7 @@ public class Worker(
 
     /// <summary>Per-city outcome of one tick, surfaced out of <see cref="ProcessSpatialReconciliationAsync"/>
     /// so the caller can post a PerCityCycle row on every path (healthy, not-ready, and failed) — R2/R5.</summary>
-    readonly record struct CityTickResult(
+    internal readonly record struct CityTickResult(
         string CityName,
         bool HealthOk,
         double? FeedFreshnessSeconds,
@@ -177,7 +181,8 @@ public class Worker(
         int CrossingsSuppressedFirstSeen = 0,
         int CrossingsSuppressedDeltaLeq0 = 0,
         int CrossingsSuppressedTeleport = 0,
-        int CrossingsSuppressedTransfer = 0)
+        int CrossingsSuppressedTransfer = 0,
+        long? BatchWireBytes = null)
     {
         public static CityTickResult Unhealthy(string cityName, Worker worker) => new(
             cityName, HealthOk: false, FeedFreshnessSeconds: null, TonesEmitted: 0, VehiclesProcessed: 0,
@@ -355,7 +360,7 @@ public class Worker(
     internal static string ResolveCategory(IReadOnlyDictionary<string, string>? categoryMap, string routeJoinKey) =>
         categoryMap != null && categoryMap.TryGetValue(routeJoinKey, out var category) ? category : "unknown";
 
-    async Task<CityTickResult> ProcessSpatialReconciliationAsync(
+    internal async Task<CityTickResult> ProcessSpatialReconciliationAsync(
         ITransitCity city,
         FeedMessage feed,
         IReadOnlyDictionary<string, RoutePoint[]> index,
@@ -550,6 +555,8 @@ public class Worker(
                     bufferOccupancy, droppedRecords, persistFailures);
             }
 
+            long? batchWireBytes = null;
+
             if (batch.Count > 0)
             {
                 var envelope = new EventEnvelope(
@@ -573,6 +580,8 @@ public class Worker(
                         new RouteCrossingBatchEvent(sorted)));
                 }
 
+                batchWireBytes = WireSize.Measure(envelopes);
+
                 var isBatchPublished = await transitHubPublisher.PublishBatchAsync(city.Name, envelopes, ct);
                 if (!isBatchPublished)
                     logger.LogWarning("Failed to publish spatial reconciliation batch for city {City}.", city.Name);
@@ -595,7 +604,8 @@ public class Worker(
                 CrossingsSuppressedFirstSeen: crossingsSuppressedFirstSeen,
                 CrossingsSuppressedDeltaLeq0: crossingsSuppressedDeltaLeq0,
                 CrossingsSuppressedTeleport: crossingsSuppressedTeleport,
-                CrossingsSuppressedTransfer: crossingsSuppressedTransfer);
+                CrossingsSuppressedTransfer: crossingsSuppressedTransfer,
+                BatchWireBytes: batchWireBytes);
         }
         catch (Exception ex)
         {

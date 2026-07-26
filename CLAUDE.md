@@ -1,7 +1,47 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/050-rtd-transit/plan.md
+feature plan at specs/051-egress-reduction/plan.md
+
+051-egress-reduction cuts outbound data-transfer cost ~60–75% at the current
+500–2,000-user scale (per docs/EGRESS_REDUCTION_SMALL_SCALE.md) in four
+independently-shippable, measurement-first phases. Phase 0 (US1/P1): a
+permanent `batch_wire_bytes` long? column on PerCityCycle telemetry rows
+(measured by MessagePack-serializing the exact envelope list at the
+Worker.cs publish site into a pooled buffer; NULL not 0 on no-publish ticks;
+summed on FullCycle; MUST be added to tools/telemetry-mcp validate.go's
+numeric allow-list in the same change), a new bicep/modules/logAnalytics.bicep
+workspace finally passed into the existing cae module params (today
+appLogsConfiguration resolves to null — logs go nowhere), and SWA Free→
+Standard (100 GB/mo cap = outage risk). Phase 1 (US2/P2): first-ever
+AddResponseCompression (Brotli/Gzip, EnableForHttps=true) + a new
+IRouteShapeResponseCache singleton of precomputed per-city response bytes
+with strong ETag / Cache-Control: public,max-age=3600 / 304 handling for
+GetAllRouteShapes+GetAllRoutes, populated by GtfsStaticLoader at load +
+24h refresh (killing the per-request deserialize-reserialize anti-pattern).
+Phase 2 (US3/P3): a page-visibility.js interop (outside-click lazy-RCL
+idiom); when document.hidden && audio muted the client leaves its SignalR
+city group via a NEW TransitHub.LeaveCity, rejoining on visibility/unmute —
+JoinCity's existing LastBatchCache replay is the catch-up path; audio-on
+sessions NEVER pause (ambient listening preserved); reconnect must respect
+the pause gate. Phase 3 (US4/P4, LAST, blocked on ≥3 days of Phase 0
+baseline): ONE coordinated RouteNearestPointRecord v2 wire revision — coords
+as int (degrees ×1e5, exact for the existing 5-decimal rounding), prior
+lat/lon pair nullable & omitted unless first-observation-or-route-change,
+Category nullable & non-null only for the "unknown" data-quality signal —
+gated by renaming HubMethods.JoinCity → "JoinCityV2" so stale peers fail
+cleanly at join (MessagePack ReadDouble accepts int encodings → silent
+misrender otherwise); LastBatchCache code is UNCHANGED (replayed null-prior
+records correctly snap-into-place for joiners; IsStale rides every record —
+the "synthetically all moving" regression stays fixed); ships worker+server
+container first, then SWA client, and identically on deploy/marta-jazz.
+Client keeps a per-vehicle retained-position store; precedence record-prior →
+retained → snap-into-place. Deliberately NOT doing (spec Out of Scope):
+viewport scoping, Azure SignalR, worker extraction, delta encoding, idle
+cadence downgrade R3(b), unchanged-vehicle suppression R7. See
+specs/051-egress-reduction/ for spec, plan, research (D1–D8), data-model,
+the four contracts (telemetry-observability, http-caching, visibility-pause,
+wire-slimming), and quickstart.
 
 050-rtd-transit adds Denver **RTD** as a live-vehicle city, per
 docs/city-compat/rtd.md (92.4/100, Drop-in). Pure config-only fork — RTD's

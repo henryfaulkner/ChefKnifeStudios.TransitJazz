@@ -26,6 +26,9 @@ func TestFilterValidation(t *testing.T) {
 		{name: "grouping + numeric", dataset: "telemetry", input: "(event_type = 'FullCycle' OR event_type = 'PerCityCycle') AND gc_heap_bytes > 100000000", shouldErr: false},
 		{name: "new cache-size numeric columns", dataset: "telemetry", input: "route_index_size > 0 AND crossing_baseline_cache_size >= 0", shouldErr: false},
 		{name: "crossing suppression columns (feature 045)", dataset: "telemetry", input: "crossings_suppressed_first_seen >= 0 AND crossings_suppressed_delta_leq0 > 0 AND crossings_suppressed_teleport >= 0 AND crossings_suppressed_transfer >= 0", shouldErr: false},
+		// P0-G1 (feature 051, contract telemetry-observability C2)
+		{name: "batch_wire_bytes greater than", dataset: "telemetry", input: "batch_wire_bytes > 100000", shouldErr: false},
+		{name: "batch_wire_bytes greater-or-equal zero", dataset: "telemetry", input: "batch_wire_bytes >= 0", shouldErr: false},
 
 		// extra accept coverage: operators, whitespace, case-insensitive AND/OR/bool
 		{name: "all operators <=", dataset: "telemetry", input: "time_taken_seconds <= 5.0", shouldErr: false},
@@ -58,6 +61,9 @@ func TestFilterValidation(t *testing.T) {
 		{name: "http url", dataset: "telemetry", input: "city_name = 'http://example'", shouldErr: true, contains: "forbidden data source"},
 		{name: "unknown column generic", dataset: "telemetry", input: "password = 'secret'", shouldErr: true, contains: "unknown column"},
 		{name: "near-miss suppression column name", dataset: "telemetry", input: "crossings_suppressed_deltaleq0 > 0", shouldErr: true, contains: "unknown column"},
+		// P0-G1 (feature 051, contract telemetry-observability C2)
+		{name: "batch_wire_bytes with quoted string", dataset: "telemetry", input: "batch_wire_bytes = 'x'", shouldErr: true, contains: "expects numeric"},
+		{name: "batch_wire_bytes near-miss unknown column", dataset: "telemetry", input: "batch_wire_byte > 1", shouldErr: true, contains: "unknown column"},
 
 		// structural errors
 		{name: "empty filter", dataset: "telemetry", input: "", shouldErr: true, contains: "required"},

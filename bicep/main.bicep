@@ -181,6 +181,33 @@ module telemetryStorage 'modules/telemetryStorage.bicep' = {
 }
 
 // -----------------------------------------------------------------------------
+// Log Analytics workspace (feature 051, US1): appLogsConfiguration has always
+// accepted a customerId/sharedKey pair (containerAppsEnvironment.bicep's
+// empty()-conditional) but nothing has ever supplied them, so container stdout
+// has been discarded since day one. This module creates the workspace; the
+// `existing` reference below retrieves its shared key via listKeys() so it
+// never needs its own output (keeps the secret out of module output chaining).
+// -----------------------------------------------------------------------------
+
+module logAnalytics 'modules/logAnalytics.bicep' = {
+  name: 'log-analytics-deploy'
+  scope: rg
+  params: {
+    name: '${namePrefix}-law'
+    location: location
+    tags: tags
+  }
+}
+
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
+  name: '${namePrefix}-law'
+  scope: rg
+  dependsOn: [
+    logAnalytics
+  ]
+}
+
+// -----------------------------------------------------------------------------
 // Container Apps Environment
 // -----------------------------------------------------------------------------
 
@@ -191,6 +218,8 @@ module cae 'modules/containerAppsEnvironment.bicep' = {
     name: '${namePrefix}-cae'
     location: location
     tags: tags
+    logAnalyticsCustomerId: logAnalytics.outputs.customerId
+    logAnalyticsSharedKey: logAnalyticsWorkspace.listKeys().primarySharedKey
   }
 }
 

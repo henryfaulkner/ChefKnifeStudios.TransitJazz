@@ -45,5 +45,14 @@ public sealed record TelemetryEvent : IEventArgs
     public int?    crossings_suppressed_delta_leq0 { get; init; }   // summed on FullCycle
     public int?    crossings_suppressed_teleport { get; init; }     // summed on FullCycle
     public int?    crossings_suppressed_transfer { get; init; }     // summed on FullCycle
+
+    // ── Egress measurement (feature 051, US1) — PerCityCycle-only, summed on FullCycle. ────
+    // Exact MessagePack-serialized size of the List<EventEnvelope> published for this city
+    // this tick (Worker.WireSize.Measure), NOT socket bytes (no SignalR framing/deflate).
+    // NULL — never 0 — when the tick published nothing (empty batch, unhealthy tick, publish
+    // returned false); a query on `batch_wire_bytes > 0` must equal "published ticks". MUST
+    // stay in sync with tools/telemetry-mcp/internal/validate/validate.go's kindNumeric
+    // allow-list (contract telemetry-observability C1/C2). Never rename.
+    public long?   batch_wire_bytes { get; init; }                  // summed on FullCycle
 }
 #pragma warning restore IDE1006

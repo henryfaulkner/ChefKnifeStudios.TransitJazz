@@ -2,7 +2,7 @@ name: TransitJazz Client CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 051-egress-reduction]
 
 jobs:
   build:

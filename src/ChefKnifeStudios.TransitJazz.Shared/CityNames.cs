@@ -16,4 +16,5 @@ public static class HubMethods
     public const string ReceiveBatch = "ReceiveBatch";
     public const string PublishBatch = "PublishBatch";
     public const string JoinCity = "JoinCity";
+    public const string LeaveCity = "LeaveCity";
 }

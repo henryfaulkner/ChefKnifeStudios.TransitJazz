@@ -16,7 +16,8 @@ public class TelemetryEventSchemaTests
         "vehicle_state_cache_size", "crossing_baseline_cache_size",
         "route_index_size", "route_trigger_point_cache_size",
         "crossings_suppressed_first_seen", "crossings_suppressed_delta_leq0",
-        "crossings_suppressed_teleport", "crossings_suppressed_transfer"
+        "crossings_suppressed_teleport", "crossings_suppressed_transfer",
+        "batch_wire_bytes"
     ];
 
     static TelemetryEvent PerCityCycleRow(DateTime now) => new()
@@ -39,7 +40,32 @@ public class TelemetryEventSchemaTests
         crossings_suppressed_first_seen = 2,
         crossings_suppressed_delta_leq0 = 80,
         crossings_suppressed_teleport = 1,
-        crossings_suppressed_transfer = 0
+        crossings_suppressed_transfer = 0,
+        batch_wire_bytes = 61440
+    };
+
+    static TelemetryEvent NoPublishPerCityCycleRow(DateTime now) => new()
+    {
+        event_type = "PerCityCycle",
+        event_id = "event-3",
+        observation_utc = now,
+        city_name = "WMATA",
+        feed_freshness_seconds = 1.0,
+        time_taken_seconds = 0.1,
+        health_ok = true,
+        tones_emitted = 0,
+        vehicles_processed = 0,
+        gc_heap_bytes = 1_000_000,
+        process_working_set_bytes = 2_000_000,
+        vehicle_state_cache_size = 0,
+        crossing_baseline_cache_size = 0,
+        route_index_size = 30,
+        route_trigger_point_cache_size = 60,
+        crossings_suppressed_first_seen = 0,
+        crossings_suppressed_delta_leq0 = 0,
+        crossings_suppressed_teleport = 0,
+        crossings_suppressed_transfer = 0,
+        batch_wire_bytes = null
     };
 
     static TelemetryEvent FullCycleRow(DateTime now) => new()
@@ -62,7 +88,8 @@ public class TelemetryEventSchemaTests
         crossings_suppressed_first_seen = 2,
         crossings_suppressed_delta_leq0 = 80,
         crossings_suppressed_teleport = 1,
-        crossings_suppressed_transfer = 0
+        crossings_suppressed_transfer = 0,
+        batch_wire_bytes = 122880
     };
 
     [Fact]
@@ -122,5 +149,25 @@ public class TelemetryEventSchemaTests
         Assert.Equal("MARTA", row.cities_processed_csv);
         Assert.Null(row.city_name);
         Assert.Null(row.feed_freshness_seconds);
+    }
+
+    // P0-U3 (051 US1): batch_wire_bytes is a long on a published-tick row and NULL — never 0 —
+    // on a no-publish row (contract telemetry-observability C1).
+    [Fact]
+    public async Task RoundTrip_PublishedTick_HasLongBatchWireBytes_NoPublishTick_HasNullBatchWireBytes()
+    {
+        var now = new DateTime(2026, 6, 4, 12, 0, 0, DateTimeKind.Utc);
+        var rows = new List<TelemetryEvent> { PerCityCycleRow(now), NoPublishPerCityCycleRow(now) };
+
+        using var ms = new MemoryStream();
+        await ParquetSerializer.SerializeAsync(rows, ms);
+        ms.Position = 0;
+
+        var read = (await ParquetSerializer.DeserializeAsync<TelemetryEvent>(ms)).ToList();
+        var published = Assert.Single(read, r => r.city_name == "MARTA");
+        var noPublish = Assert.Single(read, r => r.city_name == "WMATA");
+
+        Assert.Equal(61440L, published.batch_wire_bytes);
+        Assert.Null(noPublish.batch_wire_bytes);
     }
 }

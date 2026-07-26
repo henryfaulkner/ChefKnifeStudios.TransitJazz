@@ -41,6 +41,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
     [Inject] ITransitEndpointsService TransitEndpointsService { get; set; } = null!;
     [Inject] IOutsideClickJsInterop OutsideClickJsInterop { get; set; } = null!;
+    [Inject] IPageVisibilityJsInterop PageVisibility { get; set; } = null!;
     [Inject] NavigationManager NavigationManager { get; set; } = null!;
     [Inject] IJSRuntime JS { get; set; } = null!;
 
@@ -65,6 +66,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _audioUnlocked = false;
     bool _checkpointsVisible = false;
     bool _crossingTrailVisible = true;
+
+    // Hidden-tab pause (feature 051, US3): AttentionGate reconciles document.hidden × mute
+    // toward the SignalR city-group membership. bool _pageHidden mirrors the interop's live
+    // state so both the visibility callback and the audio-toggle branch can re-derive the
+    // gate's inputs without a second JS round-trip.
+    AttentionGate? _attentionGate;
+    bool _pageHidden;
 
     // routeJoinKey → GeoJSON string (client-side cache, lives for page lifetime)
     readonly Dictionary<string, RouteShapeFeature> _routeShapeCache = new(StringComparer.Ordinal);
@@ -111,6 +119,11 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _ = TransitSynth.SetAudioEnabledAsync(_audioEnabled);
         _ = TransitSynth.SetBackfillTextureAsync(settings.BackfillTexture.ToString().ToLowerInvariant());
 
+        // NotificationService doubles as IDeliveryControl (SignalRNotificationService
+        // implements both) — the gate owns it and pushes DesiredDelivery before every
+        // Pause/Resume call; the control never references the gate back (data-model §4).
+        _attentionGate = new AttentionGate((IDeliveryControl)NotificationService);
+
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
         EventNotificationService.EventReceived += HandleSettingsEventReceived;
 
@@ -148,6 +161,12 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             // switch does a full reload, so first render fires once per city view.
             try { await JS.InvokeVoidAsync("trackCityView", NavigationManager.ResolveCity()); }
             catch (Exception ex) { Logger.LogWarning(ex, "TransitMap: city view tracking failed"); }
+
+            // Hidden-tab pause (051 US3): seed current visibility, then subscribe to changes.
+            _pageHidden = await PageVisibility.GetHiddenAsync();
+            await PageVisibility.AddVisibilityChangeListenerAsync(OnPageVisibilityChanged);
+            if (_attentionGate is not null)
+                await _attentionGate.OnVisibilityChangedAsync(_pageHidden, _audioEnabled);
         }
 
         if (_mapReady && _routesLoaded && !_routesRendered && _map is not null)
@@ -248,6 +267,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 if (_map is not null)
                     await _map.SetCrossingAudioEnabledAsync(_audioEnabled);
             });
+            // Hidden-tab pause (051 US3): mute/unmute while hidden flips desiredDelivery —
+            // ambient audio-on sessions never pause; muting a hidden tab pauses it.
+            if (_attentionGate is not null)
+                _ = _attentionGate.OnAudioChangedAsync(_pageHidden, _audioEnabled);
             return;
         }
 
@@ -341,6 +364,15 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         InvokeAsync(StateHasChanged);
     }
 
+    // JS interop callback (page-visibility.js fires the current document.hidden as-is; this
+    // component re-derives desiredDelivery via AttentionGate, per research D5/data-model §4).
+    void OnPageVisibilityChanged(bool hidden)
+    {
+        _pageHidden = hidden;
+        if (_attentionGate is not null)
+            _ = _attentionGate.OnVisibilityChangedAsync(hidden, _audioEnabled);
+    }
+
     public async ValueTask DisposeAsync()
     {
         RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
@@ -349,6 +381,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             NotificationService.NotificationReceived -= _batchHandler;
         _viewportSub?.Dispose();
         await OutsideClickJsInterop.RemoveOutsideClickListenerAsync(_accordionElementId);
+        await PageVisibility.RemoveVisibilityChangeListenerAsync();
     }
 
     void OnRouteFilterPropertyChanged(object? sender, PropertyChangedEventArgs e)
