@@ -28,4 +28,5 @@ public sealed record TelemetryEventDto
     public int? CrossingBaselineCacheSize { get; init; }
     public int? RouteIndexSize { get; init; }
     public int? RouteTriggerPointCacheSize { get; init; }
+    public long? BatchWireBytes { get; init; }
 }
