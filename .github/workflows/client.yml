@@ -2,7 +2,7 @@ name: TransitJazz Client CI/CD
 
 on:
   push:
-    branches: [main, debt\rename-namespace]
+    branches: [main, debt/rename-namespace]
 
 jobs:
   build:
