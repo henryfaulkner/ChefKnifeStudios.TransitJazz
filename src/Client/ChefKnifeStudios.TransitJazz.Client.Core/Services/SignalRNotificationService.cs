@@ -2,6 +2,7 @@ using ChefKnifeStudios.TransitJazz.Client.Core.Enums;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -159,6 +160,22 @@ public class SignalRNotificationService(
 
                 logger.LogInformation("Joined city group {City}", _city);
             }
+        }
+        catch (HubException ex) when (ex.Message.Contains("Method does not exist", StringComparison.OrdinalIgnoreCase))
+        {
+            // Wire version gate (feature 051, US4). HubMethods.JoinCity is "JoinCityV2"; a server
+            // that still exposes the v1 "JoinCity" rejects the invoke here. This is the gate WORKING
+            // — it exists because MessagePack's ReadDouble accepts int encodings, so a stale peer
+            // would otherwise decode v2's scaled-int coordinates as garbage and silently misrender
+            // every vehicle. The generic handler below reported this as an unremarkable init error,
+            // which left the only visible symptom as an empty map with no live data.
+            logger.LogError(ex,
+                "SignalR join REJECTED — client/server wire version mismatch. This client invokes " +
+                "'{JoinMethod}' but the server does not expose it, so no vehicle batches or checkpoint " +
+                "crossings will arrive. Deploy the server+worker container BEFORE the client (the " +
+                "client must never lead the server). City={City}",
+                HubMethods.JoinCity, _city);
+            _hubConnection = null;
         }
         catch (Exception ex)
         {

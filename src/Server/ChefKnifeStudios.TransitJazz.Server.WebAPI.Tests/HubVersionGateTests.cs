@@ -77,8 +77,13 @@ public class HubVersionGateTests : IAsyncLifetime
         await connection.StartAsync();
 
         // The pre-051 client bundle invokes the old name.
-        await Assert.ThrowsAsync<HubException>(() => connection.InvokeAsync("JoinCity", "marta"));
+        var ex = await Assert.ThrowsAsync<HubException>(() => connection.InvokeAsync("JoinCity", "marta"));
 
+        // Pins the message text SignalRNotificationService.InitAsync filters on to distinguish a
+        // version mismatch from an ordinary connection failure. If a future SignalR release reworded
+        // this, that targeted catch would silently fall through to the generic handler and the
+        // mismatch would once again surface only as an unexplained empty map.
+        Assert.Contains("Method does not exist", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(received);
     }
 
