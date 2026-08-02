@@ -34,7 +34,7 @@ public class ActiveCountsReactivityTests
         return vm;
     }
 
-    static List<EventEnvelope> BatchWith(string vehicleId, string routeJoinKey, string category) =>
+    static List<EventEnvelope> BatchWith(string vehicleId, string routeJoinKey, string? category) =>
         new()
         {
             new EventEnvelope(
@@ -44,7 +44,7 @@ public class ActiveCountsReactivityTests
                 {
                     new RouteNearestPointBatchEvent.RouteNearestPointRecord(
                         vehicleId, routeJoinKey,
-                        33.75, -84.39, 33.751, -84.389,
+                        3_375_000, -8_439_000, 3_375_100, -8_438_900,
                         10000, null, null, IsStale: false, Category: category)
                 }))
         };
@@ -80,6 +80,61 @@ public class ActiveCountsReactivityTests
         await app.RaiseAsync(BatchWith("veh-1", "501", "streetcar"));
 
         Assert.Equal(1, vm.ActiveCountsByCategory.GetValueOrDefault("streetcar"));
+    }
+
+    // ── Feature 051 · US4 / FR-013: v2 omits the category for catalog-resolvable routes ──
+    //
+    // Regression guard. Every test above passes an EXPLICIT category, which is precisely why
+    // they stayed green while the counts silently stopped populating: under v2 the wire value
+    // is null in the normal case, and storing it raw left every vehicle uncounted.
+
+    [Fact]
+    public async Task ActiveCountsByCategory_CountsVehicle_WhenWireCategoryIsOmitted()
+    {
+        var app = new FakeApplicationViewModel(new[]
+        {
+            FakeApplicationViewModel.Shape("501", "streetcar", 0),
+        });
+        var vm = new RouteFilterViewModel(
+            NullLogger<RouteFilterViewModel>.Instance, new NoopToastService(), app);
+
+        // v2 steady-state record: category omitted, to be resolved from the route catalog.
+        await app.RaiseAsync(BatchWith("veh-1", "501", null));
+
+        Assert.Equal(1, vm.ActiveCountsByCategory.GetValueOrDefault("streetcar"));
+    }
+
+    [Fact]
+    public async Task ActiveCountsByCategory_KeepsUnknown_WhenRouteIsNotInTheCatalog()
+    {
+        // Catalog has 501; the vehicle rides an unlisted route. Resolution must NOT guess a
+        // real category — "unknown" is the data-quality signal FR-013 preserves.
+        var app = new FakeApplicationViewModel(new[]
+        {
+            FakeApplicationViewModel.Shape("501", "streetcar", 0),
+        });
+        var vm = new RouteFilterViewModel(
+            NullLogger<RouteFilterViewModel>.Instance, new NoopToastService(), app);
+
+        await app.RaiseAsync(BatchWith("veh-1", "GHOST-999", null));
+
+        Assert.Equal(1, vm.ActiveCountsByCategory.GetValueOrDefault("unknown"));
+        Assert.Equal(0, vm.ActiveCountsByCategory.GetValueOrDefault("streetcar"));
+    }
+
+    [Fact]
+    public async Task ActiveCountsByCategory_ServerSentUnknown_IsCountedNotDropped()
+    {
+        var app = new FakeApplicationViewModel(new[]
+        {
+            FakeApplicationViewModel.Shape("501", "streetcar", 0),
+        });
+        var vm = new RouteFilterViewModel(
+            NullLogger<RouteFilterViewModel>.Instance, new NoopToastService(), app);
+
+        await app.RaiseAsync(BatchWith("veh-1", "GHOST-999", "unknown"));
+
+        Assert.Equal(1, vm.ActiveCountsByCategory.GetValueOrDefault("unknown"));
     }
 
     sealed class NoopToastService : IToastService

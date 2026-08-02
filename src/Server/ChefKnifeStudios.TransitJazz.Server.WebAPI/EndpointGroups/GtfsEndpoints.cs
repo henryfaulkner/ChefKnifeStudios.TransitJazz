@@ -75,7 +75,9 @@ public static class GtfsEndpoints
 
         group.MapGet(ApiEndpoints.Gtfs.GetAllRouteShapes, async (
             [FromQuery] string? city,
+            HttpRequest request,
             [FromServices] IKeyValueRepository<string> repo,
+            [FromServices] IRouteShapeResponseCache responseCache,
             [FromServices] ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
@@ -88,27 +90,20 @@ public static class GtfsEndpoints
                 return Results.StatusCode(503);
             }
 
-            var allShapesResult = await repo.GetAllAsync(ct);
-            if (!allShapesResult.IsSuccess)
+            var cacheKey = RouteShapeResponseCacheKey.AllShapes(city is not null ? city.ToLowerInvariant() : "*");
+            var entry = responseCache.Get(cacheKey);
+            if (entry is null)
             {
-                logger.LogWarning("GtfsEndpoints: Failed to retrieve all route shapes.");
-                return Results.StatusCode(503);
+                // Ready but this specific city has no cache entry yet (e.g. never seen a shape) —
+                // preserves the pre-cache empty-list 200 behavior for an unknown city param.
+                return Results.Ok(Array.Empty<RouteShapeFeature>());
             }
 
-            var prefix = city is not null ? $"{city.ToLowerInvariant()}:" : null;
-
-            var features = allShapesResult.Value
-                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey
-                    && !kvp.Key.EndsWith(GtfsStaticLoader.SubwayOffsetsKeySuffix)
-                    && (prefix is null || kvp.Key.StartsWith(prefix)))
-                .Select(kvp => JsonSerializer.Deserialize<RouteShapeFeature>(kvp.Value, Shared.JsonOptions.Get()))
-                .Where(f => f is not null)
-                .ToList();
-
-            return Results.Ok(features);
+            return CachedJsonResult(request, entry.Value);
         })
         .WithName(nameof(ApiEndpoints.Gtfs.GetAllRouteShapes))
         .Produces<IEnumerable<RouteShapeFeature>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status304NotModified)
         .Produces(StatusCodes.Status503ServiceUnavailable);
 
         group.MapGet(ApiEndpoints.Gtfs.GetSubwayStopOffsets, async (
@@ -141,13 +136,14 @@ public static class GtfsEndpoints
 
         group.MapGet(ApiEndpoints.Gtfs.GetAllRoutes, async (
             [FromQuery] string? city,
+            HttpRequest request,
             [FromServices] IKeyValueRepository<string> repo,
+            [FromServices] IRouteShapeResponseCache responseCache,
             [FromServices] ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(GtfsEndpoints));
             var cityKey = (city ?? CityNames.Marta).ToLowerInvariant();
-            var prefix = $"{cityKey}:";
 
             var readyResult = await repo.GetAsync(GtfsStaticLoader.ReadyKey, ct);
             if (!readyResult.IsSuccess)
@@ -156,28 +152,30 @@ public static class GtfsEndpoints
                 return Results.StatusCode(503);
             }
 
-            var allShapesResult = await repo.GetAllAsync(ct);
-            if (!allShapesResult.IsSuccess)
-            {
-                logger.LogWarning("GtfsEndpoints: Failed to retrieve all route shapes.");
-                return Results.StatusCode(503);
-            }
+            var entry = responseCache.Get(RouteShapeResponseCacheKey.AllRoutes(cityKey));
+            if (entry is null)
+                return Results.Ok(Array.Empty<RouteShapeProperties>());
 
-            var featureProperties = allShapesResult.Value
-                .Where(kvp => kvp.Key != GtfsStaticLoader.ReadyKey
-                    && !kvp.Key.EndsWith(GtfsStaticLoader.SubwayOffsetsKeySuffix)
-                    && kvp.Key.StartsWith(prefix))
-                .Select(kvp => JsonSerializer.Deserialize<RouteShapeFeature>(kvp.Value, Shared.JsonOptions.Get()))
-                .Select(x => x?.Properties)
-                .Where(f => f is not null)
-                .ToList();
-
-            return Results.Ok(featureProperties);
+            return CachedJsonResult(request, entry.Value);
         })
         .WithName(nameof(ApiEndpoints.Gtfs.GetAllRoutes))
         .Produces<IEnumerable<RouteShapeProperties>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status304NotModified)
         .Produces(StatusCodes.Status503ServiceUnavailable);
 
         return builder;
+    }
+
+    // Shared 200-bytes-or-304 response for the two precomputed-cache endpoints (contract
+    // http-caching C2): sets ETag + Cache-Control on both paths (304 must still revalidate).
+    static IResult CachedJsonResult(HttpRequest request, RouteShapeResponseCacheEntry entry)
+    {
+        request.HttpContext.Response.Headers.ETag = entry.ETag;
+        request.HttpContext.Response.Headers.CacheControl = "public, max-age=3600";
+
+        if (HttpCaching.IsNotModified(request.Headers.IfNoneMatch, entry.ETag))
+            return Results.StatusCode(StatusCodes.Status304NotModified);
+
+        return Results.Bytes(entry.Utf8Json, "application/json");
     }
 }

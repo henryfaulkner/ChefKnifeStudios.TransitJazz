@@ -21,8 +21,13 @@ func Run(ctx context.Context, cfg *config.Config, dataset, date, validatedFilter
 	// literal "telemetry/" prefix inside whatever container it's configured with.
 	sourceGlob := fmt.Sprintf("%s/telemetry/dt=%s/*.parquet", cfg.StorageURI, date)
 
-	// Build the full SQL query: the data source is fixed, only the filter varies
-	fullQuery := fmt.Sprintf("SELECT * FROM '%s' WHERE %s", sourceGlob, validatedFilter)
+	// Build the full SQL query: the data source is fixed, only the filter varies.
+	// union_by_name=true is required because a day's partition can contain part-files
+	// written before and after a schema change (e.g. a new nullable column added to
+	// TelemetryEvent mid-day): the bare 'glob' string form takes its schema from the
+	// first file and hard-errors on any mismatch, whereas union_by_name coalesces
+	// missing columns to NULL per file instead of failing the whole query.
+	fullQuery := fmt.Sprintf("SELECT * FROM read_parquet('%s', union_by_name=true) WHERE %s", sourceGlob, validatedFilter)
 
 	// Create the command with the configured timeout context
 	cmdCtx, cancel := context.WithTimeout(ctx, cfg.TimeoutSeconds)

@@ -26,8 +26,8 @@ public class EventEnvelopeMessagePackTests
         // update the round-trip silently asserts against a corrupt/stale contract.
         var original = new RouteNearestPointBatchEvent.RouteNearestPointRecord(
             "NYCT_B41_1234", "B41",
-            40.67821, -73.94421,
-            40.67921, -73.94521,
+            4_067_821, -7_394_421,
+            4_067_921, -7_394_521,
             10000, 8.5f, 182.3f, IsStale: true, Category: "rail");
         var batch = new List<EventEnvelope>
         {
@@ -50,7 +50,7 @@ public class EventEnvelopeMessagePackTests
         // Speed/Bearing are float? — the WhenWritingNull JSON path elided them; MessagePack must
         // still round-trip a genuine null rather than defaulting to 0.
         var original = new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-            "v1", "74", 33.75, -84.39, 33.75, -84.39, 0, null, null, IsStale: false);
+            "v1", "74", 3_375_000, -8_439_000, 3_375_000, -8_439_000, 0, null, null, IsStale: false, Category: null);
         var batch = new List<EventEnvelope>
         {
             new("RouteNearestPointBatchEvent", DateTimeOffset.UnixEpoch,
@@ -78,10 +78,10 @@ public class EventEnvelopeMessagePackTests
     // the lowest-layer in-process round-trip (like the tests above) is where it must
     // be caught (FR-014, D2/D14).
 
-    static RouteNearestPointBatchEvent.RouteNearestPointRecord MakeRecord(string category) =>
+    static RouteNearestPointBatchEvent.RouteNearestPointRecord MakeRecord(string? category) =>
         new("NYCT_B41_1234", "B41",
-            40.67821, -73.94421,
-            40.67921, -73.94521,
+            4_067_821, -7_394_421,
+            4_067_921, -7_394_521,
             10000, 8.5f, 182.3f, IsStale: true, Category: category);
 
     static RouteNearestPointBatchEvent.RouteNearestPointRecord RoundTrip(
@@ -111,16 +111,18 @@ public class EventEnvelopeMessagePackTests
     }
 
     [Fact]
-    public void RouteNearestPointRecord_Category_DefaultsToBus_WhenOmitted()
+    public void RouteNearestPointRecord_NullCategory_RoundTripsAsNull_NotADefault()
     {
-        // Key(10) default is "bus" (wire-contract.md §1) — a record constructed
-        // without the arg must round-trip as "bus", not null/empty.
+        // v2 (feature 051, US4) REMOVED the "bus" default at Key(10): a null category is the
+        // normal case and means "resolve it from the route catalog". If it round-tripped as
+        // "bus" instead, every catalog-resolved vehicle would render as a bus and the
+        // "unknown" data-quality signal would be indistinguishable from a real classification.
         var original = new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-            "v1", "74", 33.75, -84.39, 33.75, -84.39, 0, null, null, IsStale: false);
+            "v1", "74", null, null, 3_375_000, -8_439_000, 0, null, null, IsStale: false, Category: null);
 
         var restored = RoundTrip(original);
 
-        Assert.Equal("bus", restored.Category);
+        Assert.Null(restored.Category);
     }
 
     [Fact]
@@ -153,7 +155,7 @@ public class EventEnvelopeMessagePackTests
                 new RouteNearestPointBatchEvent(new[]
                 {
                     new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-                        "v1", "74", 33.75, -84.39, 33.751, -84.389, 10000, null, null, false)
+                        "v1", "74", 3_375_000, -8_439_000, 3_375_100, -8_438_900, 10000, null, null, false, null)
                 })),
             new("RouteCrossingBatchEvent", DateTimeOffset.UnixEpoch,
                 new RouteCrossingBatchEvent(new[]

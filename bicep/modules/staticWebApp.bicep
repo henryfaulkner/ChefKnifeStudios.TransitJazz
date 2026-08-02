@@ -29,8 +29,8 @@ resource swa 'Microsoft.Web/staticSites@2024-04-01' = {
   location: location
   tags: tags
   sku: {
-    name: 'Free'
-    tier: 'Free'
+    name: 'Standard'
+    tier: 'Standard'
   }
   properties: {
     repositoryUrl: repositoryUrl

@@ -23,6 +23,7 @@ public class GtfsStaticLoader(
     IHttpClientFactory httpClientFactory,
     IKeyValueRepository<string> routeShapeRepo,
     IConfiguration configuration,
+    IRouteShapeResponseCache responseCache,
     ILogger<GtfsStaticLoader> logger) : BackgroundService
 {
     sealed record CityStaticEntry(
@@ -90,6 +91,20 @@ public class GtfsStaticLoader(
             await ReconcileCityAsync(city.Name, fresh, ct);
             anyStored = true;
             logger.LogInformation("GtfsStaticLoader: city {City} refreshed {Count} route shapes.", city.Name, fresh.Count);
+
+            var cityKey = city.Name.ToLowerInvariant();
+            responseCache.Populate(RouteShapeResponseCacheKey.AllShapes(cityKey),
+                await RouteResponseBuilder.BuildAllShapesJsonAsync(routeShapeRepo, cityKey, ct));
+            responseCache.Populate(RouteShapeResponseCacheKey.AllRoutes(cityKey),
+                await RouteResponseBuilder.BuildAllRoutesJsonAsync(routeShapeRepo, cityKey, ct));
+        }
+
+        if (anyStored)
+        {
+            // The no-city-param aggregate variant of all-shapes (research D4) — rebuilt once
+            // per refresh cycle after every city's per-city entry above is current.
+            responseCache.Populate(RouteShapeResponseCacheKey.AllShapes("*"),
+                await RouteResponseBuilder.BuildAllShapesJsonAsync(routeShapeRepo, cityKey: null, ct));
         }
 
         if (anyStored && !_ready)

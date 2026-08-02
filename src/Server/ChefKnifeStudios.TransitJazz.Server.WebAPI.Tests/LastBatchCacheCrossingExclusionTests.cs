@@ -22,8 +22,8 @@ public class LastBatchCacheCrossingExclusionTests
         new EventEnvelope(nameof(RouteNearestPointBatchEvent), Epoch, new RouteNearestPointBatchEvent(new[]
         {
             new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-                vehicleId, "74", 33.75, -84.39,
-                33.751, -84.389, 10000, null, null, false)
+                vehicleId, "74", 3_375_000, -8_439_000,
+                3_375_100, -8_438_900, 10000, null, null, false, null)
         }))
     };
 
@@ -32,8 +32,8 @@ public class LastBatchCacheCrossingExclusionTests
         var positionEvent = new RouteNearestPointBatchEvent(new[]
         {
             new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-                vehicleId, "74", 33.75, -84.39,
-                33.751, -84.389, 10000, null, null, false)
+                vehicleId, "74", 3_375_000, -8_439_000,
+                3_375_100, -8_438_900, 10000, null, null, false, null)
         });
 
         var crossingEvent = new RouteCrossingBatchEvent(new[]

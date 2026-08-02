@@ -83,6 +83,7 @@ builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddTransient<ISettingsService, SettingsService>();
 builder.Services.AddSingleton<IOutsideClickJsInterop, OutsideClickJsInterop>();
 builder.Services.AddSingleton<IViewportSizeJsInterop, ViewportSizeJsInterop>();
+builder.Services.AddSingleton<IPageVisibilityJsInterop, PageVisibilityJsInterop>();
 
 builder.Services.AddLocalization();
 

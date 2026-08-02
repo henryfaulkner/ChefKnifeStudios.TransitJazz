@@ -63,6 +63,7 @@ public class Worker(
             int tickTonesEmitted = 0, tickVehiclesProcessed = 0;
             int tickVehicleStateCacheSize = 0, tickCrossingBaselineCacheSize = 0, tickRouteIndexSize = 0, tickRouteTriggerPointCacheSize = 0;
             int tickCrossingsSuppressedFirstSeen = 0, tickCrossingsSuppressedDeltaLeq0 = 0, tickCrossingsSuppressedTeleport = 0, tickCrossingsSuppressedTransfer = 0;
+            long tickBatchWireBytes = 0;
 
             foreach (var city in cities)
             {
@@ -115,7 +116,8 @@ public class Worker(
                         crossings_suppressed_first_seen = result.CrossingsSuppressedFirstSeen,
                         crossings_suppressed_delta_leq0 = result.CrossingsSuppressedDeltaLeq0,
                         crossings_suppressed_teleport = result.CrossingsSuppressedTeleport,
-                        crossings_suppressed_transfer = result.CrossingsSuppressedTransfer
+                        crossings_suppressed_transfer = result.CrossingsSuppressedTransfer,
+                        batch_wire_bytes = result.BatchWireBytes
                     });
 
                     processedCities.Add(city.Name);
@@ -130,6 +132,7 @@ public class Worker(
                     tickCrossingsSuppressedDeltaLeq0 += result.CrossingsSuppressedDeltaLeq0;
                     tickCrossingsSuppressedTeleport += result.CrossingsSuppressedTeleport;
                     tickCrossingsSuppressedTransfer += result.CrossingsSuppressedTransfer;
+                    tickBatchWireBytes += result.BatchWireBytes ?? 0;
                 }
             }
 
@@ -156,7 +159,8 @@ public class Worker(
                     crossings_suppressed_first_seen = tickCrossingsSuppressedFirstSeen,
                     crossings_suppressed_delta_leq0 = tickCrossingsSuppressedDeltaLeq0,
                     crossings_suppressed_teleport = tickCrossingsSuppressedTeleport,
-                    crossings_suppressed_transfer = tickCrossingsSuppressedTransfer
+                    crossings_suppressed_transfer = tickCrossingsSuppressedTransfer,
+                    batch_wire_bytes = tickBatchWireBytes
                 });
             }
         }
@@ -164,7 +168,7 @@ public class Worker(
 
     /// <summary>Per-city outcome of one tick, surfaced out of <see cref="ProcessSpatialReconciliationAsync"/>
     /// so the caller can post a PerCityCycle row on every path (healthy, not-ready, and failed) — R2/R5.</summary>
-    readonly record struct CityTickResult(
+    internal readonly record struct CityTickResult(
         string CityName,
         bool HealthOk,
         double? FeedFreshnessSeconds,
@@ -177,7 +181,8 @@ public class Worker(
         int CrossingsSuppressedFirstSeen = 0,
         int CrossingsSuppressedDeltaLeq0 = 0,
         int CrossingsSuppressedTeleport = 0,
-        int CrossingsSuppressedTransfer = 0)
+        int CrossingsSuppressedTransfer = 0,
+        long? BatchWireBytes = null)
     {
         public static CityTickResult Unhealthy(string cityName, Worker worker) => new(
             cityName, HealthOk: false, FeedFreshnessSeconds: null, TonesEmitted: 0, VehiclesProcessed: 0,
@@ -355,7 +360,21 @@ public class Worker(
     internal static string ResolveCategory(IReadOnlyDictionary<string, string>? categoryMap, string routeJoinKey) =>
         categoryMap != null && categoryMap.TryGetValue(routeJoinKey, out var category) ? category : "unknown";
 
-    async Task<CityTickResult> ProcessSpatialReconciliationAsync(
+    /// <summary>
+    /// Scales a WGS84 degree value to the v2 wire's int representation (degrees x 1e5).
+    /// Exact for the 5-decimal precision v1 already applied via <c>Math.Round(x, 5)</c>,
+    /// so this is a re-encoding rather than a further loss of precision.
+    /// </summary>
+    internal static int ScaleE5(double degrees) => (int)Math.Round(degrees * 100_000d);
+
+    /// <summary>
+    /// Applies the v2 category rule: a category the client can resolve from its own route
+    /// catalog is omitted from the wire; only the <c>"unknown"</c> data-quality signal rides.
+    /// </summary>
+    internal static string? NullIfKnownCategory(string category) =>
+        category == "unknown" ? "unknown" : null;
+
+    internal async Task<CityTickResult> ProcessSpatialReconciliationAsync(
         ITransitCity city,
         FeedMessage feed,
         IReadOnlyDictionary<string, RoutePoint[]> index,
@@ -425,18 +444,24 @@ public class Worker(
                             && prior.VehicleTimestamp.HasValue
                             && currentVehicleTimestamp.Value == prior.VehicleTimestamp.Value;
 
+                        // v2 wire rules (051/US4). The prior pair is redundant in steady state —
+                        // the client retains its own last-known position — so it rides only when
+                        // the client cannot infer it: a route change makes the retained position
+                        // belong to a different shape, so it must be restated.
+                        bool routeChanged = prior.RouteJoinKey != nearest.RouteJoinKey;
+
                         batch.Add(new RouteNearestPointBatchEvent.RouteNearestPointRecord(
                             vehicleId,
                             nearest.RouteJoinKey,
-                            Math.Round(prior.NearestLat, 5),
-                            Math.Round(prior.NearestLon, 5),
-                            Math.Round(nearest.Lat, 5),
-                            Math.Round(nearest.Lon, 5),
+                            routeChanged ? ScaleE5(prior.NearestLat) : null,
+                            routeChanged ? ScaleE5(prior.NearestLon) : null,
+                            ScaleE5(nearest.Lat),
+                            ScaleE5(nearest.Lon),
                             (int)(now - prior.LastUpdated).TotalMilliseconds,
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             isStale,
-                            ResolveCategory(modeMap, routeJoinKey)
+                            NullIfKnownCategory(ResolveCategory(modeMap, routeJoinKey))
                         ));
 
                         if (isStale)
@@ -458,18 +483,21 @@ public class Worker(
                     }
                     else
                     {
+                        // First observation: the client has no retained position for this vehicle,
+                        // so the prior pair MUST ride. Prior == current with DurationMs 0 is the
+                        // existing snap-into-place contract.
                         batch.Add(new RouteNearestPointBatchEvent.RouteNearestPointRecord(
                             vehicleId,
                             nearest.RouteJoinKey,
-                            Math.Round(nearest.Lat, 5),
-                            Math.Round(nearest.Lon, 5),
-                            Math.Round(nearest.Lat, 5),
-                            Math.Round(nearest.Lon, 5),
+                            ScaleE5(nearest.Lat),
+                            ScaleE5(nearest.Lon),
+                            ScaleE5(nearest.Lat),
+                            ScaleE5(nearest.Lon),
                             0, // first observation: no prior, client snaps into place instantly
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             false,
-                            ResolveCategory(modeMap, routeJoinKey)
+                            NullIfKnownCategory(ResolveCategory(modeMap, routeJoinKey))
                         ));
                         movedCount++;
                     }
@@ -550,6 +578,8 @@ public class Worker(
                     bufferOccupancy, droppedRecords, persistFailures);
             }
 
+            long? batchWireBytes = null;
+
             if (batch.Count > 0)
             {
                 var envelope = new EventEnvelope(
@@ -573,6 +603,8 @@ public class Worker(
                         new RouteCrossingBatchEvent(sorted)));
                 }
 
+                batchWireBytes = WireSize.Measure(envelopes);
+
                 var isBatchPublished = await transitHubPublisher.PublishBatchAsync(city.Name, envelopes, ct);
                 if (!isBatchPublished)
                     logger.LogWarning("Failed to publish spatial reconciliation batch for city {City}.", city.Name);
@@ -595,7 +627,8 @@ public class Worker(
                 CrossingsSuppressedFirstSeen: crossingsSuppressedFirstSeen,
                 CrossingsSuppressedDeltaLeq0: crossingsSuppressedDeltaLeq0,
                 CrossingsSuppressedTeleport: crossingsSuppressedTeleport,
-                CrossingsSuppressedTransfer: crossingsSuppressedTransfer);
+                CrossingsSuppressedTransfer: crossingsSuppressedTransfer,
+                BatchWireBytes: batchWireBytes);
         }
         catch (Exception ex)
         {

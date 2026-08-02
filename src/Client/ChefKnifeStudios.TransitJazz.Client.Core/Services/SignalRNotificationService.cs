@@ -2,6 +2,7 @@ using ChefKnifeStudios.TransitJazz.Client.Core.Enums;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -27,11 +28,56 @@ public class SignalRNotificationService(
         IConfiguration configuration,
         IWebAssemblyHostEnvironment hostEnvironment,
         NavigationManager navigationManager,
-        ILogger<SignalRNotificationService> logger) : ISignalRNotificationService
+        ILogger<SignalRNotificationService> logger) : ISignalRNotificationService, IDeliveryControl
 {
     private HubConnection? _hubConnection;
     private string _city = CityNames.Marta;
+    // Hidden-tab pause (feature 051, US3): the Reconnected handler reads this local flag
+    // rather than referencing AttentionGate — one-directional dependency (data-model §4).
+    // AttentionGate pushes it via DesiredDelivery before every Pause/Resume call.
+    private volatile bool _desiredDelivery = true;
     public event SignalRNotificationHandler? NotificationReceived;
+
+    public bool DesiredDelivery
+    {
+        set => _desiredDelivery = value;
+    }
+
+    // Pause = leave the city group (zero fan-out egress); the connection stays open — a
+    // parked WebSocket costs only keepalive pings (research D5).
+    public async Task PauseAsync()
+    {
+        if (_hubConnection is null || _hubConnection.State != HubConnectionState.Connected)
+            return;
+
+        try
+        {
+            await _hubConnection.InvokeAsync(HubMethods.LeaveCity, _city);
+            logger.LogInformation("Left city group {City} (hidden-tab pause)", _city);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error leaving city group {City}", _city);
+        }
+    }
+
+    // Resume = rejoin; JoinCity's existing LastBatchCache replay is the catch-up path — no
+    // new server logic needed (research D5).
+    public async Task ResumeAsync()
+    {
+        if (_hubConnection is null || _hubConnection.State != HubConnectionState.Connected)
+            return;
+
+        try
+        {
+            await _hubConnection.InvokeAsync(HubMethods.JoinCity, _city);
+            logger.LogInformation("Rejoined city group {City} (hidden-tab resume)", _city);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error rejoining city group {City}", _city);
+        }
+    }
 
     public async Task InitAsync(CancellationToken ct = default)
     {
@@ -97,6 +143,14 @@ public class SignalRNotificationService(
 
                 _hubConnection.Reconnected += async _ =>
                 {
+                    // Contract C3: a reconnect while paused (hidden+muted) must not blind-rejoin
+                    // — read the local flag AttentionGate last pushed, never reference the gate.
+                    if (!_desiredDelivery)
+                    {
+                        logger.LogInformation("Reconnected while paused; not rejoining city group {City}", _city);
+                        return;
+                    }
+
                     logger.LogInformation("Reconnected; rejoining city group {City}", _city);
                     await _hubConnection.InvokeAsync(HubMethods.JoinCity, _city);
                 };
@@ -106,6 +160,22 @@ public class SignalRNotificationService(
 
                 logger.LogInformation("Joined city group {City}", _city);
             }
+        }
+        catch (HubException ex) when (ex.Message.Contains("Method does not exist", StringComparison.OrdinalIgnoreCase))
+        {
+            // Wire version gate (feature 051, US4). HubMethods.JoinCity is "JoinCityV2"; a server
+            // that still exposes the v1 "JoinCity" rejects the invoke here. This is the gate WORKING
+            // — it exists because MessagePack's ReadDouble accepts int encodings, so a stale peer
+            // would otherwise decode v2's scaled-int coordinates as garbage and silently misrender
+            // every vehicle. The generic handler below reported this as an unremarkable init error,
+            // which left the only visible symptom as an empty map with no live data.
+            logger.LogError(ex,
+                "SignalR join REJECTED — client/server wire version mismatch. This client invokes " +
+                "'{JoinMethod}' but the server does not expose it, so no vehicle batches or checkpoint " +
+                "crossings will arrive. Deploy the server+worker container BEFORE the client (the " +
+                "client must never lead the server). City={City}",
+                HubMethods.JoinCity, _city);
+            _hubConnection = null;
         }
         catch (Exception ex)
         {

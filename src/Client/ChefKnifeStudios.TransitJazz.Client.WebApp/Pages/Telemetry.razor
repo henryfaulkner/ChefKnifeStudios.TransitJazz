@@ -36,6 +36,7 @@
                     <td>@row.VehiclesProcessed</td>
                     <td>@row.GcHeapBytes</td>
                     <td>@row.ProcessWorkingSetBytes</td>
+                    <td>@row.BatchWireBytes</td>
                 </RowContent>
             </TelemetryTable>
         }
@@ -55,6 +56,7 @@
                     <td>@row.CrossingBaselineCacheSize</td>
                     <td>@row.RouteIndexSize</td>
                     <td>@row.RouteTriggerPointCacheSize</td>
+                    <td>@row.BatchWireBytes</td>
                 </RowContent>
             </TelemetryTable>
         }
@@ -79,6 +81,7 @@
         new("Vehicles Processed", TelemetrySortColumn.VehiclesProcessed),
         new("GC Heap (bytes)", TelemetrySortColumn.GcHeapBytes),
         new("Working Set (bytes)", TelemetrySortColumn.ProcessWorkingSetBytes),
+        new("Wire Bytes", TelemetrySortColumn.BatchWireBytes),
     ];
 
     static readonly IReadOnlyList<TelemetryColumn> _perCityCycleColumns =
@@ -94,6 +97,7 @@
         new("Crossing Cache", TelemetrySortColumn.CrossingBaselineCacheSize),
         new("Route Index", TelemetrySortColumn.RouteIndexSize),
         new("Trigger Point Cache", TelemetrySortColumn.RouteTriggerPointCacheSize),
+        new("Wire Bytes", TelemetrySortColumn.BatchWireBytes),
     ];
 
     bool _loading = true;

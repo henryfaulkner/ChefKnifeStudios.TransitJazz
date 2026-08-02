@@ -11,6 +11,7 @@ using ChefKnifeStudios.TransitJazz.Server.WebAPI.SignalR;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,6 +20,7 @@ using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using System;
 using System.Collections.Generic;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 
@@ -29,6 +31,22 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
 builder.Services.AddMemoryCache();
+
+// Response compression (research D3): first-ever registration in src/Server. The
+// GetAllRouteShapes/GetAllRoutes catalog responses are megabytes of coordinate-dense JSON on
+// every client startup; Brotli/Gzip over HTTPS is the highest-ROI zero-risk change in the
+// package. EnableForHttps defaults to false and production is HTTPS-only. WebSockets (the
+// SignalR/MessagePack path) bypass this middleware entirely — unaffected.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
+{
+    options.Level = CompressionLevel.Fastest;
+});
 
 builder.Services.AddCors(options =>
 {
@@ -119,6 +137,7 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
 });
 
 builder.Services.AddSingleton(typeof(IKeyValueRepository<>), typeof(InMemoryKeyValueRepository<>));
+builder.Services.AddSingleton<IRouteShapeResponseCache, RouteShapeResponseCache>();
 builder.Services.AddHttpClient();
 builder.Services.AddHostedService<GtfsStaticLoader>();
 builder.Services.AddSingleton<IFeatureFlagService>(sp =>
@@ -163,6 +182,8 @@ builder.Services.AddHostedService<Worker>();
 var app = builder.Build();
 
 app.UseExceptionHandler();
+
+app.UseResponseCompression();
 
 app.MapOpenApi().AllowAnonymous();
 

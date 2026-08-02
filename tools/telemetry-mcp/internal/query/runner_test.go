@@ -84,9 +84,10 @@ func TestRunWithStubTool(t *testing.T) {
 // TestSourceGlobConstruction asserts the read source is assembled from the fixed
 // template {StorageURI}/telemetry/dt={date}/*.parquet ("telemetry/" is a literal
 // virtual-directory prefix inside the configured container — the container itself is
-// not necessarily named "telemetry"), and that the filter content never appears
-// before the WHERE clause. This is the structural guarantee that operator input
-// cannot redirect the data source (FR-012 / SC-006).
+// not necessarily named "telemetry"), wrapped in read_parquet(..., union_by_name=true)
+// so a day partition spanning a mid-day schema change doesn't hard-error, and that the
+// filter content never appears before the WHERE clause. This is the structural
+// guarantee that operator input cannot redirect the data source (FR-012 / SC-006).
 func TestSourceGlobConstruction(t *testing.T) {
 	cfg := &config.Config{
 		ToolPath:       captureToolPath(t),
@@ -107,28 +108,28 @@ func TestSourceGlobConstruction(t *testing.T) {
 			dataset:     "telemetry",
 			date:        "2026-06-04",
 			filter:      "event_type = 'PerCityCycle'",
-			wantInQuery: "SELECT * FROM 'azure://telemetry/telemetry/dt=2026-06-04/*.parquet' WHERE event_type = 'PerCityCycle'",
+			wantInQuery: "SELECT * FROM read_parquet('azure://telemetry/telemetry/dt=2026-06-04/*.parquet', union_by_name=true) WHERE event_type = 'PerCityCycle'",
 		},
 		{
 			name:        "full-cycle explicit date",
 			dataset:     "telemetry",
 			date:        "2026-06-04",
 			filter:      "health_ok = false",
-			wantInQuery: "SELECT * FROM 'azure://telemetry/telemetry/dt=2026-06-04/*.parquet' WHERE health_ok = false",
+			wantInQuery: "SELECT * FROM read_parquet('azure://telemetry/telemetry/dt=2026-06-04/*.parquet', union_by_name=true) WHERE health_ok = false",
 		},
 		{
 			name:        "numeric filter explicit date",
 			dataset:     "telemetry",
 			date:        "2026-06-04",
 			filter:      "vehicles_processed > 10",
-			wantInQuery: "SELECT * FROM 'azure://telemetry/telemetry/dt=2026-06-04/*.parquet' WHERE vehicles_processed > 10",
+			wantInQuery: "SELECT * FROM read_parquet('azure://telemetry/telemetry/dt=2026-06-04/*.parquet', union_by_name=true) WHERE vehicles_processed > 10",
 		},
 		{
 			name:        "defaulted today UTC date",
 			dataset:     "telemetry",
 			date:        time.Now().UTC().Format("2006-01-02"),
 			filter:      "tones_emitted > 0",
-			wantInQuery: "azure://telemetry/telemetry/dt=" + time.Now().UTC().Format("2006-01-02") + "/*.parquet",
+			wantInQuery: "azure://telemetry/telemetry/dt=" + time.Now().UTC().Format("2006-01-02") + "/*.parquet', union_by_name=true)",
 		},
 	}
 

@@ -391,6 +391,42 @@ window.ChefMapAnimator = {
         this._animFrameId = requestAnimationFrame(this.tick.bind(this));
     },
 
+    // Vehicle category for the v2 wire (feature 051, US4 / FR-013). Precedence:
+    //   1. rec.category  — present ONLY to carry the "unknown" data-quality signal
+    //   2. route catalog — the normal case; v2 omits categories the client can resolve
+    //   3. 'unknown'     — genuinely unclassified, or the catalog hasn't loaded yet (FR-013a)
+    // Never guesses 'bus': a wrong category is indistinguishable from a real one downstream,
+    // which would erase the very signal this resolution order exists to preserve.
+    _resolveCategory: function (rec) {
+        if (rec.category) return rec.category;
+        if (typeof ChefMap !== 'undefined' && ChefMap.getVehicleCategory) {
+            var fromCatalog = ChefMap.getVehicleCategory(rec.routeJoinKey);
+            if (fromCatalog) return fromCatalog;
+        }
+        return 'unknown';
+    },
+
+    // FR-013a: the JoinCity replay is known to beat route-shape loading, so vehicles that
+    // arrived first resolved to 'unknown' only because the catalog was still empty. Once it
+    // populates, re-resolve exactly those — vehicles carrying a server-sent 'unknown' are a
+    // real data-quality signal and are left alone (the catalog cannot override the wire).
+    reresolveUnknownCategories: function () {
+        if (typeof ChefMap === 'undefined' || !ChefMap.getVehicleCategory) return 0;
+        var fixed = 0;
+        for (var id in this.vehicles) {
+            if (!Object.prototype.hasOwnProperty.call(this.vehicles, id)) continue;
+            var v = this.vehicles[id];
+            if (v.category !== 'unknown') continue;
+            var resolved = ChefMap.getVehicleCategory(v.routeJoinKey);
+            if (resolved) {
+                v.category = resolved;
+                fixed++;
+            }
+        }
+        if (fixed > 0) this._log('info', 'reresolveUnknownCategories: reclassified ' + fixed + ' vehicle(s) after catalog load');
+        return fixed;
+    },
+
     // --- MapLibre-specific processNearestPointBatch (R4 touch points applied) ---
 
     processNearestPointBatch: function (containerDivId, records) {
@@ -433,6 +469,27 @@ window.ChefMapAnimator = {
                 this._log('debug', 'vehicle ' + rec.vehicleId + ': route transfer ' + existingState.routeJoinKey + ' → ' + rec.routeJoinKey + ', teleporting');
                 teleportedVehicles++;
                 existingState = null;
+            }
+
+            // v2 wire (feature 051, US4): the prior position is omitted on steady-state
+            // records. Resolve it once here so every branch below reads rec.priorLat/priorLon
+            // exactly as it did under v1. Precedence (data-model §1):
+            //   1. record-supplied prior  — first observation or route change; authoritative
+            //   2. retained last position — the steady-state case, from this vehicle's state
+            //   3. current position       — no retained state (fresh join, cache replay, or a
+            //                               post-eviction reappearance): snap into place.
+            // Case 3 must never animate from a stale origin, which is exactly why an evicted
+            // vehicle's entry is dropped rather than kept around.
+            if (rec.priorLat === null || rec.priorLat === undefined ||
+                rec.priorLon === null || rec.priorLon === undefined) {
+                var retained = existingState && existingState.currentPos;
+                if (retained) {
+                    rec.priorLon = retained[0];
+                    rec.priorLat = retained[1];
+                } else {
+                    rec.priorLon = rec.currentLon;
+                    rec.priorLat = rec.currentLat;
+                }
             }
 
             // Stale upstream sample: GTFS-RT delivered the same per-vehicle timestamp.
@@ -583,7 +640,7 @@ window.ChefMapAnimator = {
             this.vehicles[rec.vehicleId] = {
                 vehicleId: rec.vehicleId,
                 routeJoinKey: rec.routeJoinKey,
-                category: rec.category || 'unknown',
+                category: this._resolveCategory(rec),
                 subPath: subPath,
                 subPathCumDist: subPathCumDist,
                 totalDistance: totalDistance,

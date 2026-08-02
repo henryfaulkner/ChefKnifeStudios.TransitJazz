@@ -66,6 +66,9 @@ var datasetColumns = map[string]map[string]valueKind{
 		"crossings_suppressed_delta_leq0": kindNumeric,
 		"crossings_suppressed_teleport":   kindNumeric,
 		"crossings_suppressed_transfer":   kindNumeric,
+		// egress measurement (feature 051, US1) — see
+		// specs/051-egress-reduction/contracts/telemetry-observability.md C2
+		"batch_wire_bytes": kindNumeric,
 	},
 }
 

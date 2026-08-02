@@ -22,6 +22,7 @@ public enum TelemetrySortColumn
     CrossingBaselineCacheSize,
     RouteIndexSize,
     RouteTriggerPointCacheSize,
+    BatchWireBytes,
 }
 
 /// <summary>One (event_type, city_name) group's row count for today, used to render table shells before any page loads.</summary>

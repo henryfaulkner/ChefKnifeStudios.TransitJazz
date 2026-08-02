@@ -116,6 +116,7 @@ public static class TelemetryEndpoints
         TelemetrySortColumn.CrossingBaselineCacheSize => OrderBy(rows, r => r.CrossingBaselineCacheSize, sortDesc),
         TelemetrySortColumn.RouteIndexSize => OrderBy(rows, r => r.RouteIndexSize, sortDesc),
         TelemetrySortColumn.RouteTriggerPointCacheSize => OrderBy(rows, r => r.RouteTriggerPointCacheSize, sortDesc),
+        TelemetrySortColumn.BatchWireBytes => OrderBy(rows, r => r.BatchWireBytes, sortDesc),
         _ => OrderBy(rows, r => r.ObservationUtc, sortDesc),
     };
 
@@ -200,5 +201,6 @@ public static class TelemetryEndpoints
         CrossingBaselineCacheSize = e.crossing_baseline_cache_size,
         RouteIndexSize = e.route_index_size,
         RouteTriggerPointCacheSize = e.route_trigger_point_cache_size,
+        BatchWireBytes = e.batch_wire_bytes,
     };
 }

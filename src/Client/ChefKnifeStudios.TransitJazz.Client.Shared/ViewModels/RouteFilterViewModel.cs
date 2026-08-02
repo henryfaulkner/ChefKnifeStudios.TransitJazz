@@ -143,7 +143,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
                 if (!_routeVehicles.TryGetValue(record.RouteJoinKey, out var vehicles))
                     _routeVehicles[record.RouteJoinKey] = vehicles = new HashSet<string>(StringComparer.Ordinal);
                 changed |= vehicles.Add(record.VehicleId);
-                _vehicleCategory[record.VehicleId] = record.Category;
+                _vehicleCategory[record.VehicleId] = ResolveCategory(record);
             }
         }
 
@@ -162,6 +162,60 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
         RecomputeActiveTransitCounts();
 
         return Task.CompletedTask;
+    }
+
+    // Vehicle category for the v2 wire (feature 051, US4 / FR-013). The record's Category is
+    // populated ONLY to carry the "unknown" data-quality signal; in the normal case it is
+    // omitted and resolved here from the route catalog by RouteJoinKey. Mirrors the precedence
+    // ChefMapAnimator._resolveCategory applies on the JS side — both consume the same wire.
+    //
+    // Never defaults to "bus": a guessed category is indistinguishable from a real one in the
+    // counts, which would erase the signal FR-013 exists to preserve.
+    //
+    // Startup race (FR-013a): the JoinCity replay routinely beats the route-shape fetch, so
+    // early records resolve to "unknown" while RouteItems is still empty. BuildRouteItems'
+    // existing recompute (below) re-runs the counts once shapes land, which re-resolves them.
+    string ResolveCategory(RouteNearestPointBatchEvent.RouteNearestPointRecord record)
+    {
+        if (!string.IsNullOrEmpty(record.Category)) return record.Category;
+
+        foreach (var item in RouteItems)
+        {
+            if (string.Equals(item.RouteJoinKey, record.RouteJoinKey, StringComparison.Ordinal)
+                && !string.IsNullOrEmpty(item.Category))
+                return item.Category;
+        }
+
+        return "unknown";
+    }
+
+    // FR-013a companion to ResolveCategory: re-resolve vehicles currently bucketed as "unknown"
+    // now that the route catalog is populated. Walks _routeVehicles (route → vehicle IDs), so
+    // each vehicle's route is known without storing a second mapping.
+    void ReresolveUnknownVehicleCategories()
+    {
+        foreach (var (routeJoinKey, vehicles) in _routeVehicles)
+        {
+            string? category = null;
+            foreach (var item in RouteItems)
+            {
+                if (string.Equals(item.RouteJoinKey, routeJoinKey, StringComparison.Ordinal)
+                    && !string.IsNullOrEmpty(item.Category))
+                {
+                    category = item.Category;
+                    break;
+                }
+            }
+
+            if (category is null) continue;
+
+            foreach (var vehicleId in vehicles)
+            {
+                if (_vehicleCategory.TryGetValue(vehicleId, out var existing)
+                    && string.Equals(existing, "unknown", StringComparison.Ordinal))
+                    _vehicleCategory[vehicleId] = category;
+            }
+        }
     }
 
     // Increment the consecutive-absence streak for every counted vehicle missing from this
@@ -260,6 +314,13 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             .ThenBy(g => g.Category, StringComparer.Ordinal)
             .Select(g => g.Category)
             .ToList();
+
+        // FR-013a: vehicles seeded before the shapes arrived resolved to "unknown" only because
+        // the catalog was empty (v2 omits the category for catalog-resolvable routes). Now that
+        // RouteItems exists, re-resolve exactly those — a vehicle whose SERVER-SENT category was
+        // "unknown" is a genuine data-quality signal, but it is indistinguishable here from a
+        // catalog miss, so both are re-resolved and the catalog is treated as authoritative.
+        ReresolveUnknownVehicleCategories();
 
         // Counts may already have been seeded by the JoinCity replay BEFORE the shapes
         // arrived (the SignalR connect and the shape fetch race at startup). That recompute
