@@ -58,4 +58,29 @@ public class CategoryFallbackTests
         // → "unknown", not "bus".
         Assert.Equal("unknown", Worker.ResolveCategory(null, "anything"));
     }
+
+    // ── Feature 051 · US4: the v2 wire rule layered on top of ResolveCategory ────
+    // v2 omits any category the client can resolve from its own route catalog, so only
+    // the "unknown" data-quality signal actually travels. These pin the null-vs-"unknown"
+    // distinction that FR-013 depends on.
+
+    [Theory]
+    [InlineData("bus")]
+    [InlineData("rail")]
+    [InlineData("streetcar")]
+    public void NullIfKnownCategory_ResolvableCategory_IsOmittedFromTheWire(string category)
+    {
+        // The client resolves these from its route catalog by RouteJoinKey, so sending
+        // them is pure redundancy — this omission is a large share of the v2 saving.
+        Assert.Null(Worker.NullIfKnownCategory(category));
+    }
+
+    [Fact]
+    public void NullIfKnownCategory_Unknown_StillRidesTheWire()
+    {
+        // "unknown" is NOT resolvable from the catalog — it means the Worker's route join
+        // failed. Omitting it would let the client silently resolve a real category from
+        // the catalog and erase the data-quality signal entirely.
+        Assert.Equal("unknown", Worker.NullIfKnownCategory("unknown"));
+    }
 }

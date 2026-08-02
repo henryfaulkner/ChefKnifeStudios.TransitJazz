@@ -430,6 +430,20 @@ window.ChefMap = {
         dark:  { rail: '#7986cb', bus: '#66bb6a', streetcar: '#e57373', _default: '#9e9e9e' }
     },
 
+    // Vehicle-category resolution for the v2 wire (feature 051, US4 / FR-013).
+    //
+    // Distinct from _routeCategoryByRouteJoinKey above, which defaults absent categories to
+    // 'bus' for checkpoint coloring. Vehicle rendering MUST NOT guess: v2 omits the category
+    // for routes the client can resolve itself, so an absent entry here means "genuinely not
+    // classified" and has to stay 'unknown' — that is the data-quality signal FR-013 protects.
+    // Returns null when the catalog has no entry, letting the caller decide the fallback.
+    _vehicleCategoryByRouteJoinKey: {},
+
+    getVehicleCategory: function (routeJoinKey) {
+        let c = ChefMap._vehicleCategoryByRouteJoinKey[routeJoinKey];
+        return c ? c : null;
+    },
+
     // Resolve the checkpoint color for a route from its vehicle category + current theme,
     // falling back to the neutral default (never the route line color).
     _checkpointColorFor: function (routeJoinKey) {
@@ -586,6 +600,11 @@ window.ChefMap = {
 
             ChefMap._routeColorsByRouteJoinKey[route.routeJoinKey] = lineColor;
             ChefMap._routeCategoryByRouteJoinKey[route.routeJoinKey] = route.category || 'bus';
+            // Vehicle-category catalog: store only a real category — no 'bus' default (see
+            // getVehicleCategory). This is the seam FR-013a's re-resolution hooks below.
+            if (route.category) {
+                ChefMap._vehicleCategoryByRouteJoinKey[route.routeJoinKey] = route.category;
+            }
 
             ChefMapAnimator.loadRouteGeometry(route.routeJoinKey, route.coordinates);
 
@@ -596,6 +615,13 @@ window.ChefMap = {
                 properties: { routeJoinKey: route.routeJoinKey, color: lineColor }
             });
         });
+
+        // FR-013a: the vehicle-category catalog is now populated. Vehicles delivered by the
+        // JoinCity replay before this point fell back to 'unknown' purely because the catalog
+        // was empty — reclassify those now that it can answer.
+        if (typeof ChefMapAnimator !== 'undefined' && ChefMapAnimator.reresolveUnknownCategories) {
+            ChefMapAnimator.reresolveUnknownCategories();
+        }
 
         let fc = { type: 'FeatureCollection', features: features };
         ChefMap._routesFeatureCollection = fc;

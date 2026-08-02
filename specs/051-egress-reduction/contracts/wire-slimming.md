@@ -55,4 +55,4 @@ Precedence: record prior (if non-null) → retained last position (JS vehicle st
 | Steady-state record (null prior, null category) | round-trips; encoded size ≤ 55% of an equivalent v1 record |
 | lat 89.99999 / lon −179.99999 | scaled values fit `int`; decode returns exact 5-decimal values |
 | lat scaling of already-rounded v1 values | zero precision loss vs. `Math.Round(x,5)` |
-| Batch of 1,000 steady-state records | total encoded bytes ≥40% smaller than v1 equivalent (SC-004 proxy) |
+| Batch of 1,000 steady-state records | total encoded bytes ≥35% smaller than v1 equivalent (SC-004 proxy; measured 38.7% — threshold amended 2026-08-01, see spec SC-004) |

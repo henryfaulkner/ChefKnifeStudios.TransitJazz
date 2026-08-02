@@ -12,9 +12,13 @@ One denormalized dataset, `telemetry`, discriminated by an `event_type` column:
 - `PerCityCycle` — one row per telemetry-emitting city per worker tick
 - `FullCycle` — one row per worker tick across all cities (counts, timing, health)
 
-The dataset has one merged snake_case column contract (17 columns; some populated
+The dataset has one merged snake_case column contract (22 columns; some populated
 only for one event type — see
-[`specs/038-telemetry-denormalization/contracts/telemetry-event-schema.md`](../../specs/038-telemetry-denormalization/contracts/telemetry-event-schema.md)).
+[`specs/038-telemetry-denormalization/contracts/telemetry-event-schema.md`](../../specs/038-telemetry-denormalization/contracts/telemetry-event-schema.md),
+[`specs/045-time-to-first-note/contracts/telemetry-schema.md`](../../specs/045-time-to-first-note/contracts/telemetry-schema.md),
+and [`specs/051-egress-reduction/contracts/telemetry-observability.md`](../../specs/051-egress-reduction/contracts/telemetry-observability.md)
+for the columns added since; `internal/validate/validate.go`'s `datasetColumns` is
+the final authority).
 
 ## Tool arguments
 
@@ -31,6 +35,14 @@ The read source is assembled from a fixed template the operator cannot redirect:
 virtual-directory prefix inside whichever container `TELEMETRY_STORAGE_URI` points
 at — the container itself is not necessarily named `telemetry` (e.g. prod's worker
 writes into a container named `parquet`).
+
+The glob is read via `read_parquet(..., union_by_name=true)`, not a bare `'glob'`
+string. A day's partition can span a schema change mid-day (a new nullable column
+added to `TelemetryEvent`) — part-files written before and after the change coexist
+under the same `dt=` prefix. The bare-string form takes its schema from the first
+file it opens and hard-errors on any mismatch; `union_by_name=true` coalesces a
+missing column to `NULL` per file instead, so adding a column never breaks queries
+against days that straddle the rollout.
 
 ### Value kinds in `filter`
 

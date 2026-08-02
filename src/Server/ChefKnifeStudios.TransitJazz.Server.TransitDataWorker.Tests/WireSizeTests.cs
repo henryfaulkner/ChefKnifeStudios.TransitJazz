@@ -19,9 +19,9 @@ public class WireSizeTests
         {
             records.Add(new RouteNearestPointBatchEvent.RouteNearestPointRecord(
                 $"VEH{i}", "95",
-                33.0 + i * 0.001, -84.0 - i * 0.001,
-                33.001 + i * 0.001, -84.001 - i * 0.001,
-                10000, 8.5f, 182.3f, IsStale: false, Category: "bus"));
+                3_300_000 + i * 100, -8_400_000 - i * 100,
+                3_300_100 + i * 100, -8_400_100 - i * 100,
+                10000, 8.5f, 182.3f, IsStale: false, Category: null));
         }
 
         return new List<EventEnvelope>

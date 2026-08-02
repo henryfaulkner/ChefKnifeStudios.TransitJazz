@@ -26,8 +26,8 @@ public class TransitHubTests
             new RouteNearestPointBatchEvent(new[]
             {
                 new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-                    id, "74", 33.75, -84.39,
-                    33.751, -84.389, 10000, null, null, false)
+                    id, "74", 3_375_000, -8_439_000,
+                    3_375_100, -8_438_900, 10000, null, null, false, null)
             })
         )).ToList();
 
@@ -65,7 +65,7 @@ public class TransitHubTests
         cache.Set("marta", batch);
         var hub = MakeHub(cache, out var groups, out var clients);
 
-        await hub.JoinCity("marta");
+        await hub.JoinCityV2("marta");
 
         Assert.Equal(1, groups.AddCallCount);
         Assert.Equal("marta", groups.LastGroupName);
@@ -79,7 +79,7 @@ public class TransitHubTests
     {
         var hub = MakeHub(new FakeLastBatchCache(), out var groups, out var clients);
 
-        await hub.JoinCity("marta");
+        await hub.JoinCityV2("marta");
 
         Assert.Equal(1, groups.AddCallCount);
         Assert.Equal(0, clients.CallerProxy.SendAsyncCallCount);

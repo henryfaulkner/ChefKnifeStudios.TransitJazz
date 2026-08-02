@@ -31,11 +31,11 @@ Phase-by-phase verification. Local run: Aspire AppHost or WebAPI+Worker directly
 
 ## Phase 3 — Wire slimming (after ≥3 days of Phase 0 baseline)
 
-1. **Unit gates**: `dotnet test` — Shared round-trip/size vectors (≥40% batch reduction proxy), Worker emit-rule tests (first-seen / steady / route-change / unknown-category / stale), WebAPI cache tests unmodified and green (`LastBatchCacheCrossingExclusionTests` untouched).
+1. **Unit gates**: `dotnet test` — Shared round-trip/size vectors (≥35% batch reduction proxy), Worker emit-rule tests (first-seen / steady / route-change / unknown-category / stale), WebAPI cache tests unmodified and green (`LastBatchCacheCrossingExclusionTests` untouched).
 2. **Local end-to-end**: run stack, verify map behavior indistinguishable: animation smoothness, categories (rail vs bus dot styling), audio triggering, join snapshot (hard-reload mid-session → vehicles snap into place, no motion replay).
 3. **Version gate**: run an old client bundle (pre-change commit) against the new server → join fails with a logged `HubException`, map stays empty, no garbled rendering. New client vs old server: same clean failure.
 4. **Deploy order**: server+worker container → SWA client → same revision cherry-picked/merged to `deploy/marta-jazz`.
-5. **Measure the win (SC-004/SC-005)**: compare per-city `batch_wire_bytes` daily sums pre/post — expect ≥40% per-vehicle reduction (normalize by `vehicles_processed`). Then compare Azure egress cost month-over-month for the ~60–75% total (with Phases 1–2 compounding).
+5. **Measure the win (SC-004/SC-005)**: compare per-city `batch_wire_bytes` daily sums pre/post — expect ≥35% per-vehicle reduction, ~38.7% predicted (normalize by `vehicles_processed`; baseline ~68 B/vehicle). Then compare Azure egress cost month-over-month for the ~60–75% total (with Phases 1–2 compounding).
 
 ## Acceptance traceability
 

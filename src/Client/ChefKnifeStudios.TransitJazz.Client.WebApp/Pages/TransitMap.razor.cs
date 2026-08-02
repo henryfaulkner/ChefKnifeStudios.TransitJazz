@@ -534,14 +534,19 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             foreach (var r in e.BatchRecords)
             {
                 activeRoutes.Add(r.RouteJoinKey);
+                // v2 wire (051/US4): coordinates arrive as degrees x 1e5. This is the single
+                // decode seam — everything downstream (JS animator included) keeps working in
+                // plain degrees. A null prior pair means "animate from your retained position";
+                // it stays null here rather than being substituted with the current position,
+                // which would collapse the animator's snap-vs-animate distinction.
                 records.Add(new
                 {
                     vehicleId = r.VehicleId,
                     routeJoinKey = r.RouteJoinKey,
-                    priorLon = r.PriorNearestLon,
-                    priorLat = r.PriorNearestLat,
-                    currentLon = r.CurrentNearestLon,
-                    currentLat = r.CurrentNearestLat,
+                    priorLon = r.PriorNearestLonE5 / 100_000d,
+                    priorLat = r.PriorNearestLatE5 / 100_000d,
+                    currentLon = r.CurrentNearestLonE5 / 100_000d,
+                    currentLat = r.CurrentNearestLatE5 / 100_000d,
                     durationMs = r.DurationMs,
                     speed = r.SpeedMetersPerSec,
                     bearing = r.Bearing,

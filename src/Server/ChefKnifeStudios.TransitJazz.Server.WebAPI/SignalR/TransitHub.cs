@@ -18,11 +18,14 @@ public class TransitHub : Hub
         _logger = logger;
     }
 
-    public async Task JoinCity(string city)
+    // Named "JoinCityV2" (feature 051, US4) as the wire version gate: a stale client bundle
+    // invoking the old "JoinCity" faults with HubException and never joins a group, instead of
+    // silently misdecoding v2's scaled-int coordinates as doubles. Body is unchanged from v1.
+    public async Task JoinCityV2(string city)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, city);
         var current = _lastBatchCache.Current(city);
-        _logger.LogInformation("TransitHub.JoinCity: connectionId={ConnectionId} joined group '{City}', replayCount={ReplayCount}", Context.ConnectionId, city, current.Count);
+        _logger.LogInformation("TransitHub.JoinCityV2: connectionId={ConnectionId} joined group '{City}', replayCount={ReplayCount}", Context.ConnectionId, city, current.Count);
         if (current.Count > 0)
             await Clients.Caller.SendAsync(HubMethods.ReceiveBatch, current);
     }

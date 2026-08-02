@@ -360,6 +360,20 @@ public class Worker(
     internal static string ResolveCategory(IReadOnlyDictionary<string, string>? categoryMap, string routeJoinKey) =>
         categoryMap != null && categoryMap.TryGetValue(routeJoinKey, out var category) ? category : "unknown";
 
+    /// <summary>
+    /// Scales a WGS84 degree value to the v2 wire's int representation (degrees x 1e5).
+    /// Exact for the 5-decimal precision v1 already applied via <c>Math.Round(x, 5)</c>,
+    /// so this is a re-encoding rather than a further loss of precision.
+    /// </summary>
+    internal static int ScaleE5(double degrees) => (int)Math.Round(degrees * 100_000d);
+
+    /// <summary>
+    /// Applies the v2 category rule: a category the client can resolve from its own route
+    /// catalog is omitted from the wire; only the <c>"unknown"</c> data-quality signal rides.
+    /// </summary>
+    internal static string? NullIfKnownCategory(string category) =>
+        category == "unknown" ? "unknown" : null;
+
     internal async Task<CityTickResult> ProcessSpatialReconciliationAsync(
         ITransitCity city,
         FeedMessage feed,
@@ -430,18 +444,24 @@ public class Worker(
                             && prior.VehicleTimestamp.HasValue
                             && currentVehicleTimestamp.Value == prior.VehicleTimestamp.Value;
 
+                        // v2 wire rules (051/US4). The prior pair is redundant in steady state —
+                        // the client retains its own last-known position — so it rides only when
+                        // the client cannot infer it: a route change makes the retained position
+                        // belong to a different shape, so it must be restated.
+                        bool routeChanged = prior.RouteJoinKey != nearest.RouteJoinKey;
+
                         batch.Add(new RouteNearestPointBatchEvent.RouteNearestPointRecord(
                             vehicleId,
                             nearest.RouteJoinKey,
-                            Math.Round(prior.NearestLat, 5),
-                            Math.Round(prior.NearestLon, 5),
-                            Math.Round(nearest.Lat, 5),
-                            Math.Round(nearest.Lon, 5),
+                            routeChanged ? ScaleE5(prior.NearestLat) : null,
+                            routeChanged ? ScaleE5(prior.NearestLon) : null,
+                            ScaleE5(nearest.Lat),
+                            ScaleE5(nearest.Lon),
                             (int)(now - prior.LastUpdated).TotalMilliseconds,
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             isStale,
-                            ResolveCategory(modeMap, routeJoinKey)
+                            NullIfKnownCategory(ResolveCategory(modeMap, routeJoinKey))
                         ));
 
                         if (isStale)
@@ -463,18 +483,21 @@ public class Worker(
                     }
                     else
                     {
+                        // First observation: the client has no retained position for this vehicle,
+                        // so the prior pair MUST ride. Prior == current with DurationMs 0 is the
+                        // existing snap-into-place contract.
                         batch.Add(new RouteNearestPointBatchEvent.RouteNearestPointRecord(
                             vehicleId,
                             nearest.RouteJoinKey,
-                            Math.Round(nearest.Lat, 5),
-                            Math.Round(nearest.Lon, 5),
-                            Math.Round(nearest.Lat, 5),
-                            Math.Round(nearest.Lon, 5),
+                            ScaleE5(nearest.Lat),
+                            ScaleE5(nearest.Lon),
+                            ScaleE5(nearest.Lat),
+                            ScaleE5(nearest.Lon),
                             0, // first observation: no prior, client snaps into place instantly
                             entity.Vehicle.Position.Speed,
                             entity.Vehicle.Position.Bearing,
                             false,
-                            ResolveCategory(modeMap, routeJoinKey)
+                            NullIfKnownCategory(ResolveCategory(modeMap, routeJoinKey))
                         ));
                         movedCount++;
                     }

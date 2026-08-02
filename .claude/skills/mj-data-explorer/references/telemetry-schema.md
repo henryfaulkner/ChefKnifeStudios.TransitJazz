@@ -1,4 +1,4 @@
-<!-- last verified: 2026-07-11 -->
+<!-- last verified: 2026-07-26 -->
 
 # Telemetry Schema Reference
 
@@ -12,10 +12,13 @@ the query tool's allow-list accepts. A name not listed here is rejected as an
 unknown column.
 
 Source of truth in the repo:
-- `specs/038-telemetry-denormalization/contracts/telemetry-event-schema.md` (types)
+- `specs/038-telemetry-denormalization/contracts/telemetry-event-schema.md` (base types)
 - `specs/038-telemetry-denormalization/data-model.md` (value-kind classification,
   field-population rules by event type)
-- `tools/telemetry-mcp/internal/validate/validate.go` (`datasetColumns`)
+- `specs/045-time-to-first-note/contracts/telemetry-schema.md` (`crossings_suppressed_*`)
+- `specs/051-egress-reduction/contracts/telemetry-observability.md` (`batch_wire_bytes`, C2)
+- `tools/telemetry-mcp/internal/validate/validate.go` (`datasetColumns` — the actual
+  allow-list the query bridge enforces; always the final authority)
 
 If a query keeps failing on an "unknown column", re-verify against `validate.go` and
 update the `last verified` date above.
@@ -35,7 +38,7 @@ Nullability below is **informational only** — the filter grammar has no `IS NU
 
 ---
 
-## Dataset `telemetry` (17 columns)
+## Dataset `telemetry` (22 columns)
 
 | Column | Kind | Group | PerCityCycle | FullCycle | Meaning |
 |--------|------|-------|:---:|:---:|---------|
@@ -56,6 +59,11 @@ Nullability below is **informational only** — the filter grammar has no `IS NU
 | `crossing_baseline_cache_size` | numeric | shared | per-city | **summed** | Size of that city's crossing-baseline cache. |
 | `route_index_size` | numeric | shared | per-city | **summed** | Size of that city's route index. |
 | `route_trigger_point_cache_size` | numeric | shared | per-city | **summed** | Size of that city's trigger-point cache. |
+| `crossings_suppressed_first_seen` | numeric | shared (045) | per-city count | **summed** | Crossings suppressed: vehicle's first-ever observation (no prior position to cross from). |
+| `crossings_suppressed_delta_leq0` | numeric | shared (045) | per-city count | **summed** | Crossings suppressed: non-positive movement delta since last observation. |
+| `crossings_suppressed_teleport` | numeric | shared (045) | per-city count | **summed** | Crossings suppressed: implausible jump (teleport) detected. |
+| `crossings_suppressed_transfer` | numeric | shared (045) | per-city count | **summed** | Crossings suppressed: vehicle transferred between routes/trips. |
+| `batch_wire_bytes` | numeric | shared (051) | per-city, **null on no-publish ticks** | **summed** | MessagePack-serialized size (bytes) of the exact SignalR envelope list published this tick, measured at the `Worker.cs` publish site into a pooled buffer. NULL (not 0) when the tick didn't publish. |
 
 ¹ Null on failure/not-ready paths and when the feed header is absent.
 ² **Reused, not summed**: the two memory figures are process-wide (not partitionable
@@ -96,3 +104,10 @@ line, not queryable here.
 - **"Is a cache growing unbounded?"** → `vehicle_state_cache_size`,
   `crossing_baseline_cache_size`, `route_index_size`, `route_trigger_point_cache_size`
   (per-city on `PerCityCycle`, tick-wide sum on `FullCycle`).
+- **"Why aren't crossings firing / are legit crossings being suppressed?"** →
+  `crossings_suppressed_first_seen`, `crossings_suppressed_delta_leq0`,
+  `crossings_suppressed_teleport`, `crossings_suppressed_transfer` (per-city counts,
+  summed on `FullCycle`). See feature 045.
+- **"How much data are we sending over the wire / is egress reduction working?"** →
+  `batch_wire_bytes` (PerCityCycle: per-city payload size for that tick's publish, NULL
+  when nothing was published that tick; FullCycle: summed across cities). See feature 051.

@@ -17,16 +17,20 @@ public class LastBatchCacheTests
             new RouteNearestPointBatchEvent(new[]
             {
                 new RouteNearestPointBatchEvent.RouteNearestPointRecord(
-                    id, "74", 33.75, -84.39,
-                    33.751, -84.389, 10000, null, null, false)
+                    id, "74", 3_375_000, -8_439_000,
+                    3_375_100, -8_438_900, 10000, null, null, false, null)
             })
         )).ToList();
+
+    // Degrees in, scaled-int on the wire (v2, feature 051). Callers and assertions keep
+    // working in degrees so this stays a compile-only change.
+    internal static int E5(double degrees) => (int)Math.Round(degrees * 100_000d);
 
     static RouteNearestPointBatchEvent.RouteNearestPointRecord MakeRecord(
         string vehicleId, double currentLat, double currentLon, bool isStale)
         => new(
-            vehicleId, "74", 33.75, -84.39,
-            currentLat, currentLon, 10000, null, null, isStale);
+            vehicleId, "74", 3_375_000, -8_439_000,
+            E5(currentLat), E5(currentLon), 10000, null, null, isStale, null);
 
     static List<EventEnvelope> MakeBatch(string city, params RouteNearestPointBatchEvent.RouteNearestPointRecord[] records)
         => new()
@@ -119,10 +123,10 @@ public class LastBatchCacheTests
         var wmataRecs = RecordsOf(cache.Current("wmata"));
 
         Assert.Single(martaRecs);
-        Assert.Equal(33.75, martaRecs[0].CurrentNearestLat);
+        Assert.Equal(E5(33.75), martaRecs[0].CurrentNearestLatE5);
 
         Assert.Single(wmataRecs);
-        Assert.Equal(38.90, wmataRecs[0].CurrentNearestLat);
+        Assert.Equal(E5(38.90), wmataRecs[0].CurrentNearestLatE5);
     }
 
     [Fact]
@@ -188,8 +192,8 @@ public class LastBatchCacheTests
         var v1 = Assert.Single(RecordsOf(cache.Current("marta")));
         Assert.Equal("v1", v1.VehicleId);
         Assert.True(v1.IsStale);
-        Assert.Equal(33.900, v1.CurrentNearestLat);
-        Assert.Equal(-84.100, v1.CurrentNearestLon);
+        Assert.Equal(E5(33.900), v1.CurrentNearestLatE5);
+        Assert.Equal(E5(-84.100), v1.CurrentNearestLonE5);
     }
 
     [Fact]
@@ -224,8 +228,41 @@ public class LastBatchCacheTests
 
         var v1 = Assert.Single(RecordsOf(cache.Current("marta")));
         Assert.Equal("v1", v1.VehicleId);
-        Assert.Equal(33.900, v1.CurrentNearestLat);
-        Assert.Equal(-84.100, v1.CurrentNearestLon);
+        Assert.Equal(E5(33.900), v1.CurrentNearestLatE5);
+        Assert.Equal(E5(-84.100), v1.CurrentNearestLonE5);
+    }
+
+    // P3-U4 (051 US4): the cache is deliberately UNCHANGED by the v2 wire revision, so this
+    // proves the v2 shape rides through it untouched rather than testing new cache code.
+    // A replayed steady-state record has a null prior pair; a joining client has no retained
+    // position for it and snaps into place — correct by the decode rules. What must NOT happen
+    // is the cache dropping or rewriting the record, or losing IsStale (the regression that
+    // once made every cached vehicle read as synthetically moving).
+    [Fact]
+    public void ReplayedNullPriorRecord_RetainsIsStale_AndSurvivesUpsert()
+    {
+        var cache = new LastBatchCache();
+
+        var steadyState = new RouteNearestPointBatchEvent.RouteNearestPointRecord(
+            "v1", "74", null, null, E5(33.751), E5(-84.389), 10000, null, null, IsStale: true, Category: null);
+        cache.Set("marta", MakeBatch("marta", steadyState));
+
+        var replayed = Assert.Single(RecordsOf(cache.Current("marta")));
+        Assert.Null(replayed.PriorNearestLatE5);
+        Assert.Null(replayed.PriorNearestLonE5);
+        Assert.True(replayed.IsStale);
+        Assert.Equal(E5(33.751), replayed.CurrentNearestLatE5);
+
+        // Upsert with a newer null-prior record: still one entry, still null-prior, flag follows
+        // the latest record rather than being reset by the merge.
+        var newer = new RouteNearestPointBatchEvent.RouteNearestPointRecord(
+            "v1", "74", null, null, E5(33.900), E5(-84.100), 10000, null, null, IsStale: false, Category: null);
+        cache.Set("marta", MakeBatch("marta", newer));
+
+        var afterUpsert = Assert.Single(RecordsOf(cache.Current("marta")));
+        Assert.Null(afterUpsert.PriorNearestLatE5);
+        Assert.False(afterUpsert.IsStale);
+        Assert.Equal(E5(33.900), afterUpsert.CurrentNearestLatE5);
     }
 
     // TTL eviction: a vehicle absent for EvictAfterCycles (3) data-carrying batches is
