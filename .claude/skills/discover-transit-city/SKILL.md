@@ -38,29 +38,61 @@ Confirm the working directory is the repo root before proceeding.
 
 ## STAGE 1 — Select a city
 
-**Goal:** choose exactly one city that has not been evaluated.
+**Goal:** choose exactly one city that has not been evaluated **and does not already
+have an open, unmerged evaluation sitting in a PR.** A merged report and an open PR
+both mean "already spoken for" — re-evaluating either wastes a run and, worse, can
+produce a second conflicting branch/PR for the same authority. This is why the
+done-set below has two sources, not one.
 
-1. **Enumerate the done-set.** `Glob docs/city-compat/*.md`. For each file, read its
-   `# GTFS Compatibility Report — {AUTHORITY} ({City, Region})` H1 to capture the
-   **city + authority** pair — dedup is by city/authority, not filename (the same
-   authority can be reachable under more than one name).
-2. **Curated arm (first).** Read `candidates.md`. Walk the ranked table top-to-bottom;
+1. **Enumerate the done-set — merged reports.** `Glob docs/city-compat/*.md`. For each
+   file, read its `# GTFS Compatibility Report — {AUTHORITY} ({City, Region})` H1 to
+   capture the **city + authority** pair.
+2. **Enumerate the done-set — open PRs.** Run
+   `gh pr list --state open --json number,headRefName,title,body --limit 200`. This
+   skill only ever opens branches named `compat/{slug}` (STAGE 6), so:
+   - Any PR whose `headRefName` matches `^compat/` is one of this skill's own prior
+     runs, regardless of who or what triggered it.
+   - Parse the **city + authority** pair from that PR's `body` (it contains the same
+     rendered report, so the same `# GTFS Compatibility Report — {AUTHORITY} ({City,
+     Region})` H1 is present) rather than from the branch slug or title alone — the
+     title is a paraphrase, the H1 is the ground truth already used for the merged-report
+     side of the done-set.
+   - If a PR's body can't be parsed (edited manually, truncated, etc.), fall back to the
+     `compat/{slug}` branch name itself as a weaker key — better to skip a possible
+     re-run than to duplicate one.
+   - If `gh pr list` fails (auth/network), do not treat that as license to skip this
+     check silently — note the failure and proceed using only the merged-report done-set
+     for this run, but say so in the run's terminal output so a human knows the open-PR
+     check was degraded, not clean.
+3. **Union the two sources** into one done-set, deduped by city + authority (the same
+   authority can be reachable under more than one name) — this is the set STAGE 1's
+   selection arms below check against. An open PR counts as "done" even though nothing
+   has merged: the goal is compiling compatible cities without a human having to
+   intervene on a merge cadence, not re-discovering the same city daily while its PR
+   waits for review.
+4. **Curated arm (first).** Read `candidates.md`. Walk the ranked table top-to-bottom;
    pick the first row whose (City, Authority) pair is not in the done-set. Stop there —
    that row is this run's target.
-3. **Open-discovery arm (fallback, only if the curated list is fully exhausted — every
+5. **Open-discovery arm (fallback, only if the curated list is fully exhausted — every
    row already done).** `WebSearch` for a large-network NA or EU transit authority not
    in the done-set (e.g. "largest public transit agencies North America Europe GTFS
    realtime"). Prefer agencies likely to publish keyless, standard GTFS-RT protobuf (see
    `references/feed-discovery-playbook.md`). Dedup against the done-set by city and
    authority.
-4. Record the chosen **city**, **authority (official name)**, and **slug** (lowercase,
+6. Record the chosen **city**, **authority (official name)**, and **slug** (lowercase,
    short, matching the existing convention: `ttc`, `wmata`, `septa`, …). The slug becomes
    the output filename and the report H1's implicit key.
 
+**Slug collision check:** before finalizing the target, also confirm the chosen slug
+does not collide with an existing open `compat/{slug}` branch name for a *different*
+authority than intended (a stale/renamed candidate). If it collides, this is the same
+city — treat as already in the done-set and pick the next candidate instead.
+
 **Branch behavior:** if both arms produce nothing new (curated list exhausted AND
-open discovery finds nothing new), this run has nothing to do — write **no file**, open
-**no PR**, and end with a one-line note: "No unevaluated candidate found." This is the
-one case where no report is written.
+open discovery finds nothing new — checked against the merged+open-PR union), this run
+has nothing to do — write **no file**, open **no PR**, and end with a one-line note:
+"No unevaluated candidate found (N merged, M open PR(s))." This is the one case where no
+report is written.
 
 ## STAGE 2 — Find the primary transit authority
 
@@ -242,6 +274,12 @@ templates — this stage summarizes the required steps.
   `rt._diag_note` and re-decode before writing anything.
 - **Silent duplicate cities** — dedup by city + authority (STAGE 1), not just slug,
   because the same authority can be named several ways.
+- **Re-evaluating a city stuck in review** — an unmerged PR from a prior run is still
+  "spoken for." STAGE 1 unions merged `docs/city-compat/*.md` reports with open
+  `compat/*` PRs (via `gh pr list`) before selecting, so a city sitting in review does
+  not get silently re-discovered and re-PR'd on every scheduled run. This is the
+  mechanism that lets the job compile a growing backlog of candidate PRs unattended,
+  without a human needing to merge (or even look at) each one before the next run.
 
 **Explicit non-goals (do NOT do these, ever):**
 
