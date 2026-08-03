@@ -2,13 +2,13 @@ namespace ChefKnifeStudios.TransitJazz.Shared;
 
 public static class CityNames
 {
-    public const string Marta = "marta";
-    public const string Wmata = "wmata";
-    public const string Mbta = "mbta";
-    public const string Nymta = "nymta";
-    public const string Ttc = "ttc";
-    public const string Septa = "septa";
-    public const string Rtd = "rtd";
+    public const string Marta = "atlanta";
+    public const string Wmata = "washington-dc";
+    public const string Mbta = "boston";
+    public const string Nymta = "new-york-city";
+    public const string Ttc = "toronto";
+    public const string Septa = "philadelphia";
+    public const string Rtd = "denver";
 }
 
 public static class HubMethods

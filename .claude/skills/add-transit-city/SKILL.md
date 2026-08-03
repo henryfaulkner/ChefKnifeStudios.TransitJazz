@@ -85,8 +85,15 @@ this order; steps 5a/5b are parallel (different files), 6 is independent, then b
 
 **a. `CityNames` constant** — `src/ChefKnifeStudios.TransitJazz.Shared/CityNames.cs`:
 ```csharp
-public const string {Agency} = "{lowercase-slug}";
+public const string {Agency} = "{city-slug}";
 ```
+**Slug rule** (binding on every city, per `052-city-slug-migration` contract C1): the value
+is the full city name, lowercase, hyphen-separated — never the transit agency's name. Add a
+region suffix only when needed to disambiguate. Conforming: `boston`, `toronto`,
+`philadelphia`, `washington-dc`. Non-conforming: `wmata` (agency, not place), `septa`
+(agency), `nyc` (abbreviation), `Boston` (case), `new_york_city` (underscore). The C#
+constant **identifier** may still read as the agency (`CityNames.Wmata`) — only the string
+**value** it resolves to must be the city slug.
 
 **b. Worker `Cities:` entry** — `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json`,
 appended to the `Cities:` array. Only include fields the agency actually needs (omit

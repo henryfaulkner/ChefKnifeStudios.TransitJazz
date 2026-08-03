@@ -83,6 +83,16 @@ done-set below has two sources, not one.
    short, matching the existing convention: `ttc`, `wmata`, `septa`, …). The slug becomes
    the output filename and the report H1's implicit key.
 
+**This filename slug is an agency document identifier, not a city identity slug** — per
+`052-city-slug-migration` contract C6, `docs/city-compat/*.md` filenames stay agency-named
+(`wmata.md`, `septa.md`) and are explicitly out of scope for the city-slug rule below; do not
+rename existing or future report filenames to match it. The rule instead binds whoever later
+runs `add-transit-city` off this report and mints the actual `CityNames.*` value: **full city
+name, lowercase, hyphen-separated, region suffix only to disambiguate** (`washington-dc`, not
+`wmata`; `boston`, not `mbta`). If this skill's output is ever consumed to auto-populate a
+`CityNames` entry instead of going through `add-transit-city`, that value must follow this
+rule, not the report-filename convention above.
+
 **Slug collision check:** before finalizing the target, also confirm the chosen slug
 does not collide with an existing open `compat/{slug}` branch name for a *different*
 authority than intended (a stale/renamed candidate). If it collides, this is the same

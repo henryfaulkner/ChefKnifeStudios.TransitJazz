@@ -76,6 +76,7 @@ public class CityLoopTests
     sealed class FakeCity(string name, bool emits) : ITransitCity
     {
         public string Name => name;
+        public string TelemetryName => name;
         public bool EmitsTelemetry => emits;
         public Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct) => Task.FromResult(new FeedMessage());
     }
@@ -83,6 +84,7 @@ public class CityLoopTests
     sealed class ThrowingCity(string name) : ITransitCity
     {
         public string Name => name;
+        public string TelemetryName => name;
         public bool EmitsTelemetry => false;
         public Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)
             => throw new InvalidOperationException($"Simulated fetch failure for city {name}");

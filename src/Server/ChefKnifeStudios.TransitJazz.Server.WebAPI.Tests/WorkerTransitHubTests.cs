@@ -1,10 +1,12 @@
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.SignalR;
+using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -105,7 +107,108 @@ public class WorkerTransitHubTests
         Assert.Contains(relayedRecords, r => r.IsStale);
     }
 
+    // --- 052-city-slug-migration: TransitHub.JoinCityV2 version-gate tests ---
+
+    // contract C2/C4: group name == the slug passed, verbatim — the publish/join symmetry
+    // that fails silently in production if it ever drifts (signalr-cutover.md C1).
+    [Fact]
+    public async Task join_city_v2_adds_connection_to_group_named_by_slug()
+    {
+        var fakeGroups = new FakeGroupManager();
+        var hub = new TransitHub(new FakeLastBatchCache(), NullLogger<TransitHub>.Instance)
+        {
+            Groups = fakeGroups,
+            Context = new FakeHubCallerContext("conn-1"),
+        };
+
+        await hub.JoinCityV2("atlanta");
+
+        Assert.Equal("conn-1", fakeGroups.LastConnectionId);
+        Assert.Equal("atlanta", fakeGroups.LastGroupName);
+    }
+
+    // contract C2: no unversioned JoinCity shim — reintroducing one recreates the exact
+    // silent-failure hazard the version gate exists to prevent.
+    [Fact]
+    public void legacy_join_city_method_is_absent()
+    {
+        var method = typeof(TransitHub).GetMethod("JoinCity", BindingFlags.Public | BindingFlags.Instance);
+        Assert.Null(method);
+    }
+
+    // Existing replay behaviour (cached batch sent to the joining caller) preserved under
+    // the new method name.
+    [Fact]
+    public async Task join_city_v2_replays_cached_batch_for_that_city()
+    {
+        var fakeCache = new FakeLastBatchCache();
+        var batch = MakeBatch("v1");
+        fakeCache.Set("atlanta", batch);
+
+        var fakeGroups = new FakeGroupManager();
+        var fakeClients = new FakeCallerHubClients();
+        var hub = new TransitHub(fakeCache, NullLogger<TransitHub>.Instance)
+        {
+            Groups = fakeGroups,
+            Context = new FakeHubCallerContext("conn-1"),
+            Clients = fakeClients,
+        };
+
+        await hub.JoinCityV2("atlanta");
+
+        Assert.Equal(1, fakeClients.CallerProxy.SendAsyncCallCount);
+        Assert.Equal(HubMethods.ReceiveBatch, fakeClients.CallerProxy.LastMethodCalled);
+        Assert.Same(batch, fakeClients.CallerProxy.LastArgs![0]);
+    }
+
     // --- Fakes ---
+
+    sealed class FakeGroupManager : IGroupManager
+    {
+        public string? LastConnectionId { get; private set; }
+        public string? LastGroupName { get; private set; }
+
+        public Task AddToGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default)
+        {
+            LastConnectionId = connectionId;
+            LastGroupName = groupName;
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveFromGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
+    sealed class FakeHubCallerContext(string connectionId) : HubCallerContext
+    {
+        public override string ConnectionId { get; } = connectionId;
+        public override string? UserIdentifier => null;
+        public override System.Security.Claims.ClaimsPrincipal? User => null;
+        public override IDictionary<object, object?> Items { get; } = new Dictionary<object, object?>();
+        public override Microsoft.AspNetCore.Http.Features.IFeatureCollection Features { get; } = new Microsoft.AspNetCore.Http.Features.FeatureCollection();
+        public override CancellationToken ConnectionAborted => CancellationToken.None;
+        public override void Abort() { }
+    }
+
+    sealed class FakeCallerHubClients : IHubCallerClients
+    {
+        public FakeClientProxy CallerProxy { get; } = new();
+        public FakeClientProxy AllProxy { get; } = new();
+
+        public IClientProxy Caller => CallerProxy;
+        public IClientProxy Others => AllProxy;
+        public IClientProxy All => AllProxy;
+        public IClientProxy AllExcept(IReadOnlyList<string> excludedConnectionIds) => AllProxy;
+        public IClientProxy Client(string connectionId) => AllProxy;
+        public IClientProxy Clients(IReadOnlyList<string> connectionIds) => AllProxy;
+        public IClientProxy Group(string groupName) => AllProxy;
+        public IClientProxy GroupExcept(string groupName, IReadOnlyList<string> excludedConnectionIds) => AllProxy;
+        public IClientProxy Groups(IReadOnlyList<string> groupNames) => AllProxy;
+        public IClientProxy OthersInGroup(string groupName) => AllProxy;
+        public IClientProxy User(string userId) => AllProxy;
+        public IClientProxy Users(IReadOnlyList<string> userIds) => AllProxy;
+        public IClientProxy OthersInGroups(IReadOnlyList<string> groupNames) => AllProxy;
+    }
 
     sealed class FakeLastBatchCache : ILastBatchCache
     {
