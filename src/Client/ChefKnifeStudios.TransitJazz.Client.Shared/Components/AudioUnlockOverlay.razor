@@ -260,12 +260,12 @@
     {
         _prefix = NavigationManager.ResolveCity() switch
         {
-            CityNames.Wmata => "WmataAudioOverlay",
-            CityNames.Mbta  => "MbtaAudioOverlay",
-            CityNames.Nymta => "NymtaAudioOverlay",
-            CityNames.Ttc   => "TtcAudioOverlay",
-            CityNames.Septa => "SeptaAudioOverlay",
-            CityNames.Rtd   => "RtdAudioOverlay",
+            CityNames.Wmata => "WashingtonDcAudioOverlay",
+            CityNames.Mbta  => "BostonAudioOverlay",
+            CityNames.Nymta => "NewYorkCityAudioOverlay",
+            CityNames.Ttc   => "TorontoAudioOverlay",
+            CityNames.Septa => "PhiladelphiaAudioOverlay",
+            CityNames.Rtd   => "DenverAudioOverlay",
             _               => "AudioOverlay"
         };
         _isDark = SettingsService.GetSettings().IsDarkModeEnabled;

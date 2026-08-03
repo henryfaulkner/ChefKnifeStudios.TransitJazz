@@ -1,7 +1,43 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/051-egress-reduction/plan.md
+feature plan at specs/052-city-slug-migration/plan.md
+
+052-city-slug-migration renames the city identity token from transit-agency
+names to city names — `marta`→`atlanta`, `wmata`→`washington-dc`,
+`mbta`→`boston`, `nymta`→`new-york-city`, `ttc`→`toronto`,
+`septa`→`philadelphia`, `rtd`→`denver` — across every boundary that carries it:
+URL fragment, SignalR group name, `?city=` query param, `Cities[].Name` in BOTH
+appsettings.json, the `{city}:` route-shape store prefix, and the Umami pageview
+path. **Slug rule (binding on all future cities, incl. those minted autonomously
+by `discover-transit-city`): full city name, lowercase, hyphen-separated, region
+suffix ONLY to disambiguate.** Constant IDENTIFIERS are unchanged
+(`CityNames.Marta` still resolves Atlanta); only their VALUES move — so the DI
+branches in both `Program.cs`, `GtfsStaticLoader`'s NYMTA `/subway/` special
+case, the `_cityCenter` map-origin dictionary, and the overlay switch arms all
+follow automatically. Two findings drive the plan, BOTH correcting
+docs/CITY_SLUG_MIGRATION_ASSESSMENT.md: (1) **telemetry is coupled to the
+renamed property** — `Worker.cs:103` writes `city_name = result.CityName` sourced
+from `ITransitCity.Name`, so renaming `Name` would silently rewrite parquet
+history and destroy the 051 Phase 3 `batch_wire_bytes` baseline; the fix SPLITS
+the property into `Name` (slug, all live boundaries) + a new **`TelemetryName`**
+(agency, FROZEN at `MARTA`/`WMATA`/… uppercase, parquet only), making "leave
+telemetry alone" positive work rather than a no-op. Existing tests asserting
+`city_name = "MARTA"` are CORRECT and must NOT be updated. (2) the assessment's
+claim that feature 051 already renamed `JoinCity`→`JoinCityV2` is **false** — only
+`JoinCity` exists and there is no `LeaveCity` at all; the version gate is NEW work
+here, renaming it so stale clients fail LOUDLY instead of joining a group nobody
+publishes to and silently receiving nothing. Legacy slug aliasing was explicitly
+DECLINED: old `#wmata` bookmarks fall through to the default city silently.
+Hardcoded literals needing manual fix (a constant-only rename compiles clean and
+breaks at runtime): `CityFab.razor`'s 7 `location.hash='marta'` strings and the 14
+`Cities[].Name` config entries, guarded by a new config-parity test. 30
+agency-prefixed resx keys (6 cities × 5; Atlanta is the unprefixed default arm)
+re-prefix in lockstep with both switch expressions. Deploy order is load-bearing:
+server+worker atomic → client → `deploy/marta-jazz` → verify all 7. Multi-agency
+composition is step TWO, a separate spec. See specs/052-city-slug-migration/ for
+spec, plan (incl. a util-testing-based Testing Strategy), research, data-model,
+the two contracts (city-identity, signalr-cutover), and quickstart.
 
 051-egress-reduction cuts outbound data-transfer cost ~60–75% at the current
 500–2,000-user scale (per docs/EGRESS_REDUCTION_SMALL_SCALE.md) in four

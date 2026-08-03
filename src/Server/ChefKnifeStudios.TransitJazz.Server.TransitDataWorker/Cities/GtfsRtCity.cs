@@ -10,6 +10,7 @@ public class GtfsRtCity(
     ILogger<GtfsRtCity> logger) : ITransitCity
 {
     public string Name => config.Name;
+    public string TelemetryName => config.TelemetryName;
     public bool EmitsTelemetry => config.EmitsTelemetry;
 
     public async Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)

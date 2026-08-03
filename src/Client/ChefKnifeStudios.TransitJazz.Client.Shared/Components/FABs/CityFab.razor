@@ -45,39 +45,39 @@
     {
         // Hash-only navigation is always in-page � no reload, WASM stays alive.
         // Set the hash then force a reload so the app re-bootstraps with the new city.
-        await JS.InvokeVoidAsync("eval", $"location.hash='marta';location.reload()");
+        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Marta}';location.reload()");
     }
 
     async Task HandleWmataClicked()
     {
         // Hash-only navigation is always in-page � no reload, WASM stays alive.
         // Set the hash then force a reload so the app re-bootstraps with the new city.
-        await JS.InvokeVoidAsync("eval", $"location.hash='wmata';location.reload()");
+        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Wmata}';location.reload()");
     }
 
     async Task HandleMbtaClicked()
     {
-        await JS.InvokeVoidAsync("eval", $"location.hash='mbta';location.reload()");
+        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Mbta}';location.reload()");
     }
 
     async Task HandleNymtaClicked()
     {
-        await JS.InvokeVoidAsync("eval", $"location.hash='nymta';location.reload()");
+        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Nymta}';location.reload()");
     }
 
     async Task HandleTtcClicked()
     {
-        await JS.InvokeVoidAsync("eval", $"location.hash='ttc';location.reload()");
+        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Ttc}';location.reload()");
     }
 
     async Task HandleSeptaClicked()
     {
-        await JS.InvokeVoidAsync("eval", $"location.hash='septa';location.reload()");
+        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Septa}';location.reload()");
     }
 
     async Task HandleRtdClicked()
     {
-        await JS.InvokeVoidAsync("eval", $"location.hash='rtd';location.reload()");
+        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Rtd}';location.reload()");
     }
 
     MatFAB Button2;

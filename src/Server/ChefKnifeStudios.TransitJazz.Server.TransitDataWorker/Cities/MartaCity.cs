@@ -18,6 +18,7 @@ public class MartaCity(
     const string BusUrl = "https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb";
 
     public string Name => CityNames.Marta;
+    public string TelemetryName => "marta";
     public bool EmitsTelemetry => true;
 
     public async Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)
