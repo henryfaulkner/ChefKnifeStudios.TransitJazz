@@ -41,7 +41,6 @@ public class NymtaCity(
     DateTime _fetchedAtUtc;
 
     public string Name => CityNames.Nymta;
-    public string TelemetryName => "nymta";
     public bool EmitsTelemetry => true;
 
     public async Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)

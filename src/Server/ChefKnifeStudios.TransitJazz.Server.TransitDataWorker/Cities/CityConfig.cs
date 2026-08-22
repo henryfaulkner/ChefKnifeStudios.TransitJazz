@@ -3,10 +3,6 @@ namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 public class CityConfig
 {
     public string Name { get; set; } = string.Empty;
-    /// <summary>Frozen agency identifier for TelemetryEvent.city_name only — see
-    /// <see cref="ITransitCity.TelemetryName"/>. Never a SignalR group, query parameter, or
-    /// URL (052-city-slug-migration FR-016).</summary>
-    public string TelemetryName { get; set; } = string.Empty;
     public string[] GtfsRtUrls { get; set; } = [];
     /// <summary>Second, independently-fetched RT feed for cities that merge two transit
     /// modes under one city (e.g. nymta: GtfsRtUrls = subway line groups, BusGtfsRtUrls =

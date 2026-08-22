@@ -120,7 +120,7 @@ public class Worker(
                         batch_wire_bytes = result.BatchWireBytes
                     });
 
-                    processedCities.Add(city.TelemetryName);
+                    processedCities.Add(city.Name);
                     tickHealthOk &= result.HealthOk;
                     tickTonesEmitted += result.TonesEmitted;
                     tickVehiclesProcessed += result.VehiclesProcessed;
@@ -185,14 +185,14 @@ public class Worker(
         long? BatchWireBytes = null)
     {
         public static CityTickResult Unhealthy(ITransitCity city, Worker worker) => new(
-            city.TelemetryName, HealthOk: false, FeedFreshnessSeconds: null, TonesEmitted: 0, VehiclesProcessed: 0,
+            city.Name, HealthOk: false, FeedFreshnessSeconds: null, TonesEmitted: 0, VehiclesProcessed: 0,
             VehicleStateCacheSize: worker.GetVehicleCache(city.Name).Count,
             CrossingBaselineCacheSize: worker.GetCrossingBaselines(city.Name).Count,
             RouteIndexSize: worker._routeIndex.TryGetValue(city.Name, out var idx) ? idx.Count : 0,
             RouteTriggerPointCacheSize: worker._routeTriggerPoints.TryGetValue(city.Name, out var tp) ? tp.Count : 0);
 
         public static CityTickResult Healthy(ITransitCity city, Worker worker, ulong? feedHeaderTs, DateTime observationUtc) => new(
-            city.TelemetryName, HealthOk: true,
+            city.Name, HealthOk: true,
             FeedFreshnessSeconds: feedHeaderTs.HasValue
                 ? (observationUtc - DateTimeOffset.FromUnixTimeSeconds((long)feedHeaderTs.Value).UtcDateTime).TotalSeconds
                 : null,
@@ -615,7 +615,7 @@ public class Worker(
                 : null;
 
             return new CityTickResult(
-                city.TelemetryName,
+                city.Name,
                 HealthOk: true,
                 FeedFreshnessSeconds: feedFreshnessSeconds,
                 TonesEmitted: crossingRecords.Count,

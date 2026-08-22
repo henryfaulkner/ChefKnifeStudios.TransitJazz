@@ -14,8 +14,8 @@ public class CityLoopTests
     [Fact]
     public void ITransitCity_EmitsTelemetry_IsConfigurablePerCity()
     {
-        ITransitCity emitting = new FakeCity("marta", emits: true);
-        ITransitCity nonEmitting = new FakeCity("wmata", emits: false);
+        ITransitCity emitting = new FakeCity("atlanta", emits: true);
+        ITransitCity nonEmitting = new FakeCity("washington-dc", emits: false);
 
         Assert.True(emitting.EmitsTelemetry);
         Assert.False(nonEmitting.EmitsTelemetry);
@@ -26,9 +26,9 @@ public class CityLoopTests
     public async Task FaultIsolation_ThrowingCity_DoesNotBlockOtherCity()
     {
         var throwing = new ThrowingCity("bad-city");
-        var working = new FakeCity("marta", emits: true);
+        var working = new FakeCity("atlanta", emits: true);
 
-        bool martaFetched = false;
+        bool atlantaFetched = false;
         bool threwForBad = false;
 
         foreach (var city in new ITransitCity[] { throwing, working })
@@ -36,7 +36,7 @@ public class CityLoopTests
             try
             {
                 var feed = await city.FetchVehiclesAsync(CancellationToken.None);
-                if (city.Name == "marta") martaFetched = true;
+                if (city.Name == "atlanta") atlantaFetched = true;
             }
             catch
             {
@@ -45,7 +45,7 @@ public class CityLoopTests
         }
 
         Assert.True(threwForBad);
-        Assert.True(martaFetched);
+        Assert.True(atlantaFetched);
     }
 
     // INV-1 (no name branching): loop only branches on EmitsTelemetry, not city.Name
@@ -56,8 +56,8 @@ public class CityLoopTests
 
         foreach (var city in new ITransitCity[]
         {
-            new FakeCity("marta", emits: true),
-            new FakeCity("wmata", emits: false),
+            new FakeCity("atlanta", emits: true),
+            new FakeCity("washington-dc", emits: false),
             new FakeCity("custom", emits: false),
         })
         {
@@ -68,15 +68,14 @@ public class CityLoopTests
                 results.Add((city.Name, false));
         }
 
-        Assert.Equal(("marta", true), results[0]);
-        Assert.Equal(("wmata", false), results[1]);
+        Assert.Equal(("atlanta", true), results[0]);
+        Assert.Equal(("washington-dc", false), results[1]);
         Assert.Equal(("custom", false), results[2]);
     }
 
     sealed class FakeCity(string name, bool emits) : ITransitCity
     {
         public string Name => name;
-        public string TelemetryName => name;
         public bool EmitsTelemetry => emits;
         public Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct) => Task.FromResult(new FeedMessage());
     }
@@ -84,7 +83,6 @@ public class CityLoopTests
     sealed class ThrowingCity(string name) : ITransitCity
     {
         public string Name => name;
-        public string TelemetryName => name;
         public bool EmitsTelemetry => false;
         public Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)
             => throw new InvalidOperationException($"Simulated fetch failure for city {name}");

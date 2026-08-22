@@ -41,7 +41,7 @@ public class RecordEmitRulesTests
                 Microsoft.Extensions.Options.Options.Create(new LoggingOptions { Enabled = false }),
                 NullLogger<LogEventWorker>.Instance),
             new NoOpLoggingService(),
-            [new FakeCity("marta")],
+            [new FakeCity("atlanta")],
             new NoOpTriggerPointGenerator());
 
     static FeedMessage Feed(string vehicleId, string routeId, double lat, double lon, ulong timestamp) => new()
@@ -69,7 +69,7 @@ public class RecordEmitRulesTests
         var worker = MakeWorker(publisher);
 
         await worker.ProcessSpatialReconciliationAsync(
-            new FakeCity("marta"), Feed("v1", "95", 33.0, -84.0, 1000), Index, modeMap: null, CancellationToken.None);
+            new FakeCity("atlanta"), Feed("v1", "95", 33.0, -84.0, 1000), Index, modeMap: null, CancellationToken.None);
 
         var rec = Assert.Single(publisher.CapturedRecords);
         Assert.NotNull(rec.PriorNearestLatE5);
@@ -85,7 +85,7 @@ public class RecordEmitRulesTests
     {
         var publisher = new SpyHubPublisher();
         var worker = MakeWorker(publisher);
-        var city = new FakeCity("marta");
+        var city = new FakeCity("atlanta");
 
         // Tick 1 establishes prior state; tick 2 is the steady-state case under test.
         await worker.ProcessSpatialReconciliationAsync(city, Feed("v1", "95", 33.0, -84.0, 1000), Index, null, CancellationToken.None);
@@ -103,7 +103,7 @@ public class RecordEmitRulesTests
     {
         var publisher = new SpyHubPublisher();
         var worker = MakeWorker(publisher);
-        var city = new FakeCity("marta");
+        var city = new FakeCity("atlanta");
 
         await worker.ProcessSpatialReconciliationAsync(city, Feed("v1", "95", 33.0, -84.0, 1000), Index, null, CancellationToken.None);
         publisher.CapturedRecords.Clear();
@@ -122,7 +122,7 @@ public class RecordEmitRulesTests
     {
         var publisher = new SpyHubPublisher();
         var worker = MakeWorker(publisher);
-        var city = new FakeCity("marta");
+        var city = new FakeCity("atlanta");
 
         await worker.ProcessSpatialReconciliationAsync(city, Feed("v1", "95", 33.0, -84.0, 1000), Index, null, CancellationToken.None);
         await worker.ProcessSpatialReconciliationAsync(city, Feed("v1", "95", 33.002, -84.002, 2000), Index, null, CancellationToken.None);
@@ -138,7 +138,7 @@ public class RecordEmitRulesTests
     {
         var publisher = new SpyHubPublisher();
         var worker = MakeWorker(publisher);
-        var city = new FakeCity("marta");
+        var city = new FakeCity("atlanta");
         var modeMap = new Dictionary<string, string> { ["95"] = "rail" };
 
         // Route 95 IS in the map → client resolves "rail" from its catalog → omit.
@@ -160,7 +160,7 @@ public class RecordEmitRulesTests
         // is what made vehicles read as "synthetically all moving" in a past regression.
         var publisher = new SpyHubPublisher();
         var worker = MakeWorker(publisher);
-        var city = new FakeCity("marta");
+        var city = new FakeCity("atlanta");
 
         await worker.ProcessSpatialReconciliationAsync(city, Feed("v1", "95", 33.0, -84.0, 1000), Index, null, CancellationToken.None);
         publisher.CapturedRecords.Clear();
@@ -178,7 +178,7 @@ public class RecordEmitRulesTests
         var worker = MakeWorker(publisher);
 
         await worker.ProcessSpatialReconciliationAsync(
-            new FakeCity("marta"), Feed("v1", "95", 33.0, -84.0, 1000), Index, null, CancellationToken.None);
+            new FakeCity("atlanta"), Feed("v1", "95", 33.0, -84.0, 1000), Index, null, CancellationToken.None);
 
         var rec = Assert.Single(publisher.CapturedRecords);
         // Snapped to the route point at (33.0, -84.0) → 3_300_000 / -8_400_000.
