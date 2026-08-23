@@ -1,0 +1,12 @@
+.git/
+**/bin/
+**/obj/
+**/TestResults/
+**/*.user
+**/*.suo
+.env*
+*.log*
+coverage/
+node_modules/
+Dockerfile*
+.dockerignore

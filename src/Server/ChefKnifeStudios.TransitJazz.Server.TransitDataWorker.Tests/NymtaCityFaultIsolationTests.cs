@@ -67,8 +67,8 @@ public class NymtaCityFaultIsolationTests
         var city = new NymtaCity(factory, options, busConfig, NullLogger<NymtaCity>.Instance, NullLogger<GtfsRtCity>.Instance);
         var result = await city.FetchVehiclesAsync(CancellationToken.None);
 
-        Assert.Single(result.Entities);
-        Assert.Equal("train-1", result.Entities[0].Id);
+        Assert.Single(result.Feed.Entities);
+        Assert.Equal("train-1", result.Feed.Entities[0].Id);
     }
 
     [Fact]

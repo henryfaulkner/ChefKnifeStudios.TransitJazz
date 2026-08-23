@@ -1,4 +1,5 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.Text.Json;
@@ -7,8 +8,8 @@ namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 
 public interface IRailRealtimeAdapter
 {
-    /// <summary>Best-effort: never throws; returns empty on failure or when disabled.</summary>
-    Task<IReadOnlyList<FeedEntity>> FetchAsync(CancellationToken ct);
+    /// <summary>Best-effort source result that distinguishes empty input from failure.</summary>
+    Task<CityFetchResult> FetchAsync(CancellationToken ct);
 }
 
 public class RailRealtimeAdapter(
@@ -18,13 +19,13 @@ public class RailRealtimeAdapter(
 {
     static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-    public async Task<IReadOnlyList<FeedEntity>> FetchAsync(CancellationToken ct)
+    public async Task<CityFetchResult> FetchAsync(CancellationToken ct)
     {
         try
         {
             var opts = options.Value;
             if (!opts.Enabled)
-                return Array.Empty<FeedEntity>();
+                return CityFetchResult.FromSources(new FeedMessage(), 0, 0);
 
             var client = httpClientFactory.CreateClient("RailRealtimeApi");
             // BaseAddress is set in Program.cs; append key as query string only if present.
@@ -99,12 +100,16 @@ public class RailRealtimeAdapter(
             }
 
             logger.LogInformation("Rail adapter fetched {EntityCount} train entities from {RowCount} rows ({Skipped} skipped).", entities.Count, arrivals.Count, skipped);
-            return entities;
+            return CityFetchResult.FromSources(new FeedMessage { Entities = entities }, 1, 0);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Rail realtime fetch failed; bus path unaffected.");
-            return Array.Empty<FeedEntity>();
+            return CityFetchResult.FromSources(null, 0, 1);
         }
     }
 }

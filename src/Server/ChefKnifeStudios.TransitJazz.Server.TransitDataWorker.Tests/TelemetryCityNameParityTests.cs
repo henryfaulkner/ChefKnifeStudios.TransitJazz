@@ -1,4 +1,5 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
@@ -51,7 +52,7 @@ public class TelemetryCityNameParityTests
     {
         public string Name => name;
         public bool EmitsTelemetry => true;
-        public Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct) => Task.FromResult(new FeedMessage());
+        public Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct) => Task.FromResult(CityFetchResult.FromSources(new FeedMessage(), 1, 0));
     }
 
     sealed class NullHttpClientFactory : IHttpClientFactory

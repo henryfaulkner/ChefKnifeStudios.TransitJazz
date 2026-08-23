@@ -1,10 +1,10 @@
-using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 
 public interface ITransitCity
 {
     string Name { get; }
-    Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct);
+    Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct);
     bool EmitsTelemetry { get; }
 }

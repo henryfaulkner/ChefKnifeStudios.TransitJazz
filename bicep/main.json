@@ -1,0 +1,1423 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.43.8.12551",
+      "templateHash": "4306716934620707989"
+    }
+  },
+  "parameters": {
+    "projectName": {
+      "type": "string",
+      "defaultValue": "marta-jazz",
+      "metadata": {
+        "description": "Project name used as prefix in all resource names."
+      }
+    },
+    "environment": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Deployment environment."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "eastus2",
+      "metadata": {
+        "description": "Primary Azure region for regional resources."
+      }
+    },
+    "apexDomain": {
+      "type": "string",
+      "defaultValue": "martajazz.com",
+      "metadata": {
+        "description": "Custom apex domain for the site (e.g., martajazz.com)."
+      }
+    },
+    "containerRegistryName": {
+      "type": "string",
+      "defaultValue": "chefknife",
+      "metadata": {
+        "description": "Existing Container Registry name (shared across environments)."
+      }
+    },
+    "containerRegistryResourceGroup": {
+      "type": "string",
+      "defaultValue": "general",
+      "metadata": {
+        "description": "Resource group of the existing Container Registry."
+      }
+    },
+    "serverImageTag": {
+      "type": "string",
+      "defaultValue": "latest",
+      "metadata": {
+        "description": "Container image tag to deploy for the server container app."
+      }
+    },
+    "repositoryUrl": {
+      "type": "string",
+      "defaultValue": "https://github.com/henryfaulkner/ChefKnifeStudios.TransitJazz",
+      "metadata": {
+        "description": "GitHub repository URL for the Static Web App source."
+      }
+    },
+    "repositoryToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "GitHub Personal Access Token for SWA deployment."
+      }
+    },
+    "bindCustomDomains": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Bind custom domains to the SWA. Set false on first deploy (DNS zone must exist first); set true on subsequent deploys."
+      }
+    },
+    "enableWorkerMetrics": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable outbound worker metrics. Keep false until release evidence is complete."
+      }
+    },
+    "grafanaOtlpMetricsEndpoint": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Grafana Cloud OTLP metrics endpoint, ending /v1/metrics."
+      }
+    },
+    "grafanaPublisherSecretUri": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Key Vault URI for the Grafana metrics publisher authorization secret."
+      }
+    },
+    "grafanaProvisioningSecretUri": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Key Vault URI for the Grafana provisioning token."
+      }
+    }
+  },
+  "variables": {
+    "namePrefix": "[format('{0}-{1}', parameters('projectName'), parameters('environment'))]",
+    "resourceGroupName": "[format('{0}-rg', variables('namePrefix'))]",
+    "tags": {
+      "env": "[parameters('environment')]",
+      "project": "[parameters('projectName')]"
+    },
+    "staticWebAppName": "[format('{0}-swa', variables('namePrefix'))]",
+    "staticWebAppResourceId": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Web/staticSites/{2}', subscription().subscriptionId, variables('resourceGroupName'), variables('staticWebAppName'))]",
+    "telemetryStorageAccountName": "[take(format('mjtel{0}{1}', parameters('environment'), uniqueString(subscription().subscriptionId, variables('resourceGroupName'))), 24)]",
+    "telemetryContainerName": "parquet"
+  },
+  "resources": {
+    "rg": {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('resourceGroupName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    "logAnalyticsWorkspace": {
+      "existing": true,
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "name": "[format('{0}-law', variables('namePrefix'))]",
+      "dependsOn": [
+        "logAnalytics",
+        "rg"
+      ]
+    },
+    "dnsZone": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "dnsZone-deploy",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "zoneName": {
+            "value": "[parameters('apexDomain')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "2389417886757056568"
+            }
+          },
+          "parameters": {
+            "zoneName": {
+              "type": "string",
+              "metadata": {
+                "description": "DNS zone name (e.g., martajazz.com). Note: this resource intentionally breaks the project naming convention because the zone name IS the domain."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Resource tags."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/dnsZones",
+              "apiVersion": "2023-07-01-preview",
+              "name": "[parameters('zoneName')]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "zoneType": "Public"
+              }
+            }
+          ],
+          "outputs": {
+            "id": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/dnsZones', parameters('zoneName'))]"
+            },
+            "nameServers": {
+              "type": "array",
+              "value": "[reference(resourceId('Microsoft.Network/dnsZones', parameters('zoneName')), '2023-07-01-preview').nameServers]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
+    },
+    "swa": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "swa-deploy",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[variables('staticWebAppName')]"
+          },
+          "location": {
+            "value": "eastus2"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "repositoryUrl": {
+            "value": "[parameters('repositoryUrl')]"
+          },
+          "repositoryToken": {
+            "value": "[parameters('repositoryToken')]"
+          },
+          "branch": {
+            "value": "main"
+          },
+          "customDomains": "[if(parameters('bindCustomDomains'), createObject('value', createArray(parameters('apexDomain'), format('www.{0}', parameters('apexDomain')))), createObject('value', createArray()))]"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "13239262728270831277"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Static Web App."
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "eastus2",
+              "metadata": {
+                "description": "Location for the SWA (Free SKU is regional, East US 2 supported)."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Resource tags."
+              }
+            },
+            "repositoryUrl": {
+              "type": "string",
+              "metadata": {
+                "description": "Source repository URL (GitHub)."
+              }
+            },
+            "branch": {
+              "type": "string",
+              "defaultValue": "main",
+              "metadata": {
+                "description": "Deployment branch."
+              }
+            },
+            "repositoryToken": {
+              "type": "securestring",
+              "metadata": {
+                "description": "GitHub PAT for SWA deployment."
+              }
+            },
+            "customDomains": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Custom domains to bind to the SWA (apex + www)."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/staticSites",
+              "apiVersion": "2024-04-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard",
+                "tier": "Standard"
+              },
+              "properties": {
+                "repositoryUrl": "[parameters('repositoryUrl')]",
+                "branch": "[parameters('branch')]",
+                "repositoryToken": "[parameters('repositoryToken')]",
+                "buildProperties": {
+                  "appLocation": "src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp",
+                  "apiLocation": "",
+                  "outputLocation": "wwwroot"
+                }
+              }
+            },
+            {
+              "copy": {
+                "name": "domains",
+                "count": "[length(parameters('customDomains'))]"
+              },
+              "type": "Microsoft.Web/staticSites/customDomains",
+              "apiVersion": "2024-04-01",
+              "name": "[format('{0}/{1}', parameters('name'), parameters('customDomains')[copyIndex()])]",
+              "properties": {
+                "validationMethod": "[if(equals(parameters('customDomains')[copyIndex()], parameters('customDomains')[0]), 'dns-txt-token', 'cname-delegation')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/staticSites', parameters('name'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "id": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Web/staticSites', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "defaultHostname": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/staticSites', parameters('name')), '2024-04-01').defaultHostname]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
+    },
+    "apexA": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "dns-apex-a-deploy",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "zoneName": {
+            "value": "[parameters('apexDomain')]"
+          },
+          "staticWebAppResourceId": {
+            "value": "[variables('staticWebAppResourceId')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "10209747254750038382"
+            }
+          },
+          "parameters": {
+            "zoneName": {
+              "type": "string",
+              "metadata": {
+                "description": "DNS zone name (e.g., martajazz.com)."
+              }
+            },
+            "staticWebAppResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Static Web App resource ID to alias the apex A record to."
+              }
+            },
+            "recordTtl": {
+              "type": "int",
+              "defaultValue": 12960000,
+              "metadata": {
+                "description": "TTL for the record set (seconds)."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/dnsZones/A",
+              "apiVersion": "2023-07-01-preview",
+              "name": "[format('{0}/{1}', parameters('zoneName'), '@')]",
+              "properties": {
+                "TTL": "[parameters('recordTtl')]",
+                "targetResource": {
+                  "id": "[parameters('staticWebAppResourceId')]"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "dnsZone",
+        "rg",
+        "swa"
+      ]
+    },
+    "wwwCname": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "dns-www-cname-deploy",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "zoneName": {
+            "value": "[parameters('apexDomain')]"
+          },
+          "swaDefaultHostname": {
+            "value": "[reference('swa').outputs.defaultHostname.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "1158931464541845325"
+            }
+          },
+          "parameters": {
+            "zoneName": {
+              "type": "string",
+              "metadata": {
+                "description": "DNS zone name (e.g., martajazz.com)."
+              }
+            },
+            "swaDefaultHostname": {
+              "type": "string",
+              "metadata": {
+                "description": "SWA default hostname to point www at (e.g., foo.azurestaticapps.net)."
+              }
+            },
+            "recordTtl": {
+              "type": "int",
+              "defaultValue": 12960000,
+              "metadata": {
+                "description": "TTL for the record set (seconds)."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/dnsZones/CNAME",
+              "apiVersion": "2023-07-01-preview",
+              "name": "[format('{0}/{1}', parameters('zoneName'), 'www')]",
+              "properties": {
+                "TTL": "[parameters('recordTtl')]",
+                "CNAMERecord": {
+                  "cname": "[parameters('swaDefaultHostname')]"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "dnsZone",
+        "rg",
+        "swa"
+      ]
+    },
+    "serverIdentity": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "server-mi-deploy",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('{0}-ca-server-mi', variables('namePrefix'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "11123360529182270783"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the managed identity."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Resource tags."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2024-11-30",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            }
+          ],
+          "outputs": {
+            "id": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2024-11-30').principalId]"
+            },
+            "clientId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2024-11-30').clientId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
+    },
+    "acrRoleAssignment": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "acr-role-deploy",
+      "resourceGroup": "[parameters('containerRegistryResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "containerRegistryName": {
+            "value": "[parameters('containerRegistryName')]"
+          },
+          "principalId": {
+            "value": "[reference('serverIdentity').outputs.principalId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "1601823277261222739"
+            }
+          },
+          "parameters": {
+            "containerRegistryName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the existing Azure Container Registry."
+              }
+            },
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID (object ID) of the identity to grant AcrPull."
+              }
+            }
+          },
+          "variables": {
+            "acrPullRoleDefinitionId": "7f951dda-4ed3-4680-a7ca-43fe172d538d"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('containerRegistryName'))]",
+              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('containerRegistryName')), parameters('principalId'), variables('acrPullRoleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('acrPullRoleDefinitionId'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "serverIdentity"
+      ]
+    },
+    "telemetryStorage": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "telemetry-storage-deploy",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "storageAccountName": {
+            "value": "[variables('telemetryStorageAccountName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "containerName": {
+            "value": "[variables('telemetryContainerName')]"
+          },
+          "principalId": {
+            "value": "[reference('serverIdentity').outputs.principalId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "12762743403707258890"
+            }
+          },
+          "parameters": {
+            "storageAccountName": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 24,
+              "metadata": {
+                "description": "Storage account name (3-24 chars, lowercase alphanumeric, globally unique)."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Resource tags."
+              }
+            },
+            "containerName": {
+              "type": "string",
+              "defaultValue": "parquet",
+              "metadata": {
+                "description": "Blob container the sidecar writes telemetry parquet into."
+              }
+            },
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID (object ID) of the server managed identity to grant blob write."
+              }
+            }
+          },
+          "variables": {
+            "blobDataContributorRoleId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2024-01-01",
+              "name": "[parameters('storageAccountName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "accessTier": "Hot",
+                "allowBlobPublicAccess": false,
+                "allowSharedKeyAccess": true,
+                "minimumTlsVersion": "TLS1_2",
+                "supportsHttpsTrafficOnly": true
+              }
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices",
+              "apiVersion": "2024-01-01",
+              "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2024-01-01",
+              "name": "[format('{0}/{1}/{2}', parameters('storageAccountName'), 'default', parameters('containerName'))]",
+              "properties": {
+                "publicAccess": "None"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), parameters('principalId'), variables('blobDataContributorRoleId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('blobDataContributorRoleId'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "accountName": {
+              "type": "string",
+              "value": "[parameters('storageAccountName')]"
+            },
+            "blobServiceUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2024-01-01').primaryEndpoints.blob]"
+            },
+            "containerName": {
+              "type": "string",
+              "value": "[parameters('containerName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg",
+        "serverIdentity"
+      ]
+    },
+    "observabilityKeyVault": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "observability-kv-deploy",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[take(format('{0}-kv', variables('namePrefix')), 24)]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "5633932636027397447"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "tenantId": "[subscription().tenantId]",
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "enableRbacAuthorization": true,
+                "enablePurgeProtection": true,
+                "enableSoftDelete": true
+              }
+            }
+          ],
+          "outputs": {
+            "id": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
+    },
+    "logAnalytics": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "log-analytics-deploy",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('{0}-law', variables('namePrefix'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "8390626113845226461"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Log Analytics workspace."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Resource tags."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "customerId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('name')), '2023-09-01').customerId]"
+            },
+            "id": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
+    },
+    "cae": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "cae-deploy",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('{0}-cae', variables('namePrefix'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "logAnalyticsCustomerId": {
+            "value": "[reference('logAnalytics').outputs.customerId.value]"
+          },
+          "logAnalyticsSharedKey": {
+            "value": "[listKeys('logAnalyticsWorkspace', '2023-09-01').primarySharedKey]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "3431781627027828721"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Container Apps Environment."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Resource tags."
+              }
+            },
+            "logAnalyticsCustomerId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional: Log Analytics workspace customer ID for diagnostics."
+              }
+            },
+            "logAnalyticsSharedKey": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional: Log Analytics shared key."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.App/managedEnvironments",
+              "apiVersion": "2025-01-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "appLogsConfiguration": "[if(empty(parameters('logAnalyticsCustomerId')), null(), createObject('destination', 'log-analytics', 'logAnalyticsConfiguration', createObject('customerId', parameters('logAnalyticsCustomerId'), 'sharedKey', parameters('logAnalyticsSharedKey'))))]",
+                "zoneRedundant": false
+              }
+            }
+          ],
+          "outputs": {
+            "id": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.App/managedEnvironments', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "defaultDomain": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/managedEnvironments', parameters('name')), '2025-01-01').defaultDomain]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "logAnalytics",
+        "rg"
+      ]
+    },
+    "serverApp": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "server-ca-deploy",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('{0}-ca-server', variables('namePrefix'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "environmentId": {
+            "value": "[reference('cae').outputs.id.value]"
+          },
+          "managedIdentityId": {
+            "value": "[reference('serverIdentity').outputs.id.value]"
+          },
+          "containerRegistryLoginServer": {
+            "value": "[format('{0}.azurecr.io', parameters('containerRegistryName'))]"
+          },
+          "image": {
+            "value": "[format('{0}.azurecr.io/chefknifestudios.martajazz.server.webapi:latest', parameters('containerRegistryName'))]"
+          },
+          "cpu": {
+            "value": "0.5"
+          },
+          "memory": {
+            "value": "1Gi"
+          },
+          "minReplicas": {
+            "value": 1
+          },
+          "maxReplicas": {
+            "value": 1
+          },
+          "targetPort": {
+            "value": 8080
+          },
+          "corsAllowedOrigins": {
+            "value": [
+              "[format('https://{0}', parameters('apexDomain'))]",
+              "[format('https://www.{0}', parameters('apexDomain'))]"
+            ]
+          },
+          "envVars": {
+            "value": [
+              {
+                "name": "ASPNETCORE_URLS",
+                "value": "http://+:8080"
+              },
+              {
+                "name": "WebApi__BaseUrl",
+                "value": "http://localhost:8080"
+              },
+              {
+                "name": "AZURE_CLIENT_ID",
+                "value": "[reference('serverIdentity').outputs.clientId.value]"
+              },
+              {
+                "name": "Logging__Telemetry__BlobServiceUri",
+                "value": "[reference('telemetryStorage').outputs.blobServiceUri.value]"
+              },
+              {
+                "name": "Logging__Telemetry__Container",
+                "value": "[variables('telemetryContainerName')]"
+              },
+              {
+                "name": "Logging__Telemetry__Enabled",
+                "value": "true"
+              },
+              {
+                "name": "Metrics__Enabled",
+                "value": "[string(parameters('enableWorkerMetrics'))]"
+              },
+              {
+                "name": "Metrics__ExportIntervalMilliseconds",
+                "value": "10000"
+              },
+              {
+                "name": "Metrics__OtlpMetricsEndpoint",
+                "value": "[parameters('grafanaOtlpMetricsEndpoint')]"
+              },
+              {
+                "name": "Metrics__ServiceName",
+                "value": "transitjazz-transit-worker"
+              },
+              {
+                "name": "Metrics__Environment",
+                "value": "[parameters('environment')]"
+              },
+              {
+                "name": "Metrics__LocalPrometheusEnabled",
+                "value": "false"
+              },
+              {
+                "name": "Metrics__OtlpAuthorization",
+                "secretRef": "grafana-metrics-publisher"
+              }
+            ]
+          },
+          "secretRefs": {
+            "value": [
+              {
+                "name": "grafana-metrics-publisher",
+                "keyVaultUrl": "[parameters('grafanaPublisherSecretUri')]",
+                "identity": "[reference('serverIdentity').outputs.id.value]"
+              },
+              {
+                "name": "grafana-provisioning-token",
+                "keyVaultUrl": "[parameters('grafanaProvisioningSecretUri')]",
+                "identity": "[reference('serverIdentity').outputs.id.value]"
+              }
+            ]
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "3567985697333442810"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Container App."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Resource tags."
+              }
+            },
+            "environmentId": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Apps Environment resource ID."
+              }
+            },
+            "managedIdentityId": {
+              "type": "string",
+              "metadata": {
+                "description": "User-assigned Managed Identity resource ID (for ACR pull)."
+              }
+            },
+            "containerRegistryLoginServer": {
+              "type": "string",
+              "metadata": {
+                "description": "ACR login server, e.g., chefknife.azurecr.io."
+              }
+            },
+            "image": {
+              "type": "string",
+              "metadata": {
+                "description": "Full image reference including tag."
+              }
+            },
+            "cpu": {
+              "type": "string",
+              "metadata": {
+                "description": "CPU cores (e.g., 0.5)."
+              }
+            },
+            "memory": {
+              "type": "string",
+              "defaultValue": "1Gi",
+              "metadata": {
+                "description": "Memory (e.g., 1Gi)."
+              }
+            },
+            "minReplicas": {
+              "type": "int",
+              "defaultValue": 1,
+              "metadata": {
+                "description": "Minimum replicas."
+              }
+            },
+            "maxReplicas": {
+              "type": "int",
+              "defaultValue": 1,
+              "metadata": {
+                "description": "Maximum replicas."
+              }
+            },
+            "targetPort": {
+              "type": "int",
+              "defaultValue": 8080,
+              "metadata": {
+                "description": "Container target port for ingress."
+              }
+            },
+            "corsAllowedOrigins": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "CORS allowed origins."
+              }
+            },
+            "envVars": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Environment variables for the container."
+              }
+            },
+            "secretRefs": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Key Vault-backed Container App secret definitions."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2025-01-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('managedIdentityId'))]": {}
+                }
+              },
+              "properties": {
+                "environmentId": "[parameters('environmentId')]",
+                "configuration": {
+                  "activeRevisionsMode": "Single",
+                  "ingress": {
+                    "external": true,
+                    "targetPort": "[parameters('targetPort')]",
+                    "transport": "auto",
+                    "allowInsecure": false,
+                    "stickySessions": {
+                      "affinity": "sticky"
+                    },
+                    "ipSecurityRestrictions": [],
+                    "corsPolicy": {
+                      "allowedOrigins": "[parameters('corsAllowedOrigins')]",
+                      "allowedHeaders": [
+                        "*"
+                      ],
+                      "allowCredentials": true,
+                      "allowedMethods": [
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "DELETE",
+                        "PATCH",
+                        "OPTIONS"
+                      ]
+                    }
+                  },
+                  "registries": [
+                    {
+                      "server": "[parameters('containerRegistryLoginServer')]",
+                      "identity": "[parameters('managedIdentityId')]"
+                    }
+                  ],
+                  "secrets": "[parameters('secretRefs')]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "server",
+                      "image": "[parameters('image')]",
+                      "resources": {
+                        "cpu": "[json(parameters('cpu'))]",
+                        "memory": "[parameters('memory')]"
+                      },
+                      "env": "[parameters('envVars')]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": "[parameters('minReplicas')]",
+                    "maxReplicas": "[parameters('maxReplicas')]"
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "id": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.App/containerApps', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "fqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/containerApps', parameters('name')), '2025-01-01').configuration.ingress.fqdn]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "acrRoleAssignment",
+        "cae",
+        "rg",
+        "serverIdentity",
+        "telemetryStorage"
+      ]
+    }
+  },
+  "outputs": {
+    "resourceGroupName": {
+      "type": "string",
+      "value": "[variables('resourceGroupName')]"
+    },
+    "staticWebAppDefaultHostname": {
+      "type": "string",
+      "value": "[reference('swa').outputs.defaultHostname.value]"
+    },
+    "dnsZoneNameServers": {
+      "type": "array",
+      "value": "[reference('dnsZone').outputs.nameServers.value]"
+    },
+    "serverContainerAppFqdn": {
+      "type": "string",
+      "value": "[reference('serverApp').outputs.fqdn.value]"
+    },
+    "serverManagedIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference('serverIdentity').outputs.principalId.value]"
+    },
+    "telemetryStorageAccountName": {
+      "type": "string",
+      "value": "[reference('telemetryStorage').outputs.accountName.value]"
+    },
+    "telemetryBlobServiceUri": {
+      "type": "string",
+      "value": "[reference('telemetryStorage').outputs.blobServiceUri.value]"
+    }
+  }
+}

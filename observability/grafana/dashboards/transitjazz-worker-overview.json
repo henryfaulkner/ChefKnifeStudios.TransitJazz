@@ -1,0 +1,373 @@
+{
+  "uid": "transitjazz-worker-overview",
+  "title": "TransitJazz Worker Overview",
+  "tags": ["transitjazz", "worker"],
+  "timezone": "utc",
+  "refresh": "10s",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "transit_city",
+        "type": "query",
+        "query": "label_values({__name__=\"transitjazz.worker.city.last_cycled_seconds\"}, transit.city)",
+        "multi": true,
+        "includeAll": true
+      }
+    ]
+  },
+  "panels": [
+    {"type": "row", "title": "Health", "collapsed": false, "gridPos": {"x": 0, "y": 0, "w": 24, "h": 1}},
+    {
+      "type": "timeseries",
+      "title": "Worker cycle age",
+      "description": "Seconds since the latest completed worker cycle. Healthy: it stays close to the configured interval. Next: inspect WorkerStalled and worker logs.",
+      "gridPos": {"x": 0, "y": 1, "w": 8, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "time() - {__name__=\"transitjazz.worker.last_cycled_seconds\"}", "legendFormat": "Last completed cycle"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker work age",
+      "description": "Seconds since the latest worker cycle that produced work. Healthy: it advances when the system is idle and resets when work is produced. Next: compare with input status.",
+      "gridPos": {"x": 8, "y": 1, "w": 8, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "time() - {__name__=\"transitjazz.worker.last_worked_seconds\"}", "legendFormat": "Last work-producing cycle"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker cycle interval",
+      "description": "Configured interval between worker cycles. Healthy: it remains stable at the configured cadence. Next: check worker configuration if it changes unexpectedly.",
+      "gridPos": {"x": 16, "y": 1, "w": 8, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.cycle_interval_seconds\"}", "legendFormat": "Configured interval"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cycle rate",
+      "description": "Completed worker and city cycles per second. Healthy: every series tracks the configured cadence. Next: inspect cycle age if a series falls to zero.",
+      "gridPos": {"x": 0, "y": 7, "w": 12, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "rate({__name__=\"transitjazz.worker.cycles_total\"}[$__rate_interval])", "legendFormat": "Worker"},
+        {"expr": "rate({__name__=\"transitjazz.worker.city.cycles_total\", \"transit.city\"=~\"$transit_city\"}[$__rate_interval])", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker cycle error rate",
+      "description": "Unhandled worker-cycle errors per second. Healthy: zero. Next: inspect worker logs and the affected city panels.",
+      "gridPos": {"x": 12, "y": 7, "w": 12, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "rate({__name__=\"transitjazz.worker.cycle_errors_total\"}[$__rate_interval])", "legendFormat": "Errors / second"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "City health status",
+      "description": "Whether each latest city cycle was healthy. Healthy: every selected city is 1. Next: inspect that city's input and error panels when it is 0.",
+      "gridPos": {"x": 0, "y": 13, "w": 12, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.healthy\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "City cycle age",
+      "description": "Seconds since each city's latest completed cycle. Healthy: each selected city stays close to the worker interval. Next: inspect CityMissing and the city input panels.",
+      "gridPos": {"x": 12, "y": 13, "w": 12, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "time() - {__name__=\"transitjazz.worker.city.last_cycled_seconds\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "City work age",
+      "description": "Seconds since each city last produced work. Healthy: it rises while a city is idle and resets when it emits work. Next: compare it with that city's input records.",
+      "gridPos": {"x": 0, "y": 19, "w": 12, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "time() - {__name__=\"transitjazz.worker.city.last_worked_seconds\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "City cycle error rate",
+      "description": "Non-cancellation city-cycle errors per second. Healthy: zero for every selected city. Next: inspect the city feed and structured logs.",
+      "gridPos": {"x": 12, "y": 19, "w": 12, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "rate({__name__=\"transitjazz.worker.city.cycle_errors_total\", \"transit.city\"=~\"$transit_city\"}[$__rate_interval])", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+
+    {"type": "row", "title": "Work", "collapsed": false, "gridPos": {"x": 0, "y": 25, "w": 24, "h": 1}},
+    {
+      "type": "timeseries",
+      "title": "Cycle duration p95",
+      "description": "Observed p95 full-worker and city-cycle duration over the Grafana rate interval. Healthy: each stays below the slow-cycle threshold. Next: inspect input volume and worker logs.",
+      "gridPos": {"x": 0, "y": 26, "w": 12, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=\"transitjazz.worker.cycle_duration_seconds_bucket\"}[$__rate_interval])))", "legendFormat": "Worker p95"},
+        {"expr": "histogram_quantile(0.95, sum by (le, \"transit.city\") (rate({__name__=\"transitjazz.worker.city.cycle_duration_seconds_bucket\", \"transit.city\"=~\"$transit_city\"}[$__rate_interval])))", "legendFormat": "{{transit.city}} p95"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Vehicles processed",
+      "description": "Vehicles processed during each city cycle. Healthy: values track live service activity. Next: compare with input records when a city unexpectedly drops to zero.",
+      "gridPos": {"x": 12, "y": 26, "w": 12, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.vehicles_processed\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tones emitted",
+      "description": "Tones emitted during each city cycle. Healthy: values track eligible crossings. Next: compare with vehicles and crossing suppressions.",
+      "gridPos": {"x": 0, "y": 34, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.tones_emitted\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Published batch size",
+      "description": "Bytes in each published city batch. Healthy: values track the city's processed output without unexpected growth. Next: compare with vehicles processed.",
+      "gridPos": {"x": 8, "y": 34, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.batch_wire_bytes\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "First-seen suppressions",
+      "description": "Crossings suppressed because a vehicle was first seen in this city cycle. Healthy: values follow new-vehicle arrivals. Next: compare with vehicles processed.",
+      "gridPos": {"x": 16, "y": 34, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.crossings_suppressed_first_seen\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "No-distance suppressions",
+      "description": "Crossings suppressed because vehicle distance did not advance. Healthy: values reflect stationary vehicles. Next: compare with vehicle state and input freshness.",
+      "gridPos": {"x": 0, "y": 41, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.crossings_suppressed_delta_leq0\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Teleport suppressions",
+      "description": "Crossings suppressed because a vehicle made an implausible jump. Healthy: values are low and explainable. Next: inspect the affected feed and vehicle logs.",
+      "gridPos": {"x": 8, "y": 41, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.crossings_suppressed_teleport\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Transfer suppressions",
+      "description": "Crossings suppressed while a vehicle changes route. Healthy: values reflect route transitions. Next: inspect route mappings if they rise unexpectedly.",
+      "gridPos": {"x": 16, "y": 41, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.crossings_suppressed_transfer\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+
+    {"type": "row", "title": "Input", "collapsed": false, "gridPos": {"x": 0, "y": 48, "w": 24, "h": 1}},
+    {
+      "type": "timeseries",
+      "title": "Input fetch success",
+      "description": "Whether at least one input source succeeded for each city. Healthy: every selected city is 1. Next: inspect the agency feed and source-failure count when it is 0.",
+      "gridPos": {"x": 0, "y": 49, "w": 8, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.input_fetch_ok\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Input records present",
+      "description": "Whether each city received one or more valid input records. Healthy: 1 when service is active; 0 can be normal only for an empty feed. Next: compare with fetch success.",
+      "gridPos": {"x": 8, "y": 49, "w": 8, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.has_input_records\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Input timestamp known",
+      "description": "Whether each city supplied a timestamp for lag calculation. Healthy: 1 when the feed supports it. Next: treat zero lag as unknown when this is 0.",
+      "gridPos": {"x": 16, "y": 49, "w": 8, "h": 6},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.input_timestamp_known\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Valid input records",
+      "description": "Normalized valid records per city cycle. Healthy: values follow active service. Next: compare with fetch success if they unexpectedly fall to zero.",
+      "gridPos": {"x": 0, "y": 55, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.input_records_valid\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Input lag",
+      "description": "Seconds between a known input timestamp and cycle completion. Healthy: below the alert threshold. Next: confirm timestamp-known is 1 before diagnosing a zero value.",
+      "gridPos": {"x": 8, "y": 55, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.input_lag_seconds\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Input source failures",
+      "description": "Input sources that failed during each city cycle. Healthy: zero. Next: inspect the city feed configuration and structured logs.",
+      "gridPos": {"x": 16, "y": 55, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.input_source_failures\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+
+    {"type": "row", "title": "Resources", "collapsed": false, "gridPos": {"x": 0, "y": 62, "w": 24, "h": 1}},
+    {
+      "type": "timeseries",
+      "title": "Process memory",
+      "description": "Managed heap and process working-set memory. Healthy: both remain stable relative to workload. Next: inspect allocations and worker logs if either grows continuously.",
+      "gridPos": {"x": 0, "y": 63, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.gc_heap_bytes\"}", "legendFormat": "Managed heap"},
+        {"expr": "{__name__=\"transitjazz.worker.working_set_bytes\"}", "legendFormat": "Working set"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cycle allocation",
+      "description": "Bytes allocated during each full worker cycle. Healthy: it is stable for comparable workload. Next: inspect a sustained increase alongside duration and memory.",
+      "gridPos": {"x": 8, "y": 63, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.cycle_allocated_bytes\"}", "legendFormat": "Allocated / cycle"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Sidecar queue occupancy",
+      "description": "Current telemetry-sidecar queue occupancy. Healthy: it stays bounded and drains after bursts. Next: inspect sidecar drops and persist failures if it rises.",
+      "gridPos": {"x": 16, "y": 63, "w": 8, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.log_buffer_occupancy\"}", "legendFormat": "Queued records"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Sidecar failure rate",
+      "description": "Dropped records and persistence failures per second. Healthy: both remain zero. Next: inspect sidecar and blob-storage logs when either rises.",
+      "gridPos": {"x": 0, "y": 70, "w": 12, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "rate({__name__=\"transitjazz.worker.log_dropped_records_total\"}[$__rate_interval])", "legendFormat": "Dropped records / second"},
+        {"expr": "rate({__name__=\"transitjazz.worker.log_persist_failures_total\"}[$__rate_interval])", "legendFormat": "Persist failures / second"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Vehicle-state cache entries",
+      "description": "Vehicle-state cache entries for each city. Healthy: values track active vehicles and remain bounded. Next: compare with vehicles processed if they grow unexpectedly.",
+      "gridPos": {"x": 12, "y": 70, "w": 12, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.vehicle_state_cache\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Crossing-baseline cache entries",
+      "description": "Crossing-baseline cache entries for each city. Healthy: values remain bounded relative to active vehicles. Next: inspect state cleanup if they grow continuously.",
+      "gridPos": {"x": 0, "y": 77, "w": 12, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.crossing_baseline_cache\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Route-index entries",
+      "description": "Route-index entries for each city. Healthy: values remain stable until static route data changes. Next: inspect static-feed loading if a city changes unexpectedly.",
+      "gridPos": {"x": 12, "y": 77, "w": 12, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.route_index\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Route trigger-point cache entries",
+      "description": "Route trigger-point cache entries for each city. Healthy: values remain stable until route geometry changes. Next: inspect static route processing if they change unexpectedly.",
+      "gridPos": {"x": 0, "y": 84, "w": 24, "h": 7},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
+      "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
+      "targets": [
+        {"expr": "{__name__=\"transitjazz.worker.city.route_trigger_point_cache\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+      ]
+    }
+  ]
+}

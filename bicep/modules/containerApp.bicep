@@ -45,6 +45,9 @@ param corsAllowedOrigins array = []
 @description('Environment variables for the container.')
 param envVars array = []
 
+@description('Key Vault-backed Container App secret definitions.')
+param secretRefs array = []
+
 resource app 'Microsoft.App/containerApps@2025-01-01' = {
   name: name
   location: location
@@ -88,7 +91,7 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
           identity: managedIdentityId
         }
       ]
-      secrets: []
+      secrets: secretRefs
     }
     template: {
       containers: [

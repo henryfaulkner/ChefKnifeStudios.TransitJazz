@@ -1,4 +1,5 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
 using System;
 using System.Collections.Generic;
@@ -77,14 +78,14 @@ public class CityLoopTests
     {
         public string Name => name;
         public bool EmitsTelemetry => emits;
-        public Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct) => Task.FromResult(new FeedMessage());
+        public Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct) => Task.FromResult(CityFetchResult.FromSources(new FeedMessage(), 1, 0));
     }
 
     sealed class ThrowingCity(string name) : ITransitCity
     {
         public string Name => name;
         public bool EmitsTelemetry => false;
-        public Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)
+        public Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct)
             => throw new InvalidOperationException($"Simulated fetch failure for city {name}");
     }
 }

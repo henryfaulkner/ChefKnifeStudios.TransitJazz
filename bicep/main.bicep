@@ -44,6 +44,18 @@ param repositoryToken string
 @description('Bind custom domains to the SWA. Set false on first deploy (DNS zone must exist first); set true on subsequent deploys.')
 param bindCustomDomains bool = false
 
+@description('Enable outbound worker metrics. Keep false until release evidence is complete.')
+param enableWorkerMetrics bool = false
+
+@description('Grafana Cloud OTLP metrics endpoint, ending /v1/metrics.')
+param grafanaOtlpMetricsEndpoint string = ''
+
+@description('Key Vault URI for the Grafana metrics publisher authorization secret.')
+param grafanaPublisherSecretUri string = ''
+
+@description('Key Vault URI for the Grafana provisioning token.')
+param grafanaProvisioningSecretUri string = ''
+
 // -----------------------------------------------------------------------------
 // Variables
 // -----------------------------------------------------------------------------
@@ -180,6 +192,16 @@ module telemetryStorage 'modules/telemetryStorage.bicep' = {
   }
 }
 
+module observabilityKeyVault 'modules/keyVault.bicep' = {
+  name: 'observability-kv-deploy'
+  scope: rg
+  params: {
+    name: take('${namePrefix}-kv', 24)
+    location: location
+    tags: tags
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Log Analytics workspace (feature 051, US1): appLogsConfiguration has always
 // accepted a customerId/sharedKey pair (containerAppsEnvironment.bicep's
@@ -274,6 +296,46 @@ module serverApp 'modules/containerApp.bicep' = {
       {
         name: 'Logging__Telemetry__Enabled'
         value: 'true'
+      }
+      {
+        name: 'Metrics__Enabled'
+        value: string(enableWorkerMetrics)
+      }
+      {
+        name: 'Metrics__ExportIntervalMilliseconds'
+        value: '10000'
+      }
+      {
+        name: 'Metrics__OtlpMetricsEndpoint'
+        value: grafanaOtlpMetricsEndpoint
+      }
+      {
+        name: 'Metrics__ServiceName'
+        value: 'transitjazz-transit-worker'
+      }
+      {
+        name: 'Metrics__Environment'
+        value: environment
+      }
+      {
+        name: 'Metrics__LocalPrometheusEnabled'
+        value: 'false'
+      }
+      {
+        name: 'Metrics__OtlpAuthorization'
+        secretRef: 'grafana-metrics-publisher'
+      }
+    ]
+    secretRefs: [
+      {
+        name: 'grafana-metrics-publisher'
+        keyVaultUrl: grafanaPublisherSecretUri
+        identity: serverIdentity.outputs.id
+      }
+      {
+        name: 'grafana-provisioning-token'
+        keyVaultUrl: grafanaProvisioningSecretUri
+        identity: serverIdentity.outputs.id
       }
     ]
   }

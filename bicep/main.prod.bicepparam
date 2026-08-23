@@ -12,3 +12,8 @@ param serverImageTag = ''
 
 param repositoryUrl = 'https://github.com/henryfaulkner/ChefKnifeStudios.TransitJazz'
 param repositoryToken = ''
+
+param enableWorkerMetrics = false
+param grafanaOtlpMetricsEndpoint = ''
+param grafanaPublisherSecretUri = ''
+param grafanaProvisioningSecretUri = ''
