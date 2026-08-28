@@ -50,10 +50,10 @@ param enableWorkerMetrics bool = false
 @description('Grafana Cloud OTLP metrics endpoint, ending /v1/metrics.')
 param grafanaOtlpMetricsEndpoint string = ''
 
-@description('Key Vault URI for the Grafana metrics publisher authorization secret.')
+@description('Key Vault URI for the TransitJazzWorkerMetricsPublisherToken secret.')
 param grafanaPublisherSecretUri string = ''
 
-@description('Key Vault URI for the Grafana provisioning token.')
+@description('Key Vault URI for the TransitJazzTerraformProvisionerToken secret.')
 param grafanaProvisioningSecretUri string = ''
 
 // -----------------------------------------------------------------------------
@@ -323,17 +323,20 @@ module serverApp 'modules/containerApp.bicep' = {
       }
       {
         name: 'Metrics__OtlpAuthorization'
-        secretRef: 'grafana-metrics-publisher'
+        // This is an ACA alias. It is deliberately short because Container App
+        // secret names are limited to 20 characters; its Key Vault URI below
+        // identifies the full production secret name.
+        secretRef: 'grafana-metrics'
       }
     ]
     secretRefs: [
       {
-        name: 'grafana-metrics-publisher'
+        name: 'grafana-metrics'
         keyVaultUrl: grafanaPublisherSecretUri
         identity: serverIdentity.outputs.id
       }
       {
-        name: 'grafana-provisioning-token'
+        name: 'grafana-provision'
         keyVaultUrl: grafanaProvisioningSecretUri
         identity: serverIdentity.outputs.id
       }

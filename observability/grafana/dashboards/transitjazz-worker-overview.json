@@ -10,7 +10,7 @@
       {
         "name": "transit_city",
         "type": "query",
-        "query": "label_values({__name__=\"transitjazz.worker.city.last_cycled_seconds\"}, transit.city)",
+        "query": "label_values({__name__=\"transitjazz_worker_city_last_cycled_seconds\"}, transit_city)",
         "multi": true,
         "includeAll": true
       }
@@ -26,7 +26,7 @@
       "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
       "targets": [
-        {"expr": "time() - {__name__=\"transitjazz.worker.last_cycled_seconds\"}", "legendFormat": "Last completed cycle"}
+        {"expr": "time() - {__name__=\"transitjazz_worker_last_cycled_seconds\"}", "legendFormat": "Last completed cycle"}
       ]
     },
     {
@@ -37,7 +37,7 @@
       "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
       "targets": [
-        {"expr": "time() - {__name__=\"transitjazz.worker.last_worked_seconds\"}", "legendFormat": "Last work-producing cycle"}
+        {"expr": "time() - {__name__=\"transitjazz_worker_last_worked_seconds\"}", "legendFormat": "Last work-producing cycle"}
       ]
     },
     {
@@ -48,7 +48,7 @@
       "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.cycle_interval_seconds\"}", "legendFormat": "Configured interval"}
+        {"expr": "{__name__=\"transitjazz_worker_cycle_interval_seconds\"}", "legendFormat": "Configured interval"}
       ]
     },
     {
@@ -59,8 +59,8 @@
       "fieldConfig": {"defaults": {"unit": "ops", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
       "targets": [
-        {"expr": "rate({__name__=\"transitjazz.worker.cycles_total\"}[$__rate_interval])", "legendFormat": "Worker"},
-        {"expr": "rate({__name__=\"transitjazz.worker.city.cycles_total\", \"transit.city\"=~\"$transit_city\"}[$__rate_interval])", "legendFormat": "{{transit.city}}"}
+        {"expr": "rate({__name__=\"transitjazz_worker_cycles_total\"}[$__rate_interval])", "legendFormat": "Worker"},
+        {"expr": "rate({__name__=\"transitjazz_worker_city_cycles_total\", \"transit_city\"=~\"$transit_city\"}[$__rate_interval])", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -71,7 +71,7 @@
       "fieldConfig": {"defaults": {"unit": "ops", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
       "targets": [
-        {"expr": "rate({__name__=\"transitjazz.worker.cycle_errors_total\"}[$__rate_interval])", "legendFormat": "Errors / second"}
+        {"expr": "rate({__name__=\"transitjazz_worker_cycle_errors_total\"}[$__rate_interval])", "legendFormat": "Errors / second"}
       ]
     },
     {
@@ -82,7 +82,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.healthy\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_healthy_ratio\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -93,7 +93,7 @@
       "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "time() - {__name__=\"transitjazz.worker.city.last_cycled_seconds\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "time() - {__name__=\"transitjazz_worker_city_last_cycled_seconds\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -104,7 +104,7 @@
       "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "time() - {__name__=\"transitjazz.worker.city.last_worked_seconds\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "time() - {__name__=\"transitjazz_worker_city_last_worked_seconds\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -115,7 +115,7 @@
       "fieldConfig": {"defaults": {"unit": "ops", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "rate({__name__=\"transitjazz.worker.city.cycle_errors_total\", \"transit.city\"=~\"$transit_city\"}[$__rate_interval])", "legendFormat": "{{transit.city}}"}
+        {"expr": "rate({__name__=\"transitjazz_worker_city_cycle_errors_total\", \"transit_city\"=~\"$transit_city\"}[$__rate_interval])", "legendFormat": "{{transit_city}}"}
       ]
     },
 
@@ -128,8 +128,8 @@
       "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=\"transitjazz.worker.cycle_duration_seconds_bucket\"}[$__rate_interval])))", "legendFormat": "Worker p95"},
-        {"expr": "histogram_quantile(0.95, sum by (le, \"transit.city\") (rate({__name__=\"transitjazz.worker.city.cycle_duration_seconds_bucket\", \"transit.city\"=~\"$transit_city\"}[$__rate_interval])))", "legendFormat": "{{transit.city}} p95"}
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=\"transitjazz_worker_cycle_duration_seconds_bucket\"}[$__rate_interval])))", "legendFormat": "Worker p95"},
+        {"expr": "histogram_quantile(0.95, sum by (le, \"transit_city\") (rate({__name__=\"transitjazz_worker_city_cycle_duration_seconds_bucket\", \"transit_city\"=~\"$transit_city\"}[$__rate_interval])))", "legendFormat": "{{transit_city}} p95"}
       ]
     },
     {
@@ -140,7 +140,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.vehicles_processed\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_vehicles_processed\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -151,7 +151,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.tones_emitted\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_tones_emitted\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -162,7 +162,7 @@
       "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.batch_wire_bytes\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_batch_wire_bytes\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -173,7 +173,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.crossings_suppressed_first_seen\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_crossings_suppressed_first_seen\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -184,7 +184,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.crossings_suppressed_delta_leq0\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_crossings_suppressed_delta_leq0\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -195,7 +195,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.crossings_suppressed_teleport\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_crossings_suppressed_teleport\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -206,7 +206,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.crossings_suppressed_transfer\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_crossings_suppressed_transfer\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
 
@@ -219,7 +219,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.input_fetch_ok\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_input_fetch_ok_ratio\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -230,7 +230,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.has_input_records\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_has_input_records_ratio\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -241,7 +241,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.input_timestamp_known\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_input_timestamp_known_ratio\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -252,7 +252,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.input_records_valid\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_input_records_valid\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -263,7 +263,7 @@
       "fieldConfig": {"defaults": {"unit": "s", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.input_lag_seconds\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_input_lag_seconds\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -274,7 +274,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.input_source_failures\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_input_source_failures\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
 
@@ -287,8 +287,8 @@
       "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.gc_heap_bytes\"}", "legendFormat": "Managed heap"},
-        {"expr": "{__name__=\"transitjazz.worker.working_set_bytes\"}", "legendFormat": "Working set"}
+        {"expr": "{__name__=\"transitjazz_worker_gc_heap_bytes\"}", "legendFormat": "Managed heap"},
+        {"expr": "{__name__=\"transitjazz_worker_working_set_bytes\"}", "legendFormat": "Working set"}
       ]
     },
     {
@@ -299,7 +299,7 @@
       "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.cycle_allocated_bytes\"}", "legendFormat": "Allocated / cycle"}
+        {"expr": "{__name__=\"transitjazz_worker_cycle_allocated_bytes\"}", "legendFormat": "Allocated / cycle"}
       ]
     },
     {
@@ -310,7 +310,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.log_buffer_occupancy\"}", "legendFormat": "Queued records"}
+        {"expr": "{__name__=\"transitjazz_worker_log_buffer_occupancy\"}", "legendFormat": "Queued records"}
       ]
     },
     {
@@ -321,8 +321,8 @@
       "fieldConfig": {"defaults": {"unit": "ops", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
       "targets": [
-        {"expr": "rate({__name__=\"transitjazz.worker.log_dropped_records_total\"}[$__rate_interval])", "legendFormat": "Dropped records / second"},
-        {"expr": "rate({__name__=\"transitjazz.worker.log_persist_failures_total\"}[$__rate_interval])", "legendFormat": "Persist failures / second"}
+        {"expr": "rate({__name__=\"transitjazz_worker_log_dropped_records_total\"}[$__rate_interval])", "legendFormat": "Dropped records / second"},
+        {"expr": "rate({__name__=\"transitjazz_worker_log_persist_failures_total\"}[$__rate_interval])", "legendFormat": "Persist failures / second"}
       ]
     },
     {
@@ -333,7 +333,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.vehicle_state_cache\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_vehicle_state_cache\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -344,7 +344,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.crossing_baseline_cache\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_crossing_baseline_cache\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -355,7 +355,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.route_index\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_route_index\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     },
     {
@@ -366,7 +366,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
-        {"expr": "{__name__=\"transitjazz.worker.city.route_trigger_point_cache\", \"transit.city\"=~\"$transit_city\"}", "legendFormat": "{{transit.city}}"}
+        {"expr": "{__name__=\"transitjazz_worker_city_route_trigger_point_cache\", \"transit_city\"=~\"$transit_city\"}", "legendFormat": "{{transit_city}}"}
       ]
     }
   ]
