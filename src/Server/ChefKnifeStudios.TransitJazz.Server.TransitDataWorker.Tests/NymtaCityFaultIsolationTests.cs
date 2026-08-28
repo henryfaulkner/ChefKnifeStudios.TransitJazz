@@ -62,13 +62,13 @@ public class NymtaCityFaultIsolationTests
             GtfsRtUrls = ["https://fake/dead-feed", "https://fake/good-feed"],
             NominalRunSeconds = 90,
         });
-        var busConfig = new CityConfig { Name = "nymta", GtfsRtUrls = [] };
+        var busConfig = new CityConfig { Name = "new-york-city", GtfsRtUrls = [] };
 
         var city = new NymtaCity(factory, options, busConfig, NullLogger<NymtaCity>.Instance, NullLogger<GtfsRtCity>.Instance);
         var result = await city.FetchVehiclesAsync(CancellationToken.None);
 
-        Assert.Single(result.Entities);
-        Assert.Equal("train-1", result.Entities[0].Id);
+        Assert.Single(result.Feed.Entities);
+        Assert.Equal("train-1", result.Feed.Entities[0].Id);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class NymtaCityFaultIsolationTests
         var handler = new FakeHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
         var factory = new FakeHttpClientFactory(handler);
         var options = Options.Create(new SubwaySynthesisOptions { GtfsRtUrls = ["https://fake/feed"] });
-        var busConfig = new CityConfig { Name = "nymta", GtfsRtUrls = [] };
+        var busConfig = new CityConfig { Name = "new-york-city", GtfsRtUrls = [] };
 
         var city = new NymtaCity(factory, options, busConfig, NullLogger<NymtaCity>.Instance, NullLogger<GtfsRtCity>.Instance);
         var exception = await Record.ExceptionAsync(() => city.FetchVehiclesAsync(CancellationToken.None));

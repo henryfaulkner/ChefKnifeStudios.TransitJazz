@@ -1,4 +1,5 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
 using Microsoft.Extensions.Logging;
@@ -18,20 +19,17 @@ public class MartaCity(
     const string BusUrl = "https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb";
 
     public string Name => CityNames.Marta;
-    public string TelemetryName => "marta";
     public bool EmitsTelemetry => true;
 
-    public async Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)
+    public async Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct)
     {
-        var busFeed = await FetchBusFeedAsync(ct);
-        var railEntities = await FetchRailEntitiesAsync(ct);
-
-        var merged = busFeed ?? new FeedMessage();
-        merged.Entities.AddRange(railEntities);
-        return merged;
+        var sources = new List<CityFetchResult> { await FetchBusFeedAsync(ct) };
+        if (railOptions.Value.Enabled)
+            sources.Add(await FetchRailEntitiesAsync(ct));
+        return CityFetchResult.Combine(sources);
     }
 
-    async Task<FeedMessage?> FetchBusFeedAsync(CancellationToken ct)
+    async Task<CityFetchResult> FetchBusFeedAsync(CancellationToken ct)
     {
         try
         {
@@ -44,25 +42,29 @@ public class MartaCity(
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning("MARTA bus feed returned {StatusCode}", response.StatusCode);
-                return null;
+                return CityFetchResult.FromSources(null, 0, 1);
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
-            return ProtoBuf.Serializer.Deserialize<FeedMessage>(stream);
+            return CityFetchResult.FromSources(ProtoBuf.Serializer.Deserialize<FeedMessage>(stream), 1, 0);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to fetch MARTA bus GTFS-RT feed.");
-            return null;
+            return CityFetchResult.FromSources(null, 0, 1);
         }
     }
 
-    async Task<IReadOnlyList<FeedEntity>> FetchRailEntitiesAsync(CancellationToken ct)
+    async Task<CityFetchResult> FetchRailEntitiesAsync(CancellationToken ct)
     {
         try
         {
             var opts = railOptions.Value;
-            if (!opts.Enabled) return Array.Empty<FeedEntity>();
+            if (!opts.Enabled) return CityFetchResult.FromSources(new FeedMessage(), 0, 0);
 
             var client = httpClientFactory.CreateClient("RailRealtimeApi");
             var requestUri = string.IsNullOrEmpty(opts.ApiKey)
@@ -109,12 +111,16 @@ public class MartaCity(
             }
 
             logger.LogInformation("MARTA rail: fetched {Count} train entities.", entities.Count);
-            return entities;
+            return CityFetchResult.FromSources(new FeedMessage { Entities = entities }, 1, 0);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "MARTA rail fetch failed; bus path unaffected.");
-            return Array.Empty<FeedEntity>();
+            return CityFetchResult.FromSources(null, 0, 1);
         }
     }
 }

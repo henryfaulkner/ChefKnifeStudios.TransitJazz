@@ -1,4 +1,5 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.EventData;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
@@ -41,35 +42,27 @@ public class NymtaCity(
     DateTime _fetchedAtUtc;
 
     public string Name => CityNames.Nymta;
-    public string TelemetryName => "nymta";
     public bool EmitsTelemetry => true;
 
-    public async Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)
+    public async Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct)
     {
-        var merged = await FetchAndSynthesizeSubwayAsync(ct);
-
-        try
-        {
-            var busFeed = await _busCity.FetchVehiclesAsync(ct);
-            merged.Entities.AddRange(busFeed.Entities);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "NymtaCity: failed to fetch bus GTFS-RT.");
-        }
-
-        return merged;
+        var subway = await FetchAndSynthesizeSubwayAsync(ct);
+        var bus = await _busCity.FetchVehiclesAsync(ct);
+        return CityFetchResult.Combine(subway, bus);
     }
 
-    async Task<FeedMessage> FetchAndSynthesizeSubwayAsync(CancellationToken ct)
+    async Task<CityFetchResult> FetchAndSynthesizeSubwayAsync(CancellationToken ct)
     {
-        await EnsureTableAsync(ct);
+        if (!await EnsureTableAsync(ct))
+            return CityFetchResult.FromSources(null, 0, 1);
 
         var table = _table;
         if (table is null)
-            return new FeedMessage();
+            return CityFetchResult.FromSources(null, 0, 1);
 
         var merged = new FeedMessage();
+        var successfulSources = 0;
+        var failedSources = 0;
         int synthesizedStopped = 0, synthesizedInTransit = 0, skippedUnknownStation = 0;
         var nominalRunSeconds = options.Value.NominalRunSeconds;
 
@@ -78,7 +71,13 @@ public class NymtaCity(
             try
             {
                 var feed = await FetchFeedAsync(url, ct);
-                if (feed is null) continue;
+                if (feed is null)
+                {
+                    failedSources++;
+                    continue;
+                }
+                successfulSources++;
+                merged.Header ??= feed.Header;
 
                 foreach (var entity in feed.Entities)
                 {
@@ -99,9 +98,14 @@ public class NymtaCity(
                     }
                 }
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "NymtaCity: failed to fetch/synthesize GTFS-RT from {Url}.", url);
+                failedSources++;
             }
         }
 
@@ -109,7 +113,7 @@ public class NymtaCity(
             "NymtaCity: synthesizedStopped={Stopped}, synthesizedInTransit={InTransit}, skippedUnknownStation={Skipped}.",
             synthesizedStopped, synthesizedInTransit, skippedUnknownStation);
 
-        return merged;
+        return CityFetchResult.FromSources(merged, successfulSources, failedSources);
     }
 
     (FeedEntity? Entity, SynthesisOutcome Outcome) SynthesizeEntity(StopOffsetTable table, FeedEntity entity, double nominalRunSeconds)
@@ -148,9 +152,9 @@ public class NymtaCity(
         return (synthesized, result.Outcome);
     }
 
-    async Task EnsureTableAsync(CancellationToken ct)
+    async Task<bool> EnsureTableAsync(CancellationToken ct)
     {
-        if (_table is not null && DateTime.UtcNow - _fetchedAtUtc <= TableTtl) return;
+        if (_table is not null && DateTime.UtcNow - _fetchedAtUtc <= TableTtl) return true;
 
         try
         {
@@ -165,16 +169,22 @@ public class NymtaCity(
             if (sets is null || sets.Count == 0)
             {
                 logger.LogWarning("NymtaCity: stop-offsets endpoint returned no data; keeping existing cache.");
-                return;
+                return _table is not null;
             }
 
             _table = new StopOffsetTable(sets);
             _fetchedAtUtc = DateTime.UtcNow;
             logger.LogInformation("NymtaCity: fetched subway stop-offsets ({Count} sets).", sets.Count);
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "NymtaCity: failed to fetch subway stop-offsets; keeping existing cache if any.");
+            return _table is not null;
         }
     }
 

@@ -1,6 +1,7 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.EndpointGroups;
@@ -17,14 +18,75 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OpenTelemetry;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using Scalar.AspNetCore;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var workerOptions = builder.Configuration.GetSection(WorkerOptions.SectionName).Get<WorkerOptions>() ?? new WorkerOptions();
+workerOptions.Validate();
+var metricsOptions = builder.Configuration.GetSection(MetricsOptions.SectionName).Get<MetricsOptions>() ?? new MetricsOptions();
+metricsOptions.Validate(workerOptions.CycleIntervalSeconds, builder.Environment.IsProduction());
+if (metricsOptions.LocalPrometheusEnabled && !builder.Environment.IsDevelopment())
+    throw new OptionsValidationException(MetricsOptions.SectionName, typeof(MetricsOptions), ["LocalPrometheusEnabled is development-only."]);
+
+builder.Services.AddSingleton(workerOptions);
+builder.Services.AddSingleton(metricsOptions);
+builder.Services.AddMetrics();
+
+var instanceId = $"{Environment.MachineName}-{Environment.ProcessId}-{Guid.NewGuid():N}";
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService(metricsOptions.ServiceName)
+        .AddAttributes(new Dictionary<string, object>
+        {
+            ["deployment.environment.name"] = metricsOptions.Environment,
+            ["service.instance.id"] = instanceId,
+        }))
+    .WithMetrics(metrics =>
+    {
+        metrics.AddMeter(WorkerMetricsReporter.MeterName);
+        if (metricsOptions.Enabled && metricsOptions.LocalPrometheusEnabled)
+        {
+            metrics.AddPrometheusHttpListener(options =>
+            {
+                // Prometheus runs in Docker and reaches this development-only listener
+                // through host.docker.internal rather than localhost.
+                options.Host = "host.docker.internal";
+                options.Port = 9464;
+                options.ScrapeEndpointPath = "/metrics";
+                // service.instance.id stays resource-only; local metric series do not carry it.
+                options.ResourceConstantLabels = static _ => false;
+            });
+        }
+        else if (metricsOptions.Enabled)
+        {
+            metrics.AddOtlpExporter((options, readerOptions) =>
+            {
+                options.Endpoint = new Uri(metricsOptions.OtlpMetricsEndpoint!, UriKind.Absolute);
+                options.Protocol = OtlpExportProtocol.HttpProtobuf;
+                options.Headers = $"Authorization={metricsOptions.OtlpAuthorization}";
+                options.ExportProcessorType = ExportProcessorType.Batch;
+                readerOptions.PeriodicExportingMetricReaderOptions = new()
+                {
+                    ExportIntervalMilliseconds = metricsOptions.ExportIntervalMilliseconds,
+                };
+            });
+        }
+    });
+
+builder.Services.AddSingleton<IWorkerMetricsReporter>(sp => metricsOptions.Enabled
+    ? new WorkerMetricsReporter(sp.GetRequiredService<IMeterFactory>(), sp.GetService<MeterProvider>())
+    : new NullWorkerMetricsReporter());
 
 builder.Services.AddProblemDetails();
 
@@ -177,6 +239,8 @@ builder.Services.AddSingleton<ILoggingService, ParquetLoggingService>();
 builder.Services.AddSingleton<LogEventWorker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<LogEventWorker>());
 
+// Registered before Worker so StopAsync force-flushes the final worker-cycle measurement.
+builder.Services.AddHostedService<WorkerMetricsLifecycleService>();
 builder.Services.AddHostedService<Worker>();
 
 var app = builder.Build();

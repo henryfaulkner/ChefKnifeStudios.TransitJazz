@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" Version="10.0.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.HttpListener" Version="1.17.0-beta.1" />
     <PackageReference Include="Parquet.Net" Version="5.*" />
     <PackageReference Include="xunit" Version="2.*" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.*">
@@ -19,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.TransitDataWorker\ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.csproj" />
+    <ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.WebAPI\ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj" />
   </ItemGroup>
 
 </Project>

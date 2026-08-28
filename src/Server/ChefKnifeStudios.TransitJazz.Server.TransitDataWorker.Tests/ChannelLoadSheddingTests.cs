@@ -32,7 +32,7 @@ public class ChannelLoadSheddingTests
                 event_type = "PerCityCycle",
                 event_id = $"event-{i}",
                 observation_utc = DateTime.UtcNow,
-                city_name = "MARTA"
+                city_name = "atlanta"
             });
             if (wasFull) Interlocked.Increment(ref droppedCount);
         }
@@ -80,7 +80,7 @@ public class ChannelLoadSheddingTests
                 event_type = "PerCityCycle",
                 event_id = $"c{i}",
                 observation_utc = DateTime.UtcNow,
-                city_name = "MARTA"
+                city_name = "atlanta"
             });
         }
 

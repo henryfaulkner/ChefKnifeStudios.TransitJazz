@@ -1,4 +1,5 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
@@ -40,7 +41,7 @@ public class WireBytesTelemetryTests
                 Microsoft.Extensions.Options.Options.Create(new LoggingOptions { Enabled = false }),
                 NullLogger<LogEventWorker>.Instance),
             new NoOpLoggingService(),
-            [new FakeCity("marta")],
+            [new FakeCity("atlanta")],
             new NoOpTriggerPointGenerator());
 
     static FeedMessage OneVehicleFeed(string vehicleId = "veh-1") => new()
@@ -81,7 +82,7 @@ public class WireBytesTelemetryTests
         var publisher = new SpyHubPublisher(publishSucceeds: true);
         var notifications = new SpyEventNotifications();
         var worker = MakeWorker(publisher, notifications);
-        var city = new FakeCity("marta");
+        var city = new FakeCity("atlanta");
 
         var result = await worker.ProcessSpatialReconciliationAsync(city, OneVehicleFeed(), Index, modeMap: null, CancellationToken.None);
         PostPerCityCycleRow(notifications, result);
@@ -98,7 +99,7 @@ public class WireBytesTelemetryTests
         var publisher = new SpyHubPublisher(publishSucceeds: true);
         var notifications = new SpyEventNotifications();
         var worker = MakeWorker(publisher, notifications);
-        var city = new FakeCity("marta");
+        var city = new FakeCity("atlanta");
         var emptyFeed = new FeedMessage { Entities = [] };
 
         var result = await worker.ProcessSpatialReconciliationAsync(city, emptyFeed, Index, modeMap: null, CancellationToken.None);
@@ -116,15 +117,15 @@ public class WireBytesTelemetryTests
         var publisher2 = new SpyHubPublisher(publishSucceeds: true);
         var notifications = new SpyEventNotifications();
 
-        var martaWorker = MakeWorker(publisher1, notifications);
-        var marta = new FakeCity("marta");
-        var wmataWorker = MakeWorker(publisher2, notifications);
-        var wmata = new FakeCity("wmata");
+        var atlantaWorker = MakeWorker(publisher1, notifications);
+        var atlanta = new FakeCity("atlanta");
+        var washingtonWorker = MakeWorker(publisher2, notifications);
+        var washington = new FakeCity("washington-dc");
 
-        var martaResult = await martaWorker.ProcessSpatialReconciliationAsync(marta, OneVehicleFeed("veh-marta"), Index, modeMap: null, CancellationToken.None);
-        PostPerCityCycleRow(notifications, martaResult);
-        var wmataResult = await wmataWorker.ProcessSpatialReconciliationAsync(wmata, OneVehicleFeed("veh-wmata"), Index, modeMap: null, CancellationToken.None);
-        PostPerCityCycleRow(notifications, wmataResult);
+        var atlantaResult = await atlantaWorker.ProcessSpatialReconciliationAsync(atlanta, OneVehicleFeed("veh-atlanta"), Index, modeMap: null, CancellationToken.None);
+        PostPerCityCycleRow(notifications, atlantaResult);
+        var washingtonResult = await washingtonWorker.ProcessSpatialReconciliationAsync(washington, OneVehicleFeed("veh-washington"), Index, modeMap: null, CancellationToken.None);
+        PostPerCityCycleRow(notifications, washingtonResult);
 
         var perCityRows = notifications.PostedEvents.OfType<TelemetryEvent>()
             .Where(e => e.event_type == "PerCityCycle")
@@ -140,7 +141,7 @@ public class WireBytesTelemetryTests
             event_id = "full-1",
             observation_utc = DateTime.UtcNow,
             cities_processed_count = 2,
-            cities_processed_csv = "marta,wmata",
+            cities_processed_csv = "atlanta,washington-dc",
             batch_wire_bytes = expectedSum
         };
         notifications.PostEvent(this, fullCycleRow);
@@ -153,7 +154,7 @@ public class WireBytesTelemetryTests
     {
         public string Name => name;
         public bool EmitsTelemetry => true;
-        public Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct) => Task.FromResult(new FeedMessage());
+        public Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct) => Task.FromResult(CityFetchResult.FromSources(new FeedMessage(), 1, 0));
     }
 
     // Captures the envelope count and measured size SYNCHRONOUSLY inside PublishBatchAsync, matching

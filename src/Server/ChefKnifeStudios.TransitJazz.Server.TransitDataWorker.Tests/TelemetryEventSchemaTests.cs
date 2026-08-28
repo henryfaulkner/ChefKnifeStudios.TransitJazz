@@ -25,7 +25,7 @@ public class TelemetryEventSchemaTests
         event_type = "PerCityCycle",
         event_id = "event-1",
         observation_utc = now,
-        city_name = "MARTA",
+        city_name = "atlanta",
         feed_freshness_seconds = 3.5,
         time_taken_seconds = 0.2,
         health_ok = true,
@@ -49,7 +49,7 @@ public class TelemetryEventSchemaTests
         event_type = "PerCityCycle",
         event_id = "event-3",
         observation_utc = now,
-        city_name = "WMATA",
+        city_name = "washington-dc",
         feed_freshness_seconds = 1.0,
         time_taken_seconds = 0.1,
         health_ok = true,
@@ -74,7 +74,7 @@ public class TelemetryEventSchemaTests
         event_id = "event-2",
         observation_utc = now,
         cities_processed_count = 1,
-        cities_processed_csv = "MARTA",
+        cities_processed_csv = "atlanta",
         time_taken_seconds = 0.3,
         health_ok = true,
         tones_emitted = 4,
@@ -121,7 +121,7 @@ public class TelemetryEventSchemaTests
         var row = Assert.Single(read);
 
         Assert.Equal("PerCityCycle", row.event_type);
-        Assert.Equal("MARTA", row.city_name);
+        Assert.Equal("atlanta", row.city_name);
         Assert.Equal(3.5, row.feed_freshness_seconds);
         Assert.Null(row.cities_processed_count);
         Assert.Null(row.cities_processed_csv);
@@ -146,7 +146,7 @@ public class TelemetryEventSchemaTests
 
         Assert.Equal("FullCycle", row.event_type);
         Assert.Equal(1, row.cities_processed_count);
-        Assert.Equal("MARTA", row.cities_processed_csv);
+        Assert.Equal("atlanta", row.cities_processed_csv);
         Assert.Null(row.city_name);
         Assert.Null(row.feed_freshness_seconds);
     }
@@ -164,8 +164,8 @@ public class TelemetryEventSchemaTests
         ms.Position = 0;
 
         var read = (await ParquetSerializer.DeserializeAsync<TelemetryEvent>(ms)).ToList();
-        var published = Assert.Single(read, r => r.city_name == "MARTA");
-        var noPublish = Assert.Single(read, r => r.city_name == "WMATA");
+        var published = Assert.Single(read, r => r.city_name == "atlanta");
+        var noPublish = Assert.Single(read, r => r.city_name == "washington-dc");
 
         Assert.Equal(61440L, published.batch_wire_bytes);
         Assert.Null(noPublish.batch_wire_bytes);

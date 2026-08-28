@@ -1,4 +1,5 @@
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
 
@@ -10,16 +11,17 @@ public class GtfsRtCity(
     ILogger<GtfsRtCity> logger) : ITransitCity
 {
     public string Name => config.Name;
-    public string TelemetryName => config.TelemetryName;
     public bool EmitsTelemetry => config.EmitsTelemetry;
 
-    public async Task<FeedMessage> FetchVehiclesAsync(CancellationToken ct)
+    public async Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct)
     {
         var apiKey = config.ApiKeyEnvVar is not null
             ? Environment.GetEnvironmentVariable(config.ApiKeyEnvVar)
             : null;
 
         var merged = new FeedMessage();
+        var successfulSources = 0;
+        var failedSources = 0;
 
         foreach (var url in config.GtfsRtUrls)
         {
@@ -27,17 +29,30 @@ public class GtfsRtCity(
             {
                 var feed = await FetchFeedAsync(url, apiKey, ct);
                 if (feed != null)
+                {
+                    successfulSources++;
                     merged.Entities.AddRange(feed.Entities);
+                    merged.Header ??= feed.Header;
+                }
+                else
+                {
+                    failedSources++;
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "City {City}: failed to fetch GTFS-RT from {Url}.", config.Name, url);
+                failedSources++;
             }
         }
 
         ApplyRailRouteIdMap(merged);
         ApplyRouteIdNormalization(merged);
-        return merged;
+        return CityFetchResult.FromSources(merged, successfulSources, failedSources);
     }
 
     async Task<FeedMessage?> FetchFeedAsync(string url, string? apiKey, CancellationToken ct)

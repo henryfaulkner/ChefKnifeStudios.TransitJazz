@@ -1,6 +1,7 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Checkpoints;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Collections;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
@@ -22,11 +23,16 @@ public class Worker(
     LogEventWorker logEventWorker,
     ILoggingService loggingService,
     IEnumerable<ITransitCity> cities,
-    ITriggerPointGenerator triggerPointGenerator) : BackgroundService
+    ITriggerPointGenerator triggerPointGenerator,
+    IWorkerMetricsReporter? metricsReporter = null,
+    WorkerOptions? workerOptions = null) : BackgroundService
 {
     readonly Dictionary<string, ConcurrentDictionary<string, VehicleState>> _vehicleStateCaches = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ulong?> _lastFeedHeaderTimestamps = new(StringComparer.OrdinalIgnoreCase);
     readonly string _batchOutputDir = Path.Combine(AppContext.BaseDirectory, "event-batches");
+    readonly IReadOnlyList<ITransitCity> _cities = cities.ToArray();
+    readonly IWorkerMetricsReporter _metricsReporter = metricsReporter ?? new NullWorkerMetricsReporter();
+    readonly WorkerOptions _workerOptions = workerOptions ?? new WorkerOptions();
 
     Dictionary<string, IReadOnlyDictionary<string, RoutePoint[]>> _routeIndex = new(StringComparer.OrdinalIgnoreCase);
     // per-city routeJoinKey→category, built from the WebAPI-classified shape catalog at static-data load time
@@ -48,7 +54,7 @@ public class Worker(
         _ = Task.Run(() => PruneStaleVehicleStatesAsync(stoppingToken), stoppingToken);
         _ = Task.Run(() => RefreshRouteIndexAsync(stoppingToken), stoppingToken);
 
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_workerOptions.CycleIntervalSeconds));
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
@@ -60,38 +66,56 @@ public class Worker(
 
             var processedCities = new List<string>();
             var tickHealthOk = true;
+            var tickDidAnyWork = false;
+            var tickHadError = false;
+            var allocatedAtStart = GC.GetAllocatedBytesForCurrentThread();
             int tickTonesEmitted = 0, tickVehiclesProcessed = 0;
             int tickVehicleStateCacheSize = 0, tickCrossingBaselineCacheSize = 0, tickRouteIndexSize = 0, tickRouteTriggerPointCacheSize = 0;
             int tickCrossingsSuppressedFirstSeen = 0, tickCrossingsSuppressedDeltaLeq0 = 0, tickCrossingsSuppressedTeleport = 0, tickCrossingsSuppressedTransfer = 0;
             long tickBatchWireBytes = 0;
 
-            foreach (var city in cities)
+            try
+            {
+            foreach (var city in _cities)
             {
                 var cityStart = DateTime.UtcNow;
-                CityTickResult result;
+                var fetch = CityFetchResult.FromSources(null, 0, 1);
+                var result = CityTickResult.Unhealthy(city, this);
+                var cityHadError = false;
 
                 try
                 {
-                    var feed = await city.FetchVehiclesAsync(stoppingToken);
+                    fetch = await city.FetchVehiclesAsync(stoppingToken);
 
-                    if (!_routeIndex.TryGetValue(city.Name, out var index) || index == null)
+                    if (fetch.Outcome == CityFetchOutcome.Failure || !_routeIndex.TryGetValue(city.Name, out var index) || index == null)
                     {
-                        logger.LogWarning("City {City}: route index not ready, skipping tick.", city.Name);
-                        result = CityTickResult.Unhealthy(city, this);
+                        logger.LogWarning("City {City}: input failed or route index is not ready, skipping tick.", city.Name);
                     }
                     else
                     {
                         _routeMode.TryGetValue(city.Name, out var modeMap);
-                        result = feed.Entities.Count > 0
-                            ? await ProcessSpatialReconciliationAsync(city, feed, index, modeMap, stoppingToken)
-                            : CityTickResult.Healthy(city, this, feed.Header?.Timestamp, cityStart);
+                        result = fetch.ValidRecordCount > 0
+                            ? await ProcessSpatialReconciliationAsync(city, fetch.Feed, index, modeMap, stoppingToken)
+                            : CityTickResult.Healthy(city, this, fetch.Feed.Header?.Timestamp, cityStart);
                     }
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
+                    cityHadError = true;
+                    _metricsReporter.ReportCityError(city.Name);
                     logger.LogError(ex, "City {City} tick failed; other cities unaffected", city.Name);
-                    result = CityTickResult.Unhealthy(city, this);
                 }
+
+                var completedAt = DateTimeOffset.UtcNow;
+                _metricsReporter.ReportCityCycle(new CityCycleMetrics(
+                    city.Name, completedAt, fetch, result, completedAt.UtcDateTime - cityStart,
+                    result.VehiclesProcessed > 0 || result.TonesEmitted > 0, cityHadError));
+                tickDidAnyWork |= result.VehiclesProcessed > 0 || result.TonesEmitted > 0;
+                tickHadError |= cityHadError;
 
                 if (city.EmitsTelemetry)
                 {
@@ -120,7 +144,7 @@ public class Worker(
                         batch_wire_bytes = result.BatchWireBytes
                     });
 
-                    processedCities.Add(city.TelemetryName);
+                    processedCities.Add(city.Name);
                     tickHealthOk &= result.HealthOk;
                     tickTonesEmitted += result.TonesEmitted;
                     tickVehiclesProcessed += result.VehiclesProcessed;
@@ -163,12 +187,30 @@ public class Worker(
                     batch_wire_bytes = tickBatchWireBytes
                 });
             }
+            }
+            finally
+            {
+                var completedAt = DateTimeOffset.UtcNow;
+                _metricsReporter.ReportWorkerCycleCompleted(new WorkerCycleMetrics(
+                    completedAt,
+                    completedAt.UtcDateTime - tickStart,
+                    tickDidAnyWork,
+                    tickHadError,
+                    _workerOptions.CycleIntervalSeconds,
+                    Math.Max(0, GC.GetAllocatedBytesForCurrentThread() - allocatedAtStart),
+                    gcHeapBytes,
+                    workingSetBytes,
+                    logEventWorker.BufferOccupancy,
+                    logEventWorker.DroppedRecords,
+                    loggingService.PersistFailures,
+                    _cities.Count));
+            }
         }
     }
 
     /// <summary>Per-city outcome of one tick, surfaced out of <see cref="ProcessSpatialReconciliationAsync"/>
     /// so the caller can post a PerCityCycle row on every path (healthy, not-ready, and failed) — R2/R5.</summary>
-    internal readonly record struct CityTickResult(
+    public readonly record struct CityTickResult(
         string CityName,
         bool HealthOk,
         double? FeedFreshnessSeconds,
@@ -185,14 +227,14 @@ public class Worker(
         long? BatchWireBytes = null)
     {
         public static CityTickResult Unhealthy(ITransitCity city, Worker worker) => new(
-            city.TelemetryName, HealthOk: false, FeedFreshnessSeconds: null, TonesEmitted: 0, VehiclesProcessed: 0,
+            city.Name, HealthOk: false, FeedFreshnessSeconds: null, TonesEmitted: 0, VehiclesProcessed: 0,
             VehicleStateCacheSize: worker.GetVehicleCache(city.Name).Count,
             CrossingBaselineCacheSize: worker.GetCrossingBaselines(city.Name).Count,
             RouteIndexSize: worker._routeIndex.TryGetValue(city.Name, out var idx) ? idx.Count : 0,
             RouteTriggerPointCacheSize: worker._routeTriggerPoints.TryGetValue(city.Name, out var tp) ? tp.Count : 0);
 
         public static CityTickResult Healthy(ITransitCity city, Worker worker, ulong? feedHeaderTs, DateTime observationUtc) => new(
-            city.TelemetryName, HealthOk: true,
+            city.Name, HealthOk: true,
             FeedFreshnessSeconds: feedHeaderTs.HasValue
                 ? (observationUtc - DateTimeOffset.FromUnixTimeSeconds((long)feedHeaderTs.Value).UtcDateTime).TotalSeconds
                 : null,
@@ -615,7 +657,7 @@ public class Worker(
                 : null;
 
             return new CityTickResult(
-                city.TelemetryName,
+                city.Name,
                 HealthOk: true,
                 FeedFreshnessSeconds: feedFreshnessSeconds,
                 TonesEmitted: crossingRecords.Count,

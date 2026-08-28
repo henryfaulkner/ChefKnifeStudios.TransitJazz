@@ -1,0 +1,59 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "name": "transitjazz-worker",
+      "folder": "TransitJazz",
+      "interval": "10s",
+      "rules": [
+        {
+          "name": "WorkerStalled",
+          "condition": "time() - {__name__=\"transitjazz_worker_last_cycled_seconds\"} > bool 3 * {__name__=\"transitjazz_worker_cycle_interval_seconds\"}",
+          "for": "0s", "severity": "critical", "noDataState": "Alerting",
+          "summary": "Worker heartbeat is older than three configured intervals."
+        },
+        {
+          "name": "WorkerGone",
+          "condition": "count({__name__=\"transitjazz_worker_cycles_total\"}) == bool 0",
+          "for": "0s", "severity": "critical", "noDataState": "Alerting",
+          "summary": "Worker full-cycle series is absent."
+        },
+        {
+          "name": "CityMissing",
+          "condition": "present_over_time({__name__=\"transitjazz_worker_city_last_cycled_seconds\"}[6h]) unless present_over_time({__name__=\"transitjazz_worker_city_last_cycled_seconds\"}[30s])",
+          "for": "0s", "severity": "critical", "noDataState": "OK",
+          "labels": {"transit_city": "{{ index $labels \"transit_city\" }}"},
+          "summary": "Configured city is absent from the recent three-tick window."
+        },
+        {
+          "name": "CityInputStopped",
+          "condition": "max_over_time({__name__=\"transitjazz_worker_city_has_input_records_ratio\"}[15m]) == bool 0",
+          "for": "15m", "severity": "warning", "noDataState": "OK",
+          "labels": {"transit_city": "{{ index $labels \"transit_city\" }}"},
+          "summary": "City has no input for 15 minutes."
+        },
+        {
+          "name": "CityCycleErrors",
+          "condition": "increase({__name__=\"transitjazz_worker_city_cycle_errors_total\"}[15m]) > bool 0",
+          "for": "0s", "severity": "warning", "noDataState": "OK",
+          "labels": {"transit_city": "{{ index $labels \"transit_city\" }}"},
+          "summary": "City has a recent cycle error."
+        },
+        {
+          "name": "CityCycleSlow",
+          "condition": "histogram_quantile(0.95, sum by (le, transit_city) (rate({__name__=\"transitjazz_worker_city_cycle_duration_seconds_bucket\"}[15m]))) > bool 30",
+          "for": "15m", "severity": "warning", "noDataState": "OK",
+          "labels": {"transit_city": "{{ index $labels \"transit_city\" }}"},
+          "summary": "City p95 cycle duration exceeds 30 seconds."
+        },
+        {
+          "name": "CityInputLagHigh",
+          "condition": "(min_over_time({__name__=\"transitjazz_worker_city_input_timestamp_known_ratio\"}[10m]) == bool 1) * on(transit_city) (min_over_time({__name__=\"transitjazz_worker_city_input_lag_seconds\"}[10m]) > bool 900)",
+          "for": "10m", "severity": "warning", "noDataState": "OK",
+          "labels": {"transit_city": "{{ index $labels \"transit_city\" }}"},
+          "summary": "City input lag exceeds 900 seconds with a known timestamp."
+        }
+      ]
+    }
+  ]
+}

@@ -3,6 +3,11 @@ For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
 feature plan at specs/052-city-slug-migration/plan.md
 
+**Telemetry identifier supersession (2026-08-22):** the `TelemetryName` split described
+below has been removed. `ITransitCity.Name` is the sole city identifier and telemetry must
+use the canonical city slug (`atlanta`, `washington-dc`, and so on), including
+`city_name` and `cities_processed_csv`.
+
 052-city-slug-migration renames the city identity token from transit-agency
 names to city names — `marta`→`atlanta`, `wmata`→`washington-dc`,
 `mbta`→`boston`, `nymta`→`new-york-city`, `ttc`→`toronto`,
