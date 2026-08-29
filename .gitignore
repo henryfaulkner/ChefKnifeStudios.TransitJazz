@@ -63,6 +63,12 @@ nunit-*.xml
 bloat-reports
 .mcp.json
 
+# Generated from skills/ by tools/sync-skills.ps1.
+/.agents/skills/
+/.claude/skills/
+/.opencode/skills/
+/.skill-sync-backups/
+
 .claude/settings.local.json
 .claude/skills/create-neighborhood-blurb
 .claude/skills/grill-me
@@ -78,6 +84,7 @@ bloat-reports
 .claude/skills/speckit-taskstoissues
 
 # Local IDE and user state
+.codex/config.toml
 *.user
 *.suo
 packages/

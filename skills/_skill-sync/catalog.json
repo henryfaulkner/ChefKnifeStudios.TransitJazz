@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "skills": {
+    "add-transit-city": { "targets": ["claude", "codex", "opencode"] },
+    "create-audio-overlay-paragraphs": { "targets": ["claude", "codex", "opencode"] },
+    "create-neighborhood-blurb": { "targets": ["claude", "codex", "opencode"] },
+    "discover-transit-city": { "targets": ["claude", "codex", "opencode"] },
+    "gh-project-management": { "targets": ["claude", "codex", "opencode"] },
+    "grafana": { "targets": ["claude", "codex", "opencode"] },
+    "grill-me": { "targets": ["claude", "codex", "opencode"] },
+    "mj-api": { "targets": ["claude", "codex", "opencode"] },
+    "mj-data-explorer": { "targets": ["claude", "codex", "opencode"] },
+    "mj-gtfs": { "targets": ["claude", "codex", "opencode"] },
+    "ponytail": { "targets": ["claude", "codex", "opencode"] },
+    "ponytail-audit": { "targets": ["claude", "codex", "opencode"] },
+    "select-neighborhood-tones": { "targets": ["claude", "codex", "opencode"] },
+    "transit-jazz-task": { "targets": ["claude", "codex", "opencode"] },
+    "util-testing": { "targets": ["claude", "codex", "opencode"] }
+  }
+}
