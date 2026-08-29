@@ -1,4 +1,0 @@
-interface:
-  display_name: "Grafana"
-  short_description: "Investigate Grafana metrics and dashboard panels"
-  default_prompt: "Use $grafana to investigate a metric or dashboard panel."
