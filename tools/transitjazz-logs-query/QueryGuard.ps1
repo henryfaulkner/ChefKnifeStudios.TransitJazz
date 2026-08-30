@@ -65,15 +65,15 @@ function ConvertTo-SafeOutput {
         }
         return $result
     }
+    if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+        return ,@($Value | ForEach-Object { ConvertTo-SafeOutput $_ })
+    }
     if ($Value -is [System.Management.Automation.PSObject]) {
         $result = [ordered]@{}
         foreach ($property in $Value.PSObject.Properties) {
             $result[$property.Name] = if ($property.Name -match $script:SensitiveName) { '[REDACTED]' } else { ConvertTo-SafeOutput $property.Value }
         }
         return $result
-    }
-    if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
-        return @($Value | ForEach-Object { ConvertTo-SafeOutput $_ })
     }
     return $Value
 }

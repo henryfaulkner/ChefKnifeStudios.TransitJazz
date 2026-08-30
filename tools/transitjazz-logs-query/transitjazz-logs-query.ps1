@@ -20,10 +20,25 @@ $escapedTimespan = [Uri]::EscapeDataString($timespan)
 $endpoint = "https://api.loganalytics.io/v1/workspaces/$escapedWorkspace/search?timespan=$escapedTimespan"
 $body = @{ query = $guarded.Kql } | ConvertTo-Json -Compress
 
-# Fixed read-only operation. No caller-controlled URL, method, header, token, or command is passed.
-$raw = & az rest --method post --url $endpoint --resource 'https://api.loganalytics.io/' --body $body --output json
-if ($LASTEXITCODE -ne 0) { throw 'Azure Logs query failed; run doctor and inspect the first failing layer.' }
-$safe = ConvertTo-SafeOutput (($raw -join [Environment]::NewLine) | ConvertFrom-Json)
+# PowerShell invokes az.cmd on Windows. Passing JSON inline can strip the JSON
+# quotes before Azure CLI parses it, resulting in a "query cannot be empty"
+# response. The @file convention preserves the body exactly.
+$bodyFilePath = [IO.Path]::GetTempFileName()
+try {
+    [IO.File]::WriteAllText($bodyFilePath, $body, [Text.UTF8Encoding]::new($false))
+    $bodyFileArgument = "@$bodyFilePath"
+
+    # Fixed read-only operation. No caller-controlled URL, method, header, token, or command is passed.
+    $raw = & az rest --method post --url $endpoint --resource 'https://api.loganalytics.io/' --headers 'Content-Type=application/json' --body $bodyFileArgument --output json
+    if ($LASTEXITCODE -ne 0) { throw 'Azure Logs query failed; run doctor and inspect the first failing layer.' }
+    $safe = ConvertTo-SafeOutput (($raw -join [Environment]::NewLine) | ConvertFrom-Json)
+}
+finally {
+    if (Test-Path -LiteralPath $bodyFilePath) {
+        Remove-Item -LiteralPath $bodyFilePath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 [pscustomobject]@{
     Workspace = $workspaceId
     Table = $guarded.Table
@@ -34,4 +49,3 @@ $safe = ConvertTo-SafeOutput (($raw -join [Environment]::NewLine) | ConvertFrom-
     Output = 'json'
     Rows = $safe
 } | ConvertTo-Json -Depth 20
-

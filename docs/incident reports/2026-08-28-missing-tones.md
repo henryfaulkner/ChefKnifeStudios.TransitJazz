@@ -1,6 +1,8 @@
 # Incident Report: Missing TransitJazz Tones
 
-**Incident date:** 2026-08-28
+**Incident date:** 2026-08-28 (original outage)
+
+**Related recurrence:** 2026-08-30
 
 **Investigation date:** 2026-08-29 to 2026-08-30
 
@@ -8,11 +10,13 @@
 
 **Affected service:** `marta-jazz-dev-ca-server` / `transitjazz-transit-worker`
 
-**Status:** Route-index outage recovered automatically; the recovery design remains unsafe and Philadelphia has a separate unresolved zero-tone condition.
+**Status:** The original route-index outage recovered automatically; a same-signature recurrence was observed on Aug 30 with recovery not yet confirmed. The recovery design remains unsafe, and Philadelphia has a separate unresolved zero-tone condition.
 
 ## Executive summary
 
 TransitJazz emitted no tones for any configured city for most of Aug 28, 2026. The worker was not stopped: it continued completing its approximately 10-second cycles and successfully fetching city input. The failure was in the in-memory route index required for spatial reconciliation.
+
+Read-only Azure Monitor evidence identified a separate occurrence on Aug 30, 2026. Between 15:22:44 and 15:22:45 UTC, all seven cities emitted paired `RouteIndexUnavailable` and `CityCycleAnomaly` warning records with `Outcome=Failed` and `ReasonCode=ROUTE_INDEX_UNAVAILABLE`; each had zero processed vehicles and tones, and publishing was not attempted. The timestamps are two days after the original outage and therefore represent a recurrence of the failure mode, not an extension of the Aug 28 incident.
 
 The strongest causal sequence is:
 
@@ -30,6 +34,7 @@ The exact startup HTTP failure has not been confirmed from logs. Grafana metrics
 - The worker continued accepting/processing input and reporting liveness, so this was a silent degradation rather than a complete service outage.
 - After route-index recovery, Atlanta, Boston, Denver, New York City, Toronto, and Washington, DC emitted tones.
 - Philadelphia continued to emit zero tones through at least 8:41 AM Aug 29 despite healthy input and vehicle processing. This is treated as a separate reconciliation/eligibility issue, not part of the broad route-index outage.
+- On Aug 30, the centralized logs recorded the same route-index failure signature across all seven cities. This confirms an application-level recurrence, but the available records establish only the affected cycle, not the duration or customer impact of the recurrence.
 
 ## Timeline
 
@@ -46,6 +51,33 @@ All times below are Eastern Daylight Time unless noted otherwise.
 | Aug 28, 8:31 PM onward | Six cities produce nonzero tones. | Normal reconciliation resumes for those cities. |
 | Aug 29, 8:41 AM | Philadelphia still reports zero tones while processing 351 vehicles and remaining healthy. | Separate Philadelphia-specific issue remains. |
 | Aug 29, 8:59:39 AM | Azure portal shows a later revision `0000155` created. | Subsequent deployments should be checked for recurrence of the same startup condition. |
+| Aug 30, 15:22:44.870–15:22:45.321 UTC (11:22:44–11:22:45 AM EDT) | Azure `ContainerAppConsoleLogs` contains seven `RouteIndexUnavailable` warnings and seven paired `CityCycleAnomaly` warnings, all with `ROUTE_INDEX_UNAVAILABLE`. | New all-city recurrence signature; each city reports zero vehicles and tones with no publish attempt. |
+| Aug 30, 15:21:11–15:39:21 UTC (11:21–11:39 AM EDT) | A bounded read-only search found no `WorkerCycleRecovered` or successful `CityCycleAnomaly` marker after the failure records. | Recovery was not confirmed in the queried window; the recurrence duration remains unknown. |
+
+## Aug 30 recurrence evidence
+
+The recurrence was queried read-only from workspace `dd9c8c7e-dae8-410b-b876-2cee18c7ad2c`, table `ContainerAppConsoleLogs`, using the approved Basic Logs Search path. The primary bounded window was `2026-08-30T15:21:11Z` through `2026-08-30T15:36:11Z`; the recovery-marker check extended through `2026-08-30T15:39:21Z`.
+
+The error-indicator query returned 14 records: one `RouteIndexUnavailable` and one `CityCycleAnomaly` record for each of the seven configured cities. All records shared cycle ID `f4b406afb53546ddb8b1fd9e7206578e` and reported:
+
+- `Outcome=Failed` and `ReasonCode=ROUTE_INDEX_UNAVAILABLE`.
+- `VehiclesProcessed=0`, `TonesEmitted=0`, and `PublishAttempted=false`.
+- `LogLevel=Warning`; a separate bounded query for explicit `LogLevel=Error` records returned no rows.
+
+The recovery-marker query returned only the seven `RouteIndexUnavailable` records; it found no `WorkerCycleRecovered` record or successful `CityCycleAnomaly` record in the extended window. This is evidence that recovery was not observed during that query, not proof that recovery did not occur, because structured-event coalescing and ingestion delay can hide a transition.
+
+The query used for the recovery check was:
+
+~~~kusto
+ContainerAppConsoleLogs
+| where TimeGenerated between (datetime(2026-08-30T15:21:11Z) .. datetime(2026-08-30T15:39:21Z))
+| where Log contains "RouteIndexUnavailable" or Log contains "WorkerCycleRecovered" or (Log contains "CityCycleAnomaly" and Log contains "Succeeded")
+| project TimeGenerated, Log
+| order by TimeGenerated desc
+| take 50
+~~~
+
+These records do not include a deployment revision, HTTP status, exception type, or route-shape endpoint identity. They therefore do not establish whether the Aug 30 occurrence began during startup, a scheduled refresh, or another route-index load attempt.
 
 ## Grafana evidence
 
@@ -134,6 +166,8 @@ The Azure portal screenshot supplied during the investigation shows the prior re
 
 Grafana instance labels show that revision `0000154` was still the same worker instance before and after the Aug 28 8:31 PM recovery. Its worker cycle counter advanced continuously, and its cycle age stayed healthy. Therefore, the 8:31 PM recovery was not caused by a restart.
 
+The Aug 30 recurrence cannot yet be tied to a specific revision or deployment: the observed structured event state did not include a deployment revision, and no revision/activity query was performed as part of this bounded log check.
+
 The evidence supports a restart or revision replacement at the *start* of the incident, followed by a failed startup route-index load and a successful 24-hour refresh.
 
 A restart by itself is not sufficient to cause the incident. If `/gtfs/routes/shapes` had been available and successfully processed during startup, the new instance should have loaded the index and continued emitting tones normally.
@@ -157,6 +191,14 @@ Relevant implementation: [Worker.cs](../../src/Server/ChefKnifeStudios.TransitJa
 - The route index and trigger-point caches were empty for the affected period.
 - Reconciliation resumed for six cities immediately when those caches populated.
 - The recovery occurred in the existing instance, not through a restart.
+- A separate Aug 30 occurrence reproduced the all-city `ROUTE_INDEX_UNAVAILABLE` failure signature in centralized logs.
+
+### Aug 30 recurrence assessment
+
+- The Aug 30 records are a new occurrence, not a continuation of the Aug 28 outage: the original route index recovered on Aug 28 and the new records are timestamped two days later.
+- The recurrence has the same broad route-index signature as the original incident and is distinct from the Philadelphia-only zero-tone condition.
+- The logs confirm the affected cycle, but do not yet establish how long the route index remained unavailable, whether tones were absent outside that cycle, or whether the route index subsequently recovered.
+- The same unsafe empty-index recovery design remains a plausible common mechanism, but the Aug 30 records alone do not prove the same startup or refresh trigger.
 
 ### Most likely
 
@@ -197,6 +239,7 @@ This is a separate data/reconciliation investigation from the all-city route-ind
 2. Alert when route-index size is zero while worker cycles and input fetches remain healthy.
 3. Do not treat a live worker with an empty route index as healthy city processing.
 4. Add tests proving that an empty or failed startup response recovers within minutes after the endpoint becomes available.
+5. Treat the Aug 30 recurrence as unresolved until route-index recovery is observed and the affected customer impact is bounded.
 
 ### Priority 1
 
@@ -206,6 +249,7 @@ This is a separate data/reconciliation investigation from the all-city route-ind
 4. Preserve structured route-shape load errors in the operational log path.
 5. Verify revision `0000155` and all future revisions immediately after deployment for route-index readiness.
 6. Continue the separate Philadelphia investigation using detailed reconciliation telemetry.
+7. Correlate the Aug 30 `15:22:44–15:22:45Z` failure window with revision, route-shape endpoint, and refresh activity to identify the triggering load attempt.
 
 ## Verification query
 

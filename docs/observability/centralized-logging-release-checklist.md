@@ -75,7 +75,7 @@ Parquet writes and Blob access remain enabled until all rows below pass for seve
 |---|---|---|
 | Worker tests | `PASS` | 129 passed on 2026-08-30 |
 | Web API tests | `PASS` | 121 passed on 2026-08-30 |
-| Query guard tests | `PASS` | Bounded-query rejection suite passed on 2026-08-30 |
+| Query guard tests | `PASS` | Direct PowerShell suite passed on 2026-08-30, including Basic `/search` body-file and cleanup regression |
 | Bicep build / ARM regeneration | `BLOCKED` | Azure CLI could not download the Bicep compiler in the restricted workspace; `bicep/main.json` was not hand-edited |
 | Subscription validate / what-if | `NOT RUN` | Requires approved Azure identity, subscription, and reader principal |
 | Controlled routing/canary/7-day evidence | `NOT RUN` | Requires controlled environment and release approval |

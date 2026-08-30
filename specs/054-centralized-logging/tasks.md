@@ -91,7 +91,7 @@
 
 - [X] T033 [US1] Create the read-only investigation workflow, Grafana composition, context precedence, table-first presentation, JSON-on-request behavior, and query-display requirement in `skills/transitjazz-logs/SKILL.md`.
 - [X] T034 [US1] Register the source skill for Codex, Claude, and OpenCode in `skills/_skill-sync/catalog.json` and add `skills/transitjazz-logs/.skill-sync/codex.json` only if an actual Codex UI asset is supplied.
-- [ ] T035 [US1] Run `tools/sync-skills.ps1` and verify generated skill copies and catalog metadata from `skills/transitjazz-logs/` without editing generated copies directly.
+- [X] T035 [US1] Run `tools/sync-skills.ps1` and verify generated skill copies and catalog metadata from `skills/transitjazz-logs/` without editing generated copies directly.
 - [ ] T036 [US1] Apply the reviewed routing only in a controlled environment, emit a safe anomaly/canary, capture the actual `ContainerAppConsoleLogs.Log` JSON shape, and attach the row/query evidence to `docs/observability/transitjazz-logs-us1-acceptance.md`.
 - [ ] T037 [US1] Replace recipe placeholders only after T036 with the observed JSON parser/projections in `skills/transitjazz-logs/references/kql-recipes.md`.
 - [ ] T038 [US1] Execute the city/time and Grafana-panel acceptance flow in under five minutes, record the effective context/KQL/table result, and document empty-result explanations in `docs/observability/transitjazz-logs-us1-acceptance.md`.

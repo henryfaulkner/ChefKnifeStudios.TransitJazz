@@ -11,8 +11,9 @@ read-only interface to prove Basic-table support. It is `tools/transitjazz-logs-
 - The only network operation is caller-identity-only `POST /v1/workspaces/{workspaceId}/search`.
   The endpoint, method, resource audience, and arguments are constants in the helper; callers cannot
   provide a URL, method, header, shell command, or token.
+- On Windows PowerShell, the helper passes the JSON request body through Azure CLI's quoted `@file`
+  convention so `az.cmd` cannot strip the query text; the temporary body file is removed afterward.
 - Results are recursively sanitized before output. No credential material is accepted or printed.
 
 If the preferred interface and this helper cannot query Basic, report `BasicQueryUnsupported` and
 record the approved Analytics fallback. Do not broaden the helper.
-
