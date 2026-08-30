@@ -1,4 +1,5 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using Microsoft.Extensions.Options;
 using System.Globalization;
@@ -32,7 +33,8 @@ public class RailRealtimeAdapter(
             var requestUri = string.IsNullOrEmpty(opts.ApiKey)
                 ? client.BaseAddress!
                 : new Uri($"{client.BaseAddress}?apiKey={opts.ApiKey}");
-            logger.LogInformation("Rail adapter fetching from {RequestUri}", requestUri);
+            logger.LogDebug("Rail adapter fetching from {Endpoint}.",
+                StructuredLogRedactor.SafeEndpointIdentity(requestUri.ToString()));
             var json = await client.GetStringAsync(requestUri, ct);
             var arrivals = JsonSerializer.Deserialize<List<RailArrivalDto>>(json, _jsonOptions)
                            ?? new List<RailArrivalDto>();
@@ -71,7 +73,7 @@ public class RailRealtimeAdapter(
                 var first = group.First();
                 var distinct = group.Select(r => (r.Lat, r.Lon)).Distinct().ToList();
                 if (distinct.Count > 1)
-                    logger.LogWarning("Rail live-position contract violated for TRAIN_ID {TrainId}: {Count} distinct coordinates found.", group.Key, distinct.Count);
+                    logger.LogWarning("Rail live-position contract found {Count} coordinates for one train record.", distinct.Count);
 
                 // RailTrain → FeedEntity mapping (Entity 3)
                 ulong? timestamp = null;
@@ -99,7 +101,7 @@ public class RailRealtimeAdapter(
                 });
             }
 
-            logger.LogInformation("Rail adapter fetched {EntityCount} train entities from {RowCount} rows ({Skipped} skipped).", entities.Count, arrivals.Count, skipped);
+            logger.LogDebug("Rail adapter fetched {EntityCount} train entities from {RowCount} rows ({Skipped} skipped).", entities.Count, arrivals.Count, skipped);
             return CityFetchResult.FromSources(new FeedMessage { Entities = entities }, 1, 0);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -108,7 +110,8 @@ public class RailRealtimeAdapter(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Rail realtime fetch failed; bus path unaffected.");
+            logger.LogWarning("Rail realtime source failed; bus path unaffected. Exception type {ExceptionType}.",
+                StructuredLogRedactor.SafeExceptionType(ex));
             return CityFetchResult.FromSources(null, 0, 1);
         }
     }

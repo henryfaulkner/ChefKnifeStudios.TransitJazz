@@ -1,5 +1,6 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
 using Microsoft.Extensions.Logging;
@@ -54,7 +55,8 @@ public class MartaCity(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to fetch MARTA bus GTFS-RT feed.");
+            logger.LogWarning("MARTA bus source failed; exception type {ExceptionType}.",
+                StructuredLogRedactor.SafeExceptionType(ex));
             return CityFetchResult.FromSources(null, 0, 1);
         }
     }
@@ -110,7 +112,7 @@ public class MartaCity(
                 });
             }
 
-            logger.LogInformation("MARTA rail: fetched {Count} train entities.", entities.Count);
+            logger.LogDebug("MARTA rail source fetched {Count} train entities.", entities.Count);
             return CityFetchResult.FromSources(new FeedMessage { Entities = entities }, 1, 0);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -119,7 +121,8 @@ public class MartaCity(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "MARTA rail fetch failed; bus path unaffected.");
+            logger.LogWarning("MARTA rail source failed; bus path unaffected. Exception type {ExceptionType}.",
+                StructuredLogRedactor.SafeExceptionType(ex));
             return CityFetchResult.FromSources(null, 0, 1);
         }
     }

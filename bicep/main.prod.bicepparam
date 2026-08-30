@@ -13,6 +13,10 @@ param serverImageTag = ''
 param repositoryUrl = 'https://github.com/henryfaulkner/ChefKnifeStudios.TransitJazz'
 param repositoryToken = ''
 
+// Supply only an approved object ID through the reviewed deployment process.
+param logAnalyticsReaderPrincipalId = ''
+param enableLegacyTelemetry = true
+
 param enableWorkerMetrics = false
 param grafanaOtlpMetricsEndpoint = ''
 // These are Key Vault secret URIs, not ACA secret aliases. The Bicep template

@@ -114,7 +114,8 @@ public sealed class ParquetLoggingService : ILoggingService
     void RecordPersistFailure(Exception ex)
     {
         Interlocked.Increment(ref _persistFailures);
-        _logger.LogError(ex, "Sidecar persist failure — swallowed (sidecar_persist_failures={Count})", PersistFailures);
+        _logger.LogError("Sidecar persist failure — swallowed (sidecar_persist_failures={Count}); exception type {ExceptionType}.",
+            PersistFailures, StructuredLogRedactor.SafeExceptionType(ex));
     }
 
     static string BuildBlobPath()

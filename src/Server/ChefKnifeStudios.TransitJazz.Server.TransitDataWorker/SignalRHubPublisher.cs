@@ -1,5 +1,6 @@
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 
@@ -44,13 +45,14 @@ public sealed class SignalRHubPublisher : ITransitHubPublisher, IAsyncDisposable
 
         _connection.Reconnecting += ex =>
         {
-            _logger.LogWarning("Hub connection lost, reconnecting... {ex}", ex);
+            _logger.LogWarning("Hub connection lost, reconnecting. Exception type {ExceptionType}.",
+                ex is null ? null : StructuredLogRedactor.SafeExceptionType(ex));
             return Task.CompletedTask;
         };
 
         _connection.Reconnected += id =>
         {
-            _logger.LogInformation("Reconnected to hub, connectionId={id}", id);
+            _logger.LogDebug("Reconnected to hub.");
             return Task.CompletedTask;
         };
 
@@ -59,7 +61,8 @@ public sealed class SignalRHubPublisher : ITransitHubPublisher, IAsyncDisposable
             // Reaching Closed means automatic reconnect gave up (or StartAsync was never
             // called). We don't restart here — PublishBatchAsync re-arms on the next tick,
             // which avoids racing the reconnect machinery from inside its own callback.
-            _logger.LogError("Hub connection closed; will attempt restart on next publish. {ex}", ex);
+            _logger.LogWarning("Hub connection closed; will attempt restart on next publish. Exception type {ExceptionType}.",
+                ex is null ? null : StructuredLogRedactor.SafeExceptionType(ex));
             return Task.CompletedTask;
         };
     }
@@ -69,11 +72,12 @@ public sealed class SignalRHubPublisher : ITransitHubPublisher, IAsyncDisposable
         try
         {
             await _connection.StartAsync(ct);
-            _logger.LogInformation("Connected to WorkerTransitHub");
+            _logger.LogDebug("Connected to WorkerTransitHub.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SignalR client failed to connect to hub.");
+            _logger.LogWarning("SignalR client failed to connect to hub; exception type {ExceptionType}.",
+                StructuredLogRedactor.SafeExceptionType(ex));
         }
     }
 
@@ -106,14 +110,15 @@ public sealed class SignalRHubPublisher : ITransitHubPublisher, IAsyncDisposable
             if (_connection.State != HubConnectionState.Disconnected)
                 return;
 
-            _logger.LogInformation("Hub disconnected; attempting to restart connection.");
+            _logger.LogDebug("Hub disconnected; attempting to restart connection.");
             await _connection.StartAsync(ct);
-            _logger.LogInformation("Reconnected to WorkerTransitHub.");
+            _logger.LogDebug("Reconnected to WorkerTransitHub.");
         }
         catch (Exception ex)
         {
             // Swallow: the next tick will try again. Don't let a failed restart kill the tick.
-            _logger.LogWarning(ex, "Hub restart attempt failed; will retry next publish.");
+            _logger.LogWarning("Hub restart attempt failed; will retry next publish. Exception type {ExceptionType}.",
+                StructuredLogRedactor.SafeExceptionType(ex));
         }
         finally
         {

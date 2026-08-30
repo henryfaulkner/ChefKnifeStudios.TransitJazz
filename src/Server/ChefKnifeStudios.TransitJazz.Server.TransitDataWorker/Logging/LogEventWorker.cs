@@ -80,7 +80,7 @@ public sealed class LogEventWorker : IHostedService
 
         // Best-effort final flush
         try { await _sink.FlushAsync(cancellationToken); }
-        catch (Exception ex) { _logger.LogError(ex, "Best-effort final flush failed on shutdown."); }
+        catch (Exception ex) { _logger.LogError("Best-effort final flush failed on shutdown; exception type {ExceptionType}.", StructuredLogRedactor.SafeExceptionType(ex)); }
 
         _cts?.Cancel();
         _cts?.Dispose();
@@ -114,7 +114,7 @@ public sealed class LogEventWorker : IHostedService
             await foreach (var e in _channel.Reader.ReadAllAsync(ct))
             {
                 try { _sink.Accumulate(e); }
-                catch (Exception ex) { _logger.LogError(ex, "Sidecar Accumulate error — event skipped."); }
+                catch (Exception ex) { _logger.LogError("Sidecar Accumulate error — event skipped; exception type {ExceptionType}.", StructuredLogRedactor.SafeExceptionType(ex)); }
             }
         }
         catch (OperationCanceledException) { }
@@ -123,7 +123,7 @@ public sealed class LogEventWorker : IHostedService
         while (_channel.Reader.TryRead(out var e))
         {
             try { _sink.Accumulate(e); }
-            catch (Exception ex) { _logger.LogWarning(ex, "LogEventWorker: unexpected exception."); }
+            catch (Exception ex) { _logger.LogWarning("LogEventWorker: unexpected exception; exception type {ExceptionType}.", StructuredLogRedactor.SafeExceptionType(ex)); }
         }
 
         await CancelTimerGracefully(flushTask);
@@ -137,7 +137,7 @@ public sealed class LogEventWorker : IHostedService
             {
                 LogSidecarHealth();
                 try { await _sink.FlushAsync(ct); }
-                catch (Exception ex) { _logger.LogError(ex, "Periodic flush error."); }
+                catch (Exception ex) { _logger.LogError("Periodic flush error; exception type {ExceptionType}.", StructuredLogRedactor.SafeExceptionType(ex)); }
             }
         }
         catch (OperationCanceledException) { }

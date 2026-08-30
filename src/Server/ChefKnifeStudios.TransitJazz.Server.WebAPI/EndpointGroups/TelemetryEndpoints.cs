@@ -175,7 +175,8 @@ public static class TelemetryEndpoints
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "TelemetryEndpoints: failed to read {Blob}, skipping.", blobItem.Name);
+                logger.LogWarning("TelemetryEndpoints: failed to read {Blob}, skipping; exception type {ExceptionType}.",
+                    blobItem.Name, StructuredLogRedactor.SafeExceptionType(ex));
             }
         }
 

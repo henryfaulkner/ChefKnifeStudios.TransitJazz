@@ -32,6 +32,14 @@ using System.Net.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole(options =>
+{
+    options.IncludeScopes = false;
+    options.TimestampFormat = "yyyy-MM-dd'T'HH:mm:ss.fff'Z'";
+    options.UseUtcTimestamp = true;
+});
+
 var workerOptions = builder.Configuration.GetSection(WorkerOptions.SectionName).Get<WorkerOptions>() ?? new WorkerOptions();
 workerOptions.Validate();
 var metricsOptions = builder.Configuration.GetSection(MetricsOptions.SectionName).Get<MetricsOptions>() ?? new MetricsOptions();
@@ -232,6 +240,13 @@ builder.Services.AddSingleton<ITriggerPointGenerator, TriggerPointGenerator>();
 
 // Logging sidecar pipeline
 builder.Services.Configure<LoggingOptions>(builder.Configuration.GetSection("Logging:Telemetry"));
+builder.Services.Configure<StructuredLoggingOptions>(builder.Configuration.GetSection(StructuredLoggingOptions.SectionName));
+builder.Services.AddSingleton(sp =>
+{
+    var options = sp.GetRequiredService<IOptions<StructuredLoggingOptions>>().Value;
+    return new StructuredEventPolicy(TimeProvider.System, options.ReminderInterval);
+});
+builder.Services.AddSingleton<IWorkerStructuredEventLogger, StructuredEventEmitter>();
 builder.Services.AddSingleton<IEventNotificationService, EventNotificationService>();
 builder.Services.AddSingleton<ILoggingService, ParquetLoggingService>();
 // Register LogEventWorker as singleton so Worker can inject it for health queries,

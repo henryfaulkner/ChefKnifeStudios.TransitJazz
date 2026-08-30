@@ -11,24 +11,15 @@ param location string
 @description('Resource tags.')
 param tags object
 
-@description('Optional: Log Analytics workspace customer ID for diagnostics.')
-param logAnalyticsCustomerId string = ''
-
-@description('Optional: Log Analytics shared key.')
-@secure()
-param logAnalyticsSharedKey string = ''
-
 resource env 'Microsoft.App/managedEnvironments@2025-01-01' = {
   name: name
   location: location
   tags: tags
   properties: {
-    appLogsConfiguration: empty(logAnalyticsCustomerId) ? null : {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: logAnalyticsCustomerId
-        sharedKey: logAnalyticsSharedKey
-      }
+    // Application stdout/stderr is routed by an environment diagnostic setting.
+    // No workspace shared key or customer-ID flow is accepted by this feature.
+    appLogsConfiguration: {
+      destination: 'azure-monitor'
     }
     zoneRedundant: false
   }

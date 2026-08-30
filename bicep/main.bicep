@@ -56,6 +56,12 @@ param grafanaPublisherSecretUri string = ''
 @description('Key Vault URI for the TransitJazzTerraformProvisionerToken secret.')
 param grafanaProvisioningSecretUri string = ''
 
+@description('Object ID for the intended workspace-scoped Log Analytics Reader. Leave empty until approved.')
+param logAnalyticsReaderPrincipalId string = ''
+
+@description('Keep the legacy Parquet sidecar enabled during the evidence-gated dual run.')
+param enableLegacyTelemetry bool = true
+
 // -----------------------------------------------------------------------------
 // Variables
 // -----------------------------------------------------------------------------
@@ -203,12 +209,7 @@ module observabilityKeyVault 'modules/keyVault.bicep' = {
 }
 
 // -----------------------------------------------------------------------------
-// Log Analytics workspace (feature 051, US1): appLogsConfiguration has always
-// accepted a customerId/sharedKey pair (containerAppsEnvironment.bicep's
-// empty()-conditional) but nothing has ever supplied them, so container stdout
-// has been discarded since day one. This module creates the workspace; the
-// `existing` reference below retrieves its shared key via listKeys() so it
-// never needs its own output (keeps the secret out of module output chaining).
+// Log Analytics workspace used by Azure Monitor diagnostic settings.
 // -----------------------------------------------------------------------------
 
 module logAnalytics 'modules/logAnalytics.bicep' = {
@@ -219,14 +220,6 @@ module logAnalytics 'modules/logAnalytics.bicep' = {
     location: location
     tags: tags
   }
-}
-
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
-  name: '${namePrefix}-law'
-  scope: rg
-  dependsOn: [
-    logAnalytics
-  ]
 }
 
 // -----------------------------------------------------------------------------
@@ -240,9 +233,42 @@ module cae 'modules/containerAppsEnvironment.bicep' = {
     name: '${namePrefix}-cae'
     location: location
     tags: tags
-    logAnalyticsCustomerId: logAnalytics.outputs.customerId
-    logAnalyticsSharedKey: logAnalyticsWorkspace.listKeys().primarySharedKey
   }
+}
+
+module logRouting 'modules/logAnalyticsDiagnosticSettings.bicep' = {
+  name: 'log-routing-deploy'
+  scope: rg
+  params: {
+    environmentName: '${namePrefix}-cae'
+    workspaceId: logAnalytics.outputs.id
+  }
+  dependsOn: [
+    cae
+  ]
+}
+
+module logTablePolicies 'modules/logAnalyticsTablePolicies.bicep' = {
+  name: 'log-table-policies-deploy'
+  scope: rg
+  params: {
+    workspaceName: '${namePrefix}-law'
+  }
+  dependsOn: [
+    logRouting
+  ]
+}
+
+module logReaderRole 'modules/workspaceRoleAssignment.bicep' = if (!empty(logAnalyticsReaderPrincipalId)) {
+  name: 'log-reader-role-deploy'
+  scope: rg
+  params: {
+    workspaceName: '${namePrefix}-law'
+    principalId: logAnalyticsReaderPrincipalId
+  }
+  dependsOn: [
+    logAnalytics
+  ]
 }
 
 // -----------------------------------------------------------------------------
@@ -295,7 +321,7 @@ module serverApp 'modules/containerApp.bicep' = {
       }
       {
         name: 'Logging__Telemetry__Enabled'
-        value: 'true'
+        value: string(enableLegacyTelemetry)
       }
       {
         name: 'Metrics__Enabled'
