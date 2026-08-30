@@ -56,6 +56,9 @@ param grafanaPublisherSecretUri string = ''
 @description('Key Vault URI for the TransitJazzTerraformProvisionerToken secret.')
 param grafanaProvisioningSecretUri string = ''
 
+@description('Object ID for the intended workspace-scoped Log Analytics Reader. Leave empty until approved.')
+param logAnalyticsReaderPrincipalId string = ''
+
 // -----------------------------------------------------------------------------
 // Variables
 // -----------------------------------------------------------------------------
@@ -70,11 +73,6 @@ var tags = {
 
 var staticWebAppName = '${namePrefix}-swa'
 var staticWebAppResourceId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Web/staticSites/${staticWebAppName}'
-
-// Storage account names: 3-24 chars, lowercase alphanumeric only, globally unique.
-// Derive a stable suffix from the resource group id so dev/prod get distinct names.
-var telemetryStorageAccountName = take('mjtel${environment}${uniqueString(subscription().subscriptionId, resourceGroupName)}', 24)
-var telemetryContainerName = 'parquet'
 
 // -----------------------------------------------------------------------------
 // Resource Group
@@ -177,21 +175,6 @@ module acrRoleAssignment 'modules/acrRoleAssignment.bicep' = {
 }
 
 // -----------------------------------------------------------------------------
-// Telemetry storage (logging sidecar — feature 013): account + container + blob RBAC
-// -----------------------------------------------------------------------------
-
-module telemetryStorage 'modules/telemetryStorage.bicep' = {
-  name: 'telemetry-storage-deploy'
-  scope: rg
-  params: {
-    storageAccountName: telemetryStorageAccountName
-    location: location
-    tags: tags
-    containerName: telemetryContainerName
-    principalId: serverIdentity.outputs.principalId
-  }
-}
-
 module observabilityKeyVault 'modules/keyVault.bicep' = {
   name: 'observability-kv-deploy'
   scope: rg
@@ -203,12 +186,7 @@ module observabilityKeyVault 'modules/keyVault.bicep' = {
 }
 
 // -----------------------------------------------------------------------------
-// Log Analytics workspace (feature 051, US1): appLogsConfiguration has always
-// accepted a customerId/sharedKey pair (containerAppsEnvironment.bicep's
-// empty()-conditional) but nothing has ever supplied them, so container stdout
-// has been discarded since day one. This module creates the workspace; the
-// `existing` reference below retrieves its shared key via listKeys() so it
-// never needs its own output (keeps the secret out of module output chaining).
+// Log Analytics workspace used by Azure Monitor diagnostic settings.
 // -----------------------------------------------------------------------------
 
 module logAnalytics 'modules/logAnalytics.bicep' = {
@@ -219,14 +197,6 @@ module logAnalytics 'modules/logAnalytics.bicep' = {
     location: location
     tags: tags
   }
-}
-
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
-  name: '${namePrefix}-law'
-  scope: rg
-  dependsOn: [
-    logAnalytics
-  ]
 }
 
 // -----------------------------------------------------------------------------
@@ -240,9 +210,42 @@ module cae 'modules/containerAppsEnvironment.bicep' = {
     name: '${namePrefix}-cae'
     location: location
     tags: tags
-    logAnalyticsCustomerId: logAnalytics.outputs.customerId
-    logAnalyticsSharedKey: logAnalyticsWorkspace.listKeys().primarySharedKey
   }
+}
+
+module logRouting 'modules/logAnalyticsDiagnosticSettings.bicep' = {
+  name: 'log-routing-deploy'
+  scope: rg
+  params: {
+    environmentName: '${namePrefix}-cae'
+    workspaceId: logAnalytics.outputs.id
+  }
+  dependsOn: [
+    cae
+  ]
+}
+
+module logTablePolicies 'modules/logAnalyticsTablePolicies.bicep' = {
+  name: 'log-table-policies-deploy'
+  scope: rg
+  params: {
+    workspaceName: '${namePrefix}-law'
+  }
+  dependsOn: [
+    logRouting
+  ]
+}
+
+module logReaderRole 'modules/workspaceRoleAssignment.bicep' = if (!empty(logAnalyticsReaderPrincipalId)) {
+  name: 'log-reader-role-deploy'
+  scope: rg
+  params: {
+    workspaceName: '${namePrefix}-law'
+    principalId: logAnalyticsReaderPrincipalId
+  }
+  dependsOn: [
+    logAnalytics
+  ]
 }
 
 // -----------------------------------------------------------------------------
@@ -283,19 +286,6 @@ module serverApp 'modules/containerApp.bicep' = {
       {
         name: 'AZURE_CLIENT_ID'
         value: serverIdentity.outputs.clientId
-      }
-      // Logging sidecar (feature 013) — blob target for the telemetry parquet writer.
-      {
-        name: 'Logging__Telemetry__BlobServiceUri'
-        value: telemetryStorage.outputs.blobServiceUri
-      }
-      {
-        name: 'Logging__Telemetry__Container'
-        value: telemetryContainerName
-      }
-      {
-        name: 'Logging__Telemetry__Enabled'
-        value: 'true'
       }
       {
         name: 'Metrics__Enabled'
@@ -356,5 +346,3 @@ output staticWebAppDefaultHostname string = swa.outputs.defaultHostname
 output dnsZoneNameServers array = dnsZone.outputs.nameServers
 output serverContainerAppFqdn string = serverApp.outputs.fqdn
 output serverManagedIdentityPrincipalId string = serverIdentity.outputs.principalId
-output telemetryStorageAccountName string = telemetryStorage.outputs.accountName
-output telemetryBlobServiceUri string = telemetryStorage.outputs.blobServiceUri

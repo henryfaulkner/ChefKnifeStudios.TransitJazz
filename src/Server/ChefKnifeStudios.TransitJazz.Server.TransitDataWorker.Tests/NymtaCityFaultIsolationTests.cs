@@ -108,7 +108,7 @@ public class NymtaCityFaultIsolationTests
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false)
         {
-            BaseAddress = name == "RouteShapeApi" ? new Uri("https://fake/") : null
+            BaseAddress = name == "GtfsStaticApi" ? new Uri("https://fake/") : null
         };
     }
 }

@@ -33,6 +33,13 @@
           "summary": "City has no input for 15 minutes."
         },
         {
+          "name": "RouteIndexUnavailableWhileInputHealthy",
+          "condition": "({__name__=\"transitjazz_worker_city_route_index\"} == bool 0) and on(transit_city) ({__name__=\"transitjazz_worker_city_input_fetch_ok_ratio\"} == bool 1)",
+          "for": "5m", "severity": "critical", "noDataState": "OK",
+          "labels": {"transit_city": "{{ index $labels \"transit_city\" }}"},
+          "summary": "City has usable input but no route index for five minutes."
+        },
+        {
           "name": "CityCycleErrors",
           "condition": "increase({__name__=\"transitjazz_worker_city_cycle_errors_total\"}[15m]) > bool 0",
           "for": "0s", "severity": "warning", "noDataState": "OK",

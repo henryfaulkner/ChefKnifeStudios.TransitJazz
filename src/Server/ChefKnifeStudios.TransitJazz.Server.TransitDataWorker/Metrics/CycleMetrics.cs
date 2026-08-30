@@ -20,7 +20,4 @@ public sealed record WorkerCycleMetrics(
     long AllocatedBytes,
     long GcHeapBytes,
     long WorkingSetBytes,
-    int LogBufferOccupancy,
-    long LogDroppedRecords,
-    long LogPersistFailures,
     int ConfiguredCityCount);

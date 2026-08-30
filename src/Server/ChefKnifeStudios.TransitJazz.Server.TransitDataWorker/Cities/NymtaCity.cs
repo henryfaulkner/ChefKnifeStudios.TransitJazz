@@ -1,5 +1,6 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.EventData;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
@@ -42,7 +43,6 @@ public class NymtaCity(
     DateTime _fetchedAtUtc;
 
     public string Name => CityNames.Nymta;
-    public bool EmitsTelemetry => true;
 
     public async Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct)
     {
@@ -104,12 +104,13 @@ public class NymtaCity(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "NymtaCity: failed to fetch/synthesize GTFS-RT from {Url}.", url);
+                logger.LogWarning("NymtaCity: source failed at {Endpoint}; exception type {ExceptionType}.",
+                    StructuredLogRedactor.SafeEndpointIdentity(url), StructuredLogRedactor.SafeExceptionType(ex));
                 failedSources++;
             }
         }
 
-        logger.LogInformation(
+        logger.LogDebug(
             "NymtaCity: synthesizedStopped={Stopped}, synthesizedInTransit={InTransit}, skippedUnknownStation={Skipped}.",
             synthesizedStopped, synthesizedInTransit, skippedUnknownStation);
 
@@ -158,7 +159,7 @@ public class NymtaCity(
 
         try
         {
-            var client = httpClientFactory.CreateClient("RouteShapeApi");
+            var client = httpClientFactory.CreateClient("GtfsStaticApi");
             var response = await client.GetAsync(
                 $"{ApiEndpoints.Gtfs.GetSubwayStopOffsets}?city={CityNames.Nymta}", ct);
             response.EnsureSuccessStatusCode();
@@ -183,7 +184,8 @@ public class NymtaCity(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "NymtaCity: failed to fetch subway stop-offsets; keeping existing cache if any.");
+            logger.LogWarning("NymtaCity: stop-offset source failed; keeping existing cache if any. Exception type {ExceptionType}.",
+                StructuredLogRedactor.SafeExceptionType(ex));
             return _table is not null;
         }
     }
@@ -198,7 +200,8 @@ public class NymtaCity(
         var response = await client.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
         {
-            logger.LogWarning("NymtaCity: GTFS-RT feed {Url} returned {StatusCode}.", url, response.StatusCode);
+            logger.LogWarning("NymtaCity: GTFS-RT source {Endpoint} returned {StatusCode}.",
+                StructuredLogRedactor.SafeEndpointIdentity(url), (int)response.StatusCode);
             return null;
         }
 

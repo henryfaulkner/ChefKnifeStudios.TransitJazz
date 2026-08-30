@@ -9,8 +9,16 @@ using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole(options =>
+{
+    options.IncludeScopes = false;
+    options.TimestampFormat = "yyyy-MM-dd'T'HH:mm:ss.fff'Z'";
+    options.UseUtcTimestamp = true;
+});
+
 builder.Services.AddHttpClient();
-builder.Services.AddHttpClient("RouteShapeApi", client =>
+builder.Services.AddHttpClient("GtfsStaticApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["services:apiservice:https:0"]
         ?? builder.Configuration["WebApi:BaseUrl"]!);
@@ -82,12 +90,16 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
 
 builder.Services.AddSingleton<ITriggerPointGenerator, TriggerPointGenerator>();
 
-// Logging sidecar pipeline
-builder.Services.Configure<LoggingOptions>(builder.Configuration.GetSection("Logging:Telemetry"));
-builder.Services.AddSingleton<IEventNotificationService, EventNotificationService>();
-builder.Services.AddSingleton<ILoggingService, ParquetLoggingService>();
-builder.Services.AddSingleton<LogEventWorker>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<LogEventWorker>());
+// Structured logging pipeline
+builder.Services.Configure<StructuredLoggingOptions>(builder.Configuration.GetSection(StructuredLoggingOptions.SectionName));
+builder.Services.PostConfigure<StructuredLoggingOptions>(options =>
+    options.DeploymentRevision ??= Environment.GetEnvironmentVariable("CONTAINER_APP_REVISION"));
+builder.Services.AddSingleton(sp =>
+{
+    var options = sp.GetRequiredService<IOptions<StructuredLoggingOptions>>().Value;
+    return new StructuredEventPolicy(TimeProvider.System, options.ReminderInterval);
+});
+builder.Services.AddSingleton<IWorkerStructuredEventLogger, StructuredEventEmitter>();
 
 builder.Services.AddHostedService<Worker>();
 

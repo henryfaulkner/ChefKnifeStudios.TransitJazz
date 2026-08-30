@@ -11,21 +11,18 @@ using ChefKnifeStudios.TransitJazz.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Text.Json;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
 
 public class Worker(
-    IHttpClientFactory httpClientFactory,
     ILogger<Worker> logger,
     ITransitHubPublisher transitHubPublisher,
-    IEventNotificationService eventNotifications,
-    LogEventWorker logEventWorker,
-    ILoggingService loggingService,
     IEnumerable<ITransitCity> cities,
     ITriggerPointGenerator triggerPointGenerator,
     IWorkerMetricsReporter? metricsReporter = null,
-    WorkerOptions? workerOptions = null) : BackgroundService
+    WorkerOptions? workerOptions = null,
+    IWorkerStructuredEventLogger? structuredEventLogger = null,
+    IRouteShapeSource? routeShapeSource = null) : BackgroundService, IRouteIndexReadiness
 {
     readonly Dictionary<string, ConcurrentDictionary<string, VehicleState>> _vehicleStateCaches = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ulong?> _lastFeedHeaderTimestamps = new(StringComparer.OrdinalIgnoreCase);
@@ -33,6 +30,9 @@ public class Worker(
     readonly IReadOnlyList<ITransitCity> _cities = cities.ToArray();
     readonly IWorkerMetricsReporter _metricsReporter = metricsReporter ?? new NullWorkerMetricsReporter();
     readonly WorkerOptions _workerOptions = workerOptions ?? new WorkerOptions();
+    readonly IWorkerStructuredEventLogger _structuredEventLogger = structuredEventLogger ?? NullWorkerStructuredEventLogger.Instance;
+    readonly IRouteShapeSource _routeShapeSource = routeShapeSource ?? UnavailableRouteShapeSource.Instance;
+    readonly Dictionary<string, StructuredLogReasonCode> _activeCityAnomalyReasons = new(StringComparer.OrdinalIgnoreCase);
 
     Dictionary<string, IReadOnlyDictionary<string, RoutePoint[]>> _routeIndex = new(StringComparer.OrdinalIgnoreCase);
     // per-city routeJoinKey→category, built from the WebAPI-classified shape catalog at static-data load time
@@ -43,9 +43,16 @@ public class Worker(
     Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<TriggerPoint>>> _routeTriggerPoints = new(StringComparer.OrdinalIgnoreCase);
     // per-city vehicleId→crossing baseline (mirrors _vehicleStateCaches key structure)
     readonly Dictionary<string, Dictionary<string, CrossingBaseline?>> _crossingBaselines = new(StringComparer.OrdinalIgnoreCase);
+    int _routeIndexReady;
+
+    public bool IsReady => Volatile.Read(ref _routeIndexReady) != 0;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _structuredEventLogger.Emit(StructuredLogEvent.Create(
+            StructuredLogEventName.WorkerStarted,
+            StructuredLogOutcome.Succeeded,
+            StructuredLogEvent.NewEventId()));
         logger.LogInformation("TransitDataWorker started.");
 
         await transitHubPublisher.StartAsync(stoppingToken);
@@ -59,20 +66,15 @@ public class Worker(
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             var tickStart = DateTime.UtcNow;
+            var cycleId = StructuredLogEvent.NewCycleId();
             // Sampled once per tick and reused verbatim on every row (process-wide, not
             // partitionable per city — summing across cities would be meaningless, R3).
             var gcHeapBytes = GC.GetTotalMemory(false);
             var workingSetBytes = Process.GetCurrentProcess().WorkingSet64;
 
-            var processedCities = new List<string>();
-            var tickHealthOk = true;
             var tickDidAnyWork = false;
             var tickHadError = false;
             var allocatedAtStart = GC.GetAllocatedBytesForCurrentThread();
-            int tickTonesEmitted = 0, tickVehiclesProcessed = 0;
-            int tickVehicleStateCacheSize = 0, tickCrossingBaselineCacheSize = 0, tickRouteIndexSize = 0, tickRouteTriggerPointCacheSize = 0;
-            int tickCrossingsSuppressedFirstSeen = 0, tickCrossingsSuppressedDeltaLeq0 = 0, tickCrossingsSuppressedTeleport = 0, tickCrossingsSuppressedTransfer = 0;
-            long tickBatchWireBytes = 0;
 
             try
             {
@@ -82,20 +84,27 @@ public class Worker(
                 var fetch = CityFetchResult.FromSources(null, 0, 1);
                 var result = CityTickResult.Unhealthy(city, this);
                 var cityHadError = false;
+                var routeIndexAvailable = _routeIndex.TryGetValue(city.Name, out var cityIndex) && cityIndex is not null;
+                string? cityExceptionType = null;
 
                 try
                 {
                     fetch = await city.FetchVehiclesAsync(stoppingToken);
 
-                    if (fetch.Outcome == CityFetchOutcome.Failure || !_routeIndex.TryGetValue(city.Name, out var index) || index == null)
+                    if (fetch.Outcome == CityFetchOutcome.Failure)
                     {
-                        logger.LogWarning("City {City}: input failed or route index is not ready, skipping tick.", city.Name);
+                        logger.LogWarning("City {City}: input failed, skipping tick.", city.Name);
+                    }
+                    else if (!routeIndexAvailable)
+                    {
+                        // RouteIndexUnavailable is emitted once per transition/reminder below;
+                        // do not produce one free-text warning for every city on every tick.
                     }
                     else
                     {
                         _routeMode.TryGetValue(city.Name, out var modeMap);
                         result = fetch.ValidRecordCount > 0
-                            ? await ProcessSpatialReconciliationAsync(city, fetch.Feed, index, modeMap, stoppingToken)
+                            ? await ProcessSpatialReconciliationAsync(city, fetch.Feed, cityIndex!, modeMap, stoppingToken)
                             : CityTickResult.Healthy(city, this, fetch.Feed.Header?.Timestamp, cityStart);
                     }
                 }
@@ -106,8 +115,10 @@ public class Worker(
                 catch (Exception ex)
                 {
                     cityHadError = true;
+                    cityExceptionType = StructuredLogRedactor.SafeExceptionType(ex);
                     _metricsReporter.ReportCityError(city.Name);
-                    logger.LogError(ex, "City {City} tick failed; other cities unaffected", city.Name);
+                    logger.LogError("City {City} tick failed; other cities unaffected; exception type {ExceptionType}.",
+                        city.Name, StructuredLogRedactor.SafeExceptionType(ex));
                 }
 
                 var completedAt = DateTimeOffset.UtcNow;
@@ -117,76 +128,55 @@ public class Worker(
                 tickDidAnyWork |= result.VehiclesProcessed > 0 || result.TonesEmitted > 0;
                 tickHadError |= cityHadError;
 
-                if (city.EmitsTelemetry)
+                EmitCityOutcomeEvents(new CityCycleOutcome
                 {
-                    var cityEnd = DateTime.UtcNow;
-                    eventNotifications.PostEvent(this, new TelemetryEvent
-                    {
-                        event_type = "PerCityCycle",
-                        event_id = Guid.NewGuid().ToString("N"),
-                        observation_utc = cityEnd,
-                        city_name = result.CityName,
-                        feed_freshness_seconds = result.FeedFreshnessSeconds,
-                        time_taken_seconds = (cityEnd - cityStart).TotalSeconds,
-                        health_ok = result.HealthOk,
-                        tones_emitted = result.TonesEmitted,
-                        vehicles_processed = result.VehiclesProcessed,
-                        gc_heap_bytes = gcHeapBytes,
-                        process_working_set_bytes = workingSetBytes,
-                        vehicle_state_cache_size = result.VehicleStateCacheSize,
-                        crossing_baseline_cache_size = result.CrossingBaselineCacheSize,
-                        route_index_size = result.RouteIndexSize,
-                        route_trigger_point_cache_size = result.RouteTriggerPointCacheSize,
-                        crossings_suppressed_first_seen = result.CrossingsSuppressedFirstSeen,
-                        crossings_suppressed_delta_leq0 = result.CrossingsSuppressedDeltaLeq0,
-                        crossings_suppressed_teleport = result.CrossingsSuppressedTeleport,
-                        crossings_suppressed_transfer = result.CrossingsSuppressedTransfer,
-                        batch_wire_bytes = result.BatchWireBytes
-                    });
-
-                    processedCities.Add(city.Name);
-                    tickHealthOk &= result.HealthOk;
-                    tickTonesEmitted += result.TonesEmitted;
-                    tickVehiclesProcessed += result.VehiclesProcessed;
-                    tickVehicleStateCacheSize += result.VehicleStateCacheSize;
-                    tickCrossingBaselineCacheSize += result.CrossingBaselineCacheSize;
-                    tickRouteIndexSize += result.RouteIndexSize;
-                    tickRouteTriggerPointCacheSize += result.RouteTriggerPointCacheSize;
-                    tickCrossingsSuppressedFirstSeen += result.CrossingsSuppressedFirstSeen;
-                    tickCrossingsSuppressedDeltaLeq0 += result.CrossingsSuppressedDeltaLeq0;
-                    tickCrossingsSuppressedTeleport += result.CrossingsSuppressedTeleport;
-                    tickCrossingsSuppressedTransfer += result.CrossingsSuppressedTransfer;
-                    tickBatchWireBytes += result.BatchWireBytes ?? 0;
-                }
+                    City = city.Name,
+                    Fetch = fetch,
+                    Tick = result,
+                    RouteIndexAvailable = routeIndexAvailable,
+                    DuplicateFeed = result.DuplicateFeed,
+                    ExceptionType = cityExceptionType ?? result.ProcessingExceptionType,
+                }, cycleId, completedAt.UtcDateTime - cityStart);
             }
-
-            if (processedCities.Count > 0)
+            if (tickHadError)
             {
-                var tickEnd = DateTime.UtcNow;
-                eventNotifications.PostEvent(this, new TelemetryEvent
-                {
-                    event_type = "FullCycle",
-                    event_id = Guid.NewGuid().ToString("N"),
-                    observation_utc = tickEnd,
-                    cities_processed_count = processedCities.Count,
-                    cities_processed_csv = string.Join(",", processedCities),
-                    time_taken_seconds = (tickEnd - tickStart).TotalSeconds,
-                    health_ok = tickHealthOk,
-                    tones_emitted = tickTonesEmitted,
-                    vehicles_processed = tickVehiclesProcessed,
-                    gc_heap_bytes = gcHeapBytes,
-                    process_working_set_bytes = workingSetBytes,
-                    vehicle_state_cache_size = tickVehicleStateCacheSize,
-                    crossing_baseline_cache_size = tickCrossingBaselineCacheSize,
-                    route_index_size = tickRouteIndexSize,
-                    route_trigger_point_cache_size = tickRouteTriggerPointCacheSize,
-                    crossings_suppressed_first_seen = tickCrossingsSuppressedFirstSeen,
-                    crossings_suppressed_delta_leq0 = tickCrossingsSuppressedDeltaLeq0,
-                    crossings_suppressed_teleport = tickCrossingsSuppressedTeleport,
-                    crossings_suppressed_transfer = tickCrossingsSuppressedTransfer,
-                    batch_wire_bytes = tickBatchWireBytes
-                });
+                _structuredEventLogger.Emit(StructuredLogEvent.Create(
+                    StructuredLogEventName.WorkerCycleFailed,
+                    StructuredLogOutcome.Failed,
+                    StructuredLogEvent.NewEventId(),
+                    cycleId,
+                    reasonCode: StructuredLogReasonCode.WORKER_CYCLE_FAILED));
             }
+            else
+            {
+                _structuredEventLogger.EmitRecovery(
+                    StructuredLogEvent.Create(
+                        StructuredLogEventName.WorkerCycleRecovered,
+                        StructuredLogOutcome.Succeeded,
+                        StructuredLogEvent.NewEventId(),
+                        cycleId),
+                    nameof(StructuredLogEventName.WorkerCycleFailed),
+                    StructuredLogReasonCode.WORKER_CYCLE_FAILED.ToString());
+            }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                tickHadError = true;
+                _structuredEventLogger.Emit(StructuredLogEvent.Create(
+                    StructuredLogEventName.WorkerCycleFailed,
+                    StructuredLogOutcome.Failed,
+                    StructuredLogEvent.NewEventId(),
+                    cycleId,
+                    reasonCode: StructuredLogReasonCode.WORKER_CYCLE_FAILED,
+                    context: new StructuredLogDiagnosticContext
+                    {
+                        DurationMs = Math.Max(0, (long)(DateTime.UtcNow - tickStart).TotalMilliseconds),
+                        ExceptionType = StructuredLogRedactor.SafeExceptionType(ex),
+                    }));
             }
             finally
             {
@@ -200,12 +190,18 @@ public class Worker(
                     Math.Max(0, GC.GetAllocatedBytesForCurrentThread() - allocatedAtStart),
                     gcHeapBytes,
                     workingSetBytes,
-                    logEventWorker.BufferOccupancy,
-                    logEventWorker.DroppedRecords,
-                    loggingService.PersistFailures,
                     _cities.Count));
             }
         }
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        _structuredEventLogger.Emit(StructuredLogEvent.Create(
+            StructuredLogEventName.WorkerStopped,
+            StructuredLogOutcome.Succeeded,
+            StructuredLogEvent.NewEventId()));
+        await base.StopAsync(cancellationToken);
     }
 
     /// <summary>Per-city outcome of one tick, surfaced out of <see cref="ProcessSpatialReconciliationAsync"/>
@@ -224,7 +220,12 @@ public class Worker(
         int CrossingsSuppressedDeltaLeq0 = 0,
         int CrossingsSuppressedTeleport = 0,
         int CrossingsSuppressedTransfer = 0,
-        long? BatchWireBytes = null)
+        long? BatchWireBytes = null,
+        bool RouteIndexAvailable = true,
+        bool PublishAttempted = false,
+        bool? PublishSucceeded = null,
+        bool DuplicateFeed = false,
+        string? ProcessingExceptionType = null)
     {
         public static CityTickResult Unhealthy(ITransitCity city, Worker worker) => new(
             city.Name, HealthOk: false, FeedFreshnessSeconds: null, TonesEmitted: 0, VehiclesProcessed: 0,
@@ -236,13 +237,108 @@ public class Worker(
         public static CityTickResult Healthy(ITransitCity city, Worker worker, ulong? feedHeaderTs, DateTime observationUtc) => new(
             city.Name, HealthOk: true,
             FeedFreshnessSeconds: feedHeaderTs.HasValue
-                ? (observationUtc - DateTimeOffset.FromUnixTimeSeconds((long)feedHeaderTs.Value).UtcDateTime).TotalSeconds
+                ? Math.Max(0, (observationUtc - DateTimeOffset.FromUnixTimeSeconds((long)feedHeaderTs.Value).UtcDateTime).TotalSeconds)
                 : null,
             TonesEmitted: 0, VehiclesProcessed: 0,
             VehicleStateCacheSize: worker.GetVehicleCache(city.Name).Count,
             CrossingBaselineCacheSize: worker.GetCrossingBaselines(city.Name).Count,
             RouteIndexSize: worker._routeIndex.TryGetValue(city.Name, out var idx) ? idx.Count : 0,
             RouteTriggerPointCacheSize: worker._routeTriggerPoints.TryGetValue(city.Name, out var tp) ? tp.Count : 0);
+    }
+
+    void EmitCityOutcomeEvents(CityCycleOutcome outcome, string cycleId, TimeSpan duration)
+    {
+        var context = new StructuredLogDiagnosticContext
+        {
+            DurationMs = Math.Max(0, (long)duration.TotalMilliseconds),
+            ExceptionType = outcome.ExceptionType,
+            FeedFreshnessSeconds = outcome.Tick.FeedFreshnessSeconds,
+            TonesEmitted = outcome.Tick.TonesEmitted,
+            VehiclesProcessed = outcome.Tick.VehiclesProcessed,
+            CrossingsEmitted = outcome.Tick.TonesEmitted,
+            CrossingsSuppressedFirstSeen = outcome.Tick.CrossingsSuppressedFirstSeen,
+            CrossingsSuppressedDeltaLeq0 = outcome.Tick.CrossingsSuppressedDeltaLeq0,
+            CrossingsSuppressedTeleport = outcome.Tick.CrossingsSuppressedTeleport,
+            CrossingsSuppressedTransfer = outcome.Tick.CrossingsSuppressedTransfer,
+            BatchWireBytes = outcome.Tick.BatchWireBytes,
+            PublishAttempted = outcome.PublishAttempted,
+            PublishSucceeded = outcome.PublishSucceeded,
+        };
+
+        switch (outcome.Fetch.Outcome)
+        {
+            case CityFetchOutcome.Failure:
+                _structuredEventLogger.Emit(StructuredLogEvent.Create(
+                    StructuredLogEventName.CityInputFailed,
+                    StructuredLogOutcome.Failed,
+                    StructuredLogEvent.NewEventId(), cycleId, outcome.City,
+                    StructuredLogReasonCode.INPUT_FAILED, context));
+                break;
+            case CityFetchOutcome.PartialFailure:
+                _structuredEventLogger.Emit(StructuredLogEvent.Create(
+                    StructuredLogEventName.CityInputPartial,
+                    StructuredLogOutcome.Partial,
+                    StructuredLogEvent.NewEventId(), cycleId, outcome.City,
+                    StructuredLogReasonCode.PARTIAL_INPUT, context));
+                break;
+            case CityFetchOutcome.Empty:
+                _structuredEventLogger.Emit(StructuredLogEvent.Create(
+                    StructuredLogEventName.CityInputEmpty,
+                    StructuredLogOutcome.Failed,
+                    StructuredLogEvent.NewEventId(), cycleId, outcome.City,
+                    StructuredLogReasonCode.EMPTY_INPUT, context));
+                break;
+        }
+
+        if (!outcome.RouteIndexAvailable && outcome.Fetch.Outcome != CityFetchOutcome.Failure)
+        {
+            _structuredEventLogger.Emit(StructuredLogEvent.Create(
+                StructuredLogEventName.RouteIndexUnavailable,
+                StructuredLogOutcome.Failed,
+                StructuredLogEvent.NewEventId(), cycleId, outcome.City,
+                StructuredLogReasonCode.ROUTE_INDEX_UNAVAILABLE, context));
+        }
+
+        if (outcome.PublishAttempted && outcome.PublishSucceeded == false)
+        {
+            _structuredEventLogger.Emit(StructuredLogEvent.Create(
+                StructuredLogEventName.PublishFailed,
+                StructuredLogOutcome.Failed,
+                StructuredLogEvent.NewEventId(), cycleId, outcome.City,
+                StructuredLogReasonCode.PUBLISH_FAILED, context));
+        }
+        else if (outcome.PublishAttempted && outcome.PublishSucceeded == true)
+        {
+            _structuredEventLogger.EmitRecovery(
+                StructuredLogEvent.Create(
+                    StructuredLogEventName.PublishRecovered,
+                    StructuredLogOutcome.Succeeded,
+                    StructuredLogEvent.NewEventId(), cycleId, outcome.City,
+                    StructuredLogReasonCode.PUBLISH_FAILED, context),
+                nameof(StructuredLogEventName.PublishFailed),
+                StructuredLogReasonCode.PUBLISH_FAILED.ToString());
+        }
+
+        var reason = CityAnomalyClassifier.Classify(outcome);
+        if (reason is not null)
+        {
+            _activeCityAnomalyReasons[outcome.City] = reason.Value;
+            _structuredEventLogger.Emit(StructuredLogEvent.Create(
+                StructuredLogEventName.CityCycleAnomaly,
+                StructuredLogOutcome.Failed,
+                StructuredLogEvent.NewEventId(), cycleId, outcome.City, reason, context));
+        }
+        else if (_activeCityAnomalyReasons.Remove(outcome.City, out var activeReason))
+        {
+            // The v1 contract has no separate CityAnomalyRecovered name. A successful
+            // CityCycleAnomaly row is the bounded recovery marker for the actually active reason.
+            _structuredEventLogger.EmitRecovery(
+                StructuredLogEvent.Create(
+                    StructuredLogEventName.CityCycleAnomaly,
+                    StructuredLogOutcome.Succeeded,
+                    StructuredLogEvent.NewEventId(), cycleId, outcome.City, activeReason, context),
+                nameof(StructuredLogEventName.CityCycleAnomaly), activeReason.ToString());
+        }
     }
 
     // Partition a flat list of shapes into per-city indexes using RouteShapeProperties.City.
@@ -336,51 +432,65 @@ public class Worker(
         return (indexResult, modeResult, cumDistResult, triggerPointsResult);
     }
 
-    async Task InitializeRouteIndexAsync(CancellationToken ct)
+    internal async Task InitializeRouteIndexAsync(CancellationToken ct)
     {
-        int maxRetries = 5;
-        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        var sw = Stopwatch.StartNew();
+        try
         {
-            try
-            {
-                var sw = Stopwatch.StartNew();
-                var client = httpClientFactory.CreateClient("RouteShapeApi");
-                var response = await client.GetAsync("/gtfs/routes/shapes", ct);
-                response.EnsureSuccessStatusCode();
+            var shapes = await _routeShapeSource.GetAllShapesAsync(ct);
+            ApplyRouteIndex(shapes);
+            sw.Stop();
 
-                var json = await response.Content.ReadAsStringAsync(ct);
-                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, JsonOptions.Get());
-
-                if (shapes == null || shapes.Count == 0)
-                {
-                    logger.LogWarning("Route shapes endpoint returned empty list. Retrying...");
-                    await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
-                    continue;
-                }
-
-                (_routeIndex, _routeMode, _routeCumDist, _routeTriggerPoints) = BuildRouteIndex(shapes);
-                sw.Stop();
-
-                int totalRoutes = _routeIndex.Values.Sum(d => d.Count);
-                int totalPoints = _routeIndex.Values.Sum(d => d.Values.Sum(pts => pts.Length));
-                logger.LogInformation("Built route index: {Cities} cities, {RouteCount} routes, {TotalPoints} total points in {ElapsedMs}ms",
-                    _routeIndex.Count, totalRoutes, totalPoints, sw.ElapsedMilliseconds);
-                return;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to initialize route index (attempt {Attempt}/{MaxRetries}).", attempt, maxRetries);
-                if (attempt < maxRetries)
-                    await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
-            }
+            EmitRouteIndexLoaded(shapes.Count, sw.ElapsedMilliseconds);
+            logger.LogInformation("Built route index: {Cities} cities, {RouteCount} routes, {TotalPoints} total points in {ElapsedMs}ms",
+                _routeIndex.Count, shapes.Count, _routeIndex.Values.Sum(d => d.Values.Sum(pts => pts.Length)), sw.ElapsedMilliseconds);
         }
-
-        logger.LogWarning("Could not initialize route index after {MaxRetries} attempts. V2 reconciliation will be skipped until index is built.", maxRetries);
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            EmitRouteIndexLoadFailed(ex, sw.ElapsedMilliseconds);
+            logger.LogError("Failed to initialize route index; exception type {ExceptionType}.",
+                StructuredLogRedactor.SafeExceptionType(ex));
+            throw;
+        }
     }
+
+    void ApplyRouteIndex(IReadOnlyList<RouteShapeFeature> shapes)
+    {
+        if (shapes.Count == 0)
+            throw new InvalidOperationException("Route-shape source returned an empty catalogue.");
+
+        (_routeIndex, _routeMode, _routeCumDist, _routeTriggerPoints) = BuildRouteIndex(shapes.ToList());
+        Volatile.Write(ref _routeIndexReady, 1);
+    }
+
+    void EmitRouteIndexLoaded(int routeCount, long durationMs) =>
+        _structuredEventLogger.Emit(StructuredLogEvent.Create(
+            StructuredLogEventName.RouteIndexLoaded,
+            StructuredLogOutcome.Succeeded,
+            StructuredLogEvent.NewEventId(),
+            context: new StructuredLogDiagnosticContext
+            {
+                DurationMs = Math.Max(0, durationMs),
+                CityCount = _routeIndex.Count,
+                RouteCount = routeCount,
+            }));
+
+    void EmitRouteIndexLoadFailed(Exception exception, long durationMs) =>
+        _structuredEventLogger.Emit(StructuredLogEvent.Create(
+            StructuredLogEventName.RouteIndexLoadFailed,
+            StructuredLogOutcome.Failed,
+            StructuredLogEvent.NewEventId(),
+            context: new StructuredLogDiagnosticContext
+            {
+                DurationMs = Math.Max(0, durationMs),
+                LoadAttempt = 1,
+                ExceptionType = StructuredLogRedactor.SafeExceptionType(exception),
+            }));
 
     ConcurrentDictionary<string, VehicleState> GetVehicleCache(string city)
     {
@@ -435,6 +545,7 @@ public class Worker(
             using var batch = new RecyclableList<RouteNearestPointBatchEvent.RouteNearestPointRecord>(feed.Entities.Count);
             int movedCount = 0, unchangedCount = 0, stationaryCount = 0, staleCount = 0, skippedNoJoinKey = 0, skippedUnknownRoute = 0;
             int crossingsSuppressedFirstSeen = 0, crossingsSuppressedDeltaLeq0 = 0, crossingsSuppressedTeleport = 0, crossingsSuppressedTransfer = 0;
+            string? processingExceptionType = null;
             using var crossingRecords = new RecyclableList<RouteCrossingBatchEvent.RouteCrossingRecord>();
             var baselineMap = GetCrossingBaselines(city.Name);
             _routeCumDist.TryGetValue(city.Name, out var cityCumDist);
@@ -594,7 +705,9 @@ public class Worker(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error processing spatial reconciliation for entity {EntityId}.", entity.Id);
+                    processingExceptionType ??= StructuredLogRedactor.SafeExceptionType(ex);
+                    logger.LogWarning("Spatial reconciliation skipped an entity; exception type {ExceptionType}.",
+                        StructuredLogRedactor.SafeExceptionType(ex));
                 }
             }
 
@@ -605,22 +718,13 @@ public class Worker(
 
             var cycleEnd = DateTime.UtcNow;
 
-            logger.LogInformation(
+            logger.LogDebug(
                 "City {City} spatial reconciliation: {Moved} moved, {Unchanged} unchanged, {Stationary} stationary, {Stale} stale, {SkippedNoJoinKey} skippedNoJoinKey, {SkippedUnknownRoute} skippedUnknownRoute, {CrossingsEmitted} crossingsEmitted. FeedHeaderTs={FeedHeaderTs} DuplicateFeed={DuplicateFeed}",
                 city.Name, movedCount, unchangedCount, stationaryCount, staleCount, skippedNoJoinKey, skippedUnknownRoute, crossingRecords.Count, feedTs, feedIsDuplicate);
 
-            if (city.EmitsTelemetry)
-            {
-                var droppedRecords = logEventWorker.DroppedRecords;
-                var persistFailures = loggingService.PersistFailures;
-                var bufferOccupancy = logEventWorker.BufferOccupancy;
-
-                logger.LogInformation(
-                    "Sidecar self-health: BufferOccupancy={Occupancy}, DroppedRecords={Dropped}, PersistFailures={Failures}",
-                    bufferOccupancy, droppedRecords, persistFailures);
-            }
-
             long? batchWireBytes = null;
+            var publishAttempted = false;
+            bool? publishSucceeded = null;
 
             if (batch.Count > 0)
             {
@@ -647,13 +751,15 @@ public class Worker(
 
                 batchWireBytes = WireSize.Measure(envelopes);
 
+                publishAttempted = true;
                 var isBatchPublished = await transitHubPublisher.PublishBatchAsync(city.Name, envelopes, ct);
+                publishSucceeded = isBatchPublished;
                 if (!isBatchPublished)
                     logger.LogWarning("Failed to publish spatial reconciliation batch for city {City}.", city.Name);
             }
 
             double? feedFreshnessSeconds = feedTs.HasValue
-                ? (cycleEnd - DateTimeOffset.FromUnixTimeSeconds((long)feedTs.Value).UtcDateTime).TotalSeconds
+                ? Math.Max(0, (cycleEnd - DateTimeOffset.FromUnixTimeSeconds((long)feedTs.Value).UtcDateTime).TotalSeconds)
                 : null;
 
             return new CityTickResult(
@@ -670,12 +776,21 @@ public class Worker(
                 CrossingsSuppressedDeltaLeq0: crossingsSuppressedDeltaLeq0,
                 CrossingsSuppressedTeleport: crossingsSuppressedTeleport,
                 CrossingsSuppressedTransfer: crossingsSuppressedTransfer,
-                BatchWireBytes: batchWireBytes);
+                BatchWireBytes: batchWireBytes,
+                RouteIndexAvailable: true,
+                PublishAttempted: publishAttempted,
+                PublishSucceeded: publishSucceeded,
+                DuplicateFeed: feedIsDuplicate,
+                ProcessingExceptionType: processingExceptionType);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error in spatial reconciliation for city {City}.", city.Name);
-            return CityTickResult.Unhealthy(city, this);
+            logger.LogWarning("Spatial reconciliation failed for city {City}; exception type {ExceptionType}.",
+                city.Name, StructuredLogRedactor.SafeExceptionType(ex));
+            return CityTickResult.Unhealthy(city, this) with
+            {
+                ProcessingExceptionType = StructuredLogRedactor.SafeExceptionType(ex),
+            };
         }
     }
 
@@ -709,34 +824,27 @@ public class Worker(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error pruning stale vehicle states.");
+                logger.LogError("Error pruning stale vehicle states; exception type {ExceptionType}.",
+                    StructuredLogRedactor.SafeExceptionType(ex));
             }
         }
     }
 
-    async Task RefreshRouteIndexAsync(CancellationToken ct)
+    internal async Task RefreshRouteIndexAsync(CancellationToken ct)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(24));
-
-        while (await timer.WaitForNextTickAsync(ct))
+        while (!ct.IsCancellationRequested)
         {
             try
             {
-                var client = httpClientFactory.CreateClient("RouteShapeApi");
-                var response = await client.GetAsync("/gtfs/routes/shapes", ct);
-                response.EnsureSuccessStatusCode();
+                await _routeShapeSource.WaitForNextRefreshAsync(ct);
+                var sw = Stopwatch.StartNew();
+                var shapes = await _routeShapeSource.GetAllShapesAsync(ct);
+                ApplyRouteIndex(shapes);
+                sw.Stop();
 
-                var json = await response.Content.ReadAsStringAsync(ct);
-                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, JsonOptions.Get());
-
-                if (shapes == null || shapes.Count == 0)
-                {
-                    logger.LogWarning("Route shapes refresh returned empty list. Retaining existing index.");
-                    continue;
-                }
-
-                (_routeIndex, _routeMode, _routeCumDist, _routeTriggerPoints) = BuildRouteIndex(shapes);
-                logger.LogInformation("Refreshed route index: {Cities} cities.", _routeIndex.Count);
+                EmitRouteIndexLoaded(shapes.Count, sw.ElapsedMilliseconds);
+                logger.LogInformation("Refreshed route index: {Cities} cities, {RouteCount} routes.",
+                    _routeIndex.Count, shapes.Count);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -744,7 +852,9 @@ public class Worker(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to refresh route index. Retaining existing index.");
+                EmitRouteIndexLoadFailed(ex, durationMs: 0);
+                logger.LogError("Failed to refresh route index. Retaining existing index; exception type {ExceptionType}.",
+                    StructuredLogRedactor.SafeExceptionType(ex));
             }
         }
     }

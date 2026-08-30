@@ -2,6 +2,8 @@ using ChefKnifeStudios.TransitJazz.Server.WebAPI.Interfaces;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -24,6 +26,8 @@ public class GtfsStaticLoader(
     IKeyValueRepository<string> routeShapeRepo,
     IConfiguration configuration,
     IRouteShapeResponseCache responseCache,
+    InMemoryRouteShapeSource routeShapeSource,
+    IWorkerStructuredEventLogger structuredEventLogger,
     ILogger<GtfsStaticLoader> logger) : BackgroundService
 {
     sealed record CityStaticEntry(
@@ -47,7 +51,7 @@ public class GtfsStaticLoader(
         var hours = configuration.GetValue("Gtfs:StaticRefreshHours", DefaultRefreshHours);
         if (hours <= 0) hours = DefaultRefreshHours;
         var interval = TimeSpan.FromHours(hours);
-        logger.LogInformation("GtfsStaticLoader: refresh interval {Hours}h.", hours);
+        logger.LogDebug("GtfsStaticLoader: refresh interval {Hours}h.", hours);
 
         using var timer = new PeriodicTimer(interval);
 
@@ -65,7 +69,8 @@ public class GtfsStaticLoader(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "GtfsStaticLoader: refresh cycle failed.");
+                logger.LogWarning("GtfsStaticLoader: refresh cycle failed; exception type {ExceptionType}.",
+                    StructuredLogRedactor.SafeExceptionType(ex));
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
@@ -73,7 +78,7 @@ public class GtfsStaticLoader(
 
     async Task RefreshAllCitiesAsync(CancellationToken ct)
     {
-        logger.LogInformation("GtfsStaticLoader: refreshing GTFS static data for all cities...");
+        logger.LogDebug("GtfsStaticLoader: refreshing GTFS static data for all cities.");
         var cities = LoadCityEntries();
         var client = httpClientFactory.CreateClient();
 
@@ -85,12 +90,18 @@ public class GtfsStaticLoader(
             if (fresh.Count == 0)
             {
                 logger.LogWarning("GtfsStaticLoader: city {City} produced 0 routes; keeping previous data.", city.Name);
+                structuredEventLogger.Emit(StructuredLogEvent.Create(
+                    StructuredLogEventName.RouteIndexLoadFailed,
+                    StructuredLogOutcome.Failed,
+                    StructuredLogEvent.NewEventId(),
+                    city: city.Name.ToLowerInvariant(),
+                    context: new StructuredLogDiagnosticContext { LoadAttempt = 1 }));
                 continue;
             }
 
             await ReconcileCityAsync(city.Name, fresh, ct);
             anyStored = true;
-            logger.LogInformation("GtfsStaticLoader: city {City} refreshed {Count} route shapes.", city.Name, fresh.Count);
+            logger.LogDebug("GtfsStaticLoader: city {City} refreshed {Count} route shapes.", city.Name, fresh.Count);
 
             var cityKey = city.Name.ToLowerInvariant();
             responseCache.Populate(RouteShapeResponseCacheKey.AllShapes(cityKey),
@@ -107,11 +118,39 @@ public class GtfsStaticLoader(
                 await RouteResponseBuilder.BuildAllShapesJsonAsync(routeShapeRepo, cityKey: null, ct));
         }
 
-        if (anyStored && !_ready)
+        if (anyStored)
         {
-            await routeShapeRepo.SetAsync(ReadyKey, "ready", ct);
-            _ready = true;
+            if (!_ready)
+            {
+                await routeShapeRepo.SetAsync(ReadyKey, "ready", ct);
+                _ready = true;
+            }
+
+            routeShapeSource.Publish(await LoadAllRouteShapesAsync(ct));
         }
+    }
+
+    async Task<IReadOnlyList<RouteShapeFeature>> LoadAllRouteShapesAsync(CancellationToken ct)
+    {
+        var all = await routeShapeRepo.GetAllAsync(ct);
+        if (!all.IsSuccess)
+            throw new InvalidOperationException("The route-shape repository could not be read after a successful refresh.");
+
+        var shapes = new List<RouteShapeFeature>();
+        foreach (var (key, geoJson) in all.Value)
+        {
+            if (key == ReadyKey || key.EndsWith(SubwayOffsetsKeySuffix, StringComparison.Ordinal))
+                continue;
+
+            var shape = JsonSerializer.Deserialize<RouteShapeFeature>(geoJson, Shared.JsonOptions.Get());
+            if (shape is not null)
+                shapes.Add(shape);
+        }
+
+        if (shapes.Count == 0)
+            throw new InvalidOperationException("The route-shape repository contained no shapes after a successful refresh.");
+
+        return shapes;
     }
 
     // Upsert all fresh keys, then prune this city's stale keys (routes gone upstream).
@@ -214,7 +253,8 @@ public class GtfsStaticLoader(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "GtfsStaticLoader: failed to load zip for city {City} from {Url}.", city.Name, zipUrl);
+                logger.LogWarning("GtfsStaticLoader: failed to load zip for city {City} from {Endpoint}; exception type {ExceptionType}.",
+                    city.Name, StructuredLogRedactor.SafeEndpointIdentity(zipUrl), StructuredLogRedactor.SafeExceptionType(ex));
             }
         }
 

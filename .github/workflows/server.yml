@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 054-centralized-logging]
 
 env:
   REGISTRY: chefknife.azurecr.io

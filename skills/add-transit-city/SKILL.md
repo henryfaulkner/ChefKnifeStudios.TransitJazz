@@ -104,8 +104,7 @@ entry for the minimal keyless shape, WMATA's for `RailRouteIdMap`, NYMTA's for
 {
   "Name": "{slug}",
   "GtfsRtUrls": [ "..." ],
-  "StaticZipUrls": [ "..." ],
-  "EmitsTelemetry": true
+  "StaticZipUrls": [ "..." ]
 }
 ```
 Percent-encode any literal spaces in URLs (`%20`) — do not rely on the HTTP client to do it.

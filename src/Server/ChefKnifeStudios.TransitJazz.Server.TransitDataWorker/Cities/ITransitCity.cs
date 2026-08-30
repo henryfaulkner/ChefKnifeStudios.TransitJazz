@@ -6,5 +6,4 @@ public interface ITransitCity
 {
     string Name { get; }
     Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct);
-    bool EmitsTelemetry { get; }
 }

@@ -1,7 +1,77 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the most recent
-feature plan at specs/052-city-slug-migration/plan.md
+feature plan at specs/055-remove-parquet-sidecar/plan.md
+
+055-remove-parquet-sidecar retired the feature-013 telemetry sidecar and every
+consumer built on it. **Grafana metrics + 054 centralized structured logs are now the
+only two observability surfaces.** All three slices (A stop-writing, B readers, C infra)
+are IMPLEMENTED and green — build clean, 302 tests pass, `bicep/main.json` regenerated
+from source. Only the deploy-time tasks remain (66 of 73 done).
+
+**STATUS — the evidence gate was WAIVED, not passed (2026-08-30).** Feature 054's release
+checklist stood `BLOCKED` with every row `PENDING` (0 of 9 FR-024 rows, 0 of 3 canaries,
+0 of 7 dual-run days). The release owner waived the seven-day window and **deleted the
+Azure telemetry storage manually**, outside the Bicep deployment — so the IaC here was
+written to MATCH an already-deleted state, not to drive the deletion. Consequences to
+remember: contracts C1-C5 were verified locally, but **C6 (centralized logs can answer
+everything Parquet did) rests on assertion, not evidence**, and the data is gone with no
+fallback; T058a (confirming no `Storage Blob Data Contributor` assignment survives on
+`serverIdentity`) was never run, so **the next infra deployment is the reconciliation
+point**. Recorded in `specs/055-remove-parquet-sidecar/checklists/gate-status.md` and the
+055 removal authorization in `docs/observability/centralized-logging-release-checklist.md`.
+
+DONE (slice A, stop writing): deleted `Logging/`'s six parquet files
+(`ParquetLoggingService`, `ILoggingService`, `LogEventWorker`, `LoggingOptions`,
+`TelemetryEvent`, `IEventNotificationService` — the server-side bus was parquet-ONLY;
+054's `StructuredEventEmitter` writes through `ILogger` directly). Dropped `Parquet.Net`
+from BOTH the worker and test csproj, the `Logging:Telemetry` block from both
+`appsettings.json` (the two `.Development.json` files never had one), and the three
+sidecar SELF-HEALTH metrics + their two Grafana panels (grid reflowed, no gap). The
+`EmitsTelemetry` gate is fully gone — 5 code sites + all 22 config entries. The nine
+054/051 keep-files in `Logging/` and `WireSize.Measure` at the publish site are intact;
+`BatchWireBytes` survives as a structured-log field.
+
+DONE (slice B, orphaned readers): the `/telemetry` vertical slice across four projects,
+both Go tools, `tools/test-telemetry-mcp.ps1`, and the `telemetry-query-bridge` block in
+`.mcp.json`. `mj-data-explorer` was CARVED, not deleted — `discover-transit-city` depends
+on its `functions/gtfs-compatibility.md`.
+
+DONE (slice C, infra): deleted `bicep/modules/telemetryStorage.bicep`, the
+`enableLegacyTelemetry` param, and all six reference sites in `main.bicep`; regenerated
+`main.json` with `az bicep build` (Bicep CLI 0.43.8 IS available here — the checklist's
+`BLOCKED` was a different workspace). NEVER hand-edit the generated ARM. A semantic diff
+against a baseline build confirms the 055 delta is exactly 1 module + 1 param + 2 outputs;
+the rest of that file's large diff is the committed `main.json` catching up to 054's
+already-merged bicep changes, which had left it stale.
+
+OUTSTANDING (deploy only, 7 tasks): worker+server atomic -> client -> `deploy/marta-jazz`,
+then a full-cycle-window verification (T049-T052), the post-deploy infra checks
+(T058/T058a), and the quickstart gate table (T064).
+
+FOUR CORRECTIONS to the original plan, found during implementation:
+(1) there are **FOUR** skill trees, not three — the tracked `skills/` source of truth
+feeds `.claude`/`.agents`/`.opencode` via `tools/sync-skills.ps1`; carving only the three
+mirrors would be undone by the next sync.
+(2) a **THIRD** run-time-only dual-run guard existed beyond the two the plan named:
+`WebAPI.Tests/LoggingHostTests.cs`'s `StructuredKillSwitchAndLegacyMetricsSettingsRemainPresent`
+asserted `Logging:Telemetry:Enabled`. Its telemetry assertion was dropped and it was
+renamed; its Structured and Metrics assertions are genuine 054 coverage and were kept.
+(3) `.mcp.json` is **gitignored and untracked**, so it never committed the
+`randomstoragehenry` key itself — the historical exposure is via `docs/` and `specs/`
+copies (commits `bae1790`, `8dc83eb`, `4816191`). Key ROTATION on 2026-08-30 is the
+remediation; deleting the Bicep-managed `mjtel{env}{hash}` account never would have been,
+since it is a different account.
+(4) `add-transit-city` and `discover-transit-city` both instructed new cities to set
+`EmitsTelemetry: true`, a key that no longer exists — both were corrected.
+
+Trap that held: `StructuredLoggingVolumeTests.cs` and `StructuredLoggingCityCoverageTests.cs`
+assert literal SOURCE TEXT and JSON lookups, so the compiler does NOT catch their breakage —
+they fail only at run time. Always run the tests, never trust a green build alone.
+
+See specs/055-remove-parquet-sidecar/ for spec, plan, research (D1-D10), data-model, the
+three contracts (retained-observability, removal-surface, evidence-gate), quickstart, and
+`checklists/baseline.md` (the 325-test pre-removal baseline).
 
 **Telemetry identifier supersession (2026-08-22):** the `TelemetryName` split described
 below has been removed. `ITransitCity.Name` is the sole city identifier and telemetry must

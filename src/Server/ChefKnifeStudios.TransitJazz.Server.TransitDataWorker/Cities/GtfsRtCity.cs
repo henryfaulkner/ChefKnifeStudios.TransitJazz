@@ -1,5 +1,6 @@
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
 
@@ -11,7 +12,6 @@ public class GtfsRtCity(
     ILogger<GtfsRtCity> logger) : ITransitCity
 {
     public string Name => config.Name;
-    public bool EmitsTelemetry => config.EmitsTelemetry;
 
     public async Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct)
     {
@@ -45,7 +45,8 @@ public class GtfsRtCity(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "City {City}: failed to fetch GTFS-RT from {Url}.", config.Name, url);
+                logger.LogWarning("City {City}: GTFS-RT source failed at {Endpoint}; exception type {ExceptionType}.",
+                    config.Name, StructuredLogRedactor.SafeEndpointIdentity(url), StructuredLogRedactor.SafeExceptionType(ex));
                 failedSources++;
             }
         }
@@ -66,7 +67,8 @@ public class GtfsRtCity(
         var response = await client.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
         {
-            logger.LogWarning("City {City}: GTFS-RT feed {Url} returned {StatusCode}.", config.Name, url, response.StatusCode);
+            logger.LogWarning("City {City}: GTFS-RT source {Endpoint} returned {StatusCode}.",
+                config.Name, StructuredLogRedactor.SafeEndpointIdentity(url), (int)response.StatusCode);
             return null;
         }
 

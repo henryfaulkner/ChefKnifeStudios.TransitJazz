@@ -53,7 +53,6 @@ builder.Services.AddSingleton<ISignalRNotificationService, SignalRNotificationSe
 
 builder.Services.AddSingleton<IGtfsEndpointsService, GtfsEndpointsService>();
 builder.Services.AddSingleton<ITransitEndpointsService, TransitEndpointsService>();
-builder.Services.AddSingleton<ITelemetryEndpointsService, TelemetryEndpointsService>();
 
 builder.Services.AddSingleton<IApplicationViewModel, ApplicationViewModel>();
 

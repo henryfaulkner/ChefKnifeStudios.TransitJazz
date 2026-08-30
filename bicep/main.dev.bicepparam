@@ -5,6 +5,10 @@ param environment = 'dev'
 param location = 'eastus2'
 param apexDomain = 'martajazz.com'
 
+// Supply only an approved object ID; leave empty during local planning.
+param logAnalyticsReaderPrincipalId = ''
+param enableLegacyTelemetry = true
+
 param containerRegistryName = 'chefknife'
 param containerRegistryResourceGroup = 'general'
 

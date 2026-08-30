@@ -1,6 +1,6 @@
 {
   "uid": "transitjazz-worker-overview",
-  "title": "TransitJazz Worker Overview",
+  "title": "Worker App Metrics",
   "tags": ["transitjazz", "worker"],
   "timezone": "utc",
   "refresh": "10s",
@@ -304,32 +304,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Sidecar queue occupancy",
-      "description": "Current telemetry-sidecar queue occupancy. Healthy: it stays bounded and drains after bursts. Next: inspect sidecar drops and persist failures if it rises.",
-      "gridPos": {"x": 16, "y": 63, "w": 8, "h": 7},
-      "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
-      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
-      "targets": [
-        {"expr": "{__name__=\"transitjazz_worker_log_buffer_occupancy\"}", "legendFormat": "Queued records"}
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Sidecar failure rate",
-      "description": "Dropped records and persistence failures per second. Healthy: both remain zero. Next: inspect sidecar and blob-storage logs when either rises.",
-      "gridPos": {"x": 0, "y": 70, "w": 12, "h": 7},
-      "fieldConfig": {"defaults": {"unit": "ops", "min": 0}},
-      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
-      "targets": [
-        {"expr": "rate({__name__=\"transitjazz_worker_log_dropped_records_total\"}[$__rate_interval])", "legendFormat": "Dropped records / second"},
-        {"expr": "rate({__name__=\"transitjazz_worker_log_persist_failures_total\"}[$__rate_interval])", "legendFormat": "Persist failures / second"}
-      ]
-    },
-    {
-      "type": "timeseries",
       "title": "Vehicle-state cache entries",
       "description": "Vehicle-state cache entries for each city. Healthy: values track active vehicles and remain bounded. Next: compare with vehicles processed if they grow unexpectedly.",
-      "gridPos": {"x": 12, "y": 70, "w": 12, "h": 7},
+      "gridPos": {"x": 16, "y": 63, "w": 8, "h": 7},
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
@@ -340,7 +317,7 @@
       "type": "timeseries",
       "title": "Crossing-baseline cache entries",
       "description": "Crossing-baseline cache entries for each city. Healthy: values remain bounded relative to active vehicles. Next: inspect state cleanup if they grow continuously.",
-      "gridPos": {"x": 0, "y": 77, "w": 12, "h": 7},
+      "gridPos": {"x": 0, "y": 70, "w": 12, "h": 7},
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
@@ -351,7 +328,7 @@
       "type": "timeseries",
       "title": "Route-index entries",
       "description": "Route-index entries for each city. Healthy: values remain stable until static route data changes. Next: inspect static-feed loading if a city changes unexpectedly.",
-      "gridPos": {"x": 12, "y": 77, "w": 12, "h": 7},
+      "gridPos": {"x": 12, "y": 70, "w": 12, "h": 7},
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [
@@ -362,7 +339,7 @@
       "type": "timeseries",
       "title": "Route trigger-point cache entries",
       "description": "Route trigger-point cache entries for each city. Healthy: values remain stable until route geometry changes. Next: inspect static route processing if they change unexpectedly.",
-      "gridPos": {"x": 0, "y": 84, "w": 24, "h": 7},
+      "gridPos": {"x": 0, "y": 77, "w": 24, "h": 7},
       "fieldConfig": {"defaults": {"unit": "short", "min": 0}},
       "options": {"legend": {"displayMode": "list", "placement": "right", "showLegend": true}},
       "targets": [

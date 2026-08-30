@@ -19,10 +19,4 @@ public static class ApiEndpoints
     {
         public const string GetLastBatch = "/transit/last-batch";
     }
-
-    public static class Telemetry
-    {
-        public const string GetTodaySummary = "/telemetry/today/summary";
-        public const string GetToday = "/telemetry/today";
-    }
 }

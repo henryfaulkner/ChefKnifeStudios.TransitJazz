@@ -13,7 +13,10 @@ modules/
   dnsZone.bicep                     # Public DNS zone + A-alias apex + www CNAME
   managedIdentity.bicep             # User-assigned MI for the server
   acrRoleAssignment.bicep           # AcrPull on existing chefknife ACR
-  containerAppsEnvironment.bicep    # Container Apps Environment
+  containerAppsEnvironment.bicep    # Container Apps Environment (Azure Monitor destination)
+  logAnalyticsDiagnosticSettings.bicep # Environment console/system routing
+  logAnalyticsTablePolicies.bicep  # Basic/Analytics plans and 30-day retention
+  workspaceRoleAssignment.bicep     # Workspace-scoped Log Analytics Reader
   containerApp.bicep                # Server Container App (API/SignalR/Worker)
 ```
 
@@ -47,10 +50,19 @@ Search the codebase for `TODO:` — those are the holes. Quick inventory:
 - `appLocation`, `apiLocation`, `outputLocation` build properties — match your repo layout
 
 **`containerAppsEnvironment.bicep`**
-- Wire a Log Analytics workspace if you want centralized logs
+- Azure Monitor is the configured destination; the environment diagnostic setting owns the workspace route.
+
+**Centralized logging (feature 054)**
+- `logAnalyticsReaderPrincipalId` is intentionally empty by default and must be supplied only after approval.
+- The legacy Parquet telemetry sidecar, its storage account, and the `enableLegacyTelemetry` toggle were retired in feature 055; centralized logs and Grafana metrics are the only observability surfaces.
+- `ContainerAppConsoleLogs` is Basic with 30-day total retention; `ContainerAppSystemLogs` is Analytics with 30-day interactive and total retention.
+- Apply table policies after the diagnostic route materializes the resource-specific tables; validate with `az deployment sub validate` and `az deployment sub what-if` before deployment.
+- No application SDK, workspace key, connection string, ingress, or secret is added for log delivery.
 
 **`containerApp.bicep`**
-- Liveness / readiness probes
+- `/health/ready` is a route-index readiness probe. It withholds ingress until the worker has
+  loaded a non-empty static route index; its 11-minute budget accommodates a cold GTFS load and is
+  deliberately not a liveness probe.
 - Secret references (Key Vault) if needed
 - Scale rules if `min != max` later
 
