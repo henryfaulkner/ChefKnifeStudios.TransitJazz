@@ -75,11 +75,26 @@
     bottom: 1.5rem;
     left: 0;
     right: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0 1.5rem;
     text-align: center;
     font-family: monospace;
     font-size: 11px;
     letter-spacing: 0.1em;
     color: rgba(0, 0, 0, 0.6);
+}
+
+.info-overlay__footer a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.info-overlay__footer a:hover {
+    color: rgba(0, 0, 0, 0.9);
 }
 
 .info-overlay__button {
@@ -108,6 +123,9 @@
 .info-overlay--dark .info-overlay__body p,
 .info-overlay--dark .info-overlay__footer {
     color: rgba(226, 226, 230, 0.85);
+}
+.info-overlay--dark .info-overlay__footer a:hover {
+    color: rgba(255, 255, 255, 0.95);
 }
 .info-overlay--dark .info-overlay__button {
     color: rgba(226, 226, 230, 0.9);
