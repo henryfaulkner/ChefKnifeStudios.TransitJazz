@@ -12,6 +12,8 @@ public enum StructuredLogEventName
     CityInputPartial,
     CityInputEmpty,
     RouteIndexUnavailable,
+    RouteIndexLoadFailed,
+    RouteIndexLoaded,
     CityCycleAnomaly,
     PublishFailed,
     PublishRecovered,
@@ -52,6 +54,9 @@ public enum StructuredLogReasonCode
 public sealed record StructuredLogDiagnosticContext
 {
     public long? DurationMs { get; init; }
+    public int? LoadAttempt { get; init; }
+    public int? CityCount { get; init; }
+    public int? RouteCount { get; init; }
     public string? DeploymentRevision { get; init; }
     public string? ExceptionType { get; init; }
     public int? TonesEmitted { get; init; }
@@ -85,6 +90,9 @@ public sealed record StructuredLogEvent
     public string? ReasonCode { get; init; }
     public string? City { get; init; }
     public long? DurationMs { get; init; }
+    public int? LoadAttempt { get; init; }
+    public int? CityCount { get; init; }
+    public int? RouteCount { get; init; }
     public string? DeploymentRevision { get; init; }
     public string? ExceptionType { get; init; }
     public int? TonesEmitted { get; init; }
@@ -116,6 +124,9 @@ public sealed record StructuredLogEvent
             ReasonCode = reasonCode?.ToString(),
             City = city,
             DurationMs = context?.DurationMs,
+            LoadAttempt = context?.LoadAttempt,
+            CityCount = context?.CityCount,
+            RouteCount = context?.RouteCount,
             DeploymentRevision = context?.DeploymentRevision,
             ExceptionType = context?.ExceptionType,
             TonesEmitted = context?.TonesEmitted,
@@ -150,6 +161,9 @@ public sealed record StructuredLogEvent
         if (City is not null && !SafeCity.IsMatch(City))
             throw new ArgumentException("City must be a lowercase canonical slug.", nameof(City));
         if (DurationMs is < 0) throw new ArgumentOutOfRangeException(nameof(DurationMs));
+        ValidateNonNegative(LoadAttempt, nameof(LoadAttempt));
+        ValidateNonNegative(CityCount, nameof(CityCount));
+        ValidateNonNegative(RouteCount, nameof(RouteCount));
         if (DeploymentRevision is not null && !SafeRevision.IsMatch(DeploymentRevision))
             throw new ArgumentException("DeploymentRevision contains unsafe characters.", nameof(DeploymentRevision));
         if (ExceptionType is not null && !SafeRevision.IsMatch(ExceptionType))
@@ -191,6 +205,9 @@ public sealed record StructuredLogEvent
         Add(values, "ReasonCode", ReasonCode);
         Add(values, "City", City);
         Add(values, "DurationMs", DurationMs);
+        Add(values, "LoadAttempt", LoadAttempt);
+        Add(values, "CityCount", CityCount);
+        Add(values, "RouteCount", RouteCount);
         Add(values, "DeploymentRevision", DeploymentRevision);
         Add(values, "ExceptionType", ExceptionType);
         Add(values, "TonesEmitted", TonesEmitted);
@@ -251,4 +268,3 @@ public sealed record StructuredLogEvent
         if (value is not null) values.Add(new(key, value));
     }
 }
-

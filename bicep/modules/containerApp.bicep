@@ -103,6 +103,23 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
             memory: memory
           }
           env: envVars
+          // The worker must finish loading its static route index before this revision
+          // receives ingress traffic. The 11-minute allowance covers slow GTFS downloads
+          // without treating a legitimate cold load as a liveness failure.
+          probes: [
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/health/ready'
+                port: targetPort
+              }
+              initialDelaySeconds: 60
+              periodSeconds: 60
+              timeoutSeconds: 5
+              failureThreshold: 10
+              successThreshold: 1
+            }
+          ]
         }
       ]
       scale: {

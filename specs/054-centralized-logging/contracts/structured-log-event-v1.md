@@ -18,6 +18,7 @@ This contract does not authorize per-city/full-cycle log rows, a metric exporter
 | `ReasonCode` | Classification events | Stable bounded uppercase code; never prose. |
 | `City` | City events | One configured canonical city slug. |
 | `DurationMs` | When relevant | Non-negative integer. |
+| `LoadAttempt`, `CityCount`, `RouteCount` | Route-index load events | Non-negative scalar loading evidence only. |
 | `DeploymentRevision` | When available | Safe platform revision identity only. |
 | `ExceptionType` | Exception events | Type name only; never message, stack, URI, or exception data. |
 
@@ -29,7 +30,7 @@ This contract does not authorize per-city/full-cycle log rows, a metric exporter
 |---|---|---|
 | Lifecycle | `WorkerStarted`, `WorkerStopped` | Process lifecycle only. |
 | Input | `CityInputFailed`, `CityInputPartial`, `CityInputEmpty` | Derived from `CityFetchResult`; city scoped. |
-| Route index | `RouteIndexUnavailable` | Distinct from input failure. |
+| Route index | `RouteIndexUnavailable`, `RouteIndexLoadFailed`, `RouteIndexLoaded` | Distinct from input failure; load events carry bounded attempt/count/duration evidence. |
 | City anomaly | `CityCycleAnomaly` | Exactly one coalesced row with city/cycle/reason/counts/publish state. |
 | Publishing | `PublishFailed`, `PublishRecovered` | City/cycle scoped when applicable. |
 | Worker cycle | `WorkerCycleFailed`, `WorkerCycleRecovered` | Worker-level transition with a cycle when available. |

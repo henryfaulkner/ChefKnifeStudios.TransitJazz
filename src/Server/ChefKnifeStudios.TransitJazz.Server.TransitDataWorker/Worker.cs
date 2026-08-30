@@ -11,19 +11,18 @@ using ChefKnifeStudios.TransitJazz.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Text.Json;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
 
 public class Worker(
-    IHttpClientFactory httpClientFactory,
     ILogger<Worker> logger,
     ITransitHubPublisher transitHubPublisher,
     IEnumerable<ITransitCity> cities,
     ITriggerPointGenerator triggerPointGenerator,
     IWorkerMetricsReporter? metricsReporter = null,
     WorkerOptions? workerOptions = null,
-    IWorkerStructuredEventLogger? structuredEventLogger = null) : BackgroundService
+    IWorkerStructuredEventLogger? structuredEventLogger = null,
+    IRouteShapeSource? routeShapeSource = null) : BackgroundService, IRouteIndexReadiness
 {
     readonly Dictionary<string, ConcurrentDictionary<string, VehicleState>> _vehicleStateCaches = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ulong?> _lastFeedHeaderTimestamps = new(StringComparer.OrdinalIgnoreCase);
@@ -32,6 +31,8 @@ public class Worker(
     readonly IWorkerMetricsReporter _metricsReporter = metricsReporter ?? new NullWorkerMetricsReporter();
     readonly WorkerOptions _workerOptions = workerOptions ?? new WorkerOptions();
     readonly IWorkerStructuredEventLogger _structuredEventLogger = structuredEventLogger ?? NullWorkerStructuredEventLogger.Instance;
+    readonly IRouteShapeSource _routeShapeSource = routeShapeSource ?? UnavailableRouteShapeSource.Instance;
+    readonly Dictionary<string, StructuredLogReasonCode> _activeCityAnomalyReasons = new(StringComparer.OrdinalIgnoreCase);
 
     Dictionary<string, IReadOnlyDictionary<string, RoutePoint[]>> _routeIndex = new(StringComparer.OrdinalIgnoreCase);
     // per-city routeJoinKey→category, built from the WebAPI-classified shape catalog at static-data load time
@@ -42,6 +43,9 @@ public class Worker(
     Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<TriggerPoint>>> _routeTriggerPoints = new(StringComparer.OrdinalIgnoreCase);
     // per-city vehicleId→crossing baseline (mirrors _vehicleStateCaches key structure)
     readonly Dictionary<string, Dictionary<string, CrossingBaseline?>> _crossingBaselines = new(StringComparer.OrdinalIgnoreCase);
+    int _routeIndexReady;
+
+    public bool IsReady => Volatile.Read(ref _routeIndexReady) != 0;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -93,7 +97,8 @@ public class Worker(
                     }
                     else if (!routeIndexAvailable)
                     {
-                        logger.LogWarning("City {City}: route index is not ready, skipping tick.", city.Name);
+                        // RouteIndexUnavailable is emitted once per transition/reminder below;
+                        // do not produce one free-text warning for every city on every tick.
                     }
                     else
                     {
@@ -317,33 +322,24 @@ public class Worker(
         var reason = CityAnomalyClassifier.Classify(outcome);
         if (reason is not null)
         {
+            _activeCityAnomalyReasons[outcome.City] = reason.Value;
             _structuredEventLogger.Emit(StructuredLogEvent.Create(
                 StructuredLogEventName.CityCycleAnomaly,
                 StructuredLogOutcome.Failed,
                 StructuredLogEvent.NewEventId(), cycleId, outcome.City, reason, context));
         }
-        else
+        else if (_activeCityAnomalyReasons.Remove(outcome.City, out var activeReason))
         {
             // The v1 contract has no separate CityAnomalyRecovered name. A successful
-            // CityCycleAnomaly row is the bounded recovery marker for its active reason.
-            foreach (var reasonCode in Enum.GetValues<StructuredLogReasonCode>())
-            {
-                if (!IsMissingToneReason(reasonCode)) continue;
-                _structuredEventLogger.EmitRecovery(
-                    StructuredLogEvent.Create(
-                        StructuredLogEventName.CityCycleAnomaly,
-                        StructuredLogOutcome.Succeeded,
-                        StructuredLogEvent.NewEventId(), cycleId, outcome.City, reasonCode, context),
-                    nameof(StructuredLogEventName.CityCycleAnomaly), reasonCode.ToString());
-            }
+            // CityCycleAnomaly row is the bounded recovery marker for the actually active reason.
+            _structuredEventLogger.EmitRecovery(
+                StructuredLogEvent.Create(
+                    StructuredLogEventName.CityCycleAnomaly,
+                    StructuredLogOutcome.Succeeded,
+                    StructuredLogEvent.NewEventId(), cycleId, outcome.City, activeReason, context),
+                nameof(StructuredLogEventName.CityCycleAnomaly), activeReason.ToString());
         }
     }
-
-    static bool IsMissingToneReason(StructuredLogReasonCode reason) => reason is
-        StructuredLogReasonCode.NO_VEHICLES or StructuredLogReasonCode.STALE_FEED or
-        StructuredLogReasonCode.DUPLICATE_FEED or StructuredLogReasonCode.ROUTE_INDEX_UNAVAILABLE or
-        StructuredLogReasonCode.NO_CROSSINGS or StructuredLogReasonCode.ALL_CROSSINGS_SUPPRESSED or
-        StructuredLogReasonCode.INPUT_FAILED or StructuredLogReasonCode.PUBLISH_FAILED;
 
     // Partition a flat list of shapes into per-city indexes using RouteShapeProperties.City.
     // A single HTTP call to /gtfs/routes/shapes returns all cities (INV-S2, Q4).
@@ -436,52 +432,65 @@ public class Worker(
         return (indexResult, modeResult, cumDistResult, triggerPointsResult);
     }
 
-    async Task InitializeRouteIndexAsync(CancellationToken ct)
+    internal async Task InitializeRouteIndexAsync(CancellationToken ct)
     {
-        int maxRetries = 5;
-        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        var sw = Stopwatch.StartNew();
+        try
         {
-            try
-            {
-                var sw = Stopwatch.StartNew();
-                var client = httpClientFactory.CreateClient("RouteShapeApi");
-                var response = await client.GetAsync("/gtfs/routes/shapes", ct);
-                response.EnsureSuccessStatusCode();
+            var shapes = await _routeShapeSource.GetAllShapesAsync(ct);
+            ApplyRouteIndex(shapes);
+            sw.Stop();
 
-                var json = await response.Content.ReadAsStringAsync(ct);
-                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, JsonOptions.Get());
-
-                if (shapes == null || shapes.Count == 0)
-                {
-                    logger.LogWarning("Route shapes endpoint returned empty list. Retrying...");
-                    await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
-                    continue;
-                }
-
-                (_routeIndex, _routeMode, _routeCumDist, _routeTriggerPoints) = BuildRouteIndex(shapes);
-                sw.Stop();
-
-                int totalRoutes = _routeIndex.Values.Sum(d => d.Count);
-                int totalPoints = _routeIndex.Values.Sum(d => d.Values.Sum(pts => pts.Length));
-                logger.LogInformation("Built route index: {Cities} cities, {RouteCount} routes, {TotalPoints} total points in {ElapsedMs}ms",
-                    _routeIndex.Count, totalRoutes, totalPoints, sw.ElapsedMilliseconds);
-                return;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError("Failed to initialize route index (attempt {Attempt}/{MaxRetries}); exception type {ExceptionType}.",
-                    attempt, maxRetries, StructuredLogRedactor.SafeExceptionType(ex));
-                if (attempt < maxRetries)
-                    await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
-            }
+            EmitRouteIndexLoaded(shapes.Count, sw.ElapsedMilliseconds);
+            logger.LogInformation("Built route index: {Cities} cities, {RouteCount} routes, {TotalPoints} total points in {ElapsedMs}ms",
+                _routeIndex.Count, shapes.Count, _routeIndex.Values.Sum(d => d.Values.Sum(pts => pts.Length)), sw.ElapsedMilliseconds);
         }
-
-        logger.LogWarning("Could not initialize route index after {MaxRetries} attempts. V2 reconciliation will be skipped until index is built.", maxRetries);
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            EmitRouteIndexLoadFailed(ex, sw.ElapsedMilliseconds);
+            logger.LogError("Failed to initialize route index; exception type {ExceptionType}.",
+                StructuredLogRedactor.SafeExceptionType(ex));
+            throw;
+        }
     }
+
+    void ApplyRouteIndex(IReadOnlyList<RouteShapeFeature> shapes)
+    {
+        if (shapes.Count == 0)
+            throw new InvalidOperationException("Route-shape source returned an empty catalogue.");
+
+        (_routeIndex, _routeMode, _routeCumDist, _routeTriggerPoints) = BuildRouteIndex(shapes.ToList());
+        Volatile.Write(ref _routeIndexReady, 1);
+    }
+
+    void EmitRouteIndexLoaded(int routeCount, long durationMs) =>
+        _structuredEventLogger.Emit(StructuredLogEvent.Create(
+            StructuredLogEventName.RouteIndexLoaded,
+            StructuredLogOutcome.Succeeded,
+            StructuredLogEvent.NewEventId(),
+            context: new StructuredLogDiagnosticContext
+            {
+                DurationMs = Math.Max(0, durationMs),
+                CityCount = _routeIndex.Count,
+                RouteCount = routeCount,
+            }));
+
+    void EmitRouteIndexLoadFailed(Exception exception, long durationMs) =>
+        _structuredEventLogger.Emit(StructuredLogEvent.Create(
+            StructuredLogEventName.RouteIndexLoadFailed,
+            StructuredLogOutcome.Failed,
+            StructuredLogEvent.NewEventId(),
+            context: new StructuredLogDiagnosticContext
+            {
+                DurationMs = Math.Max(0, durationMs),
+                LoadAttempt = 1,
+                ExceptionType = StructuredLogRedactor.SafeExceptionType(exception),
+            }));
 
     ConcurrentDictionary<string, VehicleState> GetVehicleCache(string city)
     {
@@ -821,29 +830,21 @@ public class Worker(
         }
     }
 
-    async Task RefreshRouteIndexAsync(CancellationToken ct)
+    internal async Task RefreshRouteIndexAsync(CancellationToken ct)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(24));
-
-        while (await timer.WaitForNextTickAsync(ct))
+        while (!ct.IsCancellationRequested)
         {
             try
             {
-                var client = httpClientFactory.CreateClient("RouteShapeApi");
-                var response = await client.GetAsync("/gtfs/routes/shapes", ct);
-                response.EnsureSuccessStatusCode();
+                await _routeShapeSource.WaitForNextRefreshAsync(ct);
+                var sw = Stopwatch.StartNew();
+                var shapes = await _routeShapeSource.GetAllShapesAsync(ct);
+                ApplyRouteIndex(shapes);
+                sw.Stop();
 
-                var json = await response.Content.ReadAsStringAsync(ct);
-                var shapes = JsonSerializer.Deserialize<List<RouteShapeFeature>>(json, JsonOptions.Get());
-
-                if (shapes == null || shapes.Count == 0)
-                {
-                    logger.LogWarning("Route shapes refresh returned empty list. Retaining existing index.");
-                    continue;
-                }
-
-                (_routeIndex, _routeMode, _routeCumDist, _routeTriggerPoints) = BuildRouteIndex(shapes);
-                logger.LogInformation("Refreshed route index: {Cities} cities.", _routeIndex.Count);
+                EmitRouteIndexLoaded(shapes.Count, sw.ElapsedMilliseconds);
+                logger.LogInformation("Refreshed route index: {Cities} cities, {RouteCount} routes.",
+                    _routeIndex.Count, shapes.Count);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -851,6 +852,7 @@ public class Worker(
             }
             catch (Exception ex)
             {
+                EmitRouteIndexLoadFailed(ex, durationMs: 0);
                 logger.LogError("Failed to refresh route index. Retaining existing index; exception type {ExceptionType}.",
                     StructuredLogRedactor.SafeExceptionType(ex));
             }

@@ -9,7 +9,7 @@ public static class StructuredLogRedactor
     static readonly FrozenSet<string> AllowedProperties = new[]
     {
         "EventName", "EventVersion", "EventId", "CycleId", "Outcome", "ReasonCode", "City",
-        "DurationMs", "DeploymentRevision", "ExceptionType", "TonesEmitted", "VehiclesProcessed",
+        "DurationMs", "LoadAttempt", "CityCount", "RouteCount", "DeploymentRevision", "ExceptionType", "TonesEmitted", "VehiclesProcessed",
         "FeedFreshnessSeconds", "CrossingsEmitted", "CrossingsSuppressedFirstSeen",
         "CrossingsSuppressedDeltaLeq0", "CrossingsSuppressedTeleport", "CrossingsSuppressedTransfer",
         "BatchWireBytes", "PublishAttempted", "PublishSucceeded",

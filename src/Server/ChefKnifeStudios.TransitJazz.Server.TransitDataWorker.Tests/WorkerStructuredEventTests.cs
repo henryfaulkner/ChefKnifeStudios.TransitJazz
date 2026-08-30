@@ -78,6 +78,27 @@ public sealed class WorkerStructuredEventTests
         Assert.Equal(nameof(StructuredLogEventName.PublishRecovered), provider.Entries[1].Fields["EventName"]);
     }
 
+    [Fact]
+    public void RouteIndexLoadEvents_IncludeConfiguredDeploymentRevision()
+    {
+        using var provider = new InMemoryJsonLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(provider));
+        var emitter = new StructuredEventEmitter(
+            loggerFactory.CreateLogger<StructuredEventEmitter>(),
+            Options.Create(new StructuredLoggingOptions { DeploymentRevision = "marta-jazz-dev--0000165" }),
+            new StructuredEventPolicy());
+
+        emitter.Emit(StructuredLogEvent.Create(
+            StructuredLogEventName.RouteIndexLoaded,
+            StructuredLogOutcome.Succeeded,
+            StructuredLogEvent.NewEventId(),
+            context: new StructuredLogDiagnosticContext { DurationMs = 45, CityCount = 7, RouteCount = 412 }));
+
+        var entry = Assert.Single(provider.Entries);
+        Assert.Equal("marta-jazz-dev--0000165", entry.Fields["DeploymentRevision"]);
+        Assert.Equal(412, entry.Fields["RouteCount"]);
+    }
+
     static StructuredEventEmitter CreateEmitter(ILoggerFactory loggerFactory, TimeProvider clock, TimeSpan? reminderInterval = null) =>
         new(
             loggerFactory.CreateLogger<StructuredEventEmitter>(),

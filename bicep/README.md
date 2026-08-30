@@ -60,7 +60,9 @@ Search the codebase for `TODO:` — those are the holes. Quick inventory:
 - No application SDK, workspace key, connection string, ingress, or secret is added for log delivery.
 
 **`containerApp.bicep`**
-- Liveness / readiness probes
+- `/health/ready` is a route-index readiness probe. It withholds ingress until the worker has
+  loaded a non-empty static route index; its 11-minute budget accommodates a cold GTFS load and is
+  deliberately not a liveness probe.
 - Secret references (Key Vault) if needed
 - Scale rules if `min != max` later
 

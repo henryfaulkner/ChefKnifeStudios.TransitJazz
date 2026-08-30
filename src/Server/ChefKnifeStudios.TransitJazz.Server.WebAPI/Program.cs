@@ -5,6 +5,7 @@ using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.EndpointGroups;
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.Health;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.GtfsStatic;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Interfaces;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Repositories;
@@ -12,6 +13,7 @@ using ChefKnifeStudios.TransitJazz.Server.WebAPI.SignalR;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -208,6 +210,8 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
 
 builder.Services.AddSingleton(typeof(IKeyValueRepository<>), typeof(InMemoryKeyValueRepository<>));
 builder.Services.AddSingleton<IRouteShapeResponseCache, RouteShapeResponseCache>();
+builder.Services.AddSingleton<InMemoryRouteShapeSource>();
+builder.Services.AddSingleton<IRouteShapeSource>(sp => sp.GetRequiredService<InMemoryRouteShapeSource>());
 builder.Services.AddHttpClient();
 builder.Services.AddHostedService<GtfsStaticLoader>();
 builder.Services.AddSingleton<IFeatureFlagService>(sp =>
@@ -230,26 +234,31 @@ builder.Services.AddSingleton<IFeatureFlagService>(sp =>
 
 builder.Services.AddSingleton<ILastBatchCache, LastBatchCache>();
 builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
-builder.Services.AddHttpClient("RouteShapeApi", client =>
+builder.Services.AddHttpClient("GtfsStaticApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["services:apiservice:https:0"]
         ?? builder.Configuration["WebApi:BaseUrl"]!);
 });
-
 builder.Services.AddSingleton<ITriggerPointGenerator, TriggerPointGenerator>();
 
 // Structured logging pipeline
 builder.Services.Configure<StructuredLoggingOptions>(builder.Configuration.GetSection(StructuredLoggingOptions.SectionName));
+builder.Services.PostConfigure<StructuredLoggingOptions>(options =>
+    options.DeploymentRevision ??= Environment.GetEnvironmentVariable("CONTAINER_APP_REVISION"));
 builder.Services.AddSingleton(sp =>
 {
     var options = sp.GetRequiredService<IOptions<StructuredLoggingOptions>>().Value;
     return new StructuredEventPolicy(TimeProvider.System, options.ReminderInterval);
 });
 builder.Services.AddSingleton<IWorkerStructuredEventLogger, StructuredEventEmitter>();
+builder.Services.AddSingleton<Worker>();
+builder.Services.AddSingleton<IRouteIndexReadiness>(sp => sp.GetRequiredService<Worker>());
+builder.Services.AddHealthChecks()
+    .AddCheck<RouteIndexHealthCheck>("route-index", tags: ["ready"]);
 
 // Registered before Worker so StopAsync force-flushes the final worker-cycle measurement.
 builder.Services.AddHostedService<WorkerMetricsLifecycleService>();
-builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Worker>());
 
 var app = builder.Build();
 
@@ -270,6 +279,11 @@ app.MapScalarApiReference(options =>
 });
 
 app.UseCors("Default");
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("ready"),
+}).AllowAnonymous();
 
 app.MapHub<TransitHub>("/hubs/transit").AllowAnonymous();
 app.MapHub<WorkerTransitHub>("/hubs/worker-transit")

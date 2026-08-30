@@ -11,7 +11,7 @@ public sealed class StructuredLogEventTests
         var expected = new[]
         {
             "WorkerStarted", "WorkerStopped", "CityInputFailed", "CityInputPartial", "CityInputEmpty",
-            "RouteIndexUnavailable", "CityCycleAnomaly", "PublishFailed", "PublishRecovered",
+            "RouteIndexUnavailable", "RouteIndexLoadFailed", "RouteIndexLoaded", "CityCycleAnomaly", "PublishFailed", "PublishRecovered",
             "WorkerCycleFailed", "WorkerCycleRecovered",
         };
 
@@ -73,5 +73,26 @@ public sealed class StructuredLogEventTests
         logEvent.Validate();
         Assert.Null(logEvent.City);
         Assert.Null(logEvent.CycleId);
+    }
+
+    [Fact]
+    public void RouteIndexLoadEvents_AllowOnlyBoundedLoadDiagnostics()
+    {
+        var logEvent = StructuredLogEvent.Create(
+            StructuredLogEventName.RouteIndexLoaded,
+            StructuredLogOutcome.Succeeded,
+            StructuredLogEvent.NewEventId(),
+            context: new StructuredLogDiagnosticContext
+            {
+                DurationMs = 123,
+                CityCount = 7,
+                RouteCount = 412,
+            });
+
+        var state = logEvent.Validate().ToLogState();
+
+        Assert.Equal(7, state.Single(entry => entry.Key == "CityCount").Value);
+        Assert.Equal(412, state.Single(entry => entry.Key == "RouteCount").Value);
+        Assert.DoesNotContain(state, entry => entry.Key.Contains("Payload", StringComparison.OrdinalIgnoreCase));
     }
 }

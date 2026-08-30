@@ -2,6 +2,7 @@ using ChefKnifeStudios.TransitJazz.Server.WebAPI.Interfaces;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -25,6 +26,8 @@ public class GtfsStaticLoader(
     IKeyValueRepository<string> routeShapeRepo,
     IConfiguration configuration,
     IRouteShapeResponseCache responseCache,
+    InMemoryRouteShapeSource routeShapeSource,
+    IWorkerStructuredEventLogger structuredEventLogger,
     ILogger<GtfsStaticLoader> logger) : BackgroundService
 {
     sealed record CityStaticEntry(
@@ -87,6 +90,12 @@ public class GtfsStaticLoader(
             if (fresh.Count == 0)
             {
                 logger.LogWarning("GtfsStaticLoader: city {City} produced 0 routes; keeping previous data.", city.Name);
+                structuredEventLogger.Emit(StructuredLogEvent.Create(
+                    StructuredLogEventName.RouteIndexLoadFailed,
+                    StructuredLogOutcome.Failed,
+                    StructuredLogEvent.NewEventId(),
+                    city: city.Name.ToLowerInvariant(),
+                    context: new StructuredLogDiagnosticContext { LoadAttempt = 1 }));
                 continue;
             }
 
@@ -109,11 +118,39 @@ public class GtfsStaticLoader(
                 await RouteResponseBuilder.BuildAllShapesJsonAsync(routeShapeRepo, cityKey: null, ct));
         }
 
-        if (anyStored && !_ready)
+        if (anyStored)
         {
-            await routeShapeRepo.SetAsync(ReadyKey, "ready", ct);
-            _ready = true;
+            if (!_ready)
+            {
+                await routeShapeRepo.SetAsync(ReadyKey, "ready", ct);
+                _ready = true;
+            }
+
+            routeShapeSource.Publish(await LoadAllRouteShapesAsync(ct));
         }
+    }
+
+    async Task<IReadOnlyList<RouteShapeFeature>> LoadAllRouteShapesAsync(CancellationToken ct)
+    {
+        var all = await routeShapeRepo.GetAllAsync(ct);
+        if (!all.IsSuccess)
+            throw new InvalidOperationException("The route-shape repository could not be read after a successful refresh.");
+
+        var shapes = new List<RouteShapeFeature>();
+        foreach (var (key, geoJson) in all.Value)
+        {
+            if (key == ReadyKey || key.EndsWith(SubwayOffsetsKeySuffix, StringComparison.Ordinal))
+                continue;
+
+            var shape = JsonSerializer.Deserialize<RouteShapeFeature>(geoJson, Shared.JsonOptions.Get());
+            if (shape is not null)
+                shapes.Add(shape);
+        }
+
+        if (shapes.Count == 0)
+            throw new InvalidOperationException("The route-shape repository contained no shapes after a successful refresh.");
+
+        return shapes;
     }
 
     // Upsert all fresh keys, then prune this city's stale keys (routes gone upstream).

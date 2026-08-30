@@ -159,7 +159,7 @@ public class NymtaCity(
 
         try
         {
-            var client = httpClientFactory.CreateClient("RouteShapeApi");
+            var client = httpClientFactory.CreateClient("GtfsStaticApi");
             var response = await client.GetAsync(
                 $"{ApiEndpoints.Gtfs.GetSubwayStopOffsets}?city={CityNames.Nymta}", ct);
             response.EnsureSuccessStatusCode();

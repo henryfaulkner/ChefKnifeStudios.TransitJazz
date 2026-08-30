@@ -77,6 +77,24 @@ public sealed class StructuredLoggingVolumeTests
         Assert.Equal(nameof(StructuredLogOutcome.Succeeded), provider.Entries[1].Fields["Outcome"]);
     }
 
+    [Fact]
+    public void DuplicateFeed_IsInformationalRatherThanAWarning()
+    {
+        using var provider = new InMemoryJsonLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(provider));
+        var emitter = CreateEmitter(loggerFactory, TimeProvider.System);
+
+        emitter.Emit(StructuredLogEvent.Create(
+            StructuredLogEventName.CityCycleAnomaly,
+            StructuredLogOutcome.Failed,
+            StructuredLogEvent.NewEventId(),
+            "duplicate-cycle",
+            "atlanta",
+            StructuredLogReasonCode.DUPLICATE_FEED));
+
+        Assert.Equal(LogLevel.Information, Assert.Single(provider.Entries).Level);
+    }
+
     static StructuredEventEmitter CreateEmitter(ILoggerFactory loggerFactory, TimeProvider clock, TimeSpan? reminderInterval = null) =>
         new(
             loggerFactory.CreateLogger<StructuredEventEmitter>(),

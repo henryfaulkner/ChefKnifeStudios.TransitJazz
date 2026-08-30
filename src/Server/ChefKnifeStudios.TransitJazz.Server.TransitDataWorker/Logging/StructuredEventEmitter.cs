@@ -12,6 +12,7 @@ public sealed class StructuredEventEmitter : IWorkerStructuredEventLogger
         nameof(StructuredLogEventName.CityInputPartial),
         nameof(StructuredLogEventName.CityInputEmpty),
         nameof(StructuredLogEventName.RouteIndexUnavailable),
+        nameof(StructuredLogEventName.RouteIndexLoadFailed),
         nameof(StructuredLogEventName.CityCycleAnomaly),
         nameof(StructuredLogEventName.PublishFailed),
         nameof(StructuredLogEventName.WorkerCycleFailed),
@@ -56,6 +57,8 @@ public sealed class StructuredEventEmitter : IWorkerStructuredEventLogger
     void Write(StructuredLogEvent logEvent)
     {
         var level = logEvent.Outcome == nameof(StructuredLogOutcome.Failed)
+            && !(logEvent.EventName == nameof(StructuredLogEventName.CityCycleAnomaly)
+                && logEvent.ReasonCode == nameof(StructuredLogReasonCode.DUPLICATE_FEED))
             ? LogLevel.Warning
             : LogLevel.Information;
         _logger.Log(level, new EventId(GetEventId(logEvent.EventName), logEvent.EventName),

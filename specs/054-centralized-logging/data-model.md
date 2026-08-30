@@ -17,6 +17,7 @@ One sparse application event written through `ILogger`. It is not a replacement 
 | `Outcome` | Yes | Bounded value: `Succeeded`, `Partial`, or `Failed` | Communicates the event result. |
 | `ReasonCode` | When explanatory classification exists | Stable bounded code; never prose | Supports machine-queryable cause analysis. |
 | `DurationMs` | When duration is relevant | Non-negative integer | Adds exceptional timing context. |
+| Route-index counters | Route-index load events | `LoadAttempt`, `CityCount`, `RouteCount`; non-negative scalar values | Makes loading and readiness evidence queryable. |
 | `DeploymentRevision` | When platform context is available | Bounded platform revision | Separates evidence across deployments. |
 | `ExceptionType` | On exception events | Type name only | Preserves category without unbounded or secret-bearing exception data. |
 | Exceptional counters | Event-specific | Integers only; present only when evidence is useful | Explains an anomaly without recreating metrics. |
@@ -32,7 +33,7 @@ One sparse application event written through `ILogger`. It is not a replacement 
 |---|---|---|
 | Worker lifecycle | `WorkerStarted`, `WorkerStopped`, `WorkerCycleFailed`, `WorkerCycleRecovered` | Event-specific stable operational codes only |
 | City input | `CityInputFailed`, `CityInputPartial`, `CityInputEmpty` | Bounded fetch/input classifications |
-| Route/index | `RouteIndexUnavailable` | `ROUTE_INDEX_UNAVAILABLE` where used for an anomaly |
+| Route/index | `RouteIndexUnavailable`, `RouteIndexLoadFailed`, `RouteIndexLoaded` | `ROUTE_INDEX_UNAVAILABLE` where used for an anomaly; bounded load attempt/count context |
 | City anomaly | `CityCycleAnomaly` | `NO_VEHICLES`, `STALE_FEED`, `DUPLICATE_FEED`, `ROUTE_INDEX_UNAVAILABLE`, `NO_CROSSINGS`, `ALL_CROSSINGS_SUPPRESSED`, `INPUT_FAILED`, `PUBLISH_FAILED` |
 | Publishing | `PublishFailed`, `PublishRecovered` | Bounded publish classifications |
 
