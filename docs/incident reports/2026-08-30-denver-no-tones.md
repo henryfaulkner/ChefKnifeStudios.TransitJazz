@@ -48,9 +48,13 @@ All times below are Eastern Daylight Time unless noted otherwise.
 
 ## Grafana evidence
 
-Source dashboard: [TransitJazz Worker Overview](https://gallantpuffin3113.grafana.net/d/transitjazz-worker-overview/transitjazz-worker-overview)
+Source dashboard: [Worker App Metrics](https://gallantpuffin3113.grafana.net/d/transitjazz-worker-overview/worker-app-metrics)
 
 Dashboard UID: `transitjazz-worker-overview`
+
+The dashboard was **retitled to "Worker App Metrics" on 2026-08-30**, after this investigation. The UID is unchanged, so links keyed on it keep resolving; only the URL slug moved from `transitjazz-worker-overview` to `worker-app-metrics`. Grafana redirects an old slug to the current one as long as the UID matches, so pre-rename links in older notes are not broken.
+
+The committed dashboard at `observability/grafana/dashboards/transitjazz-worker-overview.json` has been updated to match (`"title": "Worker App Metrics"`). The **filename** still reflects the old slug; it is cosmetic, since Grafana keys on the `uid` inside the file rather than on the filename.
 
 Prometheus datasource: `grafanacloud-prom`
 

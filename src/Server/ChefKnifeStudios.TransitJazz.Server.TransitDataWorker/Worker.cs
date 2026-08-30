@@ -19,9 +19,6 @@ public class Worker(
     IHttpClientFactory httpClientFactory,
     ILogger<Worker> logger,
     ITransitHubPublisher transitHubPublisher,
-    IEventNotificationService eventNotifications,
-    LogEventWorker logEventWorker,
-    ILoggingService loggingService,
     IEnumerable<ITransitCity> cities,
     ITriggerPointGenerator triggerPointGenerator,
     IWorkerMetricsReporter? metricsReporter = null,
@@ -71,15 +68,9 @@ public class Worker(
             var gcHeapBytes = GC.GetTotalMemory(false);
             var workingSetBytes = Process.GetCurrentProcess().WorkingSet64;
 
-            var processedCities = new List<string>();
-            var tickHealthOk = true;
             var tickDidAnyWork = false;
             var tickHadError = false;
             var allocatedAtStart = GC.GetAllocatedBytesForCurrentThread();
-            int tickTonesEmitted = 0, tickVehiclesProcessed = 0;
-            int tickVehicleStateCacheSize = 0, tickCrossingBaselineCacheSize = 0, tickRouteIndexSize = 0, tickRouteTriggerPointCacheSize = 0;
-            int tickCrossingsSuppressedFirstSeen = 0, tickCrossingsSuppressedDeltaLeq0 = 0, tickCrossingsSuppressedTeleport = 0, tickCrossingsSuppressedTransfer = 0;
-            long tickBatchWireBytes = 0;
 
             try
             {
@@ -141,78 +132,7 @@ public class Worker(
                     DuplicateFeed = result.DuplicateFeed,
                     ExceptionType = cityExceptionType ?? result.ProcessingExceptionType,
                 }, cycleId, completedAt.UtcDateTime - cityStart);
-
-                if (city.EmitsTelemetry)
-                {
-                    var cityEnd = DateTime.UtcNow;
-                    eventNotifications.PostEvent(this, new TelemetryEvent
-                    {
-                        event_type = "PerCityCycle",
-                        event_id = Guid.NewGuid().ToString("N"),
-                        observation_utc = cityEnd,
-                        city_name = result.CityName,
-                        feed_freshness_seconds = result.FeedFreshnessSeconds,
-                        time_taken_seconds = (cityEnd - cityStart).TotalSeconds,
-                        health_ok = result.HealthOk,
-                        tones_emitted = result.TonesEmitted,
-                        vehicles_processed = result.VehiclesProcessed,
-                        gc_heap_bytes = gcHeapBytes,
-                        process_working_set_bytes = workingSetBytes,
-                        vehicle_state_cache_size = result.VehicleStateCacheSize,
-                        crossing_baseline_cache_size = result.CrossingBaselineCacheSize,
-                        route_index_size = result.RouteIndexSize,
-                        route_trigger_point_cache_size = result.RouteTriggerPointCacheSize,
-                        crossings_suppressed_first_seen = result.CrossingsSuppressedFirstSeen,
-                        crossings_suppressed_delta_leq0 = result.CrossingsSuppressedDeltaLeq0,
-                        crossings_suppressed_teleport = result.CrossingsSuppressedTeleport,
-                        crossings_suppressed_transfer = result.CrossingsSuppressedTransfer,
-                        batch_wire_bytes = result.BatchWireBytes
-                    });
-
-                    processedCities.Add(city.Name);
-                    tickHealthOk &= result.HealthOk;
-                    tickTonesEmitted += result.TonesEmitted;
-                    tickVehiclesProcessed += result.VehiclesProcessed;
-                    tickVehicleStateCacheSize += result.VehicleStateCacheSize;
-                    tickCrossingBaselineCacheSize += result.CrossingBaselineCacheSize;
-                    tickRouteIndexSize += result.RouteIndexSize;
-                    tickRouteTriggerPointCacheSize += result.RouteTriggerPointCacheSize;
-                    tickCrossingsSuppressedFirstSeen += result.CrossingsSuppressedFirstSeen;
-                    tickCrossingsSuppressedDeltaLeq0 += result.CrossingsSuppressedDeltaLeq0;
-                    tickCrossingsSuppressedTeleport += result.CrossingsSuppressedTeleport;
-                    tickCrossingsSuppressedTransfer += result.CrossingsSuppressedTransfer;
-                    tickBatchWireBytes += result.BatchWireBytes ?? 0;
-                }
             }
-
-            if (processedCities.Count > 0)
-            {
-                var tickEnd = DateTime.UtcNow;
-                eventNotifications.PostEvent(this, new TelemetryEvent
-                {
-                    event_type = "FullCycle",
-                    event_id = Guid.NewGuid().ToString("N"),
-                    observation_utc = tickEnd,
-                    cities_processed_count = processedCities.Count,
-                    cities_processed_csv = string.Join(",", processedCities),
-                    time_taken_seconds = (tickEnd - tickStart).TotalSeconds,
-                    health_ok = tickHealthOk,
-                    tones_emitted = tickTonesEmitted,
-                    vehicles_processed = tickVehiclesProcessed,
-                    gc_heap_bytes = gcHeapBytes,
-                    process_working_set_bytes = workingSetBytes,
-                    vehicle_state_cache_size = tickVehicleStateCacheSize,
-                    crossing_baseline_cache_size = tickCrossingBaselineCacheSize,
-                    route_index_size = tickRouteIndexSize,
-                    route_trigger_point_cache_size = tickRouteTriggerPointCacheSize,
-                    crossings_suppressed_first_seen = tickCrossingsSuppressedFirstSeen,
-                    crossings_suppressed_delta_leq0 = tickCrossingsSuppressedDeltaLeq0,
-                    crossings_suppressed_teleport = tickCrossingsSuppressedTeleport,
-                    crossings_suppressed_transfer = tickCrossingsSuppressedTransfer,
-                    batch_wire_bytes = tickBatchWireBytes
-                });
-            }
-
             if (tickHadError)
             {
                 _structuredEventLogger.Emit(StructuredLogEvent.Create(
@@ -265,9 +185,6 @@ public class Worker(
                     Math.Max(0, GC.GetAllocatedBytesForCurrentThread() - allocatedAtStart),
                     gcHeapBytes,
                     workingSetBytes,
-                    logEventWorker.BufferOccupancy,
-                    logEventWorker.DroppedRecords,
-                    loggingService.PersistFailures,
                     _cities.Count));
             }
         }
@@ -795,17 +712,6 @@ public class Worker(
             logger.LogDebug(
                 "City {City} spatial reconciliation: {Moved} moved, {Unchanged} unchanged, {Stationary} stationary, {Stale} stale, {SkippedNoJoinKey} skippedNoJoinKey, {SkippedUnknownRoute} skippedUnknownRoute, {CrossingsEmitted} crossingsEmitted. FeedHeaderTs={FeedHeaderTs} DuplicateFeed={DuplicateFeed}",
                 city.Name, movedCount, unchangedCount, stationaryCount, staleCount, skippedNoJoinKey, skippedUnknownRoute, crossingRecords.Count, feedTs, feedIsDuplicate);
-
-            if (city.EmitsTelemetry)
-            {
-                var droppedRecords = logEventWorker.DroppedRecords;
-                var persistFailures = loggingService.PersistFailures;
-                var bufferOccupancy = logEventWorker.BufferOccupancy;
-
-                logger.LogDebug(
-                    "Sidecar self-health: BufferOccupancy={Occupancy}, DroppedRecords={Dropped}, PersistFailures={Failures}",
-                    bufferOccupancy, droppedRecords, persistFailures);
-            }
 
             long? batchWireBytes = null;
             var publishAttempted = false;

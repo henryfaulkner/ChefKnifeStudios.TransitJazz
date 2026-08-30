@@ -77,24 +77,6 @@ public sealed class StructuredLoggingVolumeTests
         Assert.Equal(nameof(StructuredLogOutcome.Succeeded), provider.Entries[1].Fields["Outcome"]);
     }
 
-    [Fact]
-    public void LegacyTelemetryConfigurationAndWorkerMetricPathRemainPresent()
-    {
-        var workerSource = File.ReadAllText(Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..",
-            "ChefKnifeStudios.TransitJazz.Server.TransitDataWorker", "Worker.cs")));
-        var settings = File.ReadAllText(Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..",
-            "ChefKnifeStudios.TransitJazz.Server.TransitDataWorker", "appsettings.json")));
-
-        Assert.Contains("eventNotifications.PostEvent", workerSource, StringComparison.Ordinal);
-        Assert.Contains("_metricsReporter.ReportCityCycle", workerSource, StringComparison.Ordinal);
-        Assert.Contains("_metricsReporter.ReportWorkerCycleCompleted", workerSource, StringComparison.Ordinal);
-        Assert.Contains("EmitsTelemetry", workerSource, StringComparison.Ordinal);
-        Assert.Contains("\"Telemetry\"", settings, StringComparison.Ordinal);
-        Assert.Contains("\"Enabled\": true", settings, StringComparison.Ordinal);
-    }
-
     static StructuredEventEmitter CreateEmitter(ILoggerFactory loggerFactory, TimeProvider clock, TimeSpan? reminderInterval = null) =>
         new(
             loggerFactory.CreateLogger<StructuredEventEmitter>(),

@@ -54,7 +54,7 @@ Search the codebase for `TODO:` — those are the holes. Quick inventory:
 
 **Centralized logging (feature 054)**
 - `logAnalyticsReaderPrincipalId` is intentionally empty by default and must be supplied only after approval.
-- `enableLegacyTelemetry` remains `true` through the seven-day dual-run evidence window.
+- The legacy Parquet telemetry sidecar, its storage account, and the `enableLegacyTelemetry` toggle were retired in feature 055; centralized logs and Grafana metrics are the only observability surfaces.
 - `ContainerAppConsoleLogs` is Basic with 30-day total retention; `ContainerAppSystemLogs` is Analytics with 30-day interactive and total retention.
 - Apply table policies after the diagnostic route materializes the resource-specific tables; validate with `az deployment sub validate` and `az deployment sub what-if` before deployment.
 - No application SDK, workspace key, connection string, ingress, or secret is added for log delivery.

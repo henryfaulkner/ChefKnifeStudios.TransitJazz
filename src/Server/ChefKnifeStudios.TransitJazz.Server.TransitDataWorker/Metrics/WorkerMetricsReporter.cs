@@ -20,8 +20,6 @@ public sealed class WorkerMetricsReporter : IWorkerMetricsReporter, IDisposable
     readonly Counter<long> _cityCycles;
     readonly Counter<long> _cityCycleErrors;
     readonly Histogram<double> _cityCycleDuration;
-    readonly Counter<long> _logDroppedRecords;
-    readonly Counter<long> _logPersistFailures;
 
     readonly Gauge<double> _workerLastCycled;
     readonly Gauge<double> _workerLastWorked;
@@ -29,7 +27,6 @@ public sealed class WorkerMetricsReporter : IWorkerMetricsReporter, IDisposable
     readonly Gauge<long> _workerCycleAllocated;
     readonly Gauge<long> _workerGcHeap;
     readonly Gauge<long> _workerWorkingSet;
-    readonly Gauge<int> _workerLogBufferOccupancy;
     readonly Gauge<double> _cityLastCycled;
     readonly Gauge<double> _cityLastWorked;
     readonly Gauge<int> _cityHealthy;
@@ -50,8 +47,6 @@ public sealed class WorkerMetricsReporter : IWorkerMetricsReporter, IDisposable
     readonly Gauge<int> _cityCrossingsSuppressedTeleport;
     readonly Gauge<int> _cityCrossingsSuppressedTransfer;
     readonly Gauge<long> _cityBatchWire;
-    long _lastLogDroppedRecords;
-    long _lastLogPersistFailures;
 
     public WorkerMetricsReporter(IMeterFactory meterFactory, MeterProvider? meterProvider = null)
     {
@@ -64,8 +59,6 @@ public sealed class WorkerMetricsReporter : IWorkerMetricsReporter, IDisposable
         _cityCycles = _meter.CreateCounter<long>("transitjazz.worker.city.cycles", description: "Completed city cycles.");
         _cityCycleErrors = _meter.CreateCounter<long>("transitjazz.worker.city.cycle_errors", description: "Non-cancellation city failures.");
         _cityCycleDuration = _meter.CreateHistogram<double>("transitjazz.worker.city.cycle_duration", "s", "City cycle duration.");
-        _logDroppedRecords = _meter.CreateCounter<long>("transitjazz.worker.log_dropped_records", description: "Sidecar records dropped by load shedding.");
-        _logPersistFailures = _meter.CreateCounter<long>("transitjazz.worker.log_persist_failures", description: "Sidecar persistence failures.");
 
         _workerLastCycled = _meter.CreateGauge<double>("transitjazz.worker.last_cycled", "s", "UTC Unix time of the latest completed worker cycle.");
         _workerLastWorked = _meter.CreateGauge<double>("transitjazz.worker.last_worked", "s", "UTC Unix time of the latest work-producing worker cycle.");
@@ -73,7 +66,6 @@ public sealed class WorkerMetricsReporter : IWorkerMetricsReporter, IDisposable
         _workerCycleAllocated = _meter.CreateGauge<long>("transitjazz.worker.cycle_allocated", "By", "Bytes allocated during the worker cycle.");
         _workerGcHeap = _meter.CreateGauge<long>("transitjazz.worker.gc_heap", "By", "Process managed heap size.");
         _workerWorkingSet = _meter.CreateGauge<long>("transitjazz.worker.working_set", "By", "Process working set.");
-        _workerLogBufferOccupancy = _meter.CreateGauge<int>("transitjazz.worker.log_buffer_occupancy", description: "Current telemetry-sidecar queue occupancy.");
         _cityLastCycled = _meter.CreateGauge<double>("transitjazz.worker.city.last_cycled", "s", "UTC Unix time of the latest completed city cycle.");
         _cityLastWorked = _meter.CreateGauge<double>("transitjazz.worker.city.last_worked", "s", "UTC Unix time of the latest work-producing city cycle.");
         _cityHealthy = _meter.CreateGauge<int>("transitjazz.worker.city.healthy", "1", "Whether the latest city cycle was healthy.");
@@ -162,11 +154,6 @@ public sealed class WorkerMetricsReporter : IWorkerMetricsReporter, IDisposable
         _workerCycleAllocated.Record(metrics.AllocatedBytes);
         _workerGcHeap.Record(metrics.GcHeapBytes);
         _workerWorkingSet.Record(metrics.WorkingSetBytes);
-        _workerLogBufferOccupancy.Record(metrics.LogBufferOccupancy);
-        var droppedDelta = Math.Max(0, metrics.LogDroppedRecords - Interlocked.Exchange(ref _lastLogDroppedRecords, metrics.LogDroppedRecords));
-        var persistDelta = Math.Max(0, metrics.LogPersistFailures - Interlocked.Exchange(ref _lastLogPersistFailures, metrics.LogPersistFailures));
-        _logDroppedRecords.Add(droppedDelta);
-        _logPersistFailures.Add(persistDelta);
         if (metrics.HasError)
             _workerCycleErrors.Add(1);
     }

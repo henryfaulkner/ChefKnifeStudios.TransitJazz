@@ -4,7 +4,7 @@ namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 
 /// <summary>
 /// Bounded facts from one city tick. This is an in-process hand-off to event classification, not
-/// a replacement for the existing metric or Parquet records.
+/// a replacement for the existing metric records.
 /// </summary>
 public sealed record CityCycleOutcome
 {

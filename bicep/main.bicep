@@ -59,9 +59,6 @@ param grafanaProvisioningSecretUri string = ''
 @description('Object ID for the intended workspace-scoped Log Analytics Reader. Leave empty until approved.')
 param logAnalyticsReaderPrincipalId string = ''
 
-@description('Keep the legacy Parquet sidecar enabled during the evidence-gated dual run.')
-param enableLegacyTelemetry bool = true
-
 // -----------------------------------------------------------------------------
 // Variables
 // -----------------------------------------------------------------------------
@@ -76,11 +73,6 @@ var tags = {
 
 var staticWebAppName = '${namePrefix}-swa'
 var staticWebAppResourceId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Web/staticSites/${staticWebAppName}'
-
-// Storage account names: 3-24 chars, lowercase alphanumeric only, globally unique.
-// Derive a stable suffix from the resource group id so dev/prod get distinct names.
-var telemetryStorageAccountName = take('mjtel${environment}${uniqueString(subscription().subscriptionId, resourceGroupName)}', 24)
-var telemetryContainerName = 'parquet'
 
 // -----------------------------------------------------------------------------
 // Resource Group
@@ -183,21 +175,6 @@ module acrRoleAssignment 'modules/acrRoleAssignment.bicep' = {
 }
 
 // -----------------------------------------------------------------------------
-// Telemetry storage (logging sidecar — feature 013): account + container + blob RBAC
-// -----------------------------------------------------------------------------
-
-module telemetryStorage 'modules/telemetryStorage.bicep' = {
-  name: 'telemetry-storage-deploy'
-  scope: rg
-  params: {
-    storageAccountName: telemetryStorageAccountName
-    location: location
-    tags: tags
-    containerName: telemetryContainerName
-    principalId: serverIdentity.outputs.principalId
-  }
-}
-
 module observabilityKeyVault 'modules/keyVault.bicep' = {
   name: 'observability-kv-deploy'
   scope: rg
@@ -310,19 +287,6 @@ module serverApp 'modules/containerApp.bicep' = {
         name: 'AZURE_CLIENT_ID'
         value: serverIdentity.outputs.clientId
       }
-      // Logging sidecar (feature 013) — blob target for the telemetry parquet writer.
-      {
-        name: 'Logging__Telemetry__BlobServiceUri'
-        value: telemetryStorage.outputs.blobServiceUri
-      }
-      {
-        name: 'Logging__Telemetry__Container'
-        value: telemetryContainerName
-      }
-      {
-        name: 'Logging__Telemetry__Enabled'
-        value: string(enableLegacyTelemetry)
-      }
       {
         name: 'Metrics__Enabled'
         value: string(enableWorkerMetrics)
@@ -382,5 +346,3 @@ output staticWebAppDefaultHostname string = swa.outputs.defaultHostname
 output dnsZoneNameServers array = dnsZone.outputs.nameServers
 output serverContainerAppFqdn string = serverApp.outputs.fqdn
 output serverManagedIdentityPrincipalId string = serverIdentity.outputs.principalId
-output telemetryStorageAccountName string = telemetryStorage.outputs.accountName
-output telemetryBlobServiceUri string = telemetryStorage.outputs.blobServiceUri

@@ -3,6 +3,17 @@
 Every gate below requires dated, secret-free evidence. `BLOCKED` is an intentional state and must
 not be changed to `PASS` by configuration inspection alone.
 
+> ## Superseded 2026-08-30 — retired, not passed
+>
+> Feature 055 removed the Parquet sidecar and its infrastructure. The release owner
+> **waived** the seven-day dual-run window rather than completing it, and **deleted the
+> Azure telemetry storage manually** rather than through the gated Bicep deployment.
+>
+> **The rows below were never satisfied.** They are retained verbatim as a historical
+> record of what this gate asked for and what was actually supplied. Do not read any
+> `PENDING` row as outstanding work — the subject of every one of them no longer exists.
+> See the 055 removal authorization at the end of this file.
+
 ## Release identity
 
 | Field | Value |
@@ -55,7 +66,9 @@ streaming and Grafana during that interval; an immediate empty query is not rout
 
 ## Dual-run record
 
-Parquet writes and Blob access remain enabled until all rows below pass for seven consecutive days.
+**WAIVED 2026-08-30 by the release owner.** This window was never run — zero of seven days
+were recorded. The table below is a historical record of the evidence that was planned, not
+evidence that was collected. Parquet writes and Blob access ended with feature 055.
 
 | Day/scenario | Central evidence | Legacy evidence | Result | Approver/notes |
 |---|---|---|---|---|
@@ -76,10 +89,45 @@ Parquet writes and Blob access remain enabled until all rows below pass for seve
 | Worker tests | `PASS` | 129 passed on 2026-08-30 |
 | Web API tests | `PASS` | 121 passed on 2026-08-30 |
 | Query guard tests | `PASS` | Direct PowerShell suite passed on 2026-08-30, including Basic `/search` body-file and cleanup regression |
-| Bicep build / ARM regeneration | `BLOCKED` | Azure CLI could not download the Bicep compiler in the restricted workspace; `bicep/main.json` was not hand-edited |
+| Bicep build / ARM regeneration | `PASS` | Unblocked in the feature 055 workspace: Bicep CLI 0.43.8 available. `az bicep build` regenerated `bicep/main.json` from source on 2026-08-30; never hand-edited. Semantic delta vs. a baseline build is exactly the telemetry removal (1 module, 1 param, 2 outputs) |
 | Subscription validate / what-if | `NOT RUN` | Requires approved Azure identity, subscription, and reader principal |
 | Controlled routing/canary/7-day evidence | `NOT RUN` | Requires controlled environment and release approval |
-| Codex generated skill copy | `BLOCKED` | Repository `.agents/skills` is read-only in this workspace; Claude/OpenCode copies synchronized |
+| Codex generated skill copy | `PASS` | Not reproduced in the feature 055 workspace: the tracked `skills/` source and all three mirrors (`.claude`, `.agents`, `.opencode`) were carved together; `tools/sync-skills.ps1 -Mode Check` reports agreement |
 
-Current state: **BLOCKED — release evidence and approvals are not yet supplied.** Do not disable
-`Logging:Telemetry`, delete resources, or remove Parquet consumers while any gate is pending.
+Current state: **RETIRED — the Parquet path this gate protected no longer exists.**
+
+The former guard ("do not disable `Logging:Telemetry`, delete resources, or remove Parquet
+consumers while any gate is pending") is discharged: feature 055 removed every Parquet
+consumer, the `Logging:Telemetry` configuration, and the storage account. It is retained
+above only as a record of what was asked.
+
+## 055 removal authorization
+
+```
+Evidence window:  NOT RUN — the seven-day dual-run window was WAIVED by the release owner
+                  on 2026-08-30. Zero of seven days were recorded. Gates G1-G4 were never
+                  satisfied; they were set aside.
+Historical data decision: DISCARD (FR-020). All telemetry data, including the
+                  batch_wire_bytes series carrying the feature 051 Phase 3 egress baseline,
+                  was discarded with the storage account. No export was performed.
+Infrastructure:   DELETED MANUALLY on 2026-08-30, outside the Bicep deployment. The IaC
+                  (main.bicep, main.json, modules/telemetryStorage.bicep) was updated to
+                  match the deleted state rather than to drive the deletion.
+Authorized by:    Release owner   Date: 2026-08-30 (UTC)
+```
+
+**What accepting this trades away.** The gate existed to prove, with controlled evidence,
+that centralized logging can answer every question the Parquet store used to answer
+(contract C6). That proof was not produced. If a diagnosis later turns out to need a signal
+only the Parquet store carried, there is no fallback: the data is gone and the code paths
+are deleted. The retained-observability contract's C1–C5 guarantees *were* verified locally
+(302 tests pass, all eleven structured event names intact, zero alert rules affected); only
+C6 — the end-to-end investigation-capability claim — rests on assertion rather than
+evidence.
+
+**Manual-deletion caveat.** Because the storage account was removed by hand, standard
+post-deploy verification (T058/T058a — a clean cycle window and confirmed absence of the
+`Storage Blob Data Contributor` role assignment on `serverIdentity`) was never performed
+against a deployment. The next infrastructure deployment reconciles the IaC with reality; if
+any telemetry resource or role assignment survived the manual deletion, that deployment is
+where it will surface.

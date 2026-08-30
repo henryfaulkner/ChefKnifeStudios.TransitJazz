@@ -13,7 +13,6 @@ public class CityConfig
     public Dictionary<string, string>? RailRouteIdMap { get; set; }
     public string? ApiKeyEnvVar { get; set; }
     public string ApiKeyQueryParam { get; set; } = "api_key";
-    public bool EmitsTelemetry { get; set; }
     public string[] RouteIdNormalization { get; set; } = [];
 
     public class RailRealtimeConfig

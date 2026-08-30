@@ -19,12 +19,11 @@ public sealed class LoggingHostTests
     }
 
     [Fact]
-    public void StructuredKillSwitchAndLegacyMetricsSettingsRemainPresent()
+    public void StructuredKillSwitchAndMetricsSettingsRemainPresent()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(AppSettingsPath()));
         var logging = document.RootElement.GetProperty("Logging");
         Assert.True(logging.GetProperty("Structured").GetProperty("Enabled").GetBoolean());
-        Assert.True(logging.GetProperty("Telemetry").GetProperty("Enabled").GetBoolean());
         Assert.True(document.RootElement.GetProperty("Metrics").GetProperty("Enabled").ValueKind is JsonValueKind.True or JsonValueKind.False);
     }
 

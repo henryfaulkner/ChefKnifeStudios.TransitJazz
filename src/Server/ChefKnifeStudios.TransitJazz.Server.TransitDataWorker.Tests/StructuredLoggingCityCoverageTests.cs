@@ -27,16 +27,6 @@ public sealed class StructuredLoggingCityCoverageTests
         }
     }
 
-    [Fact]
-    public void TelemetryRemainsConfiguredIndependentlyOfStructuredEvents()
-    {
-        using var document = JsonDocument.Parse(File.ReadAllText(AppSettingsPath()));
-        var cities = document.RootElement.GetProperty("Cities").EnumerateArray().ToArray();
-
-        Assert.All(cities, city => Assert.True(city.GetProperty("EmitsTelemetry").GetBoolean()));
-        Assert.True(document.RootElement.GetProperty("Logging").GetProperty("Telemetry").GetProperty("Enabled").GetBoolean());
-    }
-
     static string AppSettingsPath() => Path.GetFullPath(Path.Combine(
         AppContext.BaseDirectory, "..", "..", "..", "..", "ChefKnifeStudios.TransitJazz.Server.TransitDataWorker", "appsettings.json"));
 }

@@ -90,8 +90,7 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
 
 builder.Services.AddSingleton<ITriggerPointGenerator, TriggerPointGenerator>();
 
-// Logging sidecar pipeline
-builder.Services.Configure<LoggingOptions>(builder.Configuration.GetSection("Logging:Telemetry"));
+// Structured logging pipeline
 builder.Services.Configure<StructuredLoggingOptions>(builder.Configuration.GetSection(StructuredLoggingOptions.SectionName));
 builder.Services.AddSingleton(sp =>
 {
@@ -99,10 +98,6 @@ builder.Services.AddSingleton(sp =>
     return new StructuredEventPolicy(TimeProvider.System, options.ReminderInterval);
 });
 builder.Services.AddSingleton<IWorkerStructuredEventLogger, StructuredEventEmitter>();
-builder.Services.AddSingleton<IEventNotificationService, EventNotificationService>();
-builder.Services.AddSingleton<ILoggingService, ParquetLoggingService>();
-builder.Services.AddSingleton<LogEventWorker>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<LogEventWorker>());
 
 builder.Services.AddHostedService<Worker>();
 

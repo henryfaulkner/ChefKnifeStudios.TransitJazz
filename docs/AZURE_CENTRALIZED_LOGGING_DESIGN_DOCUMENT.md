@@ -3,7 +3,8 @@
 **Status:** Proposed  
 **Date:** 2026-08-30  
 **Scope:** TransitDataWorker application and platform logs, their Azure persistence, and a read-only AI investigation skill  
-**Supersedes after cutover:** the Parquet telemetry sidecar, Blob-backed telemetry query API, and Parquet-specific AI/query tooling
+**Supersedes after cutover:** the Parquet telemetry sidecar, Blob-backed telemetry query API, and Parquet-specific AI/query tooling  
+**Retirement completed:** legacy Parquet retirement was carried out in feature 055 (specs/055-remove-parquet-sidecar).
 
 ## Decision
 

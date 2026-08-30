@@ -238,8 +238,7 @@ builder.Services.AddHttpClient("RouteShapeApi", client =>
 
 builder.Services.AddSingleton<ITriggerPointGenerator, TriggerPointGenerator>();
 
-// Logging sidecar pipeline
-builder.Services.Configure<LoggingOptions>(builder.Configuration.GetSection("Logging:Telemetry"));
+// Structured logging pipeline
 builder.Services.Configure<StructuredLoggingOptions>(builder.Configuration.GetSection(StructuredLoggingOptions.SectionName));
 builder.Services.AddSingleton(sp =>
 {
@@ -247,12 +246,6 @@ builder.Services.AddSingleton(sp =>
     return new StructuredEventPolicy(TimeProvider.System, options.ReminderInterval);
 });
 builder.Services.AddSingleton<IWorkerStructuredEventLogger, StructuredEventEmitter>();
-builder.Services.AddSingleton<IEventNotificationService, EventNotificationService>();
-builder.Services.AddSingleton<ILoggingService, ParquetLoggingService>();
-// Register LogEventWorker as singleton so Worker can inject it for health queries,
-// then also register it as IHostedService so the host lifecycle wires StartAsync/StopAsync.
-builder.Services.AddSingleton<LogEventWorker>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<LogEventWorker>());
 
 // Registered before Worker so StopAsync force-flushes the final worker-cycle measurement.
 builder.Services.AddHostedService<WorkerMetricsLifecycleService>();
@@ -284,7 +277,6 @@ app.MapHub<WorkerTransitHub>("/hubs/worker-transit")
 
 app.MapTestEndpoints()
     .MapGtfsEndpoints()
-    .MapTransitEndpoints()
-    .MapTelemetryEndpoints();
+    .MapTransitEndpoints();
 
 app.Run();

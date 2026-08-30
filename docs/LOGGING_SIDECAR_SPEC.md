@@ -1,3 +1,8 @@
+> **RETIRED by specs/055-remove-parquet-sidecar** — the Parquet telemetry sidecar
+> this document specifies was removed. Centralized structured logging (feature 054)
+> and Grafana metrics are the two live observability surfaces. Kept as a historical
+> record of what was built; do not implement from it.
+
 # Logging Sidecar Service Overview
 
 The Event and EventData model separation should be very, very similar to the one used for SignalR events within ChefKnifeStudios.TransitJazz.
