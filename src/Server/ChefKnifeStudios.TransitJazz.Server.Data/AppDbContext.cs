@@ -11,9 +11,6 @@ public class AppDbContext : DbContext
     {
     }
 
-    public DbSet<StateKeyValue> StateKeyValues => Set<StateKeyValue>();
-    public DbSet<PlayerSessionEntity> PlayerSessions => Set<PlayerSessionEntity>();
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
