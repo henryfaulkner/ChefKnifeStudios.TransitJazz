@@ -71,7 +71,7 @@ Search the codebase for `TODO:` — those are the holes. Quick inventory:
 
 ## GitHub Actions secrets
 
-The CI/CD workflows require four secrets set in GitHub → Settings → Secrets and variables → Actions:
+The CI/CD workflows require five secrets set in GitHub → Settings → Secrets and variables → Actions:
 
 | Secret | How to obtain |
 |---|---|
@@ -79,6 +79,7 @@ The CI/CD workflows require four secrets set in GitHub → Settings → Secrets 
 | `ACR_USERNAME` | Azure Portal → Container Registry `chefknife` → Access keys → Username |
 | `ACR_PASSWORD` | Azure Portal → Container Registry `chefknife` → Access keys → Password |
 | `AZURE_CREDENTIALS` | See below |
+| `TRANSITJAZZ_DB_CONNECTION_STRING` | The PostgreSQL connection string used by the EF migration bundle |
 
 Generate `AZURE_CREDENTIALS` (service principal scoped to the prod resource group):
 
