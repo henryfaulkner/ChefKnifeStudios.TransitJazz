@@ -1,0 +1,207 @@
+﻿##############################
+# PostgreSQL Cheat Sheet
+# For Linode Server Management
+##############################
+
+----------------------------------
+1. Accessing PostgreSQL
+----------------------------------
+# Switch to the PostgreSQL user:
+sudo -i -u postgres
+
+# Open the PostgreSQL shell:
+psql
+
+----------------------------------
+2. Database Basics
+----------------------------------
+# List all databases:
+\l
+
+# Connect to a database:
+\c <database_name>
+
+# Create a new database:
+CREATE DATABASE mydatabase;
+
+# Drop (delete) a database:
+DROP DATABASE mydatabase;
+
+----------------------------------
+3. User Management
+----------------------------------
+# List all users:
+\du
+
+# Create a new user:
+CREATE USER myuser WITH PASSWORD 'mypassword';
+
+# Grant a user access to a database:
+GRANT ALL PRIVILEGES ON DATABASE mydatabase TO myuser;
+
+# Revoke privileges from a user:
+REVOKE ALL PRIVILEGES ON DATABASE mydatabase FROM myuser;
+
+----------------------------------
+4. Table Management
+----------------------------------
+# List all tables in the current database:
+\dt
+
+# Create a table:
+CREATE TABLE mytable (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+# Insert data into a table:
+INSERT INTO mytable (name) VALUES ('example');
+
+# Select data from a table:
+SELECT * FROM mytable;
+
+# Update data in a table:
+UPDATE mytable SET name = 'newname' WHERE id = 1;
+
+# Delete data from a table:
+DELETE FROM mytable WHERE id = 1;
+
+----------------------------------
+5. Backup and Restore
+----------------------------------
+# Backup a database:
+pg_dump -U postgres -h localhost mydatabase > mydatabase_backup.sql
+
+# Restore a database:
+psql -U postgres -h localhost mydatabase < mydatabase_backup.sql
+
+----------------------------------
+6. Configuration
+----------------------------------
+# Edit the PostgreSQL configuration file:
+sudo nano /etc/postgresql/<version>/main/postgresql.conf
+
+# Edit the client authentication file:
+sudo nano /etc/postgresql/<version>/main/pg_hba.conf
+
+# Reload PostgreSQL after configuration changes whenever possible:
+sudo systemctl reload postgresql
+
+# Verify the service and the active PostgreSQL version/configuration:
+sudo systemctl status postgresql
+sudo -u postgres psql -c "SELECT version();"
+sudo -u postgres psql -c "SHOW config_file; SHOW hba_file;"
+
+# Allow one known client IP to connect over TLS using password authentication.
+# Add the narrowest matching rule to pg_hba.conf; rule order matters.
+# Replace the values in angle brackets; do not use 0.0.0.0/0.
+hostssl  <database_name>  <db_user>  <client_public_ip>/32  scram-sha-256
+
+# If the database will be created remotely, first allow the maintenance DB:
+hostssl  postgres  <db_admin_user>  <client_public_ip>/32  scram-sha-256
+
+# Ask PostgreSQL to validate the HBA file before reloading:
+sudo -u postgres psql -c "SELECT * FROM pg_hba_file_rules WHERE error IS NOT NULL;"
+
+# Confirm that the current client IP is allowed after the reload:
+# Run this from the client machine:
+psql "host=<server_ip> port=5432 dbname=postgres user=<db_admin_user> sslmode=require"
+
+# A full restart is normally unnecessary for pg_hba.conf changes:
+# sudo systemctl restart postgresql
+
+----------------------------------
+7. Remote Connection and Database Setup
+----------------------------------
+# Connect to the maintenance database first. The target database may not exist yet:
+psql "host=<server_ip> port=5432 dbname=postgres user=<db_admin_user> sslmode=require"
+
+# Create an application role without putting its password in shell history:
+CREATE ROLE <app_user> LOGIN;
+\password <app_user>
+
+# Create the application database and make the application role its owner:
+CREATE DATABASE <database_name> OWNER <app_user>;
+
+# Check the connection and TLS state from psql:
+\conninfo
+
+# Prefer a dedicated application role over using the postgres superuser remotely.
+# Keep the server firewall restricted to the same known client IP where possible.
+
+----------------------------------
+8. Reusable psql Connection
+----------------------------------
+# On Windows, create this file:
+# %APPDATA%\postgresql\pg_service.conf
+#
+# [transit-admin]
+# host=<server_ip>
+# port=5432
+# dbname=postgres
+# user=<db_admin_user>
+# sslmode=require
+
+# Store the password separately in:
+# %APPDATA%\postgresql\pgpass.conf
+#
+# <server_ip>:5432:*:<db_admin_user>:<password>
+#
+# Do not commit either file or paste its contents into tickets/chat.
+# Connect using the named service:
+psql "service=transit-admin"
+
+# If the PostgreSQL client does not find the service file automatically:
+$env:PGSERVICEFILE = "$env:APPDATA\postgresql\pg_service.conf"
+psql "service=transit-admin"
+
+----------------------------------
+9. Managing PostgreSQL Service
+----------------------------------
+# Start PostgreSQL:
+sudo systemctl start postgresql
+
+# Stop PostgreSQL:
+sudo systemctl stop postgresql
+
+# Check PostgreSQL status:
+sudo systemctl status postgresql
+
+----------------------------------
+10. Security
+----------------------------------
+# Change a user’s password:
+ALTER USER myuser WITH PASSWORD 'newpassword';
+
+# Restrict access to the database:
+# Edit `pg_hba.conf` to allow or restrict IP ranges.
+
+----------------------------------
+11. Logs
+----------------------------------
+# View PostgreSQL logs:
+sudo tail -f /var/log/postgresql/postgresql-<version>-main.log
+
+----------------------------------
+12. Troubleshooting
+----------------------------------
+# Check PostgreSQL service logs:
+journalctl -u postgresql
+
+# Fix `role does not exist` errors:
+# Ensure the user is created and granted privileges on the database.
+CREATE USER myuser WITH PASSWORD 'mypassword';
+GRANT ALL PRIVILEGES ON DATABASE mydatabase TO myuser;
+
+# "no pg_hba.conf entry for host ..." means the server was reached but
+# the client's source IP/user/database/encryption combination is not allowed.
+# Add a matching hostssl rule on the server, reload PostgreSQL, and retry.
+
+# If TLS works but non-TLS fails, keep sslmode=require on the client.
+# If the client's public IP changes, a /32 HBA rule will stop matching; use a
+# stable egress IP, VPN, SSH tunnel, or another private access path.
+
+##############################
+# End of Cheat Sheet
+##############################

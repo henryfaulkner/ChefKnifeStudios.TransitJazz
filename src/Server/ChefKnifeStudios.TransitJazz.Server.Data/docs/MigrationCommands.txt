@@ -1,0 +1,43 @@
+﻿=====================
+EF Core Tools
+=====================
+https://docs.microsoft.com/en-us/ef/core/miscellaneous/cli/dotnet
+
+-- Update EF tools
+dotnet tool update --global dotnet-ef
+
+-- Uninstall EF tools (before installing a lower version)
+dotnet tool uninstall dotnet-ef --global
+
+-- Update EF tools to specific version
+dotnet tool update dotnet-ef --version 8.0.3 --global
+
+=====================
+EF Core Migration Commands
+
+Run these from ChefKnifeStudios.PokerAttack/src/Server/ChefKnifeStudios.TransitJazz.Server.Data/
+=====================
+
+-- list migrations
+dotnet ef migrations list --startup-project ../ChefKnifeStudios.TransitJazz.Server.WebAPI
+
+-- create migration
+dotnet ef migrations add Migration_Name_Here --startup-project ../ChefKnifeStudios.TransitJazz.Server.WebAPI
+
+-- apply last migration to database
+dotnet ef database update --startup-project ../ChefKnifeStudios.TransitJazz.Server.WebAPI
+
+-- remove last migration (before it is applied to the database)
+dotnet ef migrations remove --startup-project ../ChefKnifeStudios.TransitJazz.Server.WebAPI
+
+-- rollback to an old migration
+dotnet ef database update <<OLD-MIGRATION-NAME>> --startup-project ../ChefKnifeStudios.TransitJazz.Server.WebAPI
+
+-- rollback all migrations
+dotnet ef database update 0 --startup-project ../ChefKnifeStudios.TransitJazz.Server.WebAPI
+
+-- generate script of all migrations
+dotnet ef migrations script --output ./sql-output --startup-project ../ChefKnifeStudios.TransitJazz.Server.WebAPI
+
+-- generate script between specific migrations
+dotnet ef migrations script <<last-migration-applied>> <<new-migration>> --output ./sql-output/<<script-name>>.sql --startup-project ../ChefKnifeStudios.TransitJazz.Server.WebAPI
