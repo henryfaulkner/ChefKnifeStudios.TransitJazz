@@ -22,4 +22,4 @@ WORKDIR /app
 COPY --from=publish /app/publish .
 
 RUN chmod +x ./chefknifestudios.transitjazz.efbundle
-ENTRYPOINT ["/bin/sh", "-c", "exec ./chefknifestudios.transitjazz.efbundle --connection \"$CONNECTIONSTRINGS__TRANSITJAZZDB\""]
+ENTRYPOINT ["/bin/sh", "-c", "exec ./chefknifestudios.transitjazz.efbundle --connection \"$ConnectionStrings__TransitJazzDB\""]

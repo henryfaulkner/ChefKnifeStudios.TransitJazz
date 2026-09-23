@@ -64,15 +64,15 @@ jobs:
 
       - name: Run database migrations
         env:
-          CONNECTIONSTRINGS__TRANSITJAZZDB: ${{ secrets.TRANSITJAZZ_DB_CONNECTION_STRING }}
+          ConnectionStrings__TransitJazzDB: ${{ secrets.TRANSITJAZZ_DB_CONNECTION_STRING }}
         run: |
-          if [ -z "$CONNECTIONSTRINGS__TRANSITJAZZDB" ]; then
+          if [ -z "$ConnectionStrings__TransitJazzDB" ]; then
             echo "::error::TRANSITJAZZ_DB_CONNECTION_STRING is not configured"
             exit 1
           fi
 
           docker run --rm \
-            --env CONNECTIONSTRINGS__TRANSITJAZZDB \
+            --env ConnectionStrings__TransitJazzDB \
             ${{ env.REGISTRY }}/${{ env.MIGRATION_IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
 
   deploy:
