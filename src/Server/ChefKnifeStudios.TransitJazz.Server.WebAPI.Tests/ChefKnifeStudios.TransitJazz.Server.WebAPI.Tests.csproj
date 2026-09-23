@@ -15,6 +15,7 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.Data\ChefKnifeStudios.TransitJazz.Server.Data.csproj" />
     <ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.WebAPI\ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj" />
     <ProjectReference Include="..\..\ChefKnifeStudios.TransitJazz.Shared\ChefKnifeStudios.TransitJazz.Shared.csproj" />
   </ItemGroup>

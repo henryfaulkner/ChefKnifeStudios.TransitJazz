@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "3670660603312339827"
+      "templateHash": "12641677248301599831"
     }
   },
   "parameters": {
@@ -107,6 +107,48 @@
       "defaultValue": "",
       "metadata": {
         "description": "Key Vault URI for the TransitJazzTerraformProvisionerToken secret."
+      }
+    },
+    "transitJazzDbSecretUri": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Key Vault URI for the TransitJazz TransitJazzDB connection-string secret."
+      }
+    },
+    "grafanaMetricsReaderEndpoint": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Grafana Cloud Prometheus range-query endpoint for historical statistics."
+      }
+    },
+    "grafanaMetricsReaderSecretUri": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Key Vault URI for the dedicated Grafana metrics:read authorization secret."
+      }
+    },
+    "enableHistoricalStatistics": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable the historical statistics collector after release gates pass."
+      }
+    },
+    "historicalStatisticsDryRun": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Run the historical statistics collector without database writes."
+      }
+    },
+    "historicalStatisticsInitialBackfill": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable the bounded initial historical statistics backfill."
       }
     },
     "logAnalyticsReaderPrincipalId": {
@@ -1213,6 +1255,24 @@
                 "identity": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'server-mi-deploy'), '2025-04-01').outputs.id.value]"
               }
             ]
+          },
+          "transitJazzDbSecretUri": {
+            "value": "[parameters('transitJazzDbSecretUri')]"
+          },
+          "grafanaMetricsReaderEndpoint": {
+            "value": "[parameters('grafanaMetricsReaderEndpoint')]"
+          },
+          "grafanaMetricsReaderSecretUri": {
+            "value": "[parameters('grafanaMetricsReaderSecretUri')]"
+          },
+          "enableHistoricalStatistics": {
+            "value": "[parameters('enableHistoricalStatistics')]"
+          },
+          "historicalStatisticsDryRun": {
+            "value": "[parameters('historicalStatisticsDryRun')]"
+          },
+          "historicalStatisticsInitialBackfill": {
+            "value": "[parameters('historicalStatisticsInitialBackfill')]"
           }
         },
         "template": {
@@ -1222,7 +1282,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "3567985697333442810"
+              "templateHash": "10568054643471499020"
             }
           },
           "parameters": {
@@ -1322,6 +1382,48 @@
               "metadata": {
                 "description": "Key Vault-backed Container App secret definitions."
               }
+            },
+            "transitJazzDbSecretUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Key Vault URI for the TransitJazzDB connection string."
+              }
+            },
+            "grafanaMetricsReaderEndpoint": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Grafana Cloud Prometheus range-query endpoint used by the historical collector."
+              }
+            },
+            "grafanaMetricsReaderSecretUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Key Vault URI for the dedicated Grafana metrics:read credential."
+              }
+            },
+            "enableHistoricalStatistics": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable the historical statistics collector."
+              }
+            },
+            "historicalStatisticsDryRun": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Keep historical statistics collection read-only."
+              }
+            },
+            "historicalStatisticsInitialBackfill": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable the one-time historical statistics backfill."
+              }
             }
           },
           "resources": [
@@ -1372,7 +1474,7 @@
                       "identity": "[parameters('managedIdentityId')]"
                     }
                   ],
-                  "secrets": "[parameters('secretRefs')]"
+                  "secrets": "[concat(parameters('secretRefs'), if(empty(parameters('transitJazzDbSecretUri')), createArray(), createArray(createObject('name', 'transitjazz-db', 'keyVaultUrl', parameters('transitJazzDbSecretUri'), 'identity', parameters('managedIdentityId')))), if(and(parameters('enableHistoricalStatistics'), not(empty(parameters('grafanaMetricsReaderSecretUri')))), createArray(createObject('name', 'grafana-stats-reader', 'keyVaultUrl', parameters('grafanaMetricsReaderSecretUri'), 'identity', parameters('managedIdentityId'))), createArray()))]"
                 },
                 "template": {
                   "containers": [
@@ -1383,7 +1485,21 @@
                         "cpu": "[json(parameters('cpu'))]",
                         "memory": "[parameters('memory')]"
                       },
-                      "env": "[parameters('envVars')]"
+                      "env": "[concat(parameters('envVars'), createArray(createObject('name', 'HistoricalStatistics__Enabled', 'value', string(parameters('enableHistoricalStatistics'))), createObject('name', 'HistoricalStatistics__DryRun', 'value', string(parameters('historicalStatisticsDryRun'))), createObject('name', 'HistoricalStatistics__InitialBackfill', 'value', string(parameters('historicalStatisticsInitialBackfill'))), createObject('name', 'HistoricalStatistics__SourceEndpoint', 'value', parameters('grafanaMetricsReaderEndpoint'))), if(empty(parameters('transitJazzDbSecretUri')), createArray(), createArray(createObject('name', 'ConnectionStrings__TransitJazzDB', 'secretRef', 'transitjazz-db'))), if(and(parameters('enableHistoricalStatistics'), not(empty(parameters('grafanaMetricsReaderSecretUri')))), createArray(createObject('name', 'HistoricalStatistics__ReaderAuthorization', 'secretRef', 'grafana-stats-reader')), createArray()))]",
+                      "probes": [
+                        {
+                          "type": "Readiness",
+                          "httpGet": {
+                            "path": "/health/ready",
+                            "port": "[parameters('targetPort')]"
+                          },
+                          "initialDelaySeconds": 60,
+                          "periodSeconds": 60,
+                          "timeoutSeconds": 5,
+                          "failureThreshold": 10,
+                          "successThreshold": 1
+                        }
+                      ]
                     }
                   ],
                   "scale": {

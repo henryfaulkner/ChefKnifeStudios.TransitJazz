@@ -56,6 +56,24 @@ param grafanaPublisherSecretUri string = ''
 @description('Key Vault URI for the TransitJazzTerraformProvisionerToken secret.')
 param grafanaProvisioningSecretUri string = ''
 
+@description('Key Vault URI for the TransitJazz TransitJazzDB connection-string secret.')
+param transitJazzDbSecretUri string = ''
+
+@description('Grafana Cloud Prometheus range-query endpoint for historical statistics.')
+param grafanaMetricsReaderEndpoint string = ''
+
+@description('Key Vault URI for the dedicated Grafana metrics:read authorization secret.')
+param grafanaMetricsReaderSecretUri string = ''
+
+@description('Enable the historical statistics collector after release gates pass.')
+param enableHistoricalStatistics bool = false
+
+@description('Run the historical statistics collector without database writes.')
+param historicalStatisticsDryRun bool = true
+
+@description('Enable the bounded initial historical statistics backfill.')
+param historicalStatisticsInitialBackfill bool = false
+
 @description('Object ID for the intended workspace-scoped Log Analytics Reader. Leave empty until approved.')
 param logAnalyticsReaderPrincipalId string = ''
 
@@ -331,6 +349,12 @@ module serverApp 'modules/containerApp.bicep' = {
         identity: serverIdentity.outputs.id
       }
     ]
+    transitJazzDbSecretUri: transitJazzDbSecretUri
+    grafanaMetricsReaderEndpoint: grafanaMetricsReaderEndpoint
+    grafanaMetricsReaderSecretUri: grafanaMetricsReaderSecretUri
+    enableHistoricalStatistics: enableHistoricalStatistics
+    historicalStatisticsDryRun: historicalStatisticsDryRun
+    historicalStatisticsInitialBackfill: historicalStatisticsInitialBackfill
   }
   dependsOn: [
     acrRoleAssignment

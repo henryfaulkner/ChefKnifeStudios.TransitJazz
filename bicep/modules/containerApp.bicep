@@ -48,6 +48,24 @@ param envVars array = []
 @description('Key Vault-backed Container App secret definitions.')
 param secretRefs array = []
 
+@description('Key Vault URI for the TransitJazzDB connection string.')
+param transitJazzDbSecretUri string = ''
+
+@description('Grafana Cloud Prometheus range-query endpoint used by the historical collector.')
+param grafanaMetricsReaderEndpoint string = ''
+
+@description('Key Vault URI for the dedicated Grafana metrics:read credential.')
+param grafanaMetricsReaderSecretUri string = ''
+
+@description('Enable the historical statistics collector.')
+param enableHistoricalStatistics bool = false
+
+@description('Keep historical statistics collection read-only.')
+param historicalStatisticsDryRun bool = true
+
+@description('Enable the one-time historical statistics backfill.')
+param historicalStatisticsInitialBackfill bool = false
+
 resource app 'Microsoft.App/containerApps@2025-01-01' = {
   name: name
   location: location
@@ -91,7 +109,23 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
           identity: managedIdentityId
         }
       ]
-      secrets: secretRefs
+      secrets: concat(
+        secretRefs,
+        empty(transitJazzDbSecretUri) ? [] : [
+          {
+            name: 'transitjazz-db'
+            keyVaultUrl: transitJazzDbSecretUri
+            identity: managedIdentityId
+          }
+        ],
+        enableHistoricalStatistics && !empty(grafanaMetricsReaderSecretUri) ? [
+          {
+            name: 'grafana-stats-reader'
+            keyVaultUrl: grafanaMetricsReaderSecretUri
+            identity: managedIdentityId
+          }
+        ] : []
+      )
     }
     template: {
       containers: [
@@ -102,7 +136,39 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
             cpu: json(cpu)
             memory: memory
           }
-          env: envVars
+          env: concat(
+            envVars,
+            [
+              {
+                name: 'HistoricalStatistics__Enabled'
+                value: string(enableHistoricalStatistics)
+              }
+              {
+                name: 'HistoricalStatistics__DryRun'
+                value: string(historicalStatisticsDryRun)
+              }
+              {
+                name: 'HistoricalStatistics__InitialBackfill'
+                value: string(historicalStatisticsInitialBackfill)
+              }
+              {
+                name: 'HistoricalStatistics__SourceEndpoint'
+                value: grafanaMetricsReaderEndpoint
+              }
+            ],
+            empty(transitJazzDbSecretUri) ? [] : [
+              {
+                name: 'ConnectionStrings__TransitJazzDB'
+                secretRef: 'transitjazz-db'
+              }
+            ],
+            enableHistoricalStatistics && !empty(grafanaMetricsReaderSecretUri) ? [
+              {
+                name: 'HistoricalStatistics__ReaderAuthorization'
+                secretRef: 'grafana-stats-reader'
+              }
+            ] : []
+          )
           // The worker must finish loading its static route index before this revision
           // receives ingress traffic. The 11-minute allowance covers slow GTFS downloads
           // without treating a legitimate cold load as a liveness failure.

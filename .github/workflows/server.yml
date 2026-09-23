@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main, 054-centralized-logging]
+    branches: [main, 054-centralized-logging, 055-database]
 
 env:
   REGISTRY: chefknife.azurecr.io
@@ -34,6 +34,11 @@ jobs:
 
       - name: Build database migration image
         run: docker build --file ./src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Dockerfile --tag ${{ env.REGISTRY }}/${{ env.MIGRATION_IMAGE_NAME }}:${{ github.sha }} .
+
+      - name: Validate historical collection is disabled by default
+        run: |
+          test "$(jq -r '.HistoricalStatistics.Enabled' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "false"
+          test "$(jq -r '.HistoricalStatistics.DryRun' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "true"
 
       - name: Set image tag output
         id: set-tag
@@ -71,6 +76,9 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.MIGRATION_IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
 
   deploy:
+    # The migration job is an explicit prerequisite; schema is applied before
+    # the server revision can receive traffic. Historical writes stay disabled
+    # until the operator release gates approve them.
     needs: [build-and-push, migrate-database]
     runs-on: ubuntu-latest
     steps:

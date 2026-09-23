@@ -17,6 +17,7 @@
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.HttpListener" Version="1.17.0-beta.1" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.Data\ChefKnifeStudios.TransitJazz.Server.Data.csproj" />
     <ProjectReference Include="..\..\ChefKnifeStudios.TransitJazz.Shared\ChefKnifeStudios.TransitJazz.Shared.csproj" />
     <ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.TransitDataWorker\ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.csproj" />
   </ItemGroup>

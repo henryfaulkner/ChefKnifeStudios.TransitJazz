@@ -15,11 +15,18 @@ param repositoryToken = ''
 
 // Supply only an approved object ID through the reviewed deployment process.
 param logAnalyticsReaderPrincipalId = ''
-param enableLegacyTelemetry = true
-
 param enableWorkerMetrics = false
 param grafanaOtlpMetricsEndpoint = ''
 // These are Key Vault secret URIs, not ACA secret aliases. The Bicep template
 // maps them to the short aliases required by Azure Container Apps.
 param grafanaPublisherSecretUri = 'https://transit-jazz-kv.vault.azure.net/secrets/TransitJazzWorkerMetricsPublisherToken'
 param grafanaProvisioningSecretUri = 'https://transit-jazz-kv.vault.azure.net/secrets/TransitJazzTerraformProvisionerToken'
+
+// Historical collection remains disabled until the retention, access, dry-run,
+// and reconciliation gates in specs/055-database/quickstart.md are approved.
+param transitJazzDbSecretUri = ''
+param grafanaMetricsReaderEndpoint = ''
+param grafanaMetricsReaderSecretUri = ''
+param enableHistoricalStatistics = false
+param historicalStatisticsDryRun = true
+param historicalStatisticsInitialBackfill = false

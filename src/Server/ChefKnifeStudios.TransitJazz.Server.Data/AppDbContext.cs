@@ -11,6 +11,8 @@ public class AppDbContext : DbContext
     {
     }
 
+    public DbSet<CityMinuteStatistic> CityMinuteStatistics => Set<CityMinuteStatistic>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());

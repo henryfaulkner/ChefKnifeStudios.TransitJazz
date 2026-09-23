@@ -12,6 +12,9 @@ using ChefKnifeStudios.TransitJazz.Server.WebAPI.Repositories;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.SignalR;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
+using ChefKnifeStudios.TransitJazz.Server.Data;
+using ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -157,6 +160,27 @@ builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection
 builder.Services.AddSingleton<MartaCity>();
 
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
+
+var historicalStatisticsOptions = builder.Configuration.GetSection(HistoricalStatisticsOptions.SectionName).Get<HistoricalStatisticsOptions>()
+    ?? new HistoricalStatisticsOptions();
+if (historicalStatisticsOptions.Cities.Count == 0)
+    historicalStatisticsOptions.Cities = cityConfigs.Select(city => city.Name).ToList();
+historicalStatisticsOptions.Validate();
+builder.Services.AddSingleton(historicalStatisticsOptions);
+builder.Services.AddSingleton<IOptions<HistoricalStatisticsOptions>>(Options.Create(historicalStatisticsOptions));
+
+var transitJazzConnectionString = builder.Configuration.GetConnectionString("TransitJazzDB");
+if (!string.IsNullOrWhiteSpace(transitJazzConnectionString))
+{
+    builder.Services.RegisterDataServices(transitJazzConnectionString);
+    builder.Services.AddHttpClient<IHistoricalStatisticsSource, GrafanaPrometheusStatisticsSource>();
+    builder.Services.AddSingleton<ICityMinuteStatisticsStore, CityMinuteStatisticsStore>();
+    builder.Services.AddHostedService<HistoricalStatisticsCollector>();
+}
+else if (historicalStatisticsOptions.Enabled)
+{
+    throw new InvalidOperationException("Historical statistics collection requires ConnectionStrings:TransitJazzDB.");
+}
 
 var nymtaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase));
 builder.Services.Configure<SubwaySynthesisOptions>(o =>
