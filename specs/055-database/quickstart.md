@@ -17,7 +17,17 @@ This runbook creates the single city-minute schema, proves the read-only metrics
 1. Build the solution and run the existing test suites, including the new statistics model, source-client, and collector tests.
 2. Create and inspect the EF migration for `city_minute_statistics`. It must contain only schema creation and the composite `(city_slug, stat_minute_utc)` primary key.
 3. Build the existing EF migration bundle and inspect its generated migration script. Do not place a Grafana query, token, or data backfill inside the migration.
-4. Run the repository's migration job against the intended database. Confirm only the one new table is created.
+4. After CI builds and pushes the image, apply the migration manually from a machine whose IP PostgreSQL allows. Check out the same commit SHA shown in the waiting Server CI/CD run. From the repository root, with `ConnectionStrings__TransitJazzDB` set to the intended database through your local secret manager, run:
+
+   ```powershell
+   git rev-parse HEAD
+   dotnet tool restore
+   dotnet ef database update --project src/Server/ChefKnifeStudios.TransitJazz.Server.Data --startup-project src/Server/ChefKnifeStudios.TransitJazz.Server.Data --configuration Release
+   dotnet ef migrations list --project src/Server/ChefKnifeStudios.TransitJazz.Server.Data --startup-project src/Server/ChefKnifeStudios.TransitJazz.Server.Data --configuration Release
+   ```
+
+   Confirm the SHA matches the waiting run, the database update succeeds, and `20260920201730_CreateCityMinuteStatistics` is applied to the intended database. The connection string must require TLS; keep its credentials out of command arguments and shell history. Do not approve deployment if any check fails.
+5. In the waiting GitHub Actions run, approve the `server-dev` deployment. This releases the server image only after manual migration verification. Each later server deployment needs the same review, even if no new migration is pending.
 
 ## Configure collection safely
 

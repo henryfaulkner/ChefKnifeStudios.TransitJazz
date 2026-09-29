@@ -15,7 +15,7 @@ The historical source contract is fixed as `worker-dashboard-statistics-v1`: it 
 **Primary Dependencies**: EF Core 10, Npgsql EF provider, existing ASP.NET Core hosted-service and `HttpClient` facilities, existing OpenTelemetry/Grafana Cloud metrics source; no new third-party runtime package
 **Storage**: Newly provisioned TransitJazz PostgreSQL database, one `city_minute_statistics` table keyed by `(city_slug, stat_minute_utc)`
 **Testing**: xUnit in the existing WebAPI and worker test projects; EF model metadata and migration-script validation; fake HTTP source-client tests; PostgreSQL integration test for key/upsert semantics; source-contract/dashboard binding tests; controlled live preflight and reconciliation evidence
-**Target Platform**: .NET 10 Linux process co-hosted in an Azure Container App; existing Linux EF migration bundle in CI
+**Target Platform**: .NET 10 Linux process co-hosted in an Azure Container App; CI builds a Linux EF migration bundle, while an operator applies migrations from a database-allowed machine
 **Project Type**: Server data model plus internal hosted collector; no public endpoint or client UI in v1
 **Performance Goals**: A normal collection run completes without changing the ten-second worker cadence; city/day aggregation uses the primary city/time key; the initial seven-city, 14-day upper bound is about 141,120 rows
 **Constraints**: One simple denormalized table; one city per UTC minute; no normalized source/import/coverage tables; metrics remain Grafana-authoritative; query the source only with a dedicated `metrics:read` credential; do not log secrets, URLs, raw response bodies, entity IDs, or payloads
@@ -31,7 +31,7 @@ The historical source contract is fixed as `worker-dashboard-statistics-v1`: it 
 | II. No frontend secrets | Pass | Database and Grafana reader credentials stay in Key Vault-backed server configuration; no client project changes. |
 | III. Two-pass real-time processing | Pass | No worker pass, GTFS entity, route mapping, or SignalR payload changes. The collector reads the independent metrics source after export. |
 | IV. OpenTelemetry observability | Pass | Existing metrics, labels, exporter, dashboard, and alerts remain authoritative and unchanged. The collector emits only safe operational summaries. |
-| V. GitHub Actions CI/CD | Pass | The existing Data migration bundle remains schema-only and continues before deployment. Runtime secret delivery and validation are explicit deployment tasks. |
+| V. GitHub Actions CI/CD | Pass | The Data migration remains schema-only. Deployment waits for an operator to apply and verify migrations from an allowlisted machine, then approve the GitHub environment. Runtime secret delivery and validation are explicit deployment tasks. |
 | VI. GTFS ID mapping | Pass | The model stores only canonical city slugs; it never stores route, trip, vehicle, or feed identifiers. |
 | VII–XIII. Map, music, interaction, presentation | Not applicable | No frontend, mapping, audio, or user-interaction surface is added. |
 | Governance | Conditional release gate | A dedicated Grafana `metrics:read` credential, actual retention/query proof, bounded backfill dry-run, source reconciliation, runtime database secret, and safe report must pass before enabling writes. |
@@ -90,7 +90,7 @@ bicep/
 ├── main.json                                     # regenerated from Bicep; never hand-edited
 └── modules/containerApp.bicep                    # Key Vault-backed secret/env wiring
 
-.github/workflows/server.yml                      # existing migration bundle and server deployment flow
+.github/workflows/server.yml                      # migration image build and manually gated server deployment
 ```
 
 **Structure Decision**: `Server.Data` owns the one-table persistence boundary and EF migration. `Server.WebAPI` is the actual deployed metrics host, so it owns the read-only source query client and recurring hosted collector. No new public API, UI, worker instrument, or standalone service is needed. Existing test projects gain the feature tests rather than adding a test-project topology.
@@ -119,7 +119,7 @@ bicep/
 - Provision a separate Grafana Cloud access policy limited to `metrics:read`. The existing OTLP publisher and provisioning tokens remain separate and must not be reused.
 - Add Key Vault-backed server references for the TransitJazz database connection and Grafana reader authorization; expose only configuration names to the WebAPI. Keep the reader endpoint as an HTTPS configuration value and never log it.
 - Add the Data project reference and `RegisterDataServices` call to the actual WebAPI host. Standardize the design-time factory and runtime registration on `ConnectionStrings:TransitJazzDB`.
-- Preserve the existing EF migration bundle in CI. The migration job creates schema before server deploy. Deploy with collection disabled until the live source preflight succeeds, then perform the dry run, applied backfill, reconciliation, and recurring enablement as explicit release gates.
+- Preserve the schema-only EF migration bundle build in CI. An operator applies and verifies migrations from an address allowed by PostgreSQL, then approves the `server-dev` deployment environment. Deploy with collection disabled until the live source preflight succeeds, then perform the dry run, applied backfill, reconciliation, and recurring enablement as explicit release gates.
 
 ### Test and acceptance strategy
 

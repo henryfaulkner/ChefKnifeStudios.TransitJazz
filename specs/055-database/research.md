@@ -70,7 +70,7 @@
 
 **Decision**: The EF migration bundle creates only the table and its primary key. The deployed, configuration-gated collector performs a dry-run preflight, initial bounded backfill, reconciliation, and recurring one-minute collection. It emits safe structured summaries and an operator/CI report; it never makes network calls in an EF migration.
 
-**Rationale**: Schema deployment needs to be deterministic and repeatable. Historical source availability, credentials, and API limits are runtime concerns. The repository already builds and runs an EF migration bundle before the server deployment.
+**Rationale**: Schema deployment needs to be deterministic and repeatable. Historical source availability, credentials, and API limits are runtime concerns. CI builds an EF migration image; because PostgreSQL allows only a known client address, an operator applies and verifies migrations from that address before approving server deployment.
 
 **Alternatives considered**:
 
@@ -84,7 +84,7 @@
 - `WorkerMetricsReporter` reports the city values and exports metrics every ten seconds. The host in `Server.WebAPI/Program.cs` is the deployed metrics host; the standalone worker does not configure the exporter.
 - `CityCycleMetrics` is produced once per city loop, but it is not an appropriate persistence seam because it is not source-equivalent for counter-rate and histogram p95 dashboard values.
 - `Server.Data` has Npgsql and configuration-by-assembly discovery, but currently contains no entity, `DbSet`, configuration, migration, test project, or runtime host registration. `AppDbContextFactory` uses a stale connection-string name and must be aligned with `TransitJazzDB`.
-- The existing database migration bundle already receives `CONNECTIONSTRINGS__TRANSITJAZZDB` in the CI workflow. The server runtime does not yet receive/register that connection string, so the plan adds a Key Vault-backed runtime secret reference.
+- The database migration image is built in CI, but CI runners cannot reach the restricted PostgreSQL server. Manual migration from an allowed machine is required before approving deployment. The server runtime receives its connection string through a Key Vault-backed reference.
 - The committed observability guidance expects a rolling 14-day metrics history. The actual Grafana plan, query endpoint, labels, query limits, and remaining history must be proven during release preflight; a source gap is recorded, never reconstructed from logs, Parquet, or feed data.
 
 ## External references
