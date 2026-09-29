@@ -68,6 +68,22 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
         await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, "metrics-source-authorization-failure")]
+    [InlineData(HttpStatusCode.Forbidden, "metrics-source-authorization-failure")]
+    [InlineData(HttpStatusCode.TooManyRequests, "metrics-source-rate-limited")]
+    [InlineData(HttpStatusCode.InternalServerError, "metrics-source-http-failure")]
+    public async Task HttpFailuresHaveSafeOperationalCodes(HttpStatusCode status, string code)
+    {
+        var minute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
+        var handler = new FixedPrometheusHandler { ResponseStatus = status };
+
+        var exception = await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
+
+        Assert.Equal(code, exception.Code);
+        Assert.DoesNotContain("metrics.example", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     static GrafanaPrometheusStatisticsSource CreateSource(FixedPrometheusHandler handler)
     {
         var options = new HistoricalStatisticsOptions
@@ -90,11 +106,14 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
         public bool EmptyAll { get; init; }
         public bool Malformed { get; init; }
         public bool DuplicateSeries { get; init; }
+        public HttpStatusCode ResponseStatus { get; init; } = HttpStatusCode.OK;
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var query = Uri.UnescapeDataString(request.RequestUri!.Query.Split("query=", StringSplitOptions.None)[1].Split('&')[0]);
             Requests.Add(new RequestCapture(request.RequestUri, query, request.Headers.Authorization?.ToString() ?? string.Empty));
+            if (ResponseStatus != HttpStatusCode.OK)
+                return Task.FromResult(new HttpResponseMessage(ResponseStatus));
             if (Malformed)
                 return Task.FromResult(Response("not-json"));
             if (EmptyAll || EmptyField is not null && query.Contains(EmptyField, StringComparison.Ordinal))

@@ -18,6 +18,8 @@ param grafanaMetricsReaderSecretUri = ''
 param enableHistoricalStatistics = false
 param historicalStatisticsDryRun = true
 param historicalStatisticsInitialBackfill = false
+param historicalStatisticsBackfillStartUtc = ''
+param historicalStatisticsBackfillEndUtc = ''
 
 param repositoryUrl = 'https://github.com/henryfaulkner/ChefKnifeStudios.TransitJazz'
 param repositoryToken = ''

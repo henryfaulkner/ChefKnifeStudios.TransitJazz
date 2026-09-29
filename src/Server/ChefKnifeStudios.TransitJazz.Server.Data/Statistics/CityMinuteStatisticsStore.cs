@@ -17,13 +17,15 @@ public sealed record StatisticsWriteReport(int Created, int Unchanged, int Fille
 /// <summary>Owns bounded city-minute persistence and never overwrites confirmed source values.</summary>
 public sealed class CityMinuteStatisticsStore(IDbContextFactory<AppDbContext> contextFactory) : ICityMinuteStatisticsStore
 {
+    public const int MaxBatchRows = 2_000;
+
     public async Task<StatisticsWriteReport> UpsertAsync(IReadOnlyCollection<CityMinuteStatistic> rows, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(rows);
         if (rows.Count == 0)
             return new StatisticsWriteReport(0, 0, 0, 0);
-        if (rows.Count > 2_000)
-            throw new ArgumentOutOfRangeException(nameof(rows), "Statistics batches may contain at most 2,000 rows.");
+        if (rows.Count > MaxBatchRows)
+            throw new ArgumentOutOfRangeException(nameof(rows), $"Statistics batches may contain at most {MaxBatchRows} rows.");
 
         foreach (var row in rows)
             row.Validate();

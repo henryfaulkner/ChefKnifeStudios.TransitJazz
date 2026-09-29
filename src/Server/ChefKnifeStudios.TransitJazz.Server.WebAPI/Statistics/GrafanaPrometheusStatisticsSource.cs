@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
+using System.Net;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,7 +23,10 @@ public sealed record StatisticsSourceResult(
     DateTime ReturnedEndUtc,
     IReadOnlyCollection<string> Warnings);
 
-public sealed class StatisticsSourceException(string message) : Exception(message);
+public sealed class StatisticsSourceException(string message, string code = "metrics-source-failure") : Exception(message)
+{
+    public string Code { get; } = code;
+}
 
 /// <summary>Read-only Prometheus range client for the frozen dashboard contract.</summary>
 public sealed class GrafanaPrometheusStatisticsSource(
@@ -51,7 +55,15 @@ public sealed class GrafanaPrometheusStatisticsSource(
             {
                 using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 if (!response.IsSuccessStatusCode)
-                    throw new StatisticsSourceException("Metrics source returned a non-success response.");
+                {
+                    var code = response.StatusCode switch
+                    {
+                        HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "metrics-source-authorization-failure",
+                        HttpStatusCode.TooManyRequests => "metrics-source-rate-limited",
+                        _ => "metrics-source-http-failure",
+                    };
+                    throw new StatisticsSourceException("Metrics source returned a non-success response.", code);
+                }
                 payload = await response.Content.ReadAsStringAsync(cancellationToken);
             }
             catch (StatisticsSourceException)

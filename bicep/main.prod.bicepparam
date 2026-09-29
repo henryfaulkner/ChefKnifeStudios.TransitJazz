@@ -30,3 +30,5 @@ param grafanaMetricsReaderSecretUri = ''
 param enableHistoricalStatistics = false
 param historicalStatisticsDryRun = true
 param historicalStatisticsInitialBackfill = false
+param historicalStatisticsBackfillStartUtc = ''
+param historicalStatisticsBackfillEndUtc = ''

@@ -66,6 +66,27 @@ public sealed class HistoricalStatisticsCollectorTests
         Assert.Equal(0, store.WriteCalls);
     }
 
+    [Fact]
+    public async Task AppliedSevenCityBackfillStaysWithinStoreBatchLimit()
+    {
+        var source = new FakeSource();
+        var store = new FakeStore();
+        var options = ValidOptions(enabled: true);
+        options.Cities = ["atlanta", "washington-dc", "boston", "new-york-city", "toronto", "philadelphia", "denver"];
+        options.DryRun = false;
+        options.InitialBackfill = true;
+        options.BackfillStartUtc = new DateTime(2026, 9, 20, 0, 0, 0, DateTimeKind.Utc);
+        options.BackfillEndUtc = new DateTime(2026, 9, 20, 5, 59, 0, DateTimeKind.Utc);
+        var collector = CreateCollector(options, source, store);
+
+        var report = await collector.CollectAsync(options.BackfillEndUtc.Value);
+
+        Assert.Equal(2, store.WriteCalls);
+        Assert.Equal(2_520, store.WrittenBatchSizes.Sum());
+        Assert.All(store.WrittenBatchSizes, size => Assert.InRange(size, 1, CityMinuteStatisticsStore.MaxBatchRows));
+        Assert.Equal(2_520, report.Created);
+    }
+
     static HistoricalStatisticsCollector CreateCollector(HistoricalStatisticsOptions options, FakeSource source, FakeStore store) =>
         new(Options.Create(options), source, store, NullLogger<HistoricalStatisticsCollector>.Instance);
 
@@ -102,10 +123,12 @@ public sealed class HistoricalStatisticsCollectorTests
     sealed class FakeStore : ICityMinuteStatisticsStore
     {
         public int WriteCalls { get; private set; }
+        public List<int> WrittenBatchSizes { get; } = [];
 
         public Task<StatisticsWriteReport> UpsertAsync(IReadOnlyCollection<CityMinuteStatistic> rows, CancellationToken cancellationToken = default)
         {
             WriteCalls++;
+            WrittenBatchSizes.Add(rows.Count);
             return Task.FromResult(new StatisticsWriteReport(rows.Count, 0, 0, 0));
         }
 

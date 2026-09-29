@@ -40,6 +40,10 @@ Start with statistics collection disabled by default. Supply the reader endpoint
 - initial backfill window: the actual available source history, never more than the verified retention window;
 - dry-run enabled for the first execution.
 
+The server GitHub Actions deployment updates the Container App image only. It does not add or change the collector's environment variables or Key Vault references. Deploy the reviewed Bicep configuration separately: set `transitJazzDbSecretUri`, `grafanaMetricsReaderEndpoint`, and `grafanaMetricsReaderSecretUri`; set `enableHistoricalStatistics=true` with `historicalStatisticsDryRun=true` for the first run. When `historicalStatisticsInitialBackfill=true`, also set `historicalStatisticsBackfillStartUtc` and `historicalStatisticsBackfillEndUtc` to inclusive, minute-aligned UTC values within verified source retention. The schema migration alone does not start collection, and dry-run collection does not write rows.
+
+At startup, the server logs whether collection, the database binding, source endpoint, reader credential, and backfill range are configured. An enabled collector logs one safe outcome summary per run, including dry-run mode, row counts, warning count, and fixed failure codes. The collector does not log secret values, endpoint URLs, raw responses, or database errors.
+
 The deployment must not change worker metric instruments, labels, exporter cadence, dashboard JSON, alerts, or production metrics ingress.
 
 ## Dry-run the historical backfill

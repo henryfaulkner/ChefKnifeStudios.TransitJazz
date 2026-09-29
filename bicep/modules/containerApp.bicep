@@ -66,6 +66,12 @@ param historicalStatisticsDryRun bool = true
 @description('Enable the one-time historical statistics backfill.')
 param historicalStatisticsInitialBackfill bool = false
 
+@description('Inclusive UTC minute for the initial historical statistics backfill.')
+param historicalStatisticsBackfillStartUtc string = ''
+
+@description('Inclusive UTC minute for the initial historical statistics backfill.')
+param historicalStatisticsBackfillEndUtc string = ''
+
 resource app 'Microsoft.App/containerApps@2025-01-01' = {
   name: name
   location: location
@@ -154,6 +160,18 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
               {
                 name: 'HistoricalStatistics__SourceEndpoint'
                 value: grafanaMetricsReaderEndpoint
+              }
+            ],
+            empty(historicalStatisticsBackfillStartUtc) ? [] : [
+              {
+                name: 'HistoricalStatistics__BackfillStartUtc'
+                value: historicalStatisticsBackfillStartUtc
+              }
+            ],
+            empty(historicalStatisticsBackfillEndUtc) ? [] : [
+              {
+                name: 'HistoricalStatistics__BackfillEndUtc'
+                value: historicalStatisticsBackfillEndUtc
               }
             ],
             empty(transitJazzDbSecretUri) ? [] : [

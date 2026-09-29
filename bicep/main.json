@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "12641677248301599831"
+      "templateHash": "9205687901900083095"
     }
   },
   "parameters": {
@@ -149,6 +149,20 @@
       "defaultValue": false,
       "metadata": {
         "description": "Enable the bounded initial historical statistics backfill."
+      }
+    },
+    "historicalStatisticsBackfillStartUtc": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Inclusive UTC minute for the initial historical statistics backfill; required when initial backfill is enabled."
+      }
+    },
+    "historicalStatisticsBackfillEndUtc": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Inclusive UTC minute for the initial historical statistics backfill; required when initial backfill is enabled."
       }
     },
     "logAnalyticsReaderPrincipalId": {
@@ -1273,6 +1287,12 @@
           },
           "historicalStatisticsInitialBackfill": {
             "value": "[parameters('historicalStatisticsInitialBackfill')]"
+          },
+          "historicalStatisticsBackfillStartUtc": {
+            "value": "[parameters('historicalStatisticsBackfillStartUtc')]"
+          },
+          "historicalStatisticsBackfillEndUtc": {
+            "value": "[parameters('historicalStatisticsBackfillEndUtc')]"
           }
         },
         "template": {
@@ -1282,7 +1302,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "10568054643471499020"
+              "templateHash": "1255004852623035093"
             }
           },
           "parameters": {
@@ -1424,6 +1444,20 @@
               "metadata": {
                 "description": "Enable the one-time historical statistics backfill."
               }
+            },
+            "historicalStatisticsBackfillStartUtc": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Inclusive UTC minute for the initial historical statistics backfill."
+              }
+            },
+            "historicalStatisticsBackfillEndUtc": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Inclusive UTC minute for the initial historical statistics backfill."
+              }
             }
           },
           "resources": [
@@ -1485,7 +1519,7 @@
                         "cpu": "[json(parameters('cpu'))]",
                         "memory": "[parameters('memory')]"
                       },
-                      "env": "[concat(parameters('envVars'), createArray(createObject('name', 'HistoricalStatistics__Enabled', 'value', string(parameters('enableHistoricalStatistics'))), createObject('name', 'HistoricalStatistics__DryRun', 'value', string(parameters('historicalStatisticsDryRun'))), createObject('name', 'HistoricalStatistics__InitialBackfill', 'value', string(parameters('historicalStatisticsInitialBackfill'))), createObject('name', 'HistoricalStatistics__SourceEndpoint', 'value', parameters('grafanaMetricsReaderEndpoint'))), if(empty(parameters('transitJazzDbSecretUri')), createArray(), createArray(createObject('name', 'ConnectionStrings__TransitJazzDB', 'secretRef', 'transitjazz-db'))), if(and(parameters('enableHistoricalStatistics'), not(empty(parameters('grafanaMetricsReaderSecretUri')))), createArray(createObject('name', 'HistoricalStatistics__ReaderAuthorization', 'secretRef', 'grafana-stats-reader')), createArray()))]",
+                      "env": "[concat(parameters('envVars'), createArray(createObject('name', 'HistoricalStatistics__Enabled', 'value', string(parameters('enableHistoricalStatistics'))), createObject('name', 'HistoricalStatistics__DryRun', 'value', string(parameters('historicalStatisticsDryRun'))), createObject('name', 'HistoricalStatistics__InitialBackfill', 'value', string(parameters('historicalStatisticsInitialBackfill'))), createObject('name', 'HistoricalStatistics__SourceEndpoint', 'value', parameters('grafanaMetricsReaderEndpoint'))), if(empty(parameters('historicalStatisticsBackfillStartUtc')), createArray(), createArray(createObject('name', 'HistoricalStatistics__BackfillStartUtc', 'value', parameters('historicalStatisticsBackfillStartUtc')))), if(empty(parameters('historicalStatisticsBackfillEndUtc')), createArray(), createArray(createObject('name', 'HistoricalStatistics__BackfillEndUtc', 'value', parameters('historicalStatisticsBackfillEndUtc')))), if(empty(parameters('transitJazzDbSecretUri')), createArray(), createArray(createObject('name', 'ConnectionStrings__TransitJazzDB', 'secretRef', 'transitjazz-db'))), if(and(parameters('enableHistoricalStatistics'), not(empty(parameters('grafanaMetricsReaderSecretUri')))), createArray(createObject('name', 'HistoricalStatistics__ReaderAuthorization', 'secretRef', 'grafana-stats-reader')), createArray()))]",
                       "probes": [
                         {
                           "type": "Readiness",

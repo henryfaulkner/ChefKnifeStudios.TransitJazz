@@ -45,17 +45,25 @@ public sealed class HistoricalStatisticsCollector(
 
         currentOptions.Validate();
         if (currentOptions.InitialBackfill)
-            await CollectAsync(DateTime.UtcNow, stoppingToken);
+        {
+            var backfillReport = await CollectAsync(DateTime.UtcNow, stoppingToken);
+            LogReport("backfill", backfillReport);
+        }
 
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(HistoricalStatisticsOptions.FixedCollectionIntervalMinutes));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             var report = await CollectRecurringAsync(DateTime.UtcNow, stoppingToken);
-            if (!report.Succeeded)
-                logger.LogWarning("Historical statistics collection did not succeed: created={Created}, discrepant={Discrepant}, failures={Failures}",
-                    report.Created, report.Discrepant, report.Failures.Count);
+            LogReport("recurring", report);
         }
     }
+
+    void LogReport(string mode, StatisticsCollectionReport report) =>
+        logger.Log(report.Succeeded ? LogLevel.Information : LogLevel.Warning,
+            "Historical statistics collection: mode={Mode}, succeeded={Succeeded}, dryRun={DryRun}, requestedStartUtc={RequestedStartUtc}, requestedEndUtc={RequestedEndUtc}, created={Created}, unchanged={Unchanged}, filled={Filled}, discrepant={Discrepant}, completeRows={CompleteRows}, partialRows={PartialRows}, noDataRows={NoDataRows}, warningCount={WarningCount}, failureCodes={FailureCodes}",
+            mode, report.Succeeded, report.DryRun, report.RequestedStartUtc, report.RequestedEndUtc,
+            report.Created, report.Unchanged, report.Filled, report.Discrepant, report.CompleteRows,
+            report.PartialRows, report.NoDataRows, report.Warnings.Count, string.Join(",", report.Failures.Distinct()));
 
     async Task<StatisticsCollectionReport> CollectRecurringAsync(DateTime nowUtc, CancellationToken cancellationToken)
     {
@@ -85,6 +93,11 @@ public sealed class HistoricalStatisticsCollector(
             {
                 throw;
             }
+            catch (StatisticsSourceException exception)
+            {
+                aggregate.Failures.Add(exception.Code);
+                break;
+            }
             catch
             {
                 aggregate.Failures.Add("metrics-source-failure");
@@ -100,11 +113,14 @@ public sealed class HistoricalStatisticsCollector(
             {
                 try
                 {
-                    var write = await store.UpsertAsync(rows, cancellationToken);
-                    aggregate.Created += write.Created;
-                    aggregate.Unchanged += write.Unchanged;
-                    aggregate.Filled += write.Filled;
-                    aggregate.Discrepant += write.Discrepant;
+                    foreach (var batch in rows.Chunk(CityMinuteStatisticsStore.MaxBatchRows))
+                    {
+                        var write = await store.UpsertAsync(batch, cancellationToken);
+                        aggregate.Created += write.Created;
+                        aggregate.Unchanged += write.Unchanged;
+                        aggregate.Filled += write.Filled;
+                        aggregate.Discrepant += write.Discrepant;
+                    }
                 }
                 catch (OperationCanceledException)
                 {
