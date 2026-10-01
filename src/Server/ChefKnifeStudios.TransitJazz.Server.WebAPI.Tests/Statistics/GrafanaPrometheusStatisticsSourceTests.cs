@@ -52,6 +52,22 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
     }
 
     [Fact]
+    public async Task MissingCityErrorCounterSeriesLeavesItsRateNullAndMarksTheRowPartial()
+    {
+        var minute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
+        var handler = new FixedPrometheusHandler
+        {
+            EmptyField = "transitjazz_worker_city_cycle_errors_total",
+        };
+
+        var row = Assert.Single((await CreateSource(handler).QueryAsync(minute, minute)).Rows);
+
+        Assert.Equal(CollectionStatus.Partial, row.CollectionStatus);
+        Assert.Null(row.CycleErrorRatePerSecond);
+        Assert.True(row.Healthy);
+    }
+
+    [Fact]
     public async Task SeparateInstancesInDifferentMinutesProduceOneRowPerMinute()
     {
         var firstMinute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);

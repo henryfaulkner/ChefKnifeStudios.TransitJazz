@@ -18,6 +18,7 @@ The current source exports approximately every ten seconds. The table intentiona
 - The query client uses literal metric names shown below. It does not derive names from C# instrument names.
 - The literal trailing window for counter and histogram calculations is `[1m]`. Grafana's `$__rate_interval` macro remains unchanged in the dashboard but is never sent by the collector.
 - Gauge expressions use `last_over_time(...[1m])` so a stale implicit-lookback sample is not silently treated as a fresh minute value.
+- City counters used by `rate(...[1m])` are initialized with zero for every configured city. The zero series yields a rate of zero after at least two samples are available; minutes before the series starts or during startup warmup remain missing.
 - A missing matrix value is null. It is never converted to zero.
 - Any source warning, information message, parse error, timeout, incomplete bucket set, or unexpected label makes the affected city minute `Partial` or `NoData`.
 - The source client never logs its endpoint, authorization header, query response body, or credentials.

@@ -1,3 +1,6 @@
+using System.Diagnostics.Metrics;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.Metrics;
@@ -12,6 +15,40 @@ public sealed class WorkerDashboardStatisticsContractTests
         Assert.Contains("transit.city", source, StringComparison.Ordinal);
         foreach (var instrument in RequiredCityInstruments)
             Assert.Contains($"\"{instrument}\"", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InitializeCitiesSeedsZeroValuesForTheCityErrorCounter()
+    {
+        var measurements = new Dictionary<string, long>(StringComparer.Ordinal);
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Name == "transitjazz.worker.city.cycle_errors")
+                meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, _) =>
+        {
+            string? city = null;
+            foreach (var tag in tags)
+                if (tag.Key == "transit.city")
+                    city = tag.Value as string;
+
+            if (city is not null)
+                measurements[city] = measurement;
+        });
+        listener.Start();
+
+        var services = new ServiceCollection();
+        services.AddMetrics();
+        using var serviceProvider = services.BuildServiceProvider();
+        using var reporter = new WorkerMetricsReporter(serviceProvider.GetRequiredService<IMeterFactory>());
+
+        reporter.InitializeCities(["atlanta", "boston"]);
+
+        Assert.Equal(2, measurements.Count);
+        Assert.Equal(0, measurements["atlanta"]);
+        Assert.Equal(0, measurements["boston"]);
     }
 
     static readonly string[] RequiredCityInstruments =
