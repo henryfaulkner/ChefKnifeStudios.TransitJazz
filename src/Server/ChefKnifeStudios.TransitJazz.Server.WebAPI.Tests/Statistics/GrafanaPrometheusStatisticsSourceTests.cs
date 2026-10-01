@@ -57,15 +57,22 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
         var minute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
         var handler = new FixedPrometheusHandler { City = "secret-city" };
         var exception = await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
+        Assert.Equal("metrics-source-city-label-unexpected", exception.Code);
+        Assert.Equal("last_cycled_unix_seconds", exception.FieldName);
         Assert.DoesNotContain("metrics.example", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("reader", exception.Message, StringComparison.OrdinalIgnoreCase);
 
         handler = new FixedPrometheusHandler { Malformed = true };
         exception = await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
+        Assert.Equal("metrics-source-malformed-response", exception.Code);
+        Assert.Equal("last_cycled_unix_seconds", exception.FieldName);
+        Assert.NotNull(exception.CauseType);
         Assert.DoesNotContain("metrics.example", exception.Message, StringComparison.OrdinalIgnoreCase);
 
         handler = new FixedPrometheusHandler { DuplicateSeries = true };
-        await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
+        exception = await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
+        Assert.Equal("metrics-source-city-cardinality", exception.Code);
+        Assert.Equal("last_cycled_unix_seconds", exception.FieldName);
     }
 
     [Theory]
@@ -81,7 +88,30 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
         var exception = await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
 
         Assert.Equal(code, exception.Code);
+        Assert.Equal("last_cycled_unix_seconds", exception.FieldName);
+        Assert.Equal((int)status, exception.HttpStatusCode);
         Assert.DoesNotContain("metrics.example", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(false, "metrics-source-transport-failure", "HttpRequestException")]
+    [InlineData(true, "metrics-source-timeout", "TaskCanceledException")]
+    public async Task RequestFailuresIdentifyTheFieldAndCauseWithoutExposingEndpoint(
+        bool timedOut, string code, string causeType)
+    {
+        var minute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
+        Exception cause = timedOut
+            ? new TaskCanceledException("https://metrics.example/private?token=secret")
+            : new HttpRequestException("https://metrics.example/private?token=secret");
+        var handler = new FixedPrometheusHandler { Failure = cause };
+
+        var exception = await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
+
+        Assert.Equal(code, exception.Code);
+        Assert.Equal("last_cycled_unix_seconds", exception.FieldName);
+        Assert.Equal(causeType, exception.CauseType);
+        Assert.DoesNotContain("metrics.example", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", exception.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     static GrafanaPrometheusStatisticsSource CreateSource(FixedPrometheusHandler handler)
@@ -106,12 +136,15 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
         public bool EmptyAll { get; init; }
         public bool Malformed { get; init; }
         public bool DuplicateSeries { get; init; }
+        public Exception? Failure { get; init; }
         public HttpStatusCode ResponseStatus { get; init; } = HttpStatusCode.OK;
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var query = Uri.UnescapeDataString(request.RequestUri!.Query.Split("query=", StringSplitOptions.None)[1].Split('&')[0]);
             Requests.Add(new RequestCapture(request.RequestUri, query, request.Headers.Authorization?.ToString() ?? string.Empty));
+            if (Failure is not null)
+                throw Failure;
             if (ResponseStatus != HttpStatusCode.OK)
                 return Task.FromResult(new HttpResponseMessage(ResponseStatus));
             if (Malformed)

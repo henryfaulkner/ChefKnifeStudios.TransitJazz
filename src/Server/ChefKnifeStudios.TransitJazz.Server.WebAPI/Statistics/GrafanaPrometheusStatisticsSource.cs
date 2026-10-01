@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Net.Http;
 using System.Net;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,9 +23,17 @@ public sealed record StatisticsSourceResult(
     DateTime ReturnedEndUtc,
     IReadOnlyCollection<string> Warnings);
 
-public sealed class StatisticsSourceException(string message, string code = "metrics-source-failure") : Exception(message)
+public sealed class StatisticsSourceException(
+    string message,
+    string code = "metrics-source-failure",
+    string fieldName = "",
+    int? httpStatusCode = null,
+    string causeType = null) : Exception(message)
 {
     public string Code { get; } = code;
+    public string FieldName { get; internal set; } = fieldName;
+    public int? HttpStatusCode { get; } = httpStatusCode;
+    public string CauseType { get; } = causeType;
 }
 
 /// <summary>Read-only Prometheus range client for the frozen dashboard contract.</summary>
@@ -46,13 +54,12 @@ public sealed class GrafanaPrometheusStatisticsSource(
 
         foreach (var field in WorkerDashboardStatisticsCatalog.Fields)
         {
-            var query = field.BuildQuery(currentOptions.Cities);
-            using var request = new HttpRequestMessage(HttpMethod.Get, BuildRequestUri(currentOptions.SourceEndpoint, query, evaluationStart, evaluationEnd));
-            request.Headers.TryAddWithoutValidation("Authorization", currentOptions.ReaderAuthorization);
-
             string payload;
             try
             {
+                var query = field.BuildQuery(currentOptions.Cities);
+                using var request = new HttpRequestMessage(HttpMethod.Get, BuildRequestUri(currentOptions.SourceEndpoint, query, evaluationStart, evaluationEnd));
+                request.Headers.TryAddWithoutValidation("Authorization", currentOptions.ReaderAuthorization);
                 using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 if (!response.IsSuccessStatusCode)
                 {
@@ -62,25 +69,38 @@ public sealed class GrafanaPrometheusStatisticsSource(
                         HttpStatusCode.TooManyRequests => "metrics-source-rate-limited",
                         _ => "metrics-source-http-failure",
                     };
-                    throw new StatisticsSourceException("Metrics source returned a non-success response.", code);
+                    throw new StatisticsSourceException("Metrics source returned a non-success response.", code, field.FieldName, (int)response.StatusCode);
                 }
                 payload = await response.Content.ReadAsStringAsync(cancellationToken);
             }
-            catch (StatisticsSourceException)
+            catch (StatisticsSourceException exception)
             {
+                exception.FieldName = field.FieldName;
                 throw;
+            }
+            catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new StatisticsSourceException("Metrics source request timed out.", "metrics-source-timeout", field.FieldName, causeType: exception.GetType().Name);
             }
             catch (OperationCanceledException)
             {
                 throw;
             }
-            catch
+            catch (Exception exception)
             {
                 // Do not preserve the exception: HttpClient exceptions can contain the endpoint.
-                throw new StatisticsSourceException("Metrics source request failed without exposing source configuration.");
+                throw new StatisticsSourceException("Metrics source request failed without exposing source configuration.", "metrics-source-transport-failure", field.FieldName, causeType: exception.GetType().Name);
             }
 
-            ParseResponse(payload, field, currentOptions.Cities, fromMinuteUtc, toMinuteUtc, values, warnings);
+            try
+            {
+                ParseResponse(payload, field, currentOptions.Cities, fromMinuteUtc, toMinuteUtc, values, warnings);
+            }
+            catch (StatisticsSourceException exception)
+            {
+                exception.FieldName = field.FieldName;
+                throw;
+            }
         }
 
         var rows = new List<CityMinuteStatistic>();
@@ -105,7 +125,16 @@ public sealed class GrafanaPrometheusStatisticsSource(
                 foreach (var field in WorkerDashboardStatisticsCatalog.Fields)
                 {
                     if (fieldValues.TryGetValue(field.FieldName, out var value))
-                        SetValue(row, field, value);
+                    {
+                        try
+                        {
+                            SetValue(row, field, value);
+                        }
+                        catch (OverflowException)
+                        {
+                            throw new StatisticsSourceException("Metrics source value exceeded the destination field range.", "metrics-source-value-overflow", field.FieldName);
+                        }
+                    }
                 }
 
                 rows.Add(row);
@@ -142,7 +171,7 @@ public sealed class GrafanaPrometheusStatisticsSource(
             using var document = JsonDocument.Parse(payload);
             var root = document.RootElement;
             if (!string.Equals(root.GetProperty("status").GetString(), "success", StringComparison.Ordinal))
-                throw new StatisticsSourceException("Metrics source returned an unsuccessful response.");
+                throw new StatisticsSourceException("Metrics source returned an unsuccessful response.", "metrics-source-error-response");
 
             if (root.TryGetProperty("warnings", out var warningElement) && warningElement.ValueKind == JsonValueKind.Array)
             {
@@ -153,24 +182,24 @@ public sealed class GrafanaPrometheusStatisticsSource(
 
             var data = root.GetProperty("data");
             if (!string.Equals(data.GetProperty("resultType").GetString(), "matrix", StringComparison.Ordinal))
-                throw new StatisticsSourceException("Metrics source returned an unsupported result type.");
+                throw new StatisticsSourceException("Metrics source returned an unsupported result type.", "metrics-source-result-type");
 
             var seenCities = new HashSet<string>(StringComparer.Ordinal);
             foreach (var series in data.GetProperty("result").EnumerateArray())
             {
                 var metric = series.GetProperty("metric");
                 if (!metric.TryGetProperty("transit_city", out var cityProperty) || cityProperty.ValueKind != JsonValueKind.String)
-                    throw new StatisticsSourceException("Metrics source response omitted the transit_city label.");
+                    throw new StatisticsSourceException("Metrics source response omitted the transit_city label.", "metrics-source-city-label-missing");
                 var city = cityProperty.GetString()!;
                 if (!configuredCities.Contains(city, StringComparer.Ordinal))
-                    throw new StatisticsSourceException("Metrics source returned an unexpected city label.");
+                    throw new StatisticsSourceException("Metrics source returned an unexpected city label.", "metrics-source-city-label-unexpected");
                 if (!seenCities.Add(city))
-                    throw new StatisticsSourceException("Metrics source returned unexpected city cardinality.");
+                    throw new StatisticsSourceException("Metrics source returned unexpected city cardinality.", "metrics-source-city-cardinality");
 
                 foreach (var sample in series.GetProperty("values").EnumerateArray())
                 {
                     if (sample.ValueKind != JsonValueKind.Array || sample.GetArrayLength() != 2)
-                        throw new StatisticsSourceException("Metrics source returned a malformed sample.");
+                        throw new StatisticsSourceException("Metrics source returned a malformed sample.", "metrics-source-malformed-sample");
                     var timestamp = ParseTimestamp(sample[0]);
                     var minute = DateTimeOffset.FromUnixTimeSeconds(timestamp).UtcDateTime.AddMinutes(-1);
                     if (minute < fromMinuteUtc || minute > toMinuteUtc)
@@ -180,7 +209,7 @@ public sealed class GrafanaPrometheusStatisticsSource(
                     if (!values.TryGetValue(key, out var rowValues))
                         values[key] = rowValues = new Dictionary<string, decimal>(StringComparer.Ordinal);
                     if (!rowValues.TryAdd(field.FieldName, value))
-                        throw new StatisticsSourceException("Metrics source returned duplicate field samples.");
+                        throw new StatisticsSourceException("Metrics source returned duplicate field samples.", "metrics-source-duplicate-sample");
                 }
             }
         }
@@ -188,10 +217,10 @@ public sealed class GrafanaPrometheusStatisticsSource(
         {
             throw;
         }
-        catch
+        catch (Exception exception)
         {
             // JSON and parsing errors must not include the response body or request URI.
-            throw new StatisticsSourceException("Metrics source returned malformed data.");
+            throw new StatisticsSourceException("Metrics source returned malformed data.", "metrics-source-malformed-response", causeType: exception.GetType().Name);
         }
     }
 
@@ -199,7 +228,7 @@ public sealed class GrafanaPrometheusStatisticsSource(
     {
         var value = ParseDecimal(element);
         if (value != decimal.Truncate(value))
-            throw new StatisticsSourceException("Metrics source returned a non-integral timestamp.");
+            throw new StatisticsSourceException("Metrics source returned a non-integral timestamp.", "metrics-source-invalid-timestamp");
         return checked((long)value);
     }
 
@@ -207,11 +236,11 @@ public sealed class GrafanaPrometheusStatisticsSource(
     {
         var value = ParseDecimal(element);
         if (value < 0 && kind != StatisticsValueKind.Decimal)
-            throw new StatisticsSourceException("Metrics source returned a negative count.");
+            throw new StatisticsSourceException("Metrics source returned a negative count.", "metrics-source-negative-count");
         if (kind is StatisticsValueKind.Integer or StatisticsValueKind.Ratio && value != decimal.Truncate(value))
-            throw new StatisticsSourceException("Metrics source returned a non-integral value.");
+            throw new StatisticsSourceException("Metrics source returned a non-integral value.", "metrics-source-nonintegral-value");
         if (kind == StatisticsValueKind.Ratio && value is not 0 and not 1)
-            throw new StatisticsSourceException("Metrics source returned an invalid ratio.");
+            throw new StatisticsSourceException("Metrics source returned an invalid ratio.", "metrics-source-invalid-ratio");
         return value;
     }
 
@@ -219,7 +248,7 @@ public sealed class GrafanaPrometheusStatisticsSource(
     {
         var text = element.ValueKind == JsonValueKind.String ? element.GetString() : element.GetRawText();
         if (!decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) || value < 0 && text?.StartsWith("-", StringComparison.Ordinal) == true)
-            throw new StatisticsSourceException("Metrics source returned an invalid numeric value.");
+            throw new StatisticsSourceException("Metrics source returned an invalid numeric value.", "metrics-source-invalid-number");
         return value;
     }
 
@@ -250,7 +279,7 @@ public sealed class GrafanaPrometheusStatisticsSource(
             case "crossing_baseline_cache": row.CrossingBaselineCache = checked((long)value); break;
             case "route_index": row.RouteIndex = checked((long)value); break;
             case "route_trigger_point_cache": row.RouteTriggerPointCache = checked((long)value); break;
-            default: throw new StatisticsSourceException("Metrics source field was not in the frozen catalogue.");
+            default: throw new StatisticsSourceException("Metrics source field was not in the frozen catalogue.", "metrics-source-unknown-field");
         }
     }
 

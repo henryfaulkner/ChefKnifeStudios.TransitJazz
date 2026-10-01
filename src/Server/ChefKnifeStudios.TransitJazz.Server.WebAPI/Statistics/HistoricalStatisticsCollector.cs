@@ -95,11 +95,18 @@ public sealed class HistoricalStatisticsCollector(
             }
             catch (StatisticsSourceException exception)
             {
+                logger.LogWarning(
+                    "Historical statistics source failure: code={Code}, field={Field}, httpStatusCode={HttpStatusCode}, causeType={CauseType}, exceptionType={ExceptionType}, fromMinuteUtc={FromMinuteUtc}, toMinuteUtc={ToMinuteUtc}, exceptionStackTrace={ExceptionStackTrace}",
+                    exception.Code, exception.FieldName, exception.HttpStatusCode, exception.CauseType,
+                    exception.GetType().Name, chunkStart, chunkEnd, exception.StackTrace);
                 aggregate.Failures.Add(exception.Code);
                 break;
             }
-            catch
+            catch (Exception exception)
             {
+                logger.LogWarning(
+                    "Historical statistics source failure: code={Code}, exceptionType={ExceptionType}, fromMinuteUtc={FromMinuteUtc}, toMinuteUtc={ToMinuteUtc}, exceptionStackTrace={ExceptionStackTrace}",
+                    "metrics-source-failure", exception.GetType().Name, chunkStart, chunkEnd, exception.StackTrace);
                 aggregate.Failures.Add("metrics-source-failure");
                 break;
             }
@@ -126,8 +133,11 @@ public sealed class HistoricalStatisticsCollector(
                 {
                     throw;
                 }
-                catch
+                catch (Exception exception)
                 {
+                    logger.LogWarning(
+                        "Historical statistics store failure: code={Code}, exceptionType={ExceptionType}, fromMinuteUtc={FromMinuteUtc}, toMinuteUtc={ToMinuteUtc}, exceptionStackTrace={ExceptionStackTrace}",
+                        "statistics-store-failure", exception.GetType().Name, chunkStart, chunkEnd, exception.StackTrace);
                     aggregate.Failures.Add("statistics-store-failure");
                     break;
                 }

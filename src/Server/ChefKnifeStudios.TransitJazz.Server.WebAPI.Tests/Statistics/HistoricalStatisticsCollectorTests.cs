@@ -1,6 +1,7 @@
 using ChefKnifeStudios.TransitJazz.Server.Data.Models;
 using ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -87,8 +88,52 @@ public sealed class HistoricalStatisticsCollectorTests
         Assert.Equal(2_520, report.Created);
     }
 
-    static HistoricalStatisticsCollector CreateCollector(HistoricalStatisticsOptions options, FakeSource source, FakeStore store) =>
-        new(Options.Create(options), source, store, NullLogger<HistoricalStatisticsCollector>.Instance);
+    [Fact]
+    public async Task SourceFailureLogsFieldAndReasonWithoutSensitiveExceptionMessage()
+    {
+        var logger = new CaptureLogger();
+        var source = new FakeSource
+        {
+            Failure = new StatisticsSourceException(
+                "https://metrics.example/private?token=private-token-value",
+                "metrics-source-city-cardinality",
+                "last_cycled_unix_seconds"),
+        };
+        var collector = CreateCollector(ValidOptions(enabled: true), source, new FakeStore(), logger);
+
+        var report = await collector.CollectAsync(new DateTime(2026, 9, 20, 15, 10, 31, DateTimeKind.Utc));
+
+        Assert.Contains("metrics-source-city-cardinality", report.Failures);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Contains("last_cycled_unix_seconds", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("metrics-source-city-cardinality", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-token-value", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("metrics.example", entry.Message, StringComparison.Ordinal);
+        Assert.Null(entry.Exception);
+    }
+
+    [Fact]
+    public async Task UnexpectedSourceFailureLogsExceptionTypeWithoutSensitiveMessage()
+    {
+        var logger = new CaptureLogger();
+        var source = new FakeSource { Failure = new HttpRequestException("private-token-value") };
+        var collector = CreateCollector(ValidOptions(enabled: true), source, new FakeStore(), logger);
+
+        var report = await collector.CollectAsync(new DateTime(2026, 9, 20, 15, 10, 31, DateTimeKind.Utc));
+
+        Assert.Contains("metrics-source-failure", report.Failures);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Contains("HttpRequestException", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-token-value", entry.Message, StringComparison.Ordinal);
+        Assert.Null(entry.Exception);
+    }
+
+    static HistoricalStatisticsCollector CreateCollector(
+        HistoricalStatisticsOptions options,
+        FakeSource source,
+        FakeStore store,
+        ILogger<HistoricalStatisticsCollector>? logger = null) =>
+        new(Options.Create(options), source, store, logger ?? NullLogger<HistoricalStatisticsCollector>.Instance);
 
     static HistoricalStatisticsOptions ValidOptions(bool enabled) => new()
     {
@@ -101,10 +146,13 @@ public sealed class HistoricalStatisticsCollectorTests
     sealed class FakeSource : IHistoricalStatisticsSource
     {
         public List<(DateTime Start, DateTime End)> Calls { get; } = [];
+        public Exception? Failure { get; init; }
 
         public Task<StatisticsSourceResult> QueryAsync(DateTime fromMinuteUtc, DateTime toMinuteUtc, CancellationToken cancellationToken = default)
         {
             Calls.Add((fromMinuteUtc, toMinuteUtc));
+            if (Failure is not null)
+                throw Failure;
             var rows = new List<CityMinuteStatistic>();
             for (var minute = fromMinuteUtc; minute <= toMinuteUtc; minute = minute.AddMinutes(1))
             {
@@ -134,5 +182,17 @@ public sealed class HistoricalStatisticsCollectorTests
 
         public Task<IReadOnlyList<CityMinuteStatistic>> ReadAsync(string citySlug, DateTime fromUtcInclusive, DateTime toUtcExclusive, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<CityMinuteStatistic>>([]);
+    }
+
+    sealed class CaptureLogger : ILogger<HistoricalStatisticsCollector>
+    {
+        public List<(string Message, Exception? Exception)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((formatter(state, exception), exception));
     }
 }
