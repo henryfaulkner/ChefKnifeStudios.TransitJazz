@@ -200,6 +200,11 @@ public sealed class GrafanaPrometheusStatisticsSource(
                     var minute = DateTimeOffset.FromUnixTimeSeconds(timestamp).UtcDateTime.AddMinutes(-1);
                     if (minute < fromMinuteUtc || minute > toMinuteUtc)
                         continue;
+                    // An empty histogram has no p95; keep that field null for this minute.
+                    if (field.FieldName == "cycle_duration_p95_seconds"
+                        && sample[1].ValueKind == JsonValueKind.String
+                        && string.Equals(sample[1].GetString(), "NaN", StringComparison.Ordinal))
+                        continue;
                     var value = ParseValue(sample[1], field.ValueKind);
                     var key = (city, minute);
                     if (!values.TryGetValue(key, out var rowValues))

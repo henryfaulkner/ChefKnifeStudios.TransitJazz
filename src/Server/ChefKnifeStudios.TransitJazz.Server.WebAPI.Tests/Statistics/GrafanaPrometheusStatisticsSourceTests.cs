@@ -68,6 +68,38 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
     }
 
     [Fact]
+    public async Task UndefinedP95LeavesTheValueNullAndMarksTheRowPartial()
+    {
+        var minute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
+        var handler = new FixedPrometheusHandler
+        {
+            NaNField = "transitjazz_worker_city_cycle_duration_seconds_bucket",
+        };
+
+        var row = Assert.Single((await CreateSource(handler).QueryAsync(minute, minute)).Rows);
+
+        Assert.Equal(CollectionStatus.Partial, row.CollectionStatus);
+        Assert.Null(row.CycleDurationP95Seconds);
+        Assert.True(row.Healthy);
+        Assert.Equal(23, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task NaNInOtherFieldsStillFails()
+    {
+        var minute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
+        var handler = new FixedPrometheusHandler
+        {
+            NaNField = "transitjazz_worker_city_last_cycled_seconds",
+        };
+
+        var exception = await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
+
+        Assert.Equal("metrics-source-invalid-number", exception.Code);
+        Assert.Equal("last_cycled_unix_seconds", exception.FieldName);
+    }
+
+    [Fact]
     public async Task SeparateInstancesInDifferentMinutesProduceOneRowPerMinute()
     {
         var firstMinute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
@@ -169,6 +201,7 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
         public string? EmptyField { get; init; }
         public string City { get; init; } = "atlanta";
         public string Value { get; init; } = "1";
+        public string? NaNField { get; init; }
         public bool Warning { get; init; }
         public bool EmptyAll { get; init; }
         public bool Malformed { get; init; }
@@ -189,15 +222,16 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
                 return Task.FromResult(Response("not-json"));
             if (EmptyAll || EmptyField is not null && query.Contains(EmptyField, StringComparison.Ordinal))
                 return Task.FromResult(Response("{\"status\":\"success\",\"data\":{\"resultType\":\"matrix\",\"result\":[]}}"));
-            return Task.FromResult(Response(Json(Warning, DuplicateSeries)));
+            var value = NaNField is not null && query.Contains(NaNField, StringComparison.Ordinal) ? "NaN" : Value;
+            return Task.FromResult(Response(Json(Warning, DuplicateSeries, value)));
         }
 
-        string Json(bool warning, bool duplicate)
+        string Json(bool warning, bool duplicate, string value)
         {
             var timestamp = new DateTimeOffset(2026, 9, 20, 15, 5, 0, TimeSpan.Zero).ToUnixTimeSeconds();
-            var first = $"{{\"metric\":{{\"transit_city\":\"{City}\",\"instance\":\"old\"}},\"values\":[[{timestamp},\"{Value}\"]]}}";
+            var first = $"{{\"metric\":{{\"transit_city\":\"{City}\",\"instance\":\"old\"}},\"values\":[[{timestamp},\"{value}\"]]}}";
             var secondTimestamp = SplitSeries ? timestamp + 60 : timestamp;
-            var second = $"{{\"metric\":{{\"transit_city\":\"{City}\",\"instance\":\"new\"}},\"values\":[[{secondTimestamp},\"{Value}\"]]}}";
+            var second = $"{{\"metric\":{{\"transit_city\":\"{City}\",\"instance\":\"new\"}},\"values\":[[{secondTimestamp},\"{value}\"]]}}";
             var results = duplicate || SplitSeries ? $"[{first},{second}]" : $"[{first}]";
             var warnings = warning ? ",\"warnings\":[\"partial\"]" : string.Empty;
             return $"{{\"status\":\"success\",\"data\":{{\"resultType\":\"matrix\",\"result\":{results}}}{warnings}}}";
