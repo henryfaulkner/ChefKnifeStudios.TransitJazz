@@ -120,8 +120,48 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
             });
     }
 
+    [Theory]
+    [InlineData("200", "100", 200L, 1L, true)]
+    [InlineData("100", "200", 200L, 0L, false)]
+    public async Task OverlappingInstancesUseTheNewestHeartbeatForEveryDirectField(
+        string oldHeartbeat, string newHeartbeat, long expectedHeartbeat, long expectedVehicles, bool expectedHealthy)
+    {
+        var minute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
+        var handler = new FixedPrometheusHandler
+        {
+            OverlappingSeries = true,
+            OldHeartbeat = oldHeartbeat,
+            NewHeartbeat = newHeartbeat,
+        };
+
+        var row = Assert.Single((await CreateSource(handler).QueryAsync(minute, minute)).Rows);
+
+        Assert.Equal(CollectionStatus.Partial, row.CollectionStatus);
+        Assert.Equal(expectedHeartbeat, row.LastCycledUnixSeconds);
+        Assert.Equal(expectedVehicles, row.VehiclesProcessed);
+        Assert.Equal(expectedHealthy, row.Healthy);
+        Assert.Equal(1m, row.CycleDurationP95Seconds);
+    }
+
     [Fact]
-    public async Task UnexpectedLabelsMalformedDataAndOverlappingSeriesFailWithoutSecrets()
+    public async Task TiedHeartbeatsDoNotSelectAnArbitraryInstance()
+    {
+        var minute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
+        var handler = new FixedPrometheusHandler
+        {
+            OverlappingSeries = true,
+            OldHeartbeat = "100",
+            NewHeartbeat = "100",
+        };
+
+        var exception = await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
+
+        Assert.Equal("metrics-source-ambiguous-instance", exception.Code);
+        Assert.Equal("last_cycled_unix_seconds", exception.FieldName);
+    }
+
+    [Fact]
+    public async Task UnexpectedLabelsMalformedDataAndDuplicateInstanceFailWithoutSecrets()
     {
         var minute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
         var handler = new FixedPrometheusHandler { City = "secret-city" };
@@ -207,6 +247,9 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
         public bool Malformed { get; init; }
         public bool DuplicateSeries { get; init; }
         public bool SplitSeries { get; init; }
+        public bool OverlappingSeries { get; init; }
+        public string OldHeartbeat { get; init; } = "100";
+        public string NewHeartbeat { get; init; } = "200";
         public Exception? Failure { get; init; }
         public HttpStatusCode ResponseStatus { get; init; } = HttpStatusCode.OK;
 
@@ -223,17 +266,28 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
             if (EmptyAll || EmptyField is not null && query.Contains(EmptyField, StringComparison.Ordinal))
                 return Task.FromResult(Response("{\"status\":\"success\",\"data\":{\"resultType\":\"matrix\",\"result\":[]}}"));
             var value = NaNField is not null && query.Contains(NaNField, StringComparison.Ordinal) ? "NaN" : Value;
-            return Task.FromResult(Response(Json(Warning, DuplicateSeries, value)));
+            return Task.FromResult(Response(Json(query, value)));
         }
 
-        string Json(bool warning, bool duplicate, string value)
+        string Json(string query, string value)
         {
             var timestamp = new DateTimeOffset(2026, 9, 20, 15, 5, 0, TimeSpan.Zero).ToUnixTimeSeconds();
-            var first = $"{{\"metric\":{{\"transit_city\":\"{City}\",\"instance\":\"old\"}},\"values\":[[{timestamp},\"{value}\"]]}}";
+            var histogram = query.Contains("histogram_quantile(", StringComparison.Ordinal);
+            var heartbeat = query.Contains("transitjazz_worker_city_last_cycled_seconds", StringComparison.Ordinal);
+            var oldValue = heartbeat && OverlappingSeries ? OldHeartbeat : value;
+            var newValue = OverlappingSeries ? (heartbeat ? NewHeartbeat : "0") : value;
+            var firstMetric = histogram
+                ? $"{{\"transit_city\":\"{City}\"}}"
+                : $"{{\"transit_city\":\"{City}\",\"instance\":\"old\"}}";
+            var first = $"{{\"metric\":{firstMetric},\"values\":[[{timestamp},\"{oldValue}\"]]}}";
             var secondTimestamp = SplitSeries ? timestamp + 60 : timestamp;
-            var second = $"{{\"metric\":{{\"transit_city\":\"{City}\",\"instance\":\"new\"}},\"values\":[[{secondTimestamp},\"{value}\"]]}}";
-            var results = duplicate || SplitSeries ? $"[{first},{second}]" : $"[{first}]";
-            var warnings = warning ? ",\"warnings\":[\"partial\"]" : string.Empty;
+            var secondInstance = DuplicateSeries ? "old" : "new";
+            var secondMetric = histogram
+                ? firstMetric
+                : $"{{\"transit_city\":\"{City}\",\"instance\":\"{secondInstance}\"}}";
+            var second = $"{{\"metric\":{secondMetric},\"values\":[[{secondTimestamp},\"{newValue}\"]]}}";
+            var results = SplitSeries || (!histogram && (DuplicateSeries || OverlappingSeries)) ? $"[{first},{second}]" : $"[{first}]";
+            var warnings = Warning ? ",\"warnings\":[\"partial\"]" : string.Empty;
             return $"{{\"status\":\"success\",\"data\":{{\"resultType\":\"matrix\",\"result\":{results}}}{warnings}}}";
         }
 

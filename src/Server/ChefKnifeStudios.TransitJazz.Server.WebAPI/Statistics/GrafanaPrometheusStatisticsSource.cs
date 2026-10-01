@@ -47,7 +47,8 @@ public sealed class GrafanaPrometheusStatisticsSource(
         currentOptions.Validate();
         ValidateRange(fromMinuteUtc, toMinuteUtc);
 
-        var values = new Dictionary<(string City, DateTime Minute), Dictionary<string, decimal>>(new StatisticKeyComparer());
+        var instanceValues = new Dictionary<(string City, DateTime Minute), Dictionary<string, Dictionary<string, decimal>>>(new StatisticKeyComparer());
+        var cityValues = new Dictionary<(string City, DateTime Minute), Dictionary<string, decimal>>(new StatisticKeyComparer());
         var warnings = new List<string>();
         var evaluationStart = new DateTimeOffset(fromMinuteUtc.AddMinutes(1), TimeSpan.Zero).ToUnixTimeSeconds();
         var evaluationEnd = new DateTimeOffset(toMinuteUtc.AddMinutes(1), TimeSpan.Zero).ToUnixTimeSeconds();
@@ -94,7 +95,7 @@ public sealed class GrafanaPrometheusStatisticsSource(
 
             try
             {
-                ParseResponse(payload, field, currentOptions.Cities, fromMinuteUtc, toMinuteUtc, values, warnings);
+                ParseResponse(payload, field, currentOptions.Cities, fromMinuteUtc, toMinuteUtc, instanceValues, cityValues, warnings);
             }
             catch (StatisticsSourceException exception)
             {
@@ -108,8 +109,7 @@ public sealed class GrafanaPrometheusStatisticsSource(
         {
             foreach (var city in currentOptions.Cities)
             {
-                values.TryGetValue((city, minute), out var fieldValues);
-                fieldValues ??= [];
+                var (fieldValues, overlappingInstances) = SelectValues((city, minute), instanceValues, cityValues);
                 var row = new CityMinuteStatistic
                 {
                     CitySlug = city,
@@ -117,7 +117,7 @@ public sealed class GrafanaPrometheusStatisticsSource(
                     SourceDefinitionVersion = WorkerDashboardStatisticsCatalog.Version,
                     CollectionStatus = fieldValues.Count == 0
                         ? CollectionStatus.NoData
-                        : fieldValues.Count == WorkerDashboardStatisticsCatalog.Fields.Count && warnings.Count == 0
+                        : fieldValues.Count == WorkerDashboardStatisticsCatalog.Fields.Count && warnings.Count == 0 && !overlappingInstances
                             ? CollectionStatus.Complete
                             : CollectionStatus.Partial,
                 };
@@ -163,7 +163,8 @@ public sealed class GrafanaPrometheusStatisticsSource(
         IReadOnlyCollection<string> configuredCities,
         DateTime fromMinuteUtc,
         DateTime toMinuteUtc,
-        Dictionary<(string City, DateTime Minute), Dictionary<string, decimal>> values,
+        Dictionary<(string City, DateTime Minute), Dictionary<string, Dictionary<string, decimal>>> instanceValues,
+        Dictionary<(string City, DateTime Minute), Dictionary<string, decimal>> cityValues,
         List<string> warnings)
     {
         try
@@ -207,8 +208,22 @@ public sealed class GrafanaPrometheusStatisticsSource(
                         continue;
                     var value = ParseValue(sample[1], field.ValueKind);
                     var key = (city, minute);
-                    if (!values.TryGetValue(key, out var rowValues))
-                        values[key] = rowValues = new Dictionary<string, decimal>(StringComparer.Ordinal);
+                    Dictionary<string, decimal> rowValues;
+                    if (field.IsHistogram)
+                    {
+                        if (!cityValues.TryGetValue(key, out rowValues))
+                            cityValues[key] = rowValues = new Dictionary<string, decimal>(StringComparer.Ordinal);
+                    }
+                    else
+                    {
+                        var instance = metric.TryGetProperty("instance", out var instanceProperty) && instanceProperty.ValueKind == JsonValueKind.String
+                            ? instanceProperty.GetString()!
+                            : string.Empty;
+                        if (!instanceValues.TryGetValue(key, out var instances))
+                            instanceValues[key] = instances = new Dictionary<string, Dictionary<string, decimal>>(StringComparer.Ordinal);
+                        if (!instances.TryGetValue(instance, out rowValues))
+                            instances[instance] = rowValues = new Dictionary<string, decimal>(StringComparer.Ordinal);
+                    }
                     if (!rowValues.TryAdd(field.FieldName, value))
                         throw new StatisticsSourceException("Metrics source returned duplicate field samples.", "metrics-source-duplicate-sample");
                 }
@@ -223,6 +238,44 @@ public sealed class GrafanaPrometheusStatisticsSource(
             // JSON and parsing errors must not include the response body or request URI.
             throw new StatisticsSourceException("Metrics source returned malformed data.", "metrics-source-malformed-response", causeType: exception.GetType().Name);
         }
+    }
+
+    static (Dictionary<string, decimal> Values, bool OverlappingInstances) SelectValues(
+        (string City, DateTime Minute) key,
+        Dictionary<(string City, DateTime Minute), Dictionary<string, Dictionary<string, decimal>>> instanceValues,
+        Dictionary<(string City, DateTime Minute), Dictionary<string, decimal>> cityValues)
+    {
+        Dictionary<string, decimal> selected = null;
+        var bestHeartbeat = decimal.MinValue;
+        var tied = false;
+        var overlappingInstances = instanceValues.TryGetValue(key, out var instances) && instances.Count > 1;
+        if (instances is not null)
+        {
+            foreach (var candidate in instances.Values)
+            {
+                var heartbeat = candidate.TryGetValue("last_cycled_unix_seconds", out var value) ? value : decimal.MinValue;
+                if (selected is null || heartbeat > bestHeartbeat)
+                {
+                    selected = candidate;
+                    bestHeartbeat = heartbeat;
+                    tied = false;
+                }
+                else if (heartbeat == bestHeartbeat)
+                {
+                    tied = true;
+                }
+            }
+        }
+        if (tied)
+            throw new StatisticsSourceException("Metrics source returned ambiguous worker instances.", "metrics-source-ambiguous-instance", "last_cycled_unix_seconds");
+
+        var fieldValues = selected is null
+            ? new Dictionary<string, decimal>(StringComparer.Ordinal)
+            : new Dictionary<string, decimal>(selected, StringComparer.Ordinal);
+        if (cityValues.TryGetValue(key, out var aggregateValues))
+            foreach (var (field, value) in aggregateValues)
+                fieldValues.Add(field, value);
+        return (fieldValues, overlappingInstances);
     }
 
     static long ParseTimestamp(JsonElement element)
