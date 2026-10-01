@@ -52,7 +52,28 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
     }
 
     [Fact]
-    public async Task UnexpectedLabelsMalformedDataAndDuplicateCardinalityFailWithoutSecrets()
+    public async Task SeparateInstancesInDifferentMinutesProduceOneRowPerMinute()
+    {
+        var firstMinute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
+        var handler = new FixedPrometheusHandler { SplitSeries = true };
+
+        var rows = (await CreateSource(handler).QueryAsync(firstMinute, firstMinute.AddMinutes(1))).Rows;
+
+        Assert.Collection(rows,
+            first =>
+            {
+                Assert.Equal(firstMinute, first.StatMinuteUtc);
+                Assert.Equal(CollectionStatus.Complete, first.CollectionStatus);
+            },
+            second =>
+            {
+                Assert.Equal(firstMinute.AddMinutes(1), second.StatMinuteUtc);
+                Assert.Equal(CollectionStatus.Complete, second.CollectionStatus);
+            });
+    }
+
+    [Fact]
+    public async Task UnexpectedLabelsMalformedDataAndOverlappingSeriesFailWithoutSecrets()
     {
         var minute = new DateTime(2026, 9, 20, 15, 4, 0, DateTimeKind.Utc);
         var handler = new FixedPrometheusHandler { City = "secret-city" };
@@ -71,7 +92,7 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
 
         handler = new FixedPrometheusHandler { DuplicateSeries = true };
         exception = await Assert.ThrowsAsync<StatisticsSourceException>(() => CreateSource(handler).QueryAsync(minute, minute));
-        Assert.Equal("metrics-source-city-cardinality", exception.Code);
+        Assert.Equal("metrics-source-duplicate-sample", exception.Code);
         Assert.Equal("last_cycled_unix_seconds", exception.FieldName);
     }
 
@@ -136,6 +157,7 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
         public bool EmptyAll { get; init; }
         public bool Malformed { get; init; }
         public bool DuplicateSeries { get; init; }
+        public bool SplitSeries { get; init; }
         public Exception? Failure { get; init; }
         public HttpStatusCode ResponseStatus { get; init; } = HttpStatusCode.OK;
 
@@ -157,8 +179,10 @@ public sealed class GrafanaPrometheusStatisticsSourceTests
         string Json(bool warning, bool duplicate)
         {
             var timestamp = new DateTimeOffset(2026, 9, 20, 15, 5, 0, TimeSpan.Zero).ToUnixTimeSeconds();
-            var series = $"{{\"metric\":{{\"transit_city\":\"{City}\"}},\"values\":[[{timestamp},\"{Value}\"]]}}";
-            var results = duplicate ? $"[{series},{series}]" : $"[{series}]";
+            var first = $"{{\"metric\":{{\"transit_city\":\"{City}\",\"instance\":\"old\"}},\"values\":[[{timestamp},\"{Value}\"]]}}";
+            var secondTimestamp = SplitSeries ? timestamp + 60 : timestamp;
+            var second = $"{{\"metric\":{{\"transit_city\":\"{City}\",\"instance\":\"new\"}},\"values\":[[{secondTimestamp},\"{Value}\"]]}}";
+            var results = duplicate || SplitSeries ? $"[{first},{second}]" : $"[{first}]";
             var warnings = warning ? ",\"warnings\":[\"partial\"]" : string.Empty;
             return $"{{\"status\":\"success\",\"data\":{{\"resultType\":\"matrix\",\"result\":{results}}}{warnings}}}";
         }

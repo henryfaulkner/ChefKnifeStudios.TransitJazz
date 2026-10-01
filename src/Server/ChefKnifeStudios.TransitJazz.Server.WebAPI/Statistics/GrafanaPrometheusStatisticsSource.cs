@@ -184,7 +184,6 @@ public sealed class GrafanaPrometheusStatisticsSource(
             if (!string.Equals(data.GetProperty("resultType").GetString(), "matrix", StringComparison.Ordinal))
                 throw new StatisticsSourceException("Metrics source returned an unsupported result type.", "metrics-source-result-type");
 
-            var seenCities = new HashSet<string>(StringComparer.Ordinal);
             foreach (var series in data.GetProperty("result").EnumerateArray())
             {
                 var metric = series.GetProperty("metric");
@@ -193,9 +192,6 @@ public sealed class GrafanaPrometheusStatisticsSource(
                 var city = cityProperty.GetString()!;
                 if (!configuredCities.Contains(city, StringComparer.Ordinal))
                     throw new StatisticsSourceException("Metrics source returned an unexpected city label.", "metrics-source-city-label-unexpected");
-                if (!seenCities.Add(city))
-                    throw new StatisticsSourceException("Metrics source returned unexpected city cardinality.", "metrics-source-city-cardinality");
-
                 foreach (var sample in series.GetProperty("values").EnumerateArray())
                 {
                     if (sample.ValueKind != JsonValueKind.Array || sample.GetArrayLength() != 2)

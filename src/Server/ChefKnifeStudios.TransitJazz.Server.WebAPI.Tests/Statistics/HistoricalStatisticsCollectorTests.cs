@@ -96,17 +96,17 @@ public sealed class HistoricalStatisticsCollectorTests
         {
             Failure = new StatisticsSourceException(
                 "https://metrics.example/private?token=private-token-value",
-                "metrics-source-city-cardinality",
+                "metrics-source-duplicate-sample",
                 "last_cycled_unix_seconds"),
         };
         var collector = CreateCollector(ValidOptions(enabled: true), source, new FakeStore(), logger);
 
         var report = await collector.CollectAsync(new DateTime(2026, 9, 20, 15, 10, 31, DateTimeKind.Utc));
 
-        Assert.Contains("metrics-source-city-cardinality", report.Failures);
+        Assert.Contains("metrics-source-duplicate-sample", report.Failures);
         var entry = Assert.Single(logger.Entries);
         Assert.Contains("last_cycled_unix_seconds", entry.Message, StringComparison.Ordinal);
-        Assert.Contains("metrics-source-city-cardinality", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("metrics-source-duplicate-sample", entry.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("private-token-value", entry.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("metrics.example", entry.Message, StringComparison.Ordinal);
         Assert.Null(entry.Exception);
