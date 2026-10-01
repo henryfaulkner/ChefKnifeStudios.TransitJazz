@@ -19,8 +19,8 @@ public sealed class HistoricalStatisticsOptions
     public int CollectionIntervalMinutes { get; set; } = FixedCollectionIntervalMinutes;
     public int IngestionGraceMinutes { get; set; } = 2;
     public int OverlapMinutes { get; set; } = 5;
-    public DateTime? BackfillStartUtc { get; set; }
-    public DateTime? BackfillEndUtc { get; set; }
+    public DateTimeOffset? BackfillStartUtc { get; set; }
+    public DateTimeOffset? BackfillEndUtc { get; set; }
     public List<string> Cities { get; set; } = [];
 
     public void Validate()
@@ -34,9 +34,9 @@ public sealed class HistoricalStatisticsOptions
             failures.Add("IngestionGraceMinutes must be between 1 and 10.");
         if (OverlapMinutes < 1 || OverlapMinutes > 60)
             failures.Add("OverlapMinutes must be between 1 and 60.");
-        if (BackfillStartUtc is not null && BackfillStartUtc.Value.Kind != DateTimeKind.Utc)
+        if (BackfillStartUtc is not null && BackfillStartUtc.Value.Offset != TimeSpan.Zero)
             failures.Add("BackfillStartUtc must be UTC.");
-        if (BackfillEndUtc is not null && BackfillEndUtc.Value.Kind != DateTimeKind.Utc)
+        if (BackfillEndUtc is not null && BackfillEndUtc.Value.Offset != TimeSpan.Zero)
             failures.Add("BackfillEndUtc must be UTC.");
         if (BackfillStartUtc is not null && BackfillEndUtc is not null && BackfillStartUtc >= BackfillEndUtc)
             failures.Add("BackfillStartUtc must precede BackfillEndUtc.");

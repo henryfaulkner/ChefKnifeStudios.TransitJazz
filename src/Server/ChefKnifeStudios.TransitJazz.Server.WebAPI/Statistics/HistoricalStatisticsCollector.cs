@@ -29,7 +29,7 @@ public sealed class HistoricalStatisticsCollector(
         {
             if (currentOptions.BackfillStartUtc is null || currentOptions.BackfillEndUtc is null)
                 return FailureReport(currentOptions, "initial-backfill-range-missing");
-            return await CollectRangeAsync(currentOptions, currentOptions.BackfillStartUtc.Value, currentOptions.BackfillEndUtc.Value, cancellationToken);
+            return await CollectRangeAsync(currentOptions, currentOptions.BackfillStartUtc.Value.UtcDateTime, currentOptions.BackfillEndUtc.Value.UtcDateTime, cancellationToken);
         }
 
         var closedMinute = AlignToMinute(nowUtc).AddMinutes(-currentOptions.IngestionGraceMinutes);
@@ -193,7 +193,7 @@ public sealed class HistoricalStatisticsCollector(
     static DateTime Min(DateTime left, DateTime right) => left <= right ? left : right;
 
     static StatisticsCollectionReport FailureReport(HistoricalStatisticsOptions options, string failure) => new(
-        options.SourceDefinitionVersion, options.DryRun, options.BackfillStartUtc, options.BackfillEndUtc,
+        options.SourceDefinitionVersion, options.DryRun, options.BackfillStartUtc?.UtcDateTime, options.BackfillEndUtc?.UtcDateTime,
         null, null, options.Cities, 0, 0, 0, 0, 0, 0, 0, [], [], [failure]);
 
     sealed class ReportAccumulator(HistoricalStatisticsOptions options, DateTime requestedStartUtc, DateTime requestedEndUtc)
