@@ -80,6 +80,8 @@ The CI/CD workflows require four secrets set in GitHub → Settings → Secrets 
 | `ACR_PASSWORD` | Azure Portal → Container Registry `chefknife` → Access keys → Password |
 | `AZURE_CREDENTIALS` | See below |
 
+The old `TRANSITJAZZ_DB_CONNECTION_STRING` Actions secret is no longer used by this workflow. The `server-dev` GitHub environment requires approval before the server deploy job starts. Apply and verify pending EF migrations from a machine allowed by PostgreSQL, using the same commit SHA as the waiting run, then approve that deployment. See [the database migration runbook](../specs/055-database/quickstart.md#build-and-verify-the-schema) for the commands. Do not approve a deployment when the migration or its verification fails. CI updates the server image's `latest` tag only after the approved deploy succeeds.
+
 Generate `AZURE_CREDENTIALS` (service principal scoped to the prod resource group):
 
 ```bash

@@ -1,6 +1,6 @@
 ---
 name: grafana
-description: Investigate Grafana metrics read-only by running PromQL and retrieving dashboards or panels through the configured Grafana tool. Use when a user asks to query monitoring data, open a Grafana dashboard link or UID, inspect panel PromQL, connect a panel to a refined query, or diagnose Grafana access. Do not use for creating, editing, deleting, or administering Grafana resources.
+description: Investigate Grafana metrics, dashboards, panels, and read-only alert firing history through configured Grafana tools or gcx. Use when a user asks to query monitoring data, open a Grafana dashboard link or UID, inspect panel PromQL, review alerts that fired, or diagnose Grafana access. Do not use for creating, editing, deleting, or administering Grafana resources.
 ---
 
 # Investigate Grafana
@@ -9,9 +9,10 @@ Use the configured Grafana integration as a read-only investigation tool. Grafan
 
 ## Find the available interface
 
-- Prefer a registered Grafana tool when one is available; otherwise use the installed Grafana command-line tool.
+- When the user explicitly requests `gcx`, check that command first and inspect `gcx --help` plus only relevant subcommand help. Use a documented read-only alert-history capability when available; do not guess command names, flags, or query syntax.
+- Otherwise prefer a registered Grafana tool when available, with an installed Grafana command-line tool as a fallback.
 - Treat the tool schema or command help as authoritative. If exact commands or flags are not already known, inspect the top-level help and only the relevant subcommand help before proceeding.
-- If no Grafana integration is available, explain that the integration is not configured. Do not bypass it with raw Grafana HTTP requests because authentication is intended to remain automatic and hidden.
+- If the requested command is unavailable, use another already-configured Grafana interface only if present. Do not install tools or bypass the integration with raw Grafana HTTP requests because authentication is intended to remain automatic and hidden. If no interface is available, explain what is missing.
 
 ## Preserve the read-only boundary
 
@@ -19,7 +20,8 @@ Use only capabilities that:
 
 - run instant or range PromQL queries;
 - retrieve dashboards and their panels;
-- inspect a panel's data source and PromQL; or
+- inspect a panel's data source and PromQL;
+- retrieve alert state history or firing events; and
 - diagnose authentication, connectivity, and authorization with `doctor`.
 
 Never create, edit, import, delete, or administer dashboards, folders, data sources, alerts, annotations, users, service accounts, API keys, or other Grafana resources. If the user asks for a mutation, explain that this integration is read-only and direct them to Grafana's normal editing or administrative interface.
@@ -33,6 +35,16 @@ Never create, edit, import, delete, or administer dashboards, folders, data sour
 5. Report the evaluated expression, effective range, and resolution with the result. Distinguish returned data from interpretation.
 
 Keep broad queries bounded. Narrow the time range or label set when a query would return excessive data, but do not silently change its meaning.
+
+## Review alert firing history
+
+1. Use the read-only alert-history or state-history query exposed by the selected Grafana tool or CLI. Do not use alert-rule, silence, notification-policy, or contact-point mutation commands.
+2. Respect any time range, alert name, rule UID, folder, namespace, and labels supplied by the user. If no range is supplied, use the last seven days when supported and state the exact range and timezone.
+3. Include returned transitions into a firing state and resolved/normal transitions when available. Preserve the source's state names; current state alone is not full history.
+4. Summarize each result with its alert/rule name and UID when available, firing time, resolved time or current status, relevant labels, and history source. Keep annotations concise and omit sensitive label values.
+5. State reported history retention or backend limitations. Alertmanager notifications, incidents, and Grafana rule state history are different records; identify which source was queried. A zero-row result means only that no matching records were returned for that source and range.
+
+Keep history queries bounded to the requested period and filters. If an alert name matches multiple rules, show the matches and ask which one to inspect before giving a detailed history.
 
 ## Investigate dashboards and panels
 

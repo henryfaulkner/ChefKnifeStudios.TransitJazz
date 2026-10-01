@@ -94,6 +94,9 @@ public sealed class WorkerMetricsReporter : IWorkerMetricsReporter, IDisposable
         {
             var tags = CityTags(cityName);
             _cityCycles.Add(0, tags);
+            // Keep the no-errors counter present so its dashboard rate query can
+            // evaluate to 0 instead of disappearing until the first failure.
+            _cityCycleErrors.Add(0, tags);
             _cityLastCycled.Record(0, tags);
             _cityLastWorked.Record(0, tags);
             _cityHealthy.Record(0, tags);
