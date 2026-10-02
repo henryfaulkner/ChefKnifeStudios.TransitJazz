@@ -2,6 +2,7 @@ using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.EndpointGroups;
@@ -181,6 +182,36 @@ else if (historicalStatisticsOptions.Enabled)
 {
     throw new InvalidOperationException("Historical statistics collection requires ConnectionStrings:TransitJazzDB.");
 }
+
+var cityCategoryInsightsOptions = builder.Configuration.GetSection(CityCategoryInsightsOptions.SectionName).Get<CityCategoryInsightsOptions>()
+    ?? new CityCategoryInsightsOptions();
+cityCategoryInsightsOptions.Validate(workerOptions.CycleIntervalSeconds);
+if (cityCategoryInsightsOptions.Enabled)
+{
+    if (string.IsNullOrWhiteSpace(transitJazzConnectionString))
+        throw new InvalidOperationException("City category statistics capture requires ConnectionStrings:TransitJazzDB.");
+    var configuredCities = cityConfigs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var missingCities = cityCategoryInsightsOptions.EnabledCities.Where(x => !configuredCities.Contains(x)).ToArray();
+    if (missingCities.Length > 0)
+        throw new InvalidOperationException("City category statistics EnabledCities must name configured cities.");
+    foreach (var cityName in cityCategoryInsightsOptions.EnabledCities)
+    {
+        var city = cityConfigs.Single(x => string.Equals(x.Name, cityName, StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(city.TimeZoneId))
+            throw new InvalidOperationException("Enabled city category statistics require a configured IANA time zone.");
+        CityCategoryInsightsOptions.ValidateIanaTimeZoneId(city.TimeZoneId);
+    }
+
+    builder.Services.AddSingleton<CityCategoryStatisticsStore>();
+    builder.Services.AddSingleton<CategoryStatisticsWriter>();
+    builder.Services.AddSingleton<ICategoryStatisticsSink>(sp => sp.GetRequiredService<CategoryStatisticsWriter>());
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<CategoryStatisticsWriter>());
+}
+else
+{
+    builder.Services.AddSingleton<ICategoryStatisticsSink>(NullCategoryStatisticsSink.Instance);
+}
+builder.Services.AddCategoryStatisticsCaptureRuntime(cityCategoryInsightsOptions);
 
 var nymtaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase));
 builder.Services.Configure<SubwaySynthesisOptions>(o =>

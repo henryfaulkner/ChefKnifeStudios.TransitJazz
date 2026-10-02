@@ -1,13 +1,24 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+var workerOptions = builder.Configuration.GetSection(WorkerOptions.SectionName).Get<WorkerOptions>() ?? new WorkerOptions();
+workerOptions.Validate();
+var categoryInsightsOptions = builder.Configuration.GetSection(CityCategoryInsightsOptions.SectionName).Get<CityCategoryInsightsOptions>()
+    ?? new CityCategoryInsightsOptions();
+categoryInsightsOptions.Validate(workerOptions.CycleIntervalSeconds);
+if (categoryInsightsOptions.Enabled)
+    throw new InvalidOperationException("Standalone TransitDataWorker has no category statistics database sink; keep CityCategoryInsights.Enabled false.");
+builder.Services.AddSingleton(workerOptions);
 
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(options =>

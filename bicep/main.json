@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "9205687901900083095"
+      "templateHash": "5525767348669610699"
     }
   },
   "parameters": {
@@ -135,6 +135,69 @@
       "defaultValue": false,
       "metadata": {
         "description": "Enable the historical statistics collector after release gates pass."
+      }
+    },
+    "enableCityCategoryInsights": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable city/category capture after schema and pilot release gates pass. Defaults to disabled."
+      }
+    },
+    "cityCategoryInsightsEnabledCities": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Explicit configured city names to capture when city/category insights are enabled."
+      }
+    },
+    "cityCategoryInsightsMaxObservationGapSeconds": {
+      "type": "int",
+      "defaultValue": 30,
+      "metadata": {
+        "description": "Default maximum observation gap in seconds for city/category coverage."
+      }
+    },
+    "cityCategoryInsightsCityMaxObservationGapSeconds": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional per-city maximum observation gap overrides keyed by configured city name."
+      }
+    },
+    "cityCategoryInsightsQueueCapacity": {
+      "type": "int",
+      "defaultValue": 256,
+      "metadata": {
+        "description": "Bounded aggregate envelope queue capacity."
+      }
+    },
+    "cityCategoryInsightsMaxBatchRows": {
+      "type": "int",
+      "defaultValue": 128,
+      "metadata": {
+        "description": "Maximum persisted aggregate rows per writer transaction."
+      }
+    },
+    "cityCategoryInsightsCommandTimeoutSeconds": {
+      "type": "int",
+      "defaultValue": 5,
+      "metadata": {
+        "description": "Database command timeout in seconds for category aggregate writes."
+      }
+    },
+    "cityCategoryInsightsMaxWriteAttempts": {
+      "type": "int",
+      "defaultValue": 3,
+      "metadata": {
+        "description": "Total bounded attempts for transient category aggregate writes."
+      }
+    },
+    "cityCategoryInsightsShutdownDrainSeconds": {
+      "type": "int",
+      "defaultValue": 15,
+      "metadata": {
+        "description": "Maximum category aggregate writer shutdown drain in seconds."
       }
     },
     "historicalStatisticsDryRun": {
@@ -1282,6 +1345,33 @@
           "enableHistoricalStatistics": {
             "value": "[parameters('enableHistoricalStatistics')]"
           },
+          "enableCityCategoryInsights": {
+            "value": "[parameters('enableCityCategoryInsights')]"
+          },
+          "cityCategoryInsightsEnabledCities": {
+            "value": "[parameters('cityCategoryInsightsEnabledCities')]"
+          },
+          "cityCategoryInsightsMaxObservationGapSeconds": {
+            "value": "[parameters('cityCategoryInsightsMaxObservationGapSeconds')]"
+          },
+          "cityCategoryInsightsCityMaxObservationGapSeconds": {
+            "value": "[parameters('cityCategoryInsightsCityMaxObservationGapSeconds')]"
+          },
+          "cityCategoryInsightsQueueCapacity": {
+            "value": "[parameters('cityCategoryInsightsQueueCapacity')]"
+          },
+          "cityCategoryInsightsMaxBatchRows": {
+            "value": "[parameters('cityCategoryInsightsMaxBatchRows')]"
+          },
+          "cityCategoryInsightsCommandTimeoutSeconds": {
+            "value": "[parameters('cityCategoryInsightsCommandTimeoutSeconds')]"
+          },
+          "cityCategoryInsightsMaxWriteAttempts": {
+            "value": "[parameters('cityCategoryInsightsMaxWriteAttempts')]"
+          },
+          "cityCategoryInsightsShutdownDrainSeconds": {
+            "value": "[parameters('cityCategoryInsightsShutdownDrainSeconds')]"
+          },
           "historicalStatisticsDryRun": {
             "value": "[parameters('historicalStatisticsDryRun')]"
           },
@@ -1302,7 +1392,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "1255004852623035093"
+              "templateHash": "15481011566616902058"
             }
           },
           "parameters": {
@@ -1431,6 +1521,69 @@
                 "description": "Enable the historical statistics collector."
               }
             },
+            "enableCityCategoryInsights": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable city/category capture after its separate schema and pilot gates pass."
+              }
+            },
+            "cityCategoryInsightsEnabledCities": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Explicit configured city names to capture."
+              }
+            },
+            "cityCategoryInsightsMaxObservationGapSeconds": {
+              "type": "int",
+              "defaultValue": 30,
+              "metadata": {
+                "description": "Default maximum observation gap in seconds."
+              }
+            },
+            "cityCategoryInsightsCityMaxObservationGapSeconds": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional per-city observation gap overrides."
+              }
+            },
+            "cityCategoryInsightsQueueCapacity": {
+              "type": "int",
+              "defaultValue": 256,
+              "metadata": {
+                "description": "Bounded aggregate envelope queue capacity."
+              }
+            },
+            "cityCategoryInsightsMaxBatchRows": {
+              "type": "int",
+              "defaultValue": 128,
+              "metadata": {
+                "description": "Maximum aggregate rows per database write transaction."
+              }
+            },
+            "cityCategoryInsightsCommandTimeoutSeconds": {
+              "type": "int",
+              "defaultValue": 5,
+              "metadata": {
+                "description": "Database command timeout in seconds."
+              }
+            },
+            "cityCategoryInsightsMaxWriteAttempts": {
+              "type": "int",
+              "defaultValue": 3,
+              "metadata": {
+                "description": "Total bounded transient write attempts."
+              }
+            },
+            "cityCategoryInsightsShutdownDrainSeconds": {
+              "type": "int",
+              "defaultValue": 15,
+              "metadata": {
+                "description": "Bounded writer shutdown drain in seconds."
+              }
+            },
             "historicalStatisticsDryRun": {
               "type": "bool",
               "defaultValue": true,
@@ -1459,6 +1612,26 @@
                 "description": "Inclusive UTC minute for the initial historical statistics backfill."
               }
             }
+          },
+          "variables": {
+            "copy": [
+              {
+                "name": "enabledCityEnvironmentVariables",
+                "count": "[length(parameters('cityCategoryInsightsEnabledCities'))]",
+                "input": {
+                  "name": "[format('CityCategoryInsights__EnabledCities__{0}', copyIndex('enabledCityEnvironmentVariables'))]",
+                  "value": "[parameters('cityCategoryInsightsEnabledCities')[copyIndex('enabledCityEnvironmentVariables')]]"
+                }
+              },
+              {
+                "name": "cityCadenceEnvironmentVariables",
+                "count": "[length(items(parameters('cityCategoryInsightsCityMaxObservationGapSeconds')))]",
+                "input": {
+                  "name": "[format('CityCategoryInsights__CityMaxObservationGapSeconds__{0}', items(parameters('cityCategoryInsightsCityMaxObservationGapSeconds'))[copyIndex('cityCadenceEnvironmentVariables')].key)]",
+                  "value": "[string(items(parameters('cityCategoryInsightsCityMaxObservationGapSeconds'))[copyIndex('cityCadenceEnvironmentVariables')].value)]"
+                }
+              }
+            ]
           },
           "resources": [
             {
@@ -1519,7 +1692,7 @@
                         "cpu": "[json(parameters('cpu'))]",
                         "memory": "[parameters('memory')]"
                       },
-                      "env": "[concat(parameters('envVars'), createArray(createObject('name', 'HistoricalStatistics__Enabled', 'value', string(parameters('enableHistoricalStatistics'))), createObject('name', 'HistoricalStatistics__DryRun', 'value', string(parameters('historicalStatisticsDryRun'))), createObject('name', 'HistoricalStatistics__InitialBackfill', 'value', string(parameters('historicalStatisticsInitialBackfill'))), createObject('name', 'HistoricalStatistics__SourceEndpoint', 'value', parameters('grafanaMetricsReaderEndpoint'))), if(empty(parameters('historicalStatisticsBackfillStartUtc')), createArray(), createArray(createObject('name', 'HistoricalStatistics__BackfillStartUtc', 'value', parameters('historicalStatisticsBackfillStartUtc')))), if(empty(parameters('historicalStatisticsBackfillEndUtc')), createArray(), createArray(createObject('name', 'HistoricalStatistics__BackfillEndUtc', 'value', parameters('historicalStatisticsBackfillEndUtc')))), if(empty(parameters('transitJazzDbSecretUri')), createArray(), createArray(createObject('name', 'ConnectionStrings__TransitJazzDB', 'secretRef', 'transitjazz-db'))), if(and(parameters('enableHistoricalStatistics'), not(empty(parameters('grafanaMetricsReaderSecretUri')))), createArray(createObject('name', 'HistoricalStatistics__ReaderAuthorization', 'secretRef', 'grafana-stats-reader')), createArray()))]",
+                      "env": "[concat(parameters('envVars'), createArray(createObject('name', 'HistoricalStatistics__Enabled', 'value', string(parameters('enableHistoricalStatistics'))), createObject('name', 'HistoricalStatistics__DryRun', 'value', string(parameters('historicalStatisticsDryRun'))), createObject('name', 'HistoricalStatistics__InitialBackfill', 'value', string(parameters('historicalStatisticsInitialBackfill'))), createObject('name', 'HistoricalStatistics__SourceEndpoint', 'value', parameters('grafanaMetricsReaderEndpoint')), createObject('name', 'CityCategoryInsights__Enabled', 'value', string(parameters('enableCityCategoryInsights'))), createObject('name', 'CityCategoryInsights__MaxObservationGapSeconds', 'value', string(parameters('cityCategoryInsightsMaxObservationGapSeconds'))), createObject('name', 'CityCategoryInsights__QueueCapacity', 'value', string(parameters('cityCategoryInsightsQueueCapacity'))), createObject('name', 'CityCategoryInsights__MaxBatchRows', 'value', string(parameters('cityCategoryInsightsMaxBatchRows'))), createObject('name', 'CityCategoryInsights__CommandTimeoutSeconds', 'value', string(parameters('cityCategoryInsightsCommandTimeoutSeconds'))), createObject('name', 'CityCategoryInsights__MaxWriteAttempts', 'value', string(parameters('cityCategoryInsightsMaxWriteAttempts'))), createObject('name', 'CityCategoryInsights__ShutdownDrainSeconds', 'value', string(parameters('cityCategoryInsightsShutdownDrainSeconds')))), variables('enabledCityEnvironmentVariables'), variables('cityCadenceEnvironmentVariables'), if(empty(parameters('historicalStatisticsBackfillStartUtc')), createArray(), createArray(createObject('name', 'HistoricalStatistics__BackfillStartUtc', 'value', parameters('historicalStatisticsBackfillStartUtc')))), if(empty(parameters('historicalStatisticsBackfillEndUtc')), createArray(), createArray(createObject('name', 'HistoricalStatistics__BackfillEndUtc', 'value', parameters('historicalStatisticsBackfillEndUtc')))), if(empty(parameters('transitJazzDbSecretUri')), createArray(), createArray(createObject('name', 'ConnectionStrings__TransitJazzDB', 'secretRef', 'transitjazz-db'))), if(and(parameters('enableHistoricalStatistics'), not(empty(parameters('grafanaMetricsReaderSecretUri')))), createArray(createObject('name', 'HistoricalStatistics__ReaderAuthorization', 'secretRef', 'grafana-stats-reader')), createArray()))]",
                       "probes": [
                         {
                           "type": "Readiness",
