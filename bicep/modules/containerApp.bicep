@@ -60,6 +60,43 @@ param grafanaMetricsReaderSecretUri string = ''
 @description('Enable the historical statistics collector.')
 param enableHistoricalStatistics bool = false
 
+@description('Enable city/category capture after its separate schema and pilot gates pass.')
+param enableCityCategoryInsights bool = false
+
+@description('Explicit configured city names to capture.')
+param cityCategoryInsightsEnabledCities array = []
+
+@description('Default maximum observation gap in seconds.')
+param cityCategoryInsightsMaxObservationGapSeconds int = 30
+
+@description('Optional per-city observation gap overrides.')
+param cityCategoryInsightsCityMaxObservationGapSeconds object = {}
+
+@description('Bounded aggregate envelope queue capacity.')
+param cityCategoryInsightsQueueCapacity int = 256
+
+@description('Maximum aggregate rows per database write transaction.')
+param cityCategoryInsightsMaxBatchRows int = 128
+
+@description('Database command timeout in seconds.')
+param cityCategoryInsightsCommandTimeoutSeconds int = 5
+
+@description('Total bounded transient write attempts.')
+param cityCategoryInsightsMaxWriteAttempts int = 3
+
+@description('Bounded writer shutdown drain in seconds.')
+param cityCategoryInsightsShutdownDrainSeconds int = 15
+
+var enabledCityEnvironmentVariables = [for (city, i) in cityCategoryInsightsEnabledCities: {
+  name: 'CityCategoryInsights__EnabledCities__${i}'
+  value: city
+}]
+
+var cityCadenceEnvironmentVariables = [for item in items(cityCategoryInsightsCityMaxObservationGapSeconds): {
+  name: 'CityCategoryInsights__CityMaxObservationGapSeconds__${item.key}'
+  value: string(item.value)
+}]
+
 @description('Keep historical statistics collection read-only.')
 param historicalStatisticsDryRun bool = true
 
@@ -161,7 +198,37 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
                 name: 'HistoricalStatistics__SourceEndpoint'
                 value: grafanaMetricsReaderEndpoint
               }
+              {
+                name: 'CityCategoryInsights__Enabled'
+                value: string(enableCityCategoryInsights)
+              }
+              {
+                name: 'CityCategoryInsights__MaxObservationGapSeconds'
+                value: string(cityCategoryInsightsMaxObservationGapSeconds)
+              }
+              {
+                name: 'CityCategoryInsights__QueueCapacity'
+                value: string(cityCategoryInsightsQueueCapacity)
+              }
+              {
+                name: 'CityCategoryInsights__MaxBatchRows'
+                value: string(cityCategoryInsightsMaxBatchRows)
+              }
+              {
+                name: 'CityCategoryInsights__CommandTimeoutSeconds'
+                value: string(cityCategoryInsightsCommandTimeoutSeconds)
+              }
+              {
+                name: 'CityCategoryInsights__MaxWriteAttempts'
+                value: string(cityCategoryInsightsMaxWriteAttempts)
+              }
+              {
+                name: 'CityCategoryInsights__ShutdownDrainSeconds'
+                value: string(cityCategoryInsightsShutdownDrainSeconds)
+              }
             ],
+            enabledCityEnvironmentVariables,
+            cityCadenceEnvironmentVariables,
             empty(historicalStatisticsBackfillStartUtc) ? [] : [
               {
                 name: 'HistoricalStatistics__BackfillStartUtc'
