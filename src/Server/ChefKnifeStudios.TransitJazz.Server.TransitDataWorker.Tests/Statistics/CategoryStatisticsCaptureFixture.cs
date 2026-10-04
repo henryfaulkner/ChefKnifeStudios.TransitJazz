@@ -21,7 +21,6 @@ public sealed class CategoryStatisticsCaptureFixture
             new CityCategoryInsightsOptions
             {
                 Enabled = true,
-                EnabledCities = [City],
                 MaxObservationGapSeconds = 30,
             },
             Sink,

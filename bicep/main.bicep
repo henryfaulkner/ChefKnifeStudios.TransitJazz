@@ -68,11 +68,11 @@ param grafanaMetricsReaderSecretUri string = ''
 @description('Enable the historical statistics collector after release gates pass.')
 param enableHistoricalStatistics bool = false
 
-@description('Enable city/category capture after schema and pilot release gates pass. Defaults to disabled.')
+@description('Enable city/category capture for all configured cities except explicit exclusions after schema and pilot release gates pass. Defaults to disabled.')
 param enableCityCategoryInsights bool = false
 
-@description('Explicit configured city names to capture when city/category insights are enabled.')
-param cityCategoryInsightsEnabledCities array = []
+@description('Configured city names to exclude when city/category insights are enabled.')
+param cityCategoryInsightsDisabledCities array = []
 
 @description('Default maximum observation gap in seconds for city/category coverage.')
 param cityCategoryInsightsMaxObservationGapSeconds int = 30
@@ -387,7 +387,7 @@ module serverApp 'modules/containerApp.bicep' = {
     grafanaMetricsReaderSecretUri: grafanaMetricsReaderSecretUri
     enableHistoricalStatistics: enableHistoricalStatistics
     enableCityCategoryInsights: enableCityCategoryInsights
-    cityCategoryInsightsEnabledCities: cityCategoryInsightsEnabledCities
+    cityCategoryInsightsDisabledCities: cityCategoryInsightsDisabledCities
     cityCategoryInsightsMaxObservationGapSeconds: cityCategoryInsightsMaxObservationGapSeconds
     cityCategoryInsightsCityMaxObservationGapSeconds: cityCategoryInsightsCityMaxObservationGapSeconds
     cityCategoryInsightsQueueCapacity: cityCategoryInsightsQueueCapacity

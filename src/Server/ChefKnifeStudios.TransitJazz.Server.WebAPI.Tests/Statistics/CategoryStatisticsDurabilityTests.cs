@@ -62,7 +62,7 @@ public sealed class CategoryStatisticsDurabilityTests
     {
         await using var database = await CategoryStatisticsTestDatabase.CreateAsync();
         var factory = new CountingContextFactory(database);
-        var options = new CityCategoryInsightsOptions { Enabled = true, EnabledCities = ["atlanta"], MaxWriteAttempts = 3 };
+        var options = new CityCategoryInsightsOptions { Enabled = true, MaxWriteAttempts = 3 };
         using var writer = new CategoryStatisticsWriter(new CityCategoryStatisticsStore(factory), options,
             NullLogger<CategoryStatisticsWriter>.Instance);
         var row = CategoryStatisticsTestDatabase.Hour();

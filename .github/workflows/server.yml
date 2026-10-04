@@ -43,11 +43,11 @@ jobs:
       - name: Validate city category capture is disabled by default
         run: |
           test "$(jq -r '.CityCategoryInsights.Enabled' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "false"
-          test "$(jq -r '.CityCategoryInsights.EnabledCities | length' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "0"
+          test "$(jq -r '.CityCategoryInsights.DisabledCities | length' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "0"
           test "$(jq -r '.CityCategoryInsights.Enabled' src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json)" = "false"
-          test "$(jq -r '.CityCategoryInsights.EnabledCities | length' src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json)" = "0"
+          test "$(jq -r '.CityCategoryInsights.DisabledCities | length' src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json)" = "0"
           test "$(jq -r '.parameters.enableCityCategoryInsights.defaultValue' bicep/main.json)" = "false"
-          test "$(jq -r '.parameters.cityCategoryInsightsEnabledCities.defaultValue | length' bicep/main.json)" = "0"
+          test "$(jq -r '.parameters.cityCategoryInsightsDisabledCities.defaultValue | length' bicep/main.json)" = "0"
           grep -q 'name: "city_category_minute_statistics"' src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261001204629_CreateCityCategoryStatistics.cs
           grep -q 'name: "city_category_hour_statistics"' src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261001204629_CreateCityCategoryStatistics.cs
           ! grep -Eiq 'migrationBuilder\.Sql|city_minute_statistics|gtfs|route' src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261001204629_CreateCityCategoryStatistics.cs

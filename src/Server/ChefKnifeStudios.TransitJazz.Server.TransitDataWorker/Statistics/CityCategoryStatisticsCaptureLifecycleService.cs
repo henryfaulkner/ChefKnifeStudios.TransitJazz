@@ -10,7 +10,8 @@ public sealed class CityCategoryStatisticsCaptureLifecycleService(
     TimeSpan? sweepInterval = null) : BackgroundService
 {
     readonly TimeSpan _sweepInterval = sweepInterval ?? TimeSpan.FromSeconds(Math.Clamp(
-        options.EnabledCities.Select(options.GapLimitFor).DefaultIfEmpty(options.MaxObservationGapSeconds).Min() / 2,
+        options.CityMaxObservationGapSeconds.Where(x => options.IsEnabledFor(x.Key)).Select(x => x.Value)
+            .Append(options.MaxObservationGapSeconds).Min() / 2,
         1, 15));
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

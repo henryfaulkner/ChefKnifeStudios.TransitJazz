@@ -20,7 +20,7 @@ public sealed class CityCategoryStatisticsCapture
         _logger = logger;
     }
 
-    public bool IsEnabledFor(string city) => _options.Enabled && _options.EnabledCities.Contains(city, StringComparer.OrdinalIgnoreCase);
+    public bool IsEnabledFor(string city) => _options.IsEnabledFor(city);
 
     public CityCategoryStatisticsCycle? BeginCycle(string city, IReadOnlyCollection<string> configuredCategories, long geometryGeneration)
     {

@@ -18,7 +18,6 @@ public sealed class CategoryStatisticsCaptureHostRegistrationTests
         services.AddCategoryStatisticsCaptureRuntime(new CityCategoryInsightsOptions
         {
             Enabled = true,
-            EnabledCities = ["atlanta"],
         });
 
         using var provider = services.BuildServiceProvider();

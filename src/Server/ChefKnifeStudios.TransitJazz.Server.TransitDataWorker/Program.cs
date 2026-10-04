@@ -13,8 +13,7 @@ var builder = Host.CreateApplicationBuilder(args);
 
 var workerOptions = builder.Configuration.GetSection(WorkerOptions.SectionName).Get<WorkerOptions>() ?? new WorkerOptions();
 workerOptions.Validate();
-var categoryInsightsOptions = builder.Configuration.GetSection(CityCategoryInsightsOptions.SectionName).Get<CityCategoryInsightsOptions>()
-    ?? new CityCategoryInsightsOptions();
+var categoryInsightsOptions = CityCategoryInsightsOptions.FromConfiguration(builder.Configuration);
 categoryInsightsOptions.Validate(workerOptions.CycleIntervalSeconds);
 if (categoryInsightsOptions.Enabled)
     throw new InvalidOperationException("Standalone TransitDataWorker has no category statistics database sink; keep CityCategoryInsights.Enabled false.");

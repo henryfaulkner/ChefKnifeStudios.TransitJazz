@@ -13,7 +13,6 @@ public sealed class CityCategoryInsightsOptionsTests
         options.Validate(cycleIntervalSeconds: 60);
 
         options.Enabled = true;
-        options.EnabledCities = ["atlanta"];
         Assert.Throws<ArgumentOutOfRangeException>(() => options.Validate(cycleIntervalSeconds: 60));
     }
 
