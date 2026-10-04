@@ -133,8 +133,9 @@ Starting settings:
 
 | Setting | Default / validation |
 | --- | --- |
-| `CityCategoryInsights.Enabled` | false |
-| `EnabledCities` | empty while disabled; explicit nonempty configured subset when enabled |
+| `CityCategoryInsights.Enabled` | false; true captures all configured cities except exclusions |
+| `DisabledCities` | empty by default; distinct configured city names excluded from capture |
+| `CityCategoryInsights__Disabled_0`, `Disabled_1`, ... | Optional indexed environment settings whose values are excluded city names; explicitly bound into `DisabledCities` |
 | `MaxObservationGapSeconds` | 30; per-city overrides, each greater than cycle interval and <=60 |
 | `QueueCapacity` | 256 one-city aggregate envelopes; positive bounded setting |
 | `MaxBatchRows` | 128; positive and bounded, split larger envelopes in deterministic order |
@@ -163,9 +164,9 @@ Only fully contained UTC hours supply definitive hourly measures. Subminute requ
 
 Add the two explicit EF entities/keys/checks and one schema-only migration. Preserve the current table/migration and existing database secret. The existing Data Dockerfile builds the EF bundle; no capture or feed query runs during migration.
 
-Extend server settings/Bicep with independent capture enablement, enabled cities, and policy settings; regenerate `main.json` if Bicep changes. Keep capture disabled in committed defaults and deployment defaults. Existing Grafana collection remains independently configured. Do not introduce category metrics series in v1; safe logs and database coverage provide operational evidence.
+Extend server settings/Bicep with independent global capture enablement, excluded cities, and policy settings; regenerate `main.json` if Bicep changes. `Enabled=true` selects every configured city except `DisabledCities`, including newly configured cities. Bicep emits exclusions as `CityCategoryInsights__Disabled_0`, `Disabled_1`, and so on. Keep capture disabled in committed defaults and deployment defaults. Existing Grafana collection remains independently configured. Do not introduce category metrics series in v1; safe logs and database coverage provide operational evidence.
 
-Deploy schema, then disabled capture code, then enable one explicitly selected city after timestamp/cadence preflight. Expand only after reconciliation and the 24-hour pilot pass. Preserve existing single-replica deployment; conflicts still protect revision overlap. Current history is future-only and no automatic retention deletion is added.
+Deploy schema, then disabled capture code. To select one pilot city after timestamp/cadence preflight, set the global flag and exclude the other configured cities. Remove exclusions to expand after reconciliation and the 24-hour pilot pass. Preserve existing single-replica deployment; conflicts still protect revision overlap. Current history is future-only and no automatic retention deletion is added.
 
 ### Validation strategy for implementation
 

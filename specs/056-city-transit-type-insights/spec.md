@@ -140,7 +140,7 @@ An operator enables one city, checks reconciliation and coverage, and expands co
 - **FR-023**: Each aggregate has one city/category/minute or hour identity. Identical repeated writes are harmless; differing values MUST be reported without silent addition or replacement. Unresolved conflicts MUST NOT remain authoritative complete results.
 - **FR-024**: Persistent statistics and queued historical summaries MUST contain aggregates only, without vehicle, route, trip, or listener identifiers. Temporary vehicle identities may establish cycle/hour uniqueness.
 - **FR-025**: Historical storage MUST NOT make live transit cycles wait. Bound buffering and retries; expose aggregate loss through coverage and safe summaries.
-- **FR-026**: Operators MUST be able to enable one city and expand to all configured cities. Expansion and insight query availability follow demonstrated initial-city coverage and reconciliation.
+- **FR-026**: `CityCategoryInsights.Enabled=true` MUST collect insights for all configured cities except explicit city exclusions. Operators MUST be able to exclude cities through `CityCategoryInsights__Disabled_0`, `Disabled_1`, and subsequent indexed settings whose values are city names. A one-city pilot excludes the other configured cities; removing exclusions expands capture. Expansion and insight query availability follow demonstrated initial-city coverage and reconciliation.
 - **FR-027**: Safe operational summaries MUST expose failures, conflicts, lost aggregates, and coverage without credentials, raw feeds, or individual transit/listener identities.
 - **FR-028**: Preserve existing city-only statistics, their definitions, existing city metrics, and live transit messages.
 - **FR-029**: Begin category history with new eligible capture and disclose the first collectible date. Do not divide existing city-only samples into category history or sum them into exact crossing totals.
@@ -176,7 +176,7 @@ An operator enables one city, checks reconciliation and coverage, and expands co
 - The healthy-cadence limit is an implementation-time policy calibrated from worker timings before enablement; it does not change measure definitions.
 - Attribution and freshness rules will be documented before capture. An eligible distance interval spanning a boundary belongs once to its completing observation; no unobserved trajectory is reconstructed.
 - The current deployment normally has one producer; revision overlap still requires conflict handling.
-- Collection starts disabled and is enabled city by city after storage structures are available. Existing city-only history remains independently usable under its original contract.
+- Collection starts globally disabled. After storage structures are available, the global flag enables all configured cities except explicit exclusions; pilots can exclude the other cities. Existing city-only history remains independently usable under its original contract.
 - The first release collects future history. Backfill requires a separately authorized extension and proof of an older category-tagged observation source.
 - Completed-trip distance, listener playback measurement, durable recovery of aggregates lost before storage, and extrapolation from partial hours are outside scope.
 - The 5% processing-overhead and 99% healthy-minute targets are initial rollout acceptance targets; incomplete source feeds cannot be assumed to meet them.

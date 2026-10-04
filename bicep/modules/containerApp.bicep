@@ -60,11 +60,11 @@ param grafanaMetricsReaderSecretUri string = ''
 @description('Enable the historical statistics collector.')
 param enableHistoricalStatistics bool = false
 
-@description('Enable city/category capture after its separate schema and pilot gates pass.')
+@description('Enable city/category capture for all configured cities except explicit exclusions after its separate schema and pilot gates pass.')
 param enableCityCategoryInsights bool = false
 
-@description('Explicit configured city names to capture.')
-param cityCategoryInsightsEnabledCities array = []
+@description('Configured city names to exclude from capture.')
+param cityCategoryInsightsDisabledCities array = []
 
 @description('Default maximum observation gap in seconds.')
 param cityCategoryInsightsMaxObservationGapSeconds int = 30
@@ -87,8 +87,8 @@ param cityCategoryInsightsMaxWriteAttempts int = 3
 @description('Bounded writer shutdown drain in seconds.')
 param cityCategoryInsightsShutdownDrainSeconds int = 15
 
-var enabledCityEnvironmentVariables = [for (city, i) in cityCategoryInsightsEnabledCities: {
-  name: 'CityCategoryInsights__EnabledCities__${i}'
+var disabledCityEnvironmentVariables = [for (city, i) in cityCategoryInsightsDisabledCities: {
+  name: 'CityCategoryInsights__Disabled_${i}'
   value: city
 }]
 
@@ -227,7 +227,7 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
                 value: string(cityCategoryInsightsShutdownDrainSeconds)
               }
             ],
-            enabledCityEnvironmentVariables,
+            disabledCityEnvironmentVariables,
             cityCadenceEnvironmentVariables,
             empty(historicalStatisticsBackfillStartUtc) ? [] : [
               {

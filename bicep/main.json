@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "5525767348669610699"
+      "templateHash": "249161325767316187"
     }
   },
   "parameters": {
@@ -141,14 +141,14 @@
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "Enable city/category capture after schema and pilot release gates pass. Defaults to disabled."
+        "description": "Enable city/category capture for all configured cities except explicit exclusions after schema and pilot release gates pass. Defaults to disabled."
       }
     },
-    "cityCategoryInsightsEnabledCities": {
+    "cityCategoryInsightsDisabledCities": {
       "type": "array",
       "defaultValue": [],
       "metadata": {
-        "description": "Explicit configured city names to capture when city/category insights are enabled."
+        "description": "Configured city names to exclude when city/category insights are enabled."
       }
     },
     "cityCategoryInsightsMaxObservationGapSeconds": {
@@ -1348,8 +1348,8 @@
           "enableCityCategoryInsights": {
             "value": "[parameters('enableCityCategoryInsights')]"
           },
-          "cityCategoryInsightsEnabledCities": {
-            "value": "[parameters('cityCategoryInsightsEnabledCities')]"
+          "cityCategoryInsightsDisabledCities": {
+            "value": "[parameters('cityCategoryInsightsDisabledCities')]"
           },
           "cityCategoryInsightsMaxObservationGapSeconds": {
             "value": "[parameters('cityCategoryInsightsMaxObservationGapSeconds')]"
@@ -1392,7 +1392,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "15481011566616902058"
+              "templateHash": "5770402821995527782"
             }
           },
           "parameters": {
@@ -1525,14 +1525,14 @@
               "type": "bool",
               "defaultValue": false,
               "metadata": {
-                "description": "Enable city/category capture after its separate schema and pilot gates pass."
+                "description": "Enable city/category capture for all configured cities except explicit exclusions after its separate schema and pilot gates pass."
               }
             },
-            "cityCategoryInsightsEnabledCities": {
+            "cityCategoryInsightsDisabledCities": {
               "type": "array",
               "defaultValue": [],
               "metadata": {
-                "description": "Explicit configured city names to capture."
+                "description": "Configured city names to exclude from capture."
               }
             },
             "cityCategoryInsightsMaxObservationGapSeconds": {
@@ -1616,11 +1616,11 @@
           "variables": {
             "copy": [
               {
-                "name": "enabledCityEnvironmentVariables",
-                "count": "[length(parameters('cityCategoryInsightsEnabledCities'))]",
+                "name": "disabledCityEnvironmentVariables",
+                "count": "[length(parameters('cityCategoryInsightsDisabledCities'))]",
                 "input": {
-                  "name": "[format('CityCategoryInsights__EnabledCities__{0}', copyIndex('enabledCityEnvironmentVariables'))]",
-                  "value": "[parameters('cityCategoryInsightsEnabledCities')[copyIndex('enabledCityEnvironmentVariables')]]"
+                  "name": "[format('CityCategoryInsights__Disabled_{0}', copyIndex('disabledCityEnvironmentVariables'))]",
+                  "value": "[parameters('cityCategoryInsightsDisabledCities')[copyIndex('disabledCityEnvironmentVariables')]]"
                 }
               },
               {
@@ -1692,7 +1692,7 @@
                         "cpu": "[json(parameters('cpu'))]",
                         "memory": "[parameters('memory')]"
                       },
-                      "env": "[concat(parameters('envVars'), createArray(createObject('name', 'HistoricalStatistics__Enabled', 'value', string(parameters('enableHistoricalStatistics'))), createObject('name', 'HistoricalStatistics__DryRun', 'value', string(parameters('historicalStatisticsDryRun'))), createObject('name', 'HistoricalStatistics__InitialBackfill', 'value', string(parameters('historicalStatisticsInitialBackfill'))), createObject('name', 'HistoricalStatistics__SourceEndpoint', 'value', parameters('grafanaMetricsReaderEndpoint')), createObject('name', 'CityCategoryInsights__Enabled', 'value', string(parameters('enableCityCategoryInsights'))), createObject('name', 'CityCategoryInsights__MaxObservationGapSeconds', 'value', string(parameters('cityCategoryInsightsMaxObservationGapSeconds'))), createObject('name', 'CityCategoryInsights__QueueCapacity', 'value', string(parameters('cityCategoryInsightsQueueCapacity'))), createObject('name', 'CityCategoryInsights__MaxBatchRows', 'value', string(parameters('cityCategoryInsightsMaxBatchRows'))), createObject('name', 'CityCategoryInsights__CommandTimeoutSeconds', 'value', string(parameters('cityCategoryInsightsCommandTimeoutSeconds'))), createObject('name', 'CityCategoryInsights__MaxWriteAttempts', 'value', string(parameters('cityCategoryInsightsMaxWriteAttempts'))), createObject('name', 'CityCategoryInsights__ShutdownDrainSeconds', 'value', string(parameters('cityCategoryInsightsShutdownDrainSeconds')))), variables('enabledCityEnvironmentVariables'), variables('cityCadenceEnvironmentVariables'), if(empty(parameters('historicalStatisticsBackfillStartUtc')), createArray(), createArray(createObject('name', 'HistoricalStatistics__BackfillStartUtc', 'value', parameters('historicalStatisticsBackfillStartUtc')))), if(empty(parameters('historicalStatisticsBackfillEndUtc')), createArray(), createArray(createObject('name', 'HistoricalStatistics__BackfillEndUtc', 'value', parameters('historicalStatisticsBackfillEndUtc')))), if(empty(parameters('transitJazzDbSecretUri')), createArray(), createArray(createObject('name', 'ConnectionStrings__TransitJazzDB', 'secretRef', 'transitjazz-db'))), if(and(parameters('enableHistoricalStatistics'), not(empty(parameters('grafanaMetricsReaderSecretUri')))), createArray(createObject('name', 'HistoricalStatistics__ReaderAuthorization', 'secretRef', 'grafana-stats-reader')), createArray()))]",
+                      "env": "[concat(parameters('envVars'), createArray(createObject('name', 'HistoricalStatistics__Enabled', 'value', string(parameters('enableHistoricalStatistics'))), createObject('name', 'HistoricalStatistics__DryRun', 'value', string(parameters('historicalStatisticsDryRun'))), createObject('name', 'HistoricalStatistics__InitialBackfill', 'value', string(parameters('historicalStatisticsInitialBackfill'))), createObject('name', 'HistoricalStatistics__SourceEndpoint', 'value', parameters('grafanaMetricsReaderEndpoint')), createObject('name', 'CityCategoryInsights__Enabled', 'value', string(parameters('enableCityCategoryInsights'))), createObject('name', 'CityCategoryInsights__MaxObservationGapSeconds', 'value', string(parameters('cityCategoryInsightsMaxObservationGapSeconds'))), createObject('name', 'CityCategoryInsights__QueueCapacity', 'value', string(parameters('cityCategoryInsightsQueueCapacity'))), createObject('name', 'CityCategoryInsights__MaxBatchRows', 'value', string(parameters('cityCategoryInsightsMaxBatchRows'))), createObject('name', 'CityCategoryInsights__CommandTimeoutSeconds', 'value', string(parameters('cityCategoryInsightsCommandTimeoutSeconds'))), createObject('name', 'CityCategoryInsights__MaxWriteAttempts', 'value', string(parameters('cityCategoryInsightsMaxWriteAttempts'))), createObject('name', 'CityCategoryInsights__ShutdownDrainSeconds', 'value', string(parameters('cityCategoryInsightsShutdownDrainSeconds')))), variables('disabledCityEnvironmentVariables'), variables('cityCadenceEnvironmentVariables'), if(empty(parameters('historicalStatisticsBackfillStartUtc')), createArray(), createArray(createObject('name', 'HistoricalStatistics__BackfillStartUtc', 'value', parameters('historicalStatisticsBackfillStartUtc')))), if(empty(parameters('historicalStatisticsBackfillEndUtc')), createArray(), createArray(createObject('name', 'HistoricalStatistics__BackfillEndUtc', 'value', parameters('historicalStatisticsBackfillEndUtc')))), if(empty(parameters('transitJazzDbSecretUri')), createArray(), createArray(createObject('name', 'ConnectionStrings__TransitJazzDB', 'secretRef', 'transitjazz-db'))), if(and(parameters('enableHistoricalStatistics'), not(empty(parameters('grafanaMetricsReaderSecretUri')))), createArray(createObject('name', 'HistoricalStatistics__ReaderAuthorization', 'secretRef', 'grafana-stats-reader')), createArray()))]",
                       "probes": [
                         {
                           "type": "Readiness",

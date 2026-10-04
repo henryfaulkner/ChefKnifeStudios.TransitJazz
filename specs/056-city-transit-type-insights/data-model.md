@@ -89,7 +89,7 @@ An hourly distinct count is nonadditive across minutes. Across complete hours it
 | Hour population set | Distinct eligible vehicle identities per city/category/hour; discarded on finalization or loss |
 | `FinalizedCategoryStatisticsBatch` | Immutable minute/hour rows for one city, aggregate-only |
 | `CategoryStatisticsWriteReport` | Inserted/unchanged/conflicting/omitted counts and bounded reason codes; no raw rows or transit identities |
-| `CityCategoryInsightsOptions` | Disabled default, enabled cities, cadence limits, queue capacity, batch size, timeout, retries, shutdown drain |
+| `CityCategoryInsightsOptions` | Global disabled default, optional city exclusions, cadence limits, queue capacity, batch size, timeout, retries, shutdown drain |
 | City configuration | Add validated `TimeZoneId` to the existing `Cities[]` entries; no persistent city/time-zone table |
 
 ## Availability metadata

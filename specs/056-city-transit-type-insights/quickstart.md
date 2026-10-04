@@ -11,7 +11,7 @@ Validation evidence recorded so far:
 - The complete WebAPI test suite passed **227/227 with zero skipped**. This includes **52 real category PostgreSQL cases** (store, migration, durability, writer, metric queries, and bound `EXPLAIN` plans for all six recipes) plus the legacy city-only store regression on its own isolated database. Each category integration case used a uniquely named disposable database.
 - The complete Worker suite, including hosted-sweeper, shutdown-flush, generation/watermark, unknown-boundary regressions, and six live reconciliation integration cases, passed **140/140 with zero skips**.
 - The writer tests exercised a full queue while its storage dependency was blocked and confirmed admission returned `false` immediately. A controlled noncooperative dependency also confirmed shutdown returns at its configured deadline; logs retain committed insert/unchanged/conflict counts across backing-minute retries.
-- Bicep compiled and `bicep/main.json` was regenerated. The default configuration and deployment parameter keep capture disabled and the enabled-city set empty.
+- Bicep compiled and `bicep/main.json` was regenerated. The default configuration and deployment parameter keep capture globally disabled and the city-exclusion set empty.
 - PostgreSQL integration tests create and remove only uniquely named databases in the explicitly provisioned disposable loopback cluster. No operator database was used.
 - The native Windows EF migration bundle built successfully and applied both migrations to a separately owned disposable database. Reapplying it reported no migrations pending. Schema verification found exactly `city_minute_statistics`, the two new category tables, and EF history, with two migration records. Bundle execution required the existing `ConnectionStrings__TransitJazzDB` environment binding even when `--connection` was also supplied.
 - The Docker engine was unavailable, so the Linux migration-image build from the Data Dockerfile is unverified. No migration was applied outside disposable test databases.
@@ -23,7 +23,7 @@ Validation evidence recorded so far:
 1. Review the current [plan](plan.md), [tasks](tasks.md), disabled defaults, and remaining release gates.
 2. Keep `CityCategoryInsights.Enabled=false` in committed defaults. Leave the existing `HistoricalStatistics` settings under their independent contract.
 3. Supply the existing `ConnectionStrings__TransitJazzDB` using the established server secret configuration. Category capture requires it when enabled; it requires no Grafana reader credential.
-4. Configure an explicit enabled-city subset and the city's `TimeZoneId`. Start with one city whose source timestamps and normal timing have been checked.
+4. Confirm `TimeZoneId` for every included city. The global flag enables all configured cities except explicit exclusions. For a one-city pilot, exclude the other configured cities and check the pilot city's source timestamps and normal timing.
 5. Record the healthy-gap limit, starting from 30 seconds for the ten-second cycle, and confirm the measured healthy city-cycle spacing fits it.
 
 ## Local implementation checks
@@ -73,7 +73,7 @@ Initial nonsecret configuration:
 {
   "CityCategoryInsights": {
     "Enabled": false,
-    "EnabledCities": [],
+    "DisabledCities": [],
     "MaxObservationGapSeconds": 30,
     "QueueCapacity": 256,
     "MaxBatchRows": 128,
@@ -84,7 +84,19 @@ Initial nonsecret configuration:
 }
 ```
 
-For the pilot, enable one configured city and add the IANA zone to its existing `Cities[]` entry. Existing Eastern US cities use `America/New_York`; Toronto uses `America/Toronto`; Denver uses `America/Denver`. Validate the zone and any city-specific cadence override before enabling.
+`CityCategoryInsights__Enabled=true` enables capture for every configured city. Optional exclusions use a city name as each indexed setting's value:
+
+```text
+CityCategoryInsights__Enabled=true
+CityCategoryInsights__Disabled_0=toronto
+CityCategoryInsights__Disabled_1=denver
+```
+
+This captures the other five configured cities. Exclusions are case-insensitive. With the global flag false, no city captures insights. JSON configuration can use `DisabledCities`, and Bicep uses `enableCityCategoryInsights` plus the optional `cityCategoryInsightsDisabledCities` array. To capture all cities, set the global flag true and leave exclusions empty. The old `EnabledCities` setting has been removed; remove legacy enabled-city environment entries when updating deployment configuration.
+
+For a one-city pilot, exclude every other configured city. Existing Eastern US cities use `America/New_York`; Toronto uses `America/Toronto`; Denver uses `America/Denver`. Validate the included cities' zones and any city-specific cadence override before enabling. The existing database migration and server database binding remain prerequisites.
+
+The global enablement/exclusion configuration was updated on 2026-10-04. The server build and Bicep compilation passed for this update. The earlier test results above predate this configuration change; tests have not been rerun for this update.
 
 Confirm `Channel` admission is synchronous `TryWrite`, with observable false on a full queue. A slow/unavailable database must not make a live transit cycle await storage. Reports expose aggregate insertion, unchanged retry, conflict, omission, and loss counts without raw transit IDs or credentials.
 
@@ -123,6 +135,6 @@ Record the first retained category observation. Queries before it report unavail
 
 ## Expand or disable
 
-Expand to the remaining configured cities after the pilot passes source eligibility, durable reconciliation, coverage, and overhead checks. Keep dynamic categories and per-city zones validated.
+Remove city exclusions to expand capture after the pilot passes source eligibility, durable reconciliation, coverage, and overhead checks. Keep dynamic categories and per-city zones validated.
 
 Disable capture if the pilot fails, preserving historical rows and their coverage/conflict evidence. Investigate bounded reason summaries and the missing-window queries, then re-enable only after the failing evidence is resolved. V1 has no automatic conflict overwrite, retention deletion, durable replay, listener telemetry, or backfill.

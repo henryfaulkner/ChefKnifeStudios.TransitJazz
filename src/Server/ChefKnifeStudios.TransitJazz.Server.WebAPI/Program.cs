@@ -183,20 +183,19 @@ else if (historicalStatisticsOptions.Enabled)
     throw new InvalidOperationException("Historical statistics collection requires ConnectionStrings:TransitJazzDB.");
 }
 
-var cityCategoryInsightsOptions = builder.Configuration.GetSection(CityCategoryInsightsOptions.SectionName).Get<CityCategoryInsightsOptions>()
-    ?? new CityCategoryInsightsOptions();
+var cityCategoryInsightsOptions = CityCategoryInsightsOptions.FromConfiguration(builder.Configuration);
 cityCategoryInsightsOptions.Validate(workerOptions.CycleIntervalSeconds);
 if (cityCategoryInsightsOptions.Enabled)
 {
     if (string.IsNullOrWhiteSpace(transitJazzConnectionString))
         throw new InvalidOperationException("City category statistics capture requires ConnectionStrings:TransitJazzDB.");
     var configuredCities = cityConfigs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-    var missingCities = cityCategoryInsightsOptions.EnabledCities.Where(x => !configuredCities.Contains(x)).ToArray();
+    var missingCities = cityCategoryInsightsOptions.DisabledCities.Concat(cityCategoryInsightsOptions.CityMaxObservationGapSeconds.Keys)
+        .Where(x => !configuredCities.Contains(x)).ToArray();
     if (missingCities.Length > 0)
-        throw new InvalidOperationException("City category statistics EnabledCities must name configured cities.");
-    foreach (var cityName in cityCategoryInsightsOptions.EnabledCities)
+        throw new InvalidOperationException("City category statistics DisabledCities and cadence overrides must name configured cities.");
+    foreach (var city in cityConfigs.Where(x => cityCategoryInsightsOptions.IsEnabledFor(x.Name)))
     {
-        var city = cityConfigs.Single(x => string.Equals(x.Name, cityName, StringComparison.OrdinalIgnoreCase));
         if (string.IsNullOrWhiteSpace(city.TimeZoneId))
             throw new InvalidOperationException("Enabled city category statistics require a configured IANA time zone.");
         CityCategoryInsightsOptions.ValidateIanaTimeZoneId(city.TimeZoneId);

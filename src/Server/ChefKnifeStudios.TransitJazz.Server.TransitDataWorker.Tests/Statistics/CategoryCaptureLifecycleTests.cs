@@ -43,7 +43,7 @@ public sealed class CategoryCaptureLifecycleTests
         fixture.Clock.SetUtcNow(fixture.Start.AddSeconds(91));
         var service = new CityCategoryStatisticsCaptureLifecycleService(
             fixture.Capture,
-            new CityCategoryInsightsOptions { Enabled = true, EnabledCities = [CategoryStatisticsCaptureFixture.City] },
+            new CityCategoryInsightsOptions { Enabled = true },
             fixture.Clock,
             TimeSpan.FromMilliseconds(5));
 
