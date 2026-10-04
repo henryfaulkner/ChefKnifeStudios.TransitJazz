@@ -1,0 +1,4 @@
+interface:
+  display_name: "TransitJazz Database"
+  short_description: "Connect, query, and explain TransitJazz statistics"
+  default_prompt: "Use $transitjazz-db to query the TransitJazz database and explain the results with coverage and metric definitions."

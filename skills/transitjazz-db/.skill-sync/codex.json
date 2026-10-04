@@ -1,0 +1,8 @@
+{
+  "assets": [
+    {
+      "from": "assets/agents/openai.yaml",
+      "to": "agents/openai.yaml"
+    }
+  ]
+}
