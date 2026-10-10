@@ -11,7 +11,7 @@ using Microsoft.Extensions.Options;
 
 namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
 
-/// <summary>Disabled-by-default hosted collector for bounded historical and recurring samples.</summary>
+/// <summary>Disabled-by-default hosted collector for recurring city-minute samples.</summary>
 public sealed class HistoricalStatisticsCollector(
     IOptions<HistoricalStatisticsOptions> options,
     IHistoricalStatisticsSource source,
@@ -25,13 +25,6 @@ public sealed class HistoricalStatisticsCollector(
         if (!currentOptions.Enabled)
             return StatisticsCollectionReport.Disabled(currentOptions.SourceDefinitionVersion, currentOptions.Cities);
 
-        if (currentOptions.InitialBackfill)
-        {
-            if (currentOptions.BackfillStartUtc is null || currentOptions.BackfillEndUtc is null)
-                return FailureReport(currentOptions, "initial-backfill-range-missing");
-            return await CollectRangeAsync(currentOptions, currentOptions.BackfillStartUtc.Value.UtcDateTime, currentOptions.BackfillEndUtc.Value.UtcDateTime, cancellationToken);
-        }
-
         var closedMinute = AlignToMinute(nowUtc).AddMinutes(-currentOptions.IngestionGraceMinutes);
         var start = closedMinute.AddMinutes(-currentOptions.OverlapMinutes);
         return await CollectRangeAsync(currentOptions, start, closedMinute, cancellationToken);
@@ -44,33 +37,20 @@ public sealed class HistoricalStatisticsCollector(
             return;
 
         currentOptions.Validate();
-        if (currentOptions.InitialBackfill)
-        {
-            var backfillReport = await CollectAsync(DateTime.UtcNow, stoppingToken);
-            LogReport("backfill", backfillReport);
-        }
-
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(HistoricalStatisticsOptions.FixedCollectionIntervalMinutes));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            var report = await CollectRecurringAsync(DateTime.UtcNow, stoppingToken);
-            LogReport("recurring", report);
+            var report = await CollectAsync(DateTime.UtcNow, stoppingToken);
+            LogReport(report);
         }
     }
 
-    void LogReport(string mode, StatisticsCollectionReport report) =>
+    void LogReport(StatisticsCollectionReport report) =>
         logger.Log(report.Succeeded ? LogLevel.Information : LogLevel.Warning,
-            "Historical statistics collection: mode={Mode}, succeeded={Succeeded}, dryRun={DryRun}, requestedStartUtc={RequestedStartUtc}, requestedEndUtc={RequestedEndUtc}, created={Created}, unchanged={Unchanged}, filled={Filled}, discrepant={Discrepant}, completeRows={CompleteRows}, partialRows={PartialRows}, noDataRows={NoDataRows}, warningCount={WarningCount}, failureCodes={FailureCodes}",
-            mode, report.Succeeded, report.DryRun, report.RequestedStartUtc, report.RequestedEndUtc,
+            "Historical statistics collection: succeeded={Succeeded}, dryRun={DryRun}, requestedStartUtc={RequestedStartUtc}, requestedEndUtc={RequestedEndUtc}, created={Created}, unchanged={Unchanged}, filled={Filled}, discrepant={Discrepant}, completeRows={CompleteRows}, partialRows={PartialRows}, noDataRows={NoDataRows}, warningCount={WarningCount}, failureCodes={FailureCodes}",
+            report.Succeeded, report.DryRun, report.RequestedStartUtc, report.RequestedEndUtc,
             report.Created, report.Unchanged, report.Filled, report.Discrepant, report.CompleteRows,
             report.PartialRows, report.NoDataRows, report.Warnings.Count, string.Join(",", report.Failures.Distinct()));
-
-    async Task<StatisticsCollectionReport> CollectRecurringAsync(DateTime nowUtc, CancellationToken cancellationToken)
-    {
-        var currentOptions = options.Value;
-        var closedMinute = AlignToMinute(nowUtc).AddMinutes(-currentOptions.IngestionGraceMinutes);
-        return await CollectRangeAsync(currentOptions, closedMinute.AddMinutes(-currentOptions.OverlapMinutes), closedMinute, cancellationToken);
-    }
 
     async Task<StatisticsCollectionReport> CollectRangeAsync(
         HistoricalStatisticsOptions currentOptions,
@@ -79,71 +59,64 @@ public sealed class HistoricalStatisticsCollector(
         CancellationToken cancellationToken)
     {
         var aggregate = new ReportAccumulator(currentOptions, fromMinuteUtc, toMinuteUtc);
-        var chunkStart = fromMinuteUtc;
-        while (chunkStart <= toMinuteUtc)
+        cancellationToken.ThrowIfCancellationRequested();
+        StatisticsSourceResult result;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var chunkEnd = Min(chunkStart.AddHours(HistoricalStatisticsOptions.InitialChunkHours).AddMinutes(-1), toMinuteUtc);
-            StatisticsSourceResult result;
+            result = await source.QueryAsync(fromMinuteUtc, toMinuteUtc, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (StatisticsSourceException exception)
+        {
+            logger.LogWarning(
+                "Historical statistics source failure: code={Code}, field={Field}, httpStatusCode={HttpStatusCode}, causeType={CauseType}, exceptionType={ExceptionType}, fromMinuteUtc={FromMinuteUtc}, toMinuteUtc={ToMinuteUtc}, exceptionStackTrace={ExceptionStackTrace}",
+                exception.Code, exception.FieldName, exception.HttpStatusCode, exception.CauseType,
+                exception.GetType().Name, fromMinuteUtc, toMinuteUtc, exception.StackTrace);
+            aggregate.Failures.Add(exception.Code);
+            return aggregate.Build();
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                "Historical statistics source failure: code={Code}, exceptionType={ExceptionType}, fromMinuteUtc={FromMinuteUtc}, toMinuteUtc={ToMinuteUtc}, exceptionStackTrace={ExceptionStackTrace}",
+                "metrics-source-failure", exception.GetType().Name, fromMinuteUtc, toMinuteUtc, exception.StackTrace);
+            aggregate.Failures.Add("metrics-source-failure");
+            return aggregate.Build();
+        }
+
+        aggregate.AddWarnings(result.Warnings);
+        aggregate.RecordReturned(result.ReturnedStartUtc, result.ReturnedEndUtc);
+        var rows = BuildGrid(currentOptions, fromMinuteUtc, toMinuteUtc, result.Rows, result.Warnings.Count > 0);
+        aggregate.AddRows(rows);
+
+        if (!currentOptions.DryRun)
+        {
             try
             {
-                result = await source.QueryAsync(chunkStart, chunkEnd, cancellationToken);
+                foreach (var batch in rows.Chunk(CityMinuteStatisticsStore.MaxBatchRows))
+                {
+                    var write = await store.UpsertAsync(batch, cancellationToken);
+                    aggregate.Created += write.Created;
+                    aggregate.Unchanged += write.Unchanged;
+                    aggregate.Filled += write.Filled;
+                    aggregate.Discrepant += write.Discrepant;
+                }
             }
             catch (OperationCanceledException)
             {
                 throw;
             }
-            catch (StatisticsSourceException exception)
-            {
-                logger.LogWarning(
-                    "Historical statistics source failure: code={Code}, field={Field}, httpStatusCode={HttpStatusCode}, causeType={CauseType}, exceptionType={ExceptionType}, fromMinuteUtc={FromMinuteUtc}, toMinuteUtc={ToMinuteUtc}, exceptionStackTrace={ExceptionStackTrace}",
-                    exception.Code, exception.FieldName, exception.HttpStatusCode, exception.CauseType,
-                    exception.GetType().Name, chunkStart, chunkEnd, exception.StackTrace);
-                aggregate.Failures.Add(exception.Code);
-                break;
-            }
             catch (Exception exception)
             {
                 logger.LogWarning(
-                    "Historical statistics source failure: code={Code}, exceptionType={ExceptionType}, fromMinuteUtc={FromMinuteUtc}, toMinuteUtc={ToMinuteUtc}, exceptionStackTrace={ExceptionStackTrace}",
-                    "metrics-source-failure", exception.GetType().Name, chunkStart, chunkEnd, exception.StackTrace);
-                aggregate.Failures.Add("metrics-source-failure");
-                break;
+                    "Historical statistics store failure: code={Code}, exceptionType={ExceptionType}, fromMinuteUtc={FromMinuteUtc}, toMinuteUtc={ToMinuteUtc}, exceptionStackTrace={ExceptionStackTrace}",
+                    "statistics-store-failure", exception.GetType().Name, fromMinuteUtc, toMinuteUtc, exception.StackTrace);
+                aggregate.Failures.Add("statistics-store-failure");
+                return aggregate.Build();
             }
-
-            aggregate.AddWarnings(result.Warnings);
-            aggregate.RecordReturned(result.ReturnedStartUtc, result.ReturnedEndUtc);
-            var rows = BuildGrid(currentOptions, chunkStart, chunkEnd, result.Rows, result.Warnings.Count > 0);
-            aggregate.AddRows(rows);
-
-            if (!currentOptions.DryRun)
-            {
-                try
-                {
-                    foreach (var batch in rows.Chunk(CityMinuteStatisticsStore.MaxBatchRows))
-                    {
-                        var write = await store.UpsertAsync(batch, cancellationToken);
-                        aggregate.Created += write.Created;
-                        aggregate.Unchanged += write.Unchanged;
-                        aggregate.Filled += write.Filled;
-                        aggregate.Discrepant += write.Discrepant;
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception exception)
-                {
-                    logger.LogWarning(
-                        "Historical statistics store failure: code={Code}, exceptionType={ExceptionType}, fromMinuteUtc={FromMinuteUtc}, toMinuteUtc={ToMinuteUtc}, exceptionStackTrace={ExceptionStackTrace}",
-                        "statistics-store-failure", exception.GetType().Name, chunkStart, chunkEnd, exception.StackTrace);
-                    aggregate.Failures.Add("statistics-store-failure");
-                    break;
-                }
-            }
-
-            chunkStart = chunkEnd.AddMinutes(1);
         }
 
         if (currentOptions.DryRun)
@@ -190,11 +163,6 @@ public sealed class HistoricalStatisticsCollector(
     }
 
     static DateTime AlignToMinute(DateTime value) => new(value.Year, value.Month, value.Day, value.Hour, value.Minute, 0, DateTimeKind.Utc);
-    static DateTime Min(DateTime left, DateTime right) => left <= right ? left : right;
-
-    static StatisticsCollectionReport FailureReport(HistoricalStatisticsOptions options, string failure) => new(
-        options.SourceDefinitionVersion, options.DryRun, options.BackfillStartUtc?.UtcDateTime, options.BackfillEndUtc?.UtcDateTime,
-        null, null, options.Cities, 0, 0, 0, 0, 0, 0, 0, [], [], [failure]);
 
     sealed class ReportAccumulator(HistoricalStatisticsOptions options, DateTime requestedStartUtc, DateTime requestedEndUtc)
     {

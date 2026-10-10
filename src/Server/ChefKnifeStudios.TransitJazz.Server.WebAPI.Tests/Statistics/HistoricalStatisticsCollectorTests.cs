@@ -25,30 +25,6 @@ public sealed class HistoricalStatisticsCollectorTests
     }
 
     [Fact]
-    public async Task InitialBackfillUsesSequentialSixHourChunksAndDryRunSuppressesWrites()
-    {
-        var source = new FakeSource();
-        var store = new FakeStore();
-        var options = ValidOptions(enabled: true);
-        options.InitialBackfill = true;
-        options.DryRun = true;
-        options.BackfillStartUtc = new DateTimeOffset(2026, 9, 20, 0, 0, 0, TimeSpan.Zero);
-        options.BackfillEndUtc = new DateTimeOffset(2026, 9, 20, 12, 0, 0, TimeSpan.Zero);
-        var collector = CreateCollector(options, source, store);
-
-        var report = await collector.CollectAsync(options.BackfillEndUtc.Value.UtcDateTime);
-
-        Assert.Equal(3, source.Calls.Count);
-        Assert.Equal((options.BackfillStartUtc.Value.UtcDateTime, new DateTime(2026, 9, 20, 5, 59, 0, DateTimeKind.Utc)), source.Calls[0]);
-        Assert.Equal((new DateTime(2026, 9, 20, 6, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 20, 11, 59, 0, DateTimeKind.Utc)), source.Calls[1]);
-        Assert.Equal((new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc), options.BackfillEndUtc.Value.UtcDateTime), source.Calls[2]);
-        Assert.Equal(0, store.WriteCalls);
-        Assert.Equal(721, report.Created);
-        Assert.Equal(options.BackfillStartUtc.Value.UtcDateTime, report.RequestedStartUtc);
-        Assert.Equal(options.BackfillEndUtc.Value.UtcDateTime, report.RequestedEndUtc);
-    }
-
-    [Fact]
     public async Task RecurringCollectionUsesTwoMinuteGraceAndFiveMinuteOverlapForEveryCity()
     {
         var source = new FakeSource();
@@ -68,24 +44,22 @@ public sealed class HistoricalStatisticsCollectorTests
     }
 
     [Fact]
-    public async Task AppliedSevenCityBackfillStaysWithinStoreBatchLimit()
+    public async Task AppliedSevenCityCollectionWritesOnlyTheRecurringWindow()
     {
         var source = new FakeSource();
         var store = new FakeStore();
         var options = ValidOptions(enabled: true);
         options.Cities = ["atlanta", "washington-dc", "boston", "new-york-city", "toronto", "philadelphia", "denver"];
         options.DryRun = false;
-        options.InitialBackfill = true;
-        options.BackfillStartUtc = new DateTimeOffset(2026, 9, 20, 0, 0, 0, TimeSpan.Zero);
-        options.BackfillEndUtc = new DateTimeOffset(2026, 9, 20, 5, 59, 0, TimeSpan.Zero);
         var collector = CreateCollector(options, source, store);
 
-        var report = await collector.CollectAsync(options.BackfillEndUtc.Value.UtcDateTime);
+        var report = await collector.CollectAsync(new DateTime(2026, 9, 20, 15, 10, 31, DateTimeKind.Utc));
 
-        Assert.Equal(2, store.WriteCalls);
-        Assert.Equal(2_520, store.WrittenBatchSizes.Sum());
+        Assert.Single(source.Calls);
+        Assert.Equal(1, store.WriteCalls);
+        Assert.Equal(42, store.WrittenBatchSizes.Sum());
         Assert.All(store.WrittenBatchSizes, size => Assert.InRange(size, 1, CityMinuteStatisticsStore.MaxBatchRows));
-        Assert.Equal(2_520, report.Created);
+        Assert.Equal(42, report.Created);
     }
 
     [Fact]
