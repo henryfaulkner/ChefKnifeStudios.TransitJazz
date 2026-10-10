@@ -318,12 +318,11 @@ var app = builder.Build();
 
 app.Services.GetRequiredService<ILoggerFactory>()
     .CreateLogger("ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics.Startup")
-    .LogInformation("Historical statistics startup: enabled={Enabled}, dryRun={DryRun}, initialBackfill={InitialBackfill}, databaseConfigured={DatabaseConfigured}, sourceEndpointConfigured={SourceEndpointConfigured}, readerAuthorizationConfigured={ReaderAuthorizationConfigured}, backfillRangeConfigured={BackfillRangeConfigured}",
-        historicalStatisticsOptions.Enabled, historicalStatisticsOptions.DryRun, historicalStatisticsOptions.InitialBackfill,
+    .LogInformation("Historical statistics startup: enabled={Enabled}, dryRun={DryRun}, databaseConfigured={DatabaseConfigured}, sourceEndpointConfigured={SourceEndpointConfigured}, readerAuthorizationConfigured={ReaderAuthorizationConfigured}",
+        historicalStatisticsOptions.Enabled, historicalStatisticsOptions.DryRun,
         !string.IsNullOrWhiteSpace(transitJazzConnectionString),
         !string.IsNullOrWhiteSpace(historicalStatisticsOptions.SourceEndpoint),
-        !string.IsNullOrWhiteSpace(historicalStatisticsOptions.ReaderAuthorization),
-        historicalStatisticsOptions.BackfillStartUtc is not null && historicalStatisticsOptions.BackfillEndUtc is not null);
+        !string.IsNullOrWhiteSpace(historicalStatisticsOptions.ReaderAuthorization));
 
 app.UseExceptionHandler();
 

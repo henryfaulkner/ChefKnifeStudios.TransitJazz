@@ -98,15 +98,6 @@ param cityCategoryInsightsShutdownDrainSeconds int = 15
 @description('Run the historical statistics collector without database writes.')
 param historicalStatisticsDryRun bool = true
 
-@description('Enable the bounded initial historical statistics backfill.')
-param historicalStatisticsInitialBackfill bool = false
-
-@description('Inclusive UTC minute for the initial historical statistics backfill; required when initial backfill is enabled.')
-param historicalStatisticsBackfillStartUtc string = ''
-
-@description('Inclusive UTC minute for the initial historical statistics backfill; required when initial backfill is enabled.')
-param historicalStatisticsBackfillEndUtc string = ''
-
 @description('Object ID for the intended workspace-scoped Log Analytics Reader. Leave empty until approved.')
 param logAnalyticsReaderPrincipalId string = ''
 
@@ -396,9 +387,6 @@ module serverApp 'modules/containerApp.bicep' = {
     cityCategoryInsightsMaxWriteAttempts: cityCategoryInsightsMaxWriteAttempts
     cityCategoryInsightsShutdownDrainSeconds: cityCategoryInsightsShutdownDrainSeconds
     historicalStatisticsDryRun: historicalStatisticsDryRun
-    historicalStatisticsInitialBackfill: historicalStatisticsInitialBackfill
-    historicalStatisticsBackfillStartUtc: historicalStatisticsBackfillStartUtc
-    historicalStatisticsBackfillEndUtc: historicalStatisticsBackfillEndUtc
   }
   dependsOn: [
     acrRoleAssignment

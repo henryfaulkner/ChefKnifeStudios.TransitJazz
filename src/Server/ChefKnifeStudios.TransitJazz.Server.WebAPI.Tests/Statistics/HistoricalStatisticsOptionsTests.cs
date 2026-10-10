@@ -1,5 +1,4 @@
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -50,43 +49,6 @@ public sealed class HistoricalStatisticsOptionsTests
         options.Cities.Add("atlanta");
 
         Assert.Throws<OptionsValidationException>(() => options.Validate());
-    }
-
-    [Fact]
-    public void AzureUtcBackfillValuesBindAndValidate()
-    {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["HistoricalStatistics:BackfillStartUtc"] = "2026-08-01T00:00:00Z",
-                ["HistoricalStatistics:BackfillEndUtc"] = "2026-10-01T00:00:00Z",
-            })
-            .Build();
-        var options = ValidOptions();
-        options.Enabled = true;
-        options.InitialBackfill = true;
-        options.SourceEndpoint = "https://metrics.example/api/v1/query_range";
-        options.ReaderAuthorization = "Basic reader";
-
-        configuration.GetSection(HistoricalStatisticsOptions.SectionName).Bind(options);
-
-        options.Validate();
-        Assert.Equal(TimeSpan.Zero, options.BackfillStartUtc!.Value.Offset);
-        Assert.Equal(TimeSpan.Zero, options.BackfillEndUtc!.Value.Offset);
-        Assert.Equal(DateTimeKind.Utc, options.BackfillStartUtc.Value.UtcDateTime.Kind);
-        Assert.Equal(DateTimeKind.Utc, options.BackfillEndUtc.Value.UtcDateTime.Kind);
-    }
-
-    [Fact]
-    public void BackfillRejectsNonUtcOffset()
-    {
-        var options = ValidOptions();
-        options.BackfillStartUtc = new DateTimeOffset(2026, 8, 1, 1, 0, 0, TimeSpan.FromHours(1));
-        options.BackfillEndUtc = new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero);
-
-        var exception = Assert.Throws<OptionsValidationException>(() => options.Validate());
-
-        Assert.Contains(exception.Failures, failure => failure.Contains("BackfillStartUtc must be UTC.", StringComparison.Ordinal));
     }
 
     [Fact]

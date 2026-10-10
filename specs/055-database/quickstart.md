@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This runbook creates the single city-minute schema, proves the read-only metrics source, backfills only still-queryable dashboard history, and then enables recurring collection. It never reconstructs missing history from logs, legacy telemetry files, or transit feeds.
+This runbook creates the single city-minute schema, proves the read-only metrics source, and enables recurring collection. Initial database backfill has been removed; collection reads only the newest safe closed minute and the configured retry overlap.
 
 ## Prerequisites
 
@@ -37,34 +37,33 @@ Start with statistics collection disabled by default. Supply the reader endpoint
 - one-minute collection interval;
 - two-minute ingestion grace;
 - five-minute idempotent retry overlap;
-- initial backfill window: the actual available source history, never more than the verified retention window;
 - dry-run enabled for the first execution.
 
-The server GitHub Actions deployment updates the Container App image only. It does not add or change the collector's environment variables or Key Vault references. Deploy the reviewed Bicep configuration separately: set `transitJazzDbSecretUri`, `grafanaMetricsReaderEndpoint`, and `grafanaMetricsReaderSecretUri`; set `enableHistoricalStatistics=true` with `historicalStatisticsDryRun=true` for the first run. When `historicalStatisticsInitialBackfill=true`, also set `historicalStatisticsBackfillStartUtc` and `historicalStatisticsBackfillEndUtc` to inclusive, minute-aligned UTC values within verified source retention. The schema migration alone does not start collection, and dry-run collection does not write rows.
+The server GitHub Actions deployment updates the Container App image only. It does not add or change the collector's environment variables or Key Vault references. Deploy the reviewed Bicep configuration separately: set `transitJazzDbSecretUri`, `grafanaMetricsReaderEndpoint`, and `grafanaMetricsReaderSecretUri`; set `enableHistoricalStatistics=true` with `historicalStatisticsDryRun=true` for the first run. Remove any existing `HistoricalStatistics__InitialBackfill`, `HistoricalStatistics__BackfillStartUtc`, and `HistoricalStatistics__BackfillEndUtc` environment variables. The schema migration alone does not start collection, and dry-run collection does not write rows.
 
-At startup, the server logs whether collection, the database binding, source endpoint, reader credential, and backfill range are configured. An enabled collector logs one safe outcome summary per run, including dry-run mode, row counts, warning count, and fixed failure codes. The collector does not log secret values, endpoint URLs, raw responses, or database errors.
+At startup, the server logs whether collection, the database binding, source endpoint, and reader credential are configured. An enabled collector logs one safe outcome summary per run, including dry-run mode, row counts, warning count, and fixed failure codes. The collector does not log secret values, endpoint URLs, raw responses, or database errors.
 
 The deployment must not change worker metric instruments, labels, exporter cadence, dashboard JSON, alerts, or production metrics ingress.
 
-## Dry-run the historical backfill
+## Dry-run recurring collection
 
 1. Run the collector in dry-run mode.
-2. Confirm it makes only read-only source queries in bounded six-hour UTC chunks at a 60-second step.
+2. Confirm each run makes a read-only source query at a 60-second step for the newest safe closed minute and the prior five minutes.
 3. Review the safe report: effective source contract version, actual returned interval, expected city labels, complete/partial/no-data coverage, query warnings, and created/unchanged/discrepant counts.
 4. Select three closed minutes for every source field and city where available. Compare each database-ready value with the exact frozen expression. Check a normal, zero/empty, and edge minute.
 5. If any source field, city label, source range, or credential scope is wrong, leave writes disabled, correct the issue, and repeat the dry run. Do not fill gaps with another source.
 
-## Apply and verify the backfill
+## Enable writes and verify collection
 
-1. Enable writes and rerun the same bounded range.
+1. Set `historicalStatisticsDryRun=false` after the dry run passes reconciliation.
 2. Confirm one row exists for every configured city/minute in the returned coverage, including `Partial` or `NoData` rows where the source is absent.
-3. Rerun the identical range. It must create no duplicate composite keys; compatible rows are unchanged and conflicting confirmed values are reported without replacement.
+3. Verify subsequent runs reread overlapping minutes without creating duplicate composite keys; compatible rows are unchanged and conflicting confirmed values are reported without replacement.
 4. Query one city's bounded day and verify that grouping and aggregation need only a city filter and UTC range. Do not sum sampled gauge fields such as tones or vehicles and call them exact totals.
 5. Preserve the approved safe report with the release evidence. It is operational evidence, not a database table.
 
-## Enable recurring collection
+## Monitor recurring collection
 
-After the initial backfill passes reconciliation, disable the one-time backfill mode and leave recurring collection enabled. Each run collects the newest safe closed minute and rereads the prior five minutes. Investigate repeated `Partial`, `NoData`, or `Discrepant` status through the metrics source and structured server logs; do not alter metrics or fabricate database values.
+Leave recurring collection enabled. Each run collects the newest safe closed minute and rereads the prior five minutes. Investigate repeated `Partial`, `NoData`, or `Discrepant` status through the metrics source and structured server logs; do not alter metrics or fabricate database values.
 
 ## Release-gate commands and evidence
 
@@ -78,4 +77,4 @@ az deployment sub what-if --location eastus2 --template-file bicep/main.bicep --
 
 Record only the safe result of each gate: authenticated read access and actual retention, expected city labels, one-minute query coverage, warnings, row outcome counts, representative exact/tolerant comparisons, and idempotent rerun counts. Keep `HistoricalStatistics__Enabled=false` and `HistoricalStatistics__DryRun=true` until the 15-minute preflight and bounded dry run are reviewed. A warning, missing field/city, retention gap, source-version mismatch, or reconciliation discrepancy fails closed and leaves writes disabled.
 
-After approval, preserve the same bounded range and safe dry-run report, enable writes for the six-hour-chunk backfill, rerun the identical range, and verify zero duplicate composite keys plus unchanged/filled/discrepant counts. Only then set `InitialBackfill=false`, enable recurring collection, and record one fresh city-minute row and a city/day query that does not sum sampled gauges as totals.
+After approval, preserve the safe dry-run report, enable recurring writes, and verify zero duplicate composite keys plus unchanged/filled/discrepant counts across overlapping runs. Record one fresh city-minute row and a city/day query that does not sum sampled gauges as totals.

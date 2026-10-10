@@ -100,15 +100,6 @@ var cityCadenceEnvironmentVariables = [for item in items(cityCategoryInsightsCit
 @description('Keep historical statistics collection read-only.')
 param historicalStatisticsDryRun bool = true
 
-@description('Enable the one-time historical statistics backfill.')
-param historicalStatisticsInitialBackfill bool = false
-
-@description('Inclusive UTC minute for the initial historical statistics backfill.')
-param historicalStatisticsBackfillStartUtc string = ''
-
-@description('Inclusive UTC minute for the initial historical statistics backfill.')
-param historicalStatisticsBackfillEndUtc string = ''
-
 resource app 'Microsoft.App/containerApps@2025-01-01' = {
   name: name
   location: location
@@ -191,10 +182,6 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
                 value: string(historicalStatisticsDryRun)
               }
               {
-                name: 'HistoricalStatistics__InitialBackfill'
-                value: string(historicalStatisticsInitialBackfill)
-              }
-              {
                 name: 'HistoricalStatistics__SourceEndpoint'
                 value: grafanaMetricsReaderEndpoint
               }
@@ -229,18 +216,6 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
             ],
             disabledCityEnvironmentVariables,
             cityCadenceEnvironmentVariables,
-            empty(historicalStatisticsBackfillStartUtc) ? [] : [
-              {
-                name: 'HistoricalStatistics__BackfillStartUtc'
-                value: historicalStatisticsBackfillStartUtc
-              }
-            ],
-            empty(historicalStatisticsBackfillEndUtc) ? [] : [
-              {
-                name: 'HistoricalStatistics__BackfillEndUtc'
-                value: historicalStatisticsBackfillEndUtc
-              }
-            ],
             empty(transitJazzDbSecretUri) ? [] : [
               {
                 name: 'ConnectionStrings__TransitJazzDB'
