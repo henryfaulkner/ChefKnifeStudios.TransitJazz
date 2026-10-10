@@ -2,7 +2,7 @@
 
 Resolve repository paths from the root. Use `scripts/query.ps1` through its canonical path `./skills/transitjazz-db/scripts/query.ps1`, even when this skill was loaded from a generated agent directory. Connection selection is documented in [connection.md](connection.md).
 
-Accept a nonempty UTC range (`from_utc < to_utc`), a canonical city, and retained category labels. Normalize caller local-time requests using the selected city's named zone and retain the resolved UTC bounds. Inspect available labels/definitions when uncertain. If a range is omitted, start with the latest closed UTC hour and state it. Preview at most 100 rows unless the user asks for more; compute aggregate/coverage summaries over all requested evidence.
+Accept a nonempty UTC range (`from_utc < to_utc`), a canonical city, and retained category labels or ordinal canonical route keys. Normalize caller local-time requests using the selected city's named zone and retain the resolved UTC bounds. Inspect available labels/definitions when uncertain. If a range is omitted, start with the latest closed UTC hour and state it. Preview at most 100 rows unless the user asks for more; compute aggregate/coverage summaries over all requested evidence.
 
 ## Connection, schema, and migration discovery
 
@@ -26,7 +26,8 @@ SELECT table_name, ordinal_position, column_name, data_type, is_nullable,
 FROM information_schema.columns
 WHERE table_schema = 'public'
   AND table_name IN ('city_minute_statistics', 'city_category_minute_statistics',
-                     'city_category_hour_statistics', '__EFMigrationsHistory')
+                     'city_category_hour_statistics', 'city_route_hour_statistics',
+                     '__EFMigrationsHistory')
 ORDER BY table_name, ordinal_position;
 '@
 ```
@@ -39,7 +40,7 @@ FROM public."__EFMigrationsHistory"
 ORDER BY "MigrationId";
 ```
 
-Checked-in migrations are `20260920201730_CreateCityMinuteStatistics` and `20261001204629_CreateCityCategoryStatistics`. A model file or migration class does not prove it has been applied. If a live table/column differs from [tables.md](tables.md), establish the active migration and producer contract before interpreting it. Do not run `dotnet ef database update` or the migration image for a query request.
+Checked-in creation migrations are `20260920201730_CreateCityMinuteStatistics`, `20261001204629_CreateCityCategoryStatistics`, and `20261010151240_CreateCityRouteHourStatistics`. A model file or migration class does not prove it has been applied. If a live table/column differs from [tables.md](tables.md), establish the active migration and producer contract before interpreting it. Do not run `dotnet ef database update` or the migration image for a query request.
 
 ## Inspect city dashboard history
 
@@ -171,6 +172,44 @@ The reason codes are `Missing`, `NoData`, `Partial`, `Conflict`, `DefinitionMism
 The period/activity/cadence files produce an unavailable group when no hours contribute: zero `complete_hour_count`, null contributing bounds, and null means. Zero sums describe an empty contributing set, not observed zero service. Coverage stays visible alongside the means.
 
 For local-hour reports keep `hour_start_utc`, local date/hour, and `utc_offset_seconds`. The local-hour SQL repeats bucket totals on each contributing hour row; deduplicate summaries by city/category/version/cadence policy/local hour before presenting or summing bucket totals. Both UTC occurrences of a repeated autumn hour contribute; a skipped spring hour is absent rather than zero.
+
+## Route-hour discovery and report recipe
+
+Read [route-hours.md](route-hours.md) before interpreting route measures. Discover historical keys from hours intersecting the finite request, preserving case:
+
+```sql
+SELECT route_join_key, category, definition_version, healthy_cadence_limit_seconds,
+       count(*) AS retained_hours_in_range,
+       min(hour_start_utc) AS first_hour_in_range,
+       max(hour_start_utc) AS last_hour_in_range
+FROM public.city_route_hour_statistics
+WHERE city_slug = :city_slug
+  AND hour_start_utc < :to_utc::timestamptz
+  AND hour_start_utc + interval '1 hour' > :from_utc::timestamptz
+GROUP BY route_join_key, category, definition_version, healthy_cadence_limit_seconds
+ORDER BY route_join_key COLLATE "C", category, definition_version, healthy_cadence_limit_seconds
+LIMIT :row_limit;
+```
+
+This is a discovery preview, not coverage or proof of completeness. Do not use its display limit to choose an all-route population. Earliest retained route history requires a separate all-history minimum constrained to city/key, not the minimum in this slice.
+
+The maintained `specs/057-hourly-route-history/contracts/route-hour-insights.sql` returns one JSON object with `request`, `city_hour_coverage`, `hourly`, `route_coverage`, `periods`, and `typical_local_hours`, sharing one statement snapshot. It exposes expected hour grids, whole-cohort quarantine, boundary context, weighted denominators, version/policy partitions, and local offsets. It does not need category backing-minute recipes.
+
+| Positional parameter | Type / value |
+| --- | --- |
+| `$1` | Canonical city, `text` |
+| `$2` | Nonempty distinct ordinal route keys, `text[]`, or SQL NULL for all-route discovery; empty array is invalid |
+| `$3`, `$4` | Finite inclusive/exclusive UTC bounds, `timestamptz` |
+| `$5` | Supported definition, `observed-city-route-hour-statistics-v1` |
+| `$6` | Validated configured city IANA zone, `text` |
+
+The helper handles named `:parameters`, not positional `$1` bindings. Do not pass this recipe unchanged to `-SqlFile` or treat a PowerShell array as a safely serialized PostgreSQL array. Use real positional client binding, or adapt only the six fixed placeholder tokens in the reviewed SQL to named placeholders and pass values through `-Parameters`. For a named route-array adapter, pass a JSON-serialized array as `route_keys_json` and use `CASE WHEN :route_keys_json::jsonb IS NULL THEN NULL::text[] ELSE ARRAY(SELECT jsonb_array_elements_text(:route_keys_json::jsonb)) END`; actual SQL NULL means all-route discovery. Validate nonempty/distinct string keys before execution. Never interpolate caller values into the recipe.
+
+**Checked-in recipe caveat (2026-10-10):** the contract specifies all-route discovery from retained keys overlapping the range, but the recipe's `route_keys` CTE currently scans all history for the city. Before using NULL selection for that contract, adapt its discovery branch to select from `retained` (the already range-filtered CTE), or bind an explicit untruncated set of keys discovered in-range in the same report snapshot. If no keys are discovered, still return the city-hour Missing grid; do not substitute an invalid empty explicit array. Do not silently describe the current all-history selection as in-range discovery.
+
+Feature 057's plan records deterministic checks as implemented, while real disposable PostgreSQL, migration-image/load, production observation, and analyst validation remain pending. The contract/SQL still carry planning labels. Inspect the selected schema and exercise the recipe read-only before claiming operational validation.
+
+Display at most the requested preview rows after calculating full coverage and period results. Keep every selected route's missing pairs explicit. A zero-contributor period's zero sums describe an empty contributing set, not observed inactivity. For local-hour results, use `hourly` for individual dates/offsets/UTC keys and `typical_local_hours` for bucket totals; no averaging hourly ratios or counting local labels as elapsed hours.
 
 ## JSON and CSV
 

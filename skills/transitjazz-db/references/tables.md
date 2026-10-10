@@ -1,6 +1,6 @@
 # Database tables and meaning
 
-This guide reflects the checked-in model and producers reviewed on 2026-10-04. It documents what rows mean, not the selected database's current row counts or rollout status. Check live schema/history before using a table. Resolve paths from the repository root.
+This guide reflects the checked-in model and producers, with route-hour context reviewed on 2026-10-10. It documents what rows mean, not the selected database's current row counts or rollout status. Check live schema/history before using a table. Resolve paths from the repository root.
 
 ## Source map
 
@@ -10,21 +10,27 @@ Use these directory aliases for the file references below:
 - **API**: `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI`
 - **Worker**: `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker`
 - **Contracts**: `specs/056-city-transit-type-insights/contracts`
+- **RouteContracts**: `specs/057-hourly-route-history/contracts`
 
-`Data/AppDbContext.cs` exposes exactly three entity sets. `Data/Configurations/*.cs`, the two creation migrations, and `Data/Migrations/AppDbContextModelSnapshot.cs` define the physical model. Stores and Contracts address these tables in `public`.
+`Data/AppDbContext.cs` exposes four statistics entity sets. `Data/Configurations/*.cs`, the three creation migrations, and `Data/Migrations/AppDbContextModelSnapshot.cs` define the physical model. Stores and contracts address these tables in `public`.
 
 | Table | One row represents | Primary key | Appropriate use |
 | --- | --- | --- | --- |
 | `public.city_minute_statistics` | One city's dashboard observation for a closed UTC minute | `city_slug, stat_minute_utc` | Historical worker health, input status, latest processing samples, rates, latency, and cache sizes |
 | `public.city_category_minute_statistics` | One city/category's accumulated cycle observations in a UTC minute | `city_slug, category, stat_minute_utc` | Category capture coverage, activity/movement/publication diagnostics, and hourly backing evidence |
 | `public.city_category_hour_statistics` | One city/category's finalized UTC hour, with exact hour-scoped distinct activity population | `city_slug, category, hour_start_utc` | Verified hourly movement, average activity, published cadence, weighted period and local-hour reports |
+| `public.city_route_hour_statistics` | One canonical resolved route's aggregate for a UTC hour, retained with its entire city/hour cohort | `city_slug, route_join_key, hour_start_utc` | Route activity/peak, processing/staleness, movement, detected/published crossings, suppression, and coverage |
 | `public."__EFMigrationsHistory"` | An applied EF migration | `"MigrationId"` in the standard EF history table | Establish which checked-in migrations were applied; introspect actual columns/location first |
 
-The three statistics entities do not inherit `BaseEntity`. There are no `id`, `is_deleted`, `created_on_utc`, or `modified_on_utc` columns in their mappings. The creation migrations declare composite primary keys and no foreign keys or additional indexes. Definition versions are metadata, not part of those primary keys.
+The four statistics entities do not inherit `BaseEntity`. There are no `id`, `is_deleted`, `created_on_utc`, or `modified_on_utc` columns in their mappings. The creation migrations declare composite primary keys and no foreign keys. The route-hour table additionally indexes `(city_slug, hour_start_utc, route_join_key)` and has `persisted_at_utc` provenance. Definition versions are metadata, not part of those primary keys.
 
-There are no route, vehicle, trip, listener, or user entity tables in this context. `API/Repositories/InMemoryKeyValueRepository.cs` and `API/GtfsStatic/GtfsStaticLoader.cs` supply the runtime GTFS catalog. A deployed database may contain unrelated or legacy tables; inspect them rather than assigning TransitJazz meaning without a producer/mapping.
+There is no persistent route catalog/dimension, route-minute history, or vehicle, trip, listener, or user entity table in this context. Route-hour aggregates retain historical route metadata without a foreign key to today's catalog. `API/Repositories/InMemoryKeyValueRepository.cs` and `API/GtfsStatic/GtfsStaticLoader.cs` supply the runtime GTFS catalog. A deployed database may contain unrelated or legacy tables; inspect them rather than assigning TransitJazz meaning without a producer/mapping.
 
 All time windows use UTC, start inclusive and end exclusive. `timestamptz` is PostgreSQL `timestamp with time zone`; normalize display to UTC. Configured city slugs are `atlanta`, `washington-dc`, `boston`, `new-york-city`, `toronto`, `philadelphia`, and `denver` in the committed server settings. Re-read `API/appsettings.json` and the selected runtime configuration when resolving current membership.
+
+## city_route_hour_statistics
+
+Read [route-hours.md](route-hours.md) for the full column guide, canonical route identity, capture controls, cohort quarantine, coverage criteria, and weighted metric definitions. Sources include `Data/Models/CityRouteHourStatistic.cs`, `Data/Configurations/CityRouteHourStatisticConfiguration.cs`, `Data/Statistics/CityRouteHourStatisticsStore.cs`, `Data/Migrations/20261010151240_CreateCityRouteHourStatistics.cs`, and RouteContracts. Feature 057's spec/plan describe intent; checked-in mappings, producers, and the selected database establish implementation and rollout.
 
 ## city_minute_statistics
 
