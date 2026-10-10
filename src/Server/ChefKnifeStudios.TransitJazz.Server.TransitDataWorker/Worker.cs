@@ -11,6 +11,7 @@ using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
 using ChefKnifeStudios.TransitJazz.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Diagnostics;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
@@ -24,7 +25,8 @@ public class Worker(
     WorkerOptions? workerOptions = null,
     IWorkerStructuredEventLogger? structuredEventLogger = null,
     IRouteShapeSource? routeShapeSource = null,
-    CityCategoryStatisticsCapture? categoryStatisticsCapture = null) : BackgroundService, IRouteIndexReadiness
+    CityCategoryStatisticsCapture? categoryStatisticsCapture = null,
+    RouteHourStatisticsCapture? routeHourStatisticsCapture = null) : BackgroundService, IRouteIndexReadiness
 {
     readonly Dictionary<string, ConcurrentDictionary<string, VehicleState>> _vehicleStateCaches = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ulong?> _lastFeedHeaderTimestamps = new(StringComparer.OrdinalIgnoreCase);
@@ -35,6 +37,7 @@ public class Worker(
     readonly IWorkerStructuredEventLogger _structuredEventLogger = structuredEventLogger ?? NullWorkerStructuredEventLogger.Instance;
     readonly IRouteShapeSource _routeShapeSource = routeShapeSource ?? UnavailableRouteShapeSource.Instance;
     readonly CityCategoryStatisticsCapture? _categoryStatisticsCapture = categoryStatisticsCapture;
+    readonly RouteHourStatisticsCapture? _routeHourStatisticsCapture = routeHourStatisticsCapture;
     readonly Dictionary<string, long> _routeGeometryGenerations = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, StructuredLogReasonCode> _activeCityAnomalyReasons = new(StringComparer.OrdinalIgnoreCase);
     readonly object _routeCatalogGate = new();
@@ -46,6 +49,7 @@ public class Worker(
     Dictionary<string, IReadOnlyDictionary<string, double[]>> _routeCumDist = new(StringComparer.OrdinalIgnoreCase);
     // per-city routeJoinKey→trigger points (built from shared TriggerPointGenerator)
     Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<TriggerPoint>>> _routeTriggerPoints = new(StringComparer.OrdinalIgnoreCase);
+    Dictionary<string, RouteHourCatalog?> _routeHourCatalogs = new(StringComparer.OrdinalIgnoreCase);
     // per-city vehicleId→crossing baseline (mirrors _vehicleStateCaches key structure)
     readonly Dictionary<string, Dictionary<string, CrossingBaseline?>> _crossingBaselines = new(StringComparer.OrdinalIgnoreCase);
     int _routeIndexReady;
@@ -55,8 +59,19 @@ public class Worker(
         IReadOnlyDictionary<string, string>? Categories,
         IReadOnlyDictionary<string, double[]>? CumulativeDistances,
         IReadOnlyDictionary<string, IReadOnlyList<TriggerPoint>>? TriggerPoints,
+        RouteHourCatalog? RouteHourCatalog,
         long Generation,
         bool Ready);
+
+    sealed class RouteHourCatalogGroup(string routeJoinKey, string category, string? routeShortName)
+    {
+        public string RouteJoinKey { get; } = routeJoinKey;
+        public string Category { get; } = category;
+        public string? RouteShortName { get; } = routeShortName;
+        public List<string> StaticRouteIds { get; } = [];
+        public List<string> Aliases { get; } = [];
+        public List<RouteHourGeometryPoint> Geometry { get; } = [];
+    }
 
     public bool IsReady => Volatile.Read(ref _routeIndexReady) != 0;
 
@@ -107,6 +122,10 @@ public class Worker(
                         initialModeMap?.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToArray() ?? [],
                         routeCatalog.Generation)
                     : null;
+                var routeHourCaptureEnabled = _routeHourStatisticsCapture?.IsEnabledFor(city.Name) == true;
+                var routeHourCycle = routeHourCaptureEnabled
+                    ? _routeHourStatisticsCapture!.BeginCycle(city.Name, routeCatalog.RouteHourCatalog)
+                    : null;
                 string? cityExceptionType = null;
 
                 try
@@ -126,7 +145,7 @@ public class Worker(
                     {
                         var modeMap = initialModeMap;
                         result = fetch.ValidRecordCount > 0
-                            ? await ProcessSpatialReconciliationAsync(city, fetch.Feed, cityIndex!, modeMap, stoppingToken, categoryCycle, routeCatalog)
+                            ? await ProcessSpatialReconciliationAsync(city, fetch.Feed, cityIndex!, modeMap, stoppingToken, categoryCycle, routeCatalog, routeHourCycle)
                             : CityTickResult.Healthy(city, this, fetch.Feed.Header?.Timestamp, cityStart);
                     }
                 }
@@ -152,8 +171,22 @@ public class Worker(
                     && result.ProcessingExceptionType is null
                     && fetch.Outcome != CityFetchOutcome.Failure
                     && (!result.PublishAttempted || result.PublishSucceeded == true);
+                var routeHourPublicationKnown = routeCatalog.RouteHourCatalog is { Entries.Count: > 0 }
+                    && routeIndexAvailable && !cityHadError && result.HealthOk
+                    && fetch.Outcome != CityFetchOutcome.Failure
+                    && (!result.PublishAttempted || result.PublishSucceeded == true);
                 _categoryStatisticsCapture?.CompleteCycle(categoryCycle, activityEligible, publicationKnown,
                     !activityEligible || !publicationKnown, completedAt.UtcDateTime);
+                var finalRouteHourCatalog = routeHourCaptureEnabled ? GetRouteCatalogSnapshot(city.Name).RouteHourCatalog : null;
+                RouteHourIncompleteReason? routeHourFailure = fetch.Outcome == CityFetchOutcome.Failure
+                    ? RouteHourIncompleteReason.SourceFailure
+                    : !routeIndexAvailable || routeCatalog.RouteHourCatalog is null
+                        ? RouteHourIncompleteReason.RouteIndexUnavailable
+                        : result.ProcessingExceptionType is not null || cityHadError
+                            ? RouteHourIncompleteReason.ProcessingFailure
+                            : !publicationKnown ? RouteHourIncompleteReason.PublicationUnavailable : null;
+                _routeHourStatisticsCapture?.CompleteCycle(routeHourCycle, activityEligible, routeHourPublicationKnown,
+                    !activityEligible || !routeHourPublicationKnown, completedAt.UtcDateTime, finalRouteHourCatalog, routeHourFailure);
                 _metricsReporter.ReportCityCycle(new CityCycleMetrics(
                     city.Name, completedAt, fetch, result, completedAt.UtcDateTime - cityStart,
                     result.VehiclesProcessed > 0 || result.TonesEmitted > 0, cityHadError));
@@ -240,6 +273,7 @@ public class Worker(
         finally
         {
             _categoryStatisticsCapture?.FlushPending();
+            _routeHourStatisticsCapture?.FlushPending();
         }
     }
 
@@ -385,13 +419,16 @@ public class Worker(
     (Dictionary<string, IReadOnlyDictionary<string, RoutePoint[]>> index,
      Dictionary<string, IReadOnlyDictionary<string, string>> mode,
      Dictionary<string, IReadOnlyDictionary<string, double[]>> cumDist,
-     Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<TriggerPoint>>> triggerPoints)
+     Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<TriggerPoint>>> triggerPoints,
+     Dictionary<string, RouteHourCatalog?> routeHourCatalogs)
         BuildRouteIndex(List<RouteShapeFeature> shapes)
     {
         var perCityPoints = new Dictionary<string, Dictionary<string, List<RoutePoint>>>(StringComparer.OrdinalIgnoreCase);
         var perCityMode = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
         // also need per-city per-route raw coords for cumDist + triggerPoint build
         var perCityCoords = new Dictionary<string, Dictionary<string, List<double[]>>>(StringComparer.OrdinalIgnoreCase);
+        var perCityRouteHourGroups = new Dictionary<string, Dictionary<string, RouteHourCatalogGroup>>(StringComparer.OrdinalIgnoreCase);
+        var routeHourUnavailableCities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var shape in shapes)
         {
@@ -403,6 +440,8 @@ public class Worker(
                 perCityMode[cityName] = modeMap = new Dictionary<string, string>();
             if (!perCityCoords.TryGetValue(cityName, out var coordGroups))
                 perCityCoords[cityName] = coordGroups = new Dictionary<string, List<double[]>>();
+            if (!perCityRouteHourGroups.TryGetValue(cityName, out var routeHourGroups))
+                perCityRouteHourGroups[cityName] = routeHourGroups = new Dictionary<string, RouteHourCatalogGroup>(StringComparer.Ordinal);
 
             // Primary key is the display identifier (short name when available).
             // GTFS-RT feeds can send either route_id or route_short_name depending on the agency,
@@ -429,6 +468,24 @@ public class Worker(
                 routeGroups.TryAdd(rawId, points);
                 coordGroups.TryAdd(rawId, coordList);
                 modeMap.TryAdd(rawId, shape.Properties.Category);
+            }
+
+            try
+            {
+                if (!routeHourGroups.TryGetValue(key, out var routeHourGroup))
+                    routeHourGroups[key] = routeHourGroup = new RouteHourCatalogGroup(key,
+                        string.IsNullOrWhiteSpace(shape.Properties.Category) ? "unknown" : shape.Properties.Category.ToLowerInvariant(),
+                        shape.Properties.RouteShortName);
+                routeHourGroup.Geometry.AddRange(shape.Geometry.Coordinates.Select(coord => new RouteHourGeometryPoint(coord[1], coord[0])));
+                if (!string.IsNullOrWhiteSpace(rawId))
+                {
+                    routeHourGroup.StaticRouteIds.Add(rawId);
+                    routeHourGroup.Aliases.Add(rawId);
+                }
+            }
+            catch
+            {
+                routeHourUnavailableCities.Add(cityName);
             }
         }
 
@@ -468,7 +525,29 @@ public class Worker(
             triggerPointsResult[cityName] = cityTriggers;
         }
 
-        return (indexResult, modeResult, cumDistResult, triggerPointsResult);
+        var routeHourCatalogs = new Dictionary<string, RouteHourCatalog?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (cityName, groups) in perCityRouteHourGroups)
+        {
+            if (routeHourUnavailableCities.Contains(cityName))
+            {
+                routeHourCatalogs[cityName] = null;
+                continue;
+            }
+            try
+            {
+                var inputs = groups.Values.Select(group => new RouteHourCatalogInput(group.RouteJoinKey, group.Category,
+                    group.RouteShortName, group.StaticRouteIds.Order(StringComparer.Ordinal).ToImmutableArray(),
+                    group.Geometry.ToImmutableArray(), group.Aliases.ToImmutableArray())).ToArray();
+                routeHourCatalogs[cityName] = RouteHourCatalog.Create(inputs);
+            }
+            catch
+            {
+                // Capture metadata is optional instrumentation. Invalid canonical identity must not change live routing.
+                routeHourCatalogs[cityName] = null;
+            }
+        }
+
+        return (indexResult, modeResult, cumDistResult, triggerPointsResult, routeHourCatalogs);
     }
 
     internal async Task InitializeRouteIndexAsync(CancellationToken ct)
@@ -508,7 +587,7 @@ public class Worker(
         {
             var affectedCities = _routeIndex.Keys.Concat(routeCatalog.Item1.Keys)
                 .Concat(_routeGeometryGenerations.Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-            (_routeIndex, _routeMode, _routeCumDist, _routeTriggerPoints) = routeCatalog;
+            (_routeIndex, _routeMode, _routeCumDist, _routeTriggerPoints, _routeHourCatalogs) = routeCatalog;
             foreach (var city in affectedCities)
             {
                 var generation = _routeGeometryGenerations.GetValueOrDefault(city) + 1;
@@ -527,7 +606,8 @@ public class Worker(
             _routeMode.TryGetValue(city, out var categories);
             _routeCumDist.TryGetValue(city, out var cumulativeDistances);
             _routeTriggerPoints.TryGetValue(city, out var triggerPoints);
-            return new(routes, categories, cumulativeDistances, triggerPoints,
+            _routeHourCatalogs.TryGetValue(city, out var routeHourCatalog);
+            return new(routes, categories, cumulativeDistances, triggerPoints, routeHourCatalog,
                 _routeGeometryGenerations.GetValueOrDefault(city), Volatile.Read(ref _routeIndexReady) != 0);
         }
     }
@@ -597,7 +677,8 @@ public class Worker(
         IReadOnlyDictionary<string, string>? modeMap,
         CancellationToken ct,
         CityCategoryStatisticsCycle? categoryCycle = null,
-        RouteCatalogSnapshot? routeCatalog = null)
+        RouteCatalogSnapshot? routeCatalog = null,
+        RouteHourStatisticsCycle? routeHourCycle = null)
     {
         try
         {
@@ -647,8 +728,13 @@ public class Worker(
                     double lon = (double)entity.Vehicle.Position.Longitude;
                     var category = ResolveCategory(modeMap, routeJoinKey);
                     var representativeEligible = false;
+                    var routeHourRepresentativeEligible = false;
                     if (double.IsFinite(lat) && double.IsFinite(lon) && lat is >= -90 and <= 90 && lon is >= -180 and <= 180)
+                    {
                         representativeEligible = _categoryStatisticsCapture?.RecordEligibleVehicle(categoryCycle, vehicleId, category) ?? false;
+                        if (routeHourCycle is not null)
+                            routeHourRepresentativeEligible = _routeHourStatisticsCapture?.RecordEligibleVehicle(routeHourCycle, vehicleId, routeJoinKey) ?? false;
+                    }
                     var now = DateTime.UtcNow;
 
                     const int SnapWindowSize = 30;
@@ -661,6 +747,8 @@ public class Worker(
                         if (representativeEligible)
                             _categoryStatisticsCapture?.ObserveMovement(categoryCycle, vehicleId, category, routeJoinKey, entity.Vehicle.Timestamp, double.NaN,
                                 routeCatalog.Generation);
+                        if (routeHourRepresentativeEligible && routeHourCycle!.Catalog.TryResolve(routeJoinKey, out var unresolvedEntry))
+                            _routeHourStatisticsCapture?.ObserveMovement(routeHourCycle, vehicleId, unresolvedEntry.RouteJoinKey, entity.Vehicle.Timestamp, double.NaN);
                         continue;
                     }
 
@@ -678,6 +766,16 @@ public class Worker(
                         else
                             _categoryStatisticsCapture?.ObserveMovement(categoryCycle, vehicleId, category, nearest.RouteJoinKey,
                                 currentVehicleTimestamp, double.NaN, generation);
+                    }
+                    if (routeHourRepresentativeEligible)
+                    {
+                        if (cityCumDist is not null && cityCumDist.TryGetValue(routeJoinKey, out var routeHourMeters)
+                            && snapValue.Index >= 0 && snapValue.Index < routeHourMeters.Length)
+                            _routeHourStatisticsCapture?.ObserveMovement(routeHourCycle, vehicleId, nearest.RouteJoinKey,
+                                currentVehicleTimestamp, routeHourMeters[snapValue.Index]);
+                        else
+                            _routeHourStatisticsCapture?.ObserveMovement(routeHourCycle, vehicleId, nearest.RouteJoinKey,
+                                currentVehicleTimestamp, double.NaN);
                     }
                     bool isStale = false;
                     if (vehicleStateCache.TryGetValue(vehicleId, out var prior))
@@ -747,6 +845,8 @@ public class Worker(
                         movedCount++;
                     }
 
+                    _routeHourStatisticsCapture?.RecordProcessedObservation(routeHourCycle, nearest.RouteJoinKey, isStale);
+
                     if (!isStale)
                     {
                         vehicleStateCache[vehicleId] = new VehicleState(
@@ -778,6 +878,13 @@ public class Worker(
                             // checkpoint-pulse filtering silently broke for those agencies.
                             var detected = CrossingDetector.Detect(vehicleId, nearest.RouteJoinKey, currentDistM, routeTriggers, ref baseline);
                             baselineMap[vehicleId] = baseline;
+                            if (detected.Records.Count > 0)
+                            {
+                                foreach (var group in detected.Records.GroupBy(record => record.RouteJoinKey, StringComparer.Ordinal))
+                                    _routeHourStatisticsCapture?.RecordDetected(routeHourCycle, group.Key, group.LongCount());
+                            }
+                            if (detected.Reason != CrossingSuppressionReason.None)
+                                _routeHourStatisticsCapture?.RecordSuppression(routeHourCycle, nearest.RouteJoinKey, detected.Reason);
                             crossingRecords.AddRange(detected.Records);
                             switch (detected.Reason)
                             {
@@ -847,8 +954,13 @@ public class Worker(
                 var isBatchPublished = await transitHubPublisher.PublishBatchAsync(city.Name, envelopes, ct);
                 publishSucceeded = isBatchPublished;
                 if (isBatchPublished)
+                {
+                    _routeHourStatisticsCapture?.RecordPublished(routeHourCycle,
+                        crossingRecords.GroupBy(record => record.RouteJoinKey, StringComparer.Ordinal)
+                            .Select(group => (group.Key, group.LongCount())).ToArray());
                     _categoryStatisticsCapture?.RecordCrossings(categoryCycle,
                         crossingRecords.Select(record => ResolveCategory(modeMap, record.RouteJoinKey)));
+                }
                 if (!isBatchPublished)
                     logger.LogWarning("Failed to publish spatial reconciliation batch for city {City}.", city.Name);
             }

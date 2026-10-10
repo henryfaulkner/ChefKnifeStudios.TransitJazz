@@ -8,6 +8,7 @@ using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using Microsoft.Extensions.Options;
+using System.Collections.Immutable;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -17,6 +18,10 @@ var categoryInsightsOptions = CityCategoryInsightsOptions.FromConfiguration(buil
 categoryInsightsOptions.Validate(workerOptions.CycleIntervalSeconds);
 if (categoryInsightsOptions.Enabled)
     throw new InvalidOperationException("Standalone TransitDataWorker has no category statistics database sink; keep CityCategoryInsights.Enabled false.");
+var routeHoursEnabled = builder.Configuration.GetValue<bool>("HistoricalStatistics:Enabled");
+var routeHoursDryRun = builder.Configuration.GetValue("HistoricalStatistics:DryRun", true);
+if (routeHoursEnabled && !routeHoursDryRun)
+    throw new InvalidOperationException("Standalone TransitDataWorker has no route-hour database sink; persistent route-hour capture must run in the WebAPI host.");
 builder.Services.AddSingleton(workerOptions);
 
 builder.Logging.ClearProviders();
@@ -43,6 +48,24 @@ builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
 
 // Build city registry from Cities: config array
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
+var routeHourOptions = builder.Configuration.GetSection("HistoricalStatistics:RouteHours").Get<RouteHourHistoryOptions>()
+    ?? new RouteHourHistoryOptions();
+var selectedRouteCities = builder.Configuration.GetSection("HistoricalStatistics:Cities").Get<List<string>>() ?? [];
+if (selectedRouteCities.Count == 0)
+    selectedRouteCities = cityConfigs.Count == 0 ? [CityNames.Marta] : cityConfigs.Select(city => city.Name).ToList();
+routeHourOptions.Validate(workerOptions.CycleIntervalSeconds, selectedRouteCities);
+if (routeHoursEnabled)
+{
+    var runtime = new RouteHourCaptureRuntimeOptions(RouteHourCaptureMode.DryRun,
+        selectedRouteCities.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), routeHourOptions);
+    builder.Services.AddSingleton(runtime);
+    builder.Services.AddSingleton(routeHourOptions);
+    builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+    builder.Services.AddSingleton<IRouteHourStatisticsSink>(sp =>
+        new DryRunRouteHourStatisticsSink(sp.GetRequiredService<ILogger<DryRunRouteHourStatisticsSink>>(), routeHourOptions.MaxRoutesPerCityHour));
+    builder.Services.AddSingleton<RouteHourStatisticsCapture>();
+    builder.Services.AddHostedService<RouteHourCaptureLifecycleService>();
+}
 
 var nymtaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase));
 builder.Services.Configure<SubwaySynthesisOptions>(o =>

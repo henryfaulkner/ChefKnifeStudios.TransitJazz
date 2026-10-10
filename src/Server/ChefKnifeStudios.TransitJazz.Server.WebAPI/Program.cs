@@ -164,9 +164,32 @@ var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig
 
 var historicalStatisticsOptions = builder.Configuration.GetSection(HistoricalStatisticsOptions.SectionName).Get<HistoricalStatisticsOptions>()
     ?? new HistoricalStatisticsOptions();
-if (historicalStatisticsOptions.Cities.Count == 0)
-    historicalStatisticsOptions.Cities = cityConfigs.Select(city => city.Name).ToList();
+historicalStatisticsOptions.ResolveCitySelection(cityConfigs.Select(city => city.Name), CityNames.Marta);
 historicalStatisticsOptions.Validate();
+var routeHourHistoryOptions = historicalStatisticsOptions.RouteHours ?? new RouteHourHistoryOptions();
+historicalStatisticsOptions.RouteHours = routeHourHistoryOptions;
+routeHourHistoryOptions.Validate(workerOptions.CycleIntervalSeconds, historicalStatisticsOptions.Cities);
+IEnumerable<string> configuredCityNamesSource = cityConfigs.Count == 0
+    ? new[] { CityNames.Marta }
+    : cityConfigs.Select(city => city.Name);
+var configuredCityNames = configuredCityNamesSource.ToHashSet(StringComparer.OrdinalIgnoreCase);
+if (historicalStatisticsOptions.Enabled)
+{
+    var unavailableCities = historicalStatisticsOptions.Cities.Where(city => !configuredCityNames.Contains(city)).ToArray();
+    if (unavailableCities.Length > 0)
+        throw new InvalidOperationException($"Historical statistics cities must be configured in Cities: {string.Join(", ", unavailableCities)}.");
+    foreach (var city in cityConfigs.Where(city => historicalStatisticsOptions.Cities.Contains(city.Name, StringComparer.OrdinalIgnoreCase)))
+    {
+        if (string.IsNullOrWhiteSpace(city.TimeZoneId))
+            throw new InvalidOperationException($"Enabled route-hour history requires an IANA time zone for {city.Name}.");
+        try { CityCategoryInsightsOptions.ValidateIanaTimeZoneId(city.TimeZoneId); }
+        catch (Exception exception) when (exception is ArgumentException or TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            throw new InvalidOperationException($"Enabled route-hour history requires a valid IANA time zone for {city.Name}.", exception);
+        }
+    }
+}
+var routeHourRuntime = historicalStatisticsOptions.CreateRouteHourRuntimeOptions();
 builder.Services.AddSingleton(historicalStatisticsOptions);
 builder.Services.AddSingleton<IOptions<HistoricalStatisticsOptions>>(Options.Create(historicalStatisticsOptions));
 
@@ -211,6 +234,8 @@ else
     builder.Services.AddSingleton<ICategoryStatisticsSink>(NullCategoryStatisticsSink.Instance);
 }
 builder.Services.AddCategoryStatisticsCaptureRuntime(cityCategoryInsightsOptions);
+RouteHourCaptureServiceCollectionExtensions.ValidatePersistencePrerequisites(routeHourRuntime, transitJazzConnectionString);
+builder.Services.AddRouteHourStatisticsCaptureRuntime(routeHourRuntime);
 
 var nymtaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase));
 builder.Services.Configure<SubwaySynthesisOptions>(o =>

@@ -40,6 +40,17 @@ jobs:
           test "$(jq -r '.HistoricalStatistics.Enabled' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "false"
           test "$(jq -r '.HistoricalStatistics.DryRun' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "true"
 
+      - name: Validate route-hour settings and schema-only migration
+        run: |
+          test "$(jq -r '.HistoricalStatistics.RouteHours.MaxRoutesPerCityHour' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "4096"
+          test "$(jq -r '.HistoricalStatistics.RouteHours.QueueCapacity' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "16"
+          ! jq -e '.HistoricalStatistics.RouteHours | has("Enabled") or has("DryRun") or has("Cities") or has("DisabledCities")' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json
+          route_migration=src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261010151240_CreateCityRouteHourStatistics.cs
+          test "$(grep -c 'migrationBuilder.CreateTable(' "$route_migration")" -eq 1
+          test "$(grep -c 'migrationBuilder.CreateIndex(' "$route_migration")" -eq 1
+          grep -q 'name: "city_route_hour_statistics"' "$route_migration"
+          ! grep -Eiq 'migrationBuilder\.Sql|DropTable|city_minute_statistics|city_category_(minute|hour)_statistics|gtfs' "$route_migration"
+
       - name: Validate city category capture is disabled by default
         run: |
           test "$(jq -r '.CityCategoryInsights.Enabled' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "false"

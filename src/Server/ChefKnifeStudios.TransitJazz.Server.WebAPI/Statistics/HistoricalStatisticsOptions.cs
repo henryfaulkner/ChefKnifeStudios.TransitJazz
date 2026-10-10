@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using Microsoft.Extensions.Options;
 
 namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
@@ -18,6 +21,20 @@ public sealed class HistoricalStatisticsOptions
     public int IngestionGraceMinutes { get; set; } = 2;
     public int OverlapMinutes { get; set; } = 5;
     public List<string> Cities { get; set; } = [];
+    public RouteHourHistoryOptions RouteHours { get; set; } = new();
+
+    public void ResolveCitySelection(IEnumerable<string> configuredCities, string fallbackCity)
+    {
+        if (Cities.Count > 0) return;
+        var configured = configuredCities.ToList();
+        Cities = configured.Count == 0 ? [fallbackCity] : configured;
+    }
+
+    public RouteHourCaptureRuntimeOptions CreateRouteHourRuntimeOptions()
+    {
+        var mode = !Enabled ? RouteHourCaptureMode.Disabled : DryRun ? RouteHourCaptureMode.DryRun : RouteHourCaptureMode.Persistence;
+        return new(mode, Cities.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), RouteHours);
+    }
 
     public void Validate()
     {

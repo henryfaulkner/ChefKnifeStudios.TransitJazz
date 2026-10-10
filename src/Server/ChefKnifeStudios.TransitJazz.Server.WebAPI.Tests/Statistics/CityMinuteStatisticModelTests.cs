@@ -15,7 +15,7 @@ public sealed class CityMinuteStatisticModelTests
         var entity = model.FindEntityType(typeof(CityMinuteStatistic));
 
         Assert.NotNull(entity);
-        Assert.Equal(3, model.GetEntityTypes().Count());
+        Assert.Equal(4, model.GetEntityTypes().Count());
         Assert.Equal(["CitySlug", "StatMinuteUtc"], entity!.FindPrimaryKey()!.Properties.Select(property => property.Name));
         Assert.Empty(entity.GetIndexes());
         Assert.DoesNotContain(entity.GetProperties(), property => property.Name is "Id" or "CreatedOnUtc" or "ModifiedOnUtc" or "IsDeleted");
