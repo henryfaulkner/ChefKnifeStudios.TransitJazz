@@ -49,7 +49,9 @@ jobs:
           test "$(grep -c 'migrationBuilder.CreateTable(' "$route_migration")" -eq 1
           test "$(grep -c 'migrationBuilder.CreateIndex(' "$route_migration")" -eq 1
           grep -q 'name: "city_route_hour_statistics"' "$route_migration"
-          ! grep -Eiq 'migrationBuilder\.Sql|DropTable|city_minute_statistics|city_category_(minute|hour)_statistics|gtfs' "$route_migration"
+          route_migration_up=$(awk '/protected override void Up\(/ { in_up=1 } /protected override void Down\(/ { in_up=0 } in_up' "$route_migration")
+          test -n "$route_migration_up"
+          ! printf '%s\n' "$route_migration_up" | grep -Eiq 'migrationBuilder\.Sql|DropTable|city_minute_statistics|city_category_(minute|hour)_statistics|gtfs'
 
       - name: Validate city category capture is disabled by default
         run: |
