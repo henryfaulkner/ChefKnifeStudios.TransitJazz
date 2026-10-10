@@ -14,6 +14,7 @@
     "ponytail": { "targets": ["claude", "codex", "opencode"] },
     "ponytail-audit": { "targets": ["claude", "codex", "opencode"] },
     "select-neighborhood-tones": { "targets": ["claude", "codex", "opencode"] },
+    "stepwise-instructions": { "targets": ["claude", "codex", "opencode"] },
     "transit-jazz-task": { "targets": ["claude", "codex", "opencode"] },
     "transitjazz-db": { "targets": ["claude", "codex", "opencode"] },
     "transitjazz-logs": { "targets": ["claude", "codex", "opencode"] },
