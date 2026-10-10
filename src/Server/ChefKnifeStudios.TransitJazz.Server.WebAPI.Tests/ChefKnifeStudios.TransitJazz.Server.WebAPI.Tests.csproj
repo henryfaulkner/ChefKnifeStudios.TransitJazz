@@ -21,5 +21,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\..\..\specs\056-city-transit-type-insights\contracts\*.sql" Link="contracts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\..\specs\057-hourly-route-history\contracts\*.sql" Link="contracts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
