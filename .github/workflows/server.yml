@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main, 054-centralized-logging, 055-database]
+    branches: [main]
 
 env:
   REGISTRY: chefknife.azurecr.io
@@ -39,6 +39,31 @@ jobs:
         run: |
           test "$(jq -r '.HistoricalStatistics.Enabled' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "false"
           test "$(jq -r '.HistoricalStatistics.DryRun' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "true"
+
+      - name: Validate route-hour settings and schema-only migration
+        run: |
+          test "$(jq -r '.HistoricalStatistics.RouteHours.MaxRoutesPerCityHour' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "4096"
+          test "$(jq -r '.HistoricalStatistics.RouteHours.QueueCapacity' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "16"
+          ! jq -e '.HistoricalStatistics.RouteHours | has("Enabled") or has("DryRun") or has("Cities") or has("DisabledCities")' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json
+          route_migration=src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261010151240_CreateCityRouteHourStatistics.cs
+          test "$(grep -c 'migrationBuilder.CreateTable(' "$route_migration")" -eq 1
+          test "$(grep -c 'migrationBuilder.CreateIndex(' "$route_migration")" -eq 1
+          grep -q 'name: "city_route_hour_statistics"' "$route_migration"
+          route_migration_up=$(awk '/protected override void Up\(/ { in_up=1 } /protected override void Down\(/ { in_up=0 } in_up' "$route_migration")
+          test -n "$route_migration_up"
+          ! printf '%s\n' "$route_migration_up" | grep -Eiq 'migrationBuilder\.Sql|DropTable|city_minute_statistics|city_category_(minute|hour)_statistics|gtfs'
+
+      - name: Validate city category capture is disabled by default
+        run: |
+          test "$(jq -r '.CityCategoryInsights.Enabled' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "false"
+          test "$(jq -r '.CityCategoryInsights.DisabledCities | length' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "0"
+          test "$(jq -r '.CityCategoryInsights.Enabled' src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json)" = "false"
+          test "$(jq -r '.CityCategoryInsights.DisabledCities | length' src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json)" = "0"
+          test "$(jq -r '.parameters.enableCityCategoryInsights.defaultValue' bicep/main.json)" = "false"
+          test "$(jq -r '.parameters.cityCategoryInsightsDisabledCities.defaultValue | length' bicep/main.json)" = "0"
+          grep -q 'name: "city_category_minute_statistics"' src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261001204629_CreateCityCategoryStatistics.cs
+          grep -q 'name: "city_category_hour_statistics"' src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261001204629_CreateCityCategoryStatistics.cs
+          ! grep -Eiq 'migrationBuilder\.Sql|city_minute_statistics|gtfs|route' src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261001204629_CreateCityCategoryStatistics.cs
 
       - name: Set image tag output
         id: set-tag

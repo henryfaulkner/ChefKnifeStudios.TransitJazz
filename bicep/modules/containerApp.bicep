@@ -60,17 +60,45 @@ param grafanaMetricsReaderSecretUri string = ''
 @description('Enable the historical statistics collector.')
 param enableHistoricalStatistics bool = false
 
+@description('Enable city/category capture for all configured cities except explicit exclusions after its separate schema and pilot gates pass.')
+param enableCityCategoryInsights bool = false
+
+@description('Configured city names to exclude from capture.')
+param cityCategoryInsightsDisabledCities array = []
+
+@description('Default maximum observation gap in seconds.')
+param cityCategoryInsightsMaxObservationGapSeconds int = 30
+
+@description('Optional per-city observation gap overrides.')
+param cityCategoryInsightsCityMaxObservationGapSeconds object = {}
+
+@description('Bounded aggregate envelope queue capacity.')
+param cityCategoryInsightsQueueCapacity int = 256
+
+@description('Maximum aggregate rows per database write transaction.')
+param cityCategoryInsightsMaxBatchRows int = 128
+
+@description('Database command timeout in seconds.')
+param cityCategoryInsightsCommandTimeoutSeconds int = 5
+
+@description('Total bounded transient write attempts.')
+param cityCategoryInsightsMaxWriteAttempts int = 3
+
+@description('Bounded writer shutdown drain in seconds.')
+param cityCategoryInsightsShutdownDrainSeconds int = 15
+
+var disabledCityEnvironmentVariables = [for (city, i) in cityCategoryInsightsDisabledCities: {
+  name: 'CityCategoryInsights__Disabled_${i}'
+  value: city
+}]
+
+var cityCadenceEnvironmentVariables = [for item in items(cityCategoryInsightsCityMaxObservationGapSeconds): {
+  name: 'CityCategoryInsights__CityMaxObservationGapSeconds__${item.key}'
+  value: string(item.value)
+}]
+
 @description('Keep historical statistics collection read-only.')
 param historicalStatisticsDryRun bool = true
-
-@description('Enable the one-time historical statistics backfill.')
-param historicalStatisticsInitialBackfill bool = false
-
-@description('Inclusive UTC minute for the initial historical statistics backfill.')
-param historicalStatisticsBackfillStartUtc string = ''
-
-@description('Inclusive UTC minute for the initial historical statistics backfill.')
-param historicalStatisticsBackfillEndUtc string = ''
 
 resource app 'Microsoft.App/containerApps@2025-01-01' = {
   name: name
@@ -154,26 +182,40 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
                 value: string(historicalStatisticsDryRun)
               }
               {
-                name: 'HistoricalStatistics__InitialBackfill'
-                value: string(historicalStatisticsInitialBackfill)
-              }
-              {
                 name: 'HistoricalStatistics__SourceEndpoint'
                 value: grafanaMetricsReaderEndpoint
               }
-            ],
-            empty(historicalStatisticsBackfillStartUtc) ? [] : [
               {
-                name: 'HistoricalStatistics__BackfillStartUtc'
-                value: historicalStatisticsBackfillStartUtc
+                name: 'CityCategoryInsights__Enabled'
+                value: string(enableCityCategoryInsights)
+              }
+              {
+                name: 'CityCategoryInsights__MaxObservationGapSeconds'
+                value: string(cityCategoryInsightsMaxObservationGapSeconds)
+              }
+              {
+                name: 'CityCategoryInsights__QueueCapacity'
+                value: string(cityCategoryInsightsQueueCapacity)
+              }
+              {
+                name: 'CityCategoryInsights__MaxBatchRows'
+                value: string(cityCategoryInsightsMaxBatchRows)
+              }
+              {
+                name: 'CityCategoryInsights__CommandTimeoutSeconds'
+                value: string(cityCategoryInsightsCommandTimeoutSeconds)
+              }
+              {
+                name: 'CityCategoryInsights__MaxWriteAttempts'
+                value: string(cityCategoryInsightsMaxWriteAttempts)
+              }
+              {
+                name: 'CityCategoryInsights__ShutdownDrainSeconds'
+                value: string(cityCategoryInsightsShutdownDrainSeconds)
               }
             ],
-            empty(historicalStatisticsBackfillEndUtc) ? [] : [
-              {
-                name: 'HistoricalStatistics__BackfillEndUtc'
-                value: historicalStatisticsBackfillEndUtc
-              }
-            ],
+            disabledCityEnvironmentVariables,
+            cityCadenceEnvironmentVariables,
             empty(transitJazzDbSecretUri) ? [] : [
               {
                 name: 'ConnectionStrings__TransitJazzDB'

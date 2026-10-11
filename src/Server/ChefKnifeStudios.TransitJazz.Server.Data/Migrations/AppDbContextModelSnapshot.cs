@@ -22,6 +22,222 @@ namespace ChefKnifeStudios.TransitJazz.Server.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityCategoryHourStatistic", b =>
+                {
+                    b.Property<string>("CitySlug")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("city_slug");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("HourStartUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("hour_start_utc");
+
+                    b.Property<long>("ActiveVehicleCountSum")
+                        .HasColumnType("bigint")
+                        .HasColumnName("active_vehicle_count_sum");
+
+                    b.Property<string>("CollectionStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("collection_status");
+
+                    b.Property<int>("CoveredMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("covered_minutes");
+
+                    b.Property<long>("CrossingsPublishedCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("crossings_published_count");
+
+                    b.Property<string>("DefinitionVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("definition_version");
+
+                    b.Property<long>("DistanceIntervalCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("distance_interval_count");
+
+                    b.Property<decimal>("DistanceMetersSum")
+                        .HasColumnType("numeric(20,6)")
+                        .HasColumnName("distance_meters_sum");
+
+                    b.Property<long>("DistanceRejectedCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("distance_rejected_count");
+
+                    b.Property<long?>("DistinctActiveVehicleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("distinct_active_vehicle_count");
+
+                    b.Property<long>("FailedCycleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("failed_cycle_count");
+
+                    b.Property<DateTime?>("FirstCycleUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_cycle_utc");
+
+                    b.Property<bool>("HasConflict")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("has_conflict");
+
+                    b.Property<int>("HealthyCadenceLimitSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("healthy_cadence_limit_seconds");
+
+                    b.Property<DateTime?>("LastCycleUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_cycle_utc");
+
+                    b.Property<decimal?>("MaxObservationGapSeconds")
+                        .HasColumnType("numeric(20,6)")
+                        .HasColumnName("max_observation_gap_seconds");
+
+                    b.Property<long>("ObservedCycleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("observed_cycle_count");
+
+                    b.Property<long>("ValidActiveSampleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("valid_active_sample_count");
+
+                    b.Property<long>("ValidPublishCycleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("valid_publish_cycle_count");
+
+                    b.HasKey("CitySlug", "Category", "HourStartUtc");
+
+                    b.ToTable("city_category_hour_statistics", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_city_category_hour_aligned", "date_trunc('hour', hour_start_utc AT TIME ZONE 'UTC') = hour_start_utc AT TIME ZONE 'UTC'");
+
+                            t.HasCheckConstraint("ck_city_category_hour_complete", "collection_status <> 'Complete' OR (covered_minutes = 60 AND distinct_active_vehicle_count IS NOT NULL AND observed_cycle_count > 0 AND valid_active_sample_count = observed_cycle_count AND valid_publish_cycle_count = observed_cycle_count AND failed_cycle_count = 0 AND max_observation_gap_seconds IS NOT NULL AND max_observation_gap_seconds <= healthy_cadence_limit_seconds)");
+
+                            t.HasCheckConstraint("ck_city_category_hour_no_data", "collection_status <> 'NoData' OR (valid_active_sample_count = 0 AND valid_publish_cycle_count = 0 AND active_vehicle_count_sum = 0 AND distance_meters_sum = 0 AND distance_interval_count = 0 AND crossings_published_count = 0)");
+
+                            t.HasCheckConstraint("ck_city_category_hour_nonnegative", "healthy_cadence_limit_seconds BETWEEN 1 AND 60 AND observed_cycle_count >= 0 AND valid_active_sample_count >= 0 AND valid_publish_cycle_count >= 0 AND failed_cycle_count >= 0 AND active_vehicle_count_sum >= 0 AND distance_meters_sum >= 0 AND distance_interval_count >= 0 AND distance_rejected_count >= 0 AND crossings_published_count >= 0 AND (distinct_active_vehicle_count IS NULL OR distinct_active_vehicle_count >= 0) AND covered_minutes BETWEEN 0 AND 60 AND (max_observation_gap_seconds IS NULL OR max_observation_gap_seconds >= 0)");
+
+                            t.HasCheckConstraint("ck_city_category_hour_samples", "valid_active_sample_count <= observed_cycle_count AND valid_publish_cycle_count <= observed_cycle_count AND failed_cycle_count <= observed_cycle_count");
+
+                            t.HasCheckConstraint("ck_city_category_hour_status", "collection_status IN ('Complete','Partial','NoData')");
+                        });
+                });
+
+            modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityCategoryMinuteStatistic", b =>
+                {
+                    b.Property<string>("CitySlug")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("city_slug");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("StatMinuteUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("stat_minute_utc");
+
+                    b.Property<long>("ActiveVehicleCountSum")
+                        .HasColumnType("bigint")
+                        .HasColumnName("active_vehicle_count_sum");
+
+                    b.Property<string>("CollectionStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("collection_status");
+
+                    b.Property<long>("CrossingsPublishedCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("crossings_published_count");
+
+                    b.Property<string>("DefinitionVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("definition_version");
+
+                    b.Property<long>("DistanceIntervalCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("distance_interval_count");
+
+                    b.Property<decimal>("DistanceMetersSum")
+                        .HasColumnType("numeric(20,6)")
+                        .HasColumnName("distance_meters_sum");
+
+                    b.Property<long>("DistanceRejectedCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("distance_rejected_count");
+
+                    b.Property<long>("FailedCycleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("failed_cycle_count");
+
+                    b.Property<DateTime?>("FirstCycleUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_cycle_utc");
+
+                    b.Property<bool>("HasConflict")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("has_conflict");
+
+                    b.Property<int>("HealthyCadenceLimitSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("healthy_cadence_limit_seconds");
+
+                    b.Property<DateTime?>("LastCycleUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_cycle_utc");
+
+                    b.Property<decimal?>("MaxObservationGapSeconds")
+                        .HasColumnType("numeric(20,6)")
+                        .HasColumnName("max_observation_gap_seconds");
+
+                    b.Property<long>("ObservedCycleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("observed_cycle_count");
+
+                    b.Property<long>("ValidActiveSampleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("valid_active_sample_count");
+
+                    b.Property<long>("ValidPublishCycleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("valid_publish_cycle_count");
+
+                    b.HasKey("CitySlug", "Category", "StatMinuteUtc");
+
+                    b.ToTable("city_category_minute_statistics", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_city_category_minute_aligned", "date_trunc('minute', stat_minute_utc AT TIME ZONE 'UTC') = stat_minute_utc AT TIME ZONE 'UTC'");
+
+                            t.HasCheckConstraint("ck_city_category_minute_complete", "collection_status <> 'Complete' OR (observed_cycle_count > 0 AND valid_active_sample_count = observed_cycle_count AND valid_publish_cycle_count = observed_cycle_count AND failed_cycle_count = 0 AND max_observation_gap_seconds IS NOT NULL AND max_observation_gap_seconds <= healthy_cadence_limit_seconds)");
+
+                            t.HasCheckConstraint("ck_city_category_minute_no_data", "collection_status <> 'NoData' OR (valid_active_sample_count = 0 AND valid_publish_cycle_count = 0 AND active_vehicle_count_sum = 0 AND distance_meters_sum = 0 AND distance_interval_count = 0 AND crossings_published_count = 0)");
+
+                            t.HasCheckConstraint("ck_city_category_minute_nonnegative", "healthy_cadence_limit_seconds BETWEEN 1 AND 60 AND observed_cycle_count >= 0 AND valid_active_sample_count >= 0 AND valid_publish_cycle_count >= 0 AND failed_cycle_count >= 0 AND active_vehicle_count_sum >= 0 AND distance_meters_sum >= 0 AND distance_interval_count >= 0 AND distance_rejected_count >= 0 AND crossings_published_count >= 0 AND (max_observation_gap_seconds IS NULL OR max_observation_gap_seconds >= 0)");
+
+                            t.HasCheckConstraint("ck_city_category_minute_samples", "valid_active_sample_count <= observed_cycle_count AND valid_publish_cycle_count <= observed_cycle_count AND failed_cycle_count <= observed_cycle_count");
+
+                            t.HasCheckConstraint("ck_city_category_minute_status", "collection_status IN ('Complete','Partial','NoData')");
+                        });
+                });
+
             modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityMinuteStatistic", b =>
                 {
                     b.Property<string>("CitySlug")
@@ -140,6 +356,207 @@ namespace ChefKnifeStudios.TransitJazz.Server.Data.Migrations
                     b.HasKey("CitySlug", "StatMinuteUtc");
 
                     b.ToTable("city_minute_statistics", (string)null);
+                });
+
+            modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityRouteHourStatistic", b =>
+                {
+                    b.Property<string>("CitySlug")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("city_slug");
+
+                    b.Property<string>("RouteJoinKey")
+                        .HasColumnType("text")
+                        .HasColumnName("route_join_key")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("HourStartUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("hour_start_utc");
+
+                    b.Property<long>("ActiveVehicleCountSum")
+                        .HasColumnType("bigint")
+                        .HasColumnName("active_vehicle_count_sum");
+
+                    b.Property<Guid>("CaptureRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("capture_run_id");
+
+                    b.Property<bool>("CatalogChanged")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("catalog_changed");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("category");
+
+                    b.Property<string>("CollectionStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("collection_status");
+
+                    b.Property<long>("CrossingsDetectedCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("crossings_detected_count");
+
+                    b.Property<long>("CrossingsPublishedCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("crossings_published_count");
+
+                    b.Property<long>("CrossingsSuppressedDeltaLeqZero")
+                        .HasColumnType("bigint")
+                        .HasColumnName("crossings_suppressed_delta_leq_zero");
+
+                    b.Property<long>("CrossingsSuppressedFirstSeen")
+                        .HasColumnType("bigint")
+                        .HasColumnName("crossings_suppressed_first_seen");
+
+                    b.Property<long>("CrossingsSuppressedTeleport")
+                        .HasColumnType("bigint")
+                        .HasColumnName("crossings_suppressed_teleport");
+
+                    b.Property<long>("CrossingsSuppressedTransfer")
+                        .HasColumnType("bigint")
+                        .HasColumnName("crossings_suppressed_transfer");
+
+                    b.Property<string>("DefinitionVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("definition_version");
+
+                    b.Property<long>("DistanceIntervalCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("distance_interval_count");
+
+                    b.Property<decimal>("DistanceMetersSum")
+                        .HasColumnType("numeric(20,6)")
+                        .HasColumnName("distance_meters_sum");
+
+                    b.Property<long>("DistanceRejectedCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("distance_rejected_count");
+
+                    b.Property<long?>("DistinctActiveVehicleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("distinct_active_vehicle_count");
+
+                    b.Property<bool>("EndBoundaryOk")
+                        .HasColumnType("boolean")
+                        .HasColumnName("end_boundary_ok");
+
+                    b.Property<long>("FailedCycleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("failed_cycle_count");
+
+                    b.Property<DateTime?>("FirstCycleUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_cycle_utc");
+
+                    b.Property<bool>("HasConflict")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("has_conflict");
+
+                    b.Property<int>("HealthyCadenceLimitSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("healthy_cadence_limit_seconds");
+
+                    b.PrimitiveCollection<string[]>("IncompleteReasons")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("incomplete_reasons")
+                        .HasDefaultValueSql("ARRAY[]::text[]");
+
+                    b.Property<DateTime?>("LastCycleUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_cycle_utc");
+
+                    b.Property<decimal?>("MaxObservationGapSeconds")
+                        .HasColumnType("numeric(20,6)")
+                        .HasColumnName("max_observation_gap_seconds");
+
+                    b.Property<long>("ObservedCycleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("observed_cycle_count");
+
+                    b.Property<long>("PeakActiveVehicleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("peak_active_vehicle_count");
+
+                    b.Property<DateTime>("PersistedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("persisted_at_utc")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("RouteCatalogFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("route_catalog_fingerprint");
+
+                    b.Property<string>("RouteShortName")
+                        .HasColumnType("text")
+                        .HasColumnName("route_short_name");
+
+                    b.Property<long>("StaleObservationsCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("stale_observations_count");
+
+                    b.Property<bool>("StartBoundaryOk")
+                        .HasColumnType("boolean")
+                        .HasColumnName("start_boundary_ok");
+
+                    b.Property<string>("StaticRouteId")
+                        .HasColumnType("text")
+                        .HasColumnName("static_route_id");
+
+                    b.Property<long>("ValidActiveSampleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("valid_active_sample_count");
+
+                    b.Property<long>("ValidPublishCycleCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("valid_publish_cycle_count");
+
+                    b.Property<long>("VehicleObservationsProcessedCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("vehicle_observations_processed_count");
+
+                    b.HasKey("CitySlug", "RouteJoinKey", "HourStartUtc");
+
+                    b.HasIndex("CitySlug", "HourStartUtc", "RouteJoinKey");
+
+                    b.ToTable("city_route_hour_statistics", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_city_route_hour_aligned", "date_trunc('hour', hour_start_utc AT TIME ZONE 'UTC') = hour_start_utc AT TIME ZONE 'UTC'");
+
+                            t.HasCheckConstraint("ck_city_route_hour_catalog_reason", "catalog_changed = ('catalog_changed' = ANY(incomplete_reasons))");
+
+                            t.HasCheckConstraint("ck_city_route_hour_complete", "collection_status <> 'Complete' OR (observed_cycle_count > 0 AND valid_active_sample_count = observed_cycle_count AND valid_publish_cycle_count = observed_cycle_count AND failed_cycle_count = 0 AND start_boundary_ok AND end_boundary_ok AND max_observation_gap_seconds IS NOT NULL AND max_observation_gap_seconds <= healthy_cadence_limit_seconds AND distinct_active_vehicle_count IS NOT NULL AND NOT catalog_changed AND cardinality(incomplete_reasons) = 0)");
+
+                            t.HasCheckConstraint("ck_city_route_hour_cycle_times", "(observed_cycle_count = 0 AND first_cycle_utc IS NULL AND last_cycle_utc IS NULL) OR (observed_cycle_count > 0 AND first_cycle_utc >= hour_start_utc AND first_cycle_utc <= last_cycle_utc AND last_cycle_utc < hour_start_utc + INTERVAL '1 hour')");
+
+                            t.HasCheckConstraint("ck_city_route_hour_identity", "length(btrim(city_slug)) > 0 AND length(btrim(route_join_key)) > 0 AND octet_length(route_join_key) <= 512 AND length(btrim(category)) > 0 AND category = lower(category) AND length(btrim(definition_version)) > 0 AND route_catalog_fingerprint ~ '^[0-9a-f]{64}$' AND capture_run_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_city_route_hour_no_data", "collection_status <> 'NoData' OR (valid_active_sample_count = 0 AND valid_publish_cycle_count = 0 AND active_vehicle_count_sum = 0 AND peak_active_vehicle_count = 0 AND distance_meters_sum = 0 AND distance_interval_count = 0 AND crossings_published_count = 0)");
+
+                            t.HasCheckConstraint("ck_city_route_hour_nonnegative", "healthy_cadence_limit_seconds BETWEEN 1 AND 60 AND observed_cycle_count >= 0 AND valid_active_sample_count >= 0 AND valid_publish_cycle_count >= 0 AND failed_cycle_count >= 0 AND (max_observation_gap_seconds IS NULL OR max_observation_gap_seconds >= 0) AND active_vehicle_count_sum >= 0 AND peak_active_vehicle_count >= 0 AND (distinct_active_vehicle_count IS NULL OR distinct_active_vehicle_count >= 0) AND vehicle_observations_processed_count >= 0 AND stale_observations_count >= 0 AND distance_meters_sum >= 0 AND distance_interval_count >= 0 AND distance_rejected_count >= 0 AND crossings_detected_count >= 0 AND crossings_published_count >= 0 AND crossings_suppressed_first_seen >= 0 AND crossings_suppressed_delta_leq_zero >= 0 AND crossings_suppressed_teleport >= 0 AND crossings_suppressed_transfer >= 0");
+
+                            t.HasCheckConstraint("ck_city_route_hour_reason_vocabulary", "incomplete_reasons <@ ARRAY['boundary_unproven','capture_failure','catalog_changed','clock_regression','gap_exceeded','identity_limit_exceeded','processing_failure','publication_unavailable','route_index_unavailable','shutdown_fragment','source_failure','startup_fragment']::text[]");
+
+                            t.HasCheckConstraint("ck_city_route_hour_samples", "valid_active_sample_count <= observed_cycle_count AND valid_publish_cycle_count <= observed_cycle_count AND failed_cycle_count <= observed_cycle_count AND stale_observations_count <= vehicle_observations_processed_count AND crossings_published_count <= crossings_detected_count AND peak_active_vehicle_count <= active_vehicle_count_sum AND (distinct_active_vehicle_count IS NULL OR distinct_active_vehicle_count >= peak_active_vehicle_count)");
+
+                            t.HasCheckConstraint("ck_city_route_hour_status", "collection_status IN ('Complete','Partial','NoData')");
+                        });
                 });
 #pragma warning restore 612, 618
         }

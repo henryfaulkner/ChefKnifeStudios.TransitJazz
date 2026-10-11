@@ -68,17 +68,35 @@ param grafanaMetricsReaderSecretUri string = ''
 @description('Enable the historical statistics collector after release gates pass.')
 param enableHistoricalStatistics bool = false
 
+@description('Enable city/category capture for all configured cities except explicit exclusions after schema and pilot release gates pass. Defaults to disabled.')
+param enableCityCategoryInsights bool = false
+
+@description('Configured city names to exclude when city/category insights are enabled.')
+param cityCategoryInsightsDisabledCities array = []
+
+@description('Default maximum observation gap in seconds for city/category coverage.')
+param cityCategoryInsightsMaxObservationGapSeconds int = 30
+
+@description('Optional per-city maximum observation gap overrides keyed by configured city name.')
+param cityCategoryInsightsCityMaxObservationGapSeconds object = {}
+
+@description('Bounded aggregate envelope queue capacity.')
+param cityCategoryInsightsQueueCapacity int = 256
+
+@description('Maximum persisted aggregate rows per writer transaction.')
+param cityCategoryInsightsMaxBatchRows int = 128
+
+@description('Database command timeout in seconds for category aggregate writes.')
+param cityCategoryInsightsCommandTimeoutSeconds int = 5
+
+@description('Total bounded attempts for transient category aggregate writes.')
+param cityCategoryInsightsMaxWriteAttempts int = 3
+
+@description('Maximum category aggregate writer shutdown drain in seconds.')
+param cityCategoryInsightsShutdownDrainSeconds int = 15
+
 @description('Run the historical statistics collector without database writes.')
 param historicalStatisticsDryRun bool = true
-
-@description('Enable the bounded initial historical statistics backfill.')
-param historicalStatisticsInitialBackfill bool = false
-
-@description('Inclusive UTC minute for the initial historical statistics backfill; required when initial backfill is enabled.')
-param historicalStatisticsBackfillStartUtc string = ''
-
-@description('Inclusive UTC minute for the initial historical statistics backfill; required when initial backfill is enabled.')
-param historicalStatisticsBackfillEndUtc string = ''
 
 @description('Object ID for the intended workspace-scoped Log Analytics Reader. Leave empty until approved.')
 param logAnalyticsReaderPrincipalId string = ''
@@ -359,10 +377,16 @@ module serverApp 'modules/containerApp.bicep' = {
     grafanaMetricsReaderEndpoint: grafanaMetricsReaderEndpoint
     grafanaMetricsReaderSecretUri: grafanaMetricsReaderSecretUri
     enableHistoricalStatistics: enableHistoricalStatistics
+    enableCityCategoryInsights: enableCityCategoryInsights
+    cityCategoryInsightsDisabledCities: cityCategoryInsightsDisabledCities
+    cityCategoryInsightsMaxObservationGapSeconds: cityCategoryInsightsMaxObservationGapSeconds
+    cityCategoryInsightsCityMaxObservationGapSeconds: cityCategoryInsightsCityMaxObservationGapSeconds
+    cityCategoryInsightsQueueCapacity: cityCategoryInsightsQueueCapacity
+    cityCategoryInsightsMaxBatchRows: cityCategoryInsightsMaxBatchRows
+    cityCategoryInsightsCommandTimeoutSeconds: cityCategoryInsightsCommandTimeoutSeconds
+    cityCategoryInsightsMaxWriteAttempts: cityCategoryInsightsMaxWriteAttempts
+    cityCategoryInsightsShutdownDrainSeconds: cityCategoryInsightsShutdownDrainSeconds
     historicalStatisticsDryRun: historicalStatisticsDryRun
-    historicalStatisticsInitialBackfill: historicalStatisticsInitialBackfill
-    historicalStatisticsBackfillStartUtc: historicalStatisticsBackfillStartUtc
-    historicalStatisticsBackfillEndUtc: historicalStatisticsBackfillEndUtc
   }
   dependsOn: [
     acrRoleAssignment

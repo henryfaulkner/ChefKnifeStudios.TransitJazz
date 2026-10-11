@@ -2,6 +2,7 @@ using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.EndpointGroups;
@@ -163,9 +164,32 @@ var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig
 
 var historicalStatisticsOptions = builder.Configuration.GetSection(HistoricalStatisticsOptions.SectionName).Get<HistoricalStatisticsOptions>()
     ?? new HistoricalStatisticsOptions();
-if (historicalStatisticsOptions.Cities.Count == 0)
-    historicalStatisticsOptions.Cities = cityConfigs.Select(city => city.Name).ToList();
+historicalStatisticsOptions.ResolveCitySelection(cityConfigs.Select(city => city.Name), CityNames.Marta);
 historicalStatisticsOptions.Validate();
+var routeHourHistoryOptions = historicalStatisticsOptions.RouteHours ?? new RouteHourHistoryOptions();
+historicalStatisticsOptions.RouteHours = routeHourHistoryOptions;
+routeHourHistoryOptions.Validate(workerOptions.CycleIntervalSeconds, historicalStatisticsOptions.Cities);
+IEnumerable<string> configuredCityNamesSource = cityConfigs.Count == 0
+    ? new[] { CityNames.Marta }
+    : cityConfigs.Select(city => city.Name);
+var configuredCityNames = configuredCityNamesSource.ToHashSet(StringComparer.OrdinalIgnoreCase);
+if (historicalStatisticsOptions.Enabled)
+{
+    var unavailableCities = historicalStatisticsOptions.Cities.Where(city => !configuredCityNames.Contains(city)).ToArray();
+    if (unavailableCities.Length > 0)
+        throw new InvalidOperationException($"Historical statistics cities must be configured in Cities: {string.Join(", ", unavailableCities)}.");
+    foreach (var city in cityConfigs.Where(city => historicalStatisticsOptions.Cities.Contains(city.Name, StringComparer.OrdinalIgnoreCase)))
+    {
+        if (string.IsNullOrWhiteSpace(city.TimeZoneId))
+            throw new InvalidOperationException($"Enabled route-hour history requires an IANA time zone for {city.Name}.");
+        try { CityCategoryInsightsOptions.ValidateIanaTimeZoneId(city.TimeZoneId); }
+        catch (Exception exception) when (exception is ArgumentException or TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            throw new InvalidOperationException($"Enabled route-hour history requires a valid IANA time zone for {city.Name}.", exception);
+        }
+    }
+}
+var routeHourRuntime = historicalStatisticsOptions.CreateRouteHourRuntimeOptions();
 builder.Services.AddSingleton(historicalStatisticsOptions);
 builder.Services.AddSingleton<IOptions<HistoricalStatisticsOptions>>(Options.Create(historicalStatisticsOptions));
 
@@ -181,6 +205,37 @@ else if (historicalStatisticsOptions.Enabled)
 {
     throw new InvalidOperationException("Historical statistics collection requires ConnectionStrings:TransitJazzDB.");
 }
+
+var cityCategoryInsightsOptions = CityCategoryInsightsOptions.FromConfiguration(builder.Configuration);
+cityCategoryInsightsOptions.Validate(workerOptions.CycleIntervalSeconds);
+if (cityCategoryInsightsOptions.Enabled)
+{
+    if (string.IsNullOrWhiteSpace(transitJazzConnectionString))
+        throw new InvalidOperationException("City category statistics capture requires ConnectionStrings:TransitJazzDB.");
+    var configuredCities = cityConfigs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var missingCities = cityCategoryInsightsOptions.DisabledCities.Concat(cityCategoryInsightsOptions.CityMaxObservationGapSeconds.Keys)
+        .Where(x => !configuredCities.Contains(x)).ToArray();
+    if (missingCities.Length > 0)
+        throw new InvalidOperationException("City category statistics DisabledCities and cadence overrides must name configured cities.");
+    foreach (var city in cityConfigs.Where(x => cityCategoryInsightsOptions.IsEnabledFor(x.Name)))
+    {
+        if (string.IsNullOrWhiteSpace(city.TimeZoneId))
+            throw new InvalidOperationException("Enabled city category statistics require a configured IANA time zone.");
+        CityCategoryInsightsOptions.ValidateIanaTimeZoneId(city.TimeZoneId);
+    }
+
+    builder.Services.AddSingleton<CityCategoryStatisticsStore>();
+    builder.Services.AddSingleton<CategoryStatisticsWriter>();
+    builder.Services.AddSingleton<ICategoryStatisticsSink>(sp => sp.GetRequiredService<CategoryStatisticsWriter>());
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<CategoryStatisticsWriter>());
+}
+else
+{
+    builder.Services.AddSingleton<ICategoryStatisticsSink>(NullCategoryStatisticsSink.Instance);
+}
+builder.Services.AddCategoryStatisticsCaptureRuntime(cityCategoryInsightsOptions);
+RouteHourCaptureServiceCollectionExtensions.ValidatePersistencePrerequisites(routeHourRuntime, transitJazzConnectionString);
+builder.Services.AddRouteHourStatisticsCaptureRuntime(routeHourRuntime);
 
 var nymtaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase));
 builder.Services.Configure<SubwaySynthesisOptions>(o =>
@@ -288,12 +343,11 @@ var app = builder.Build();
 
 app.Services.GetRequiredService<ILoggerFactory>()
     .CreateLogger("ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics.Startup")
-    .LogInformation("Historical statistics startup: enabled={Enabled}, dryRun={DryRun}, initialBackfill={InitialBackfill}, databaseConfigured={DatabaseConfigured}, sourceEndpointConfigured={SourceEndpointConfigured}, readerAuthorizationConfigured={ReaderAuthorizationConfigured}, backfillRangeConfigured={BackfillRangeConfigured}",
-        historicalStatisticsOptions.Enabled, historicalStatisticsOptions.DryRun, historicalStatisticsOptions.InitialBackfill,
+    .LogInformation("Historical statistics startup: enabled={Enabled}, dryRun={DryRun}, databaseConfigured={DatabaseConfigured}, sourceEndpointConfigured={SourceEndpointConfigured}, readerAuthorizationConfigured={ReaderAuthorizationConfigured}",
+        historicalStatisticsOptions.Enabled, historicalStatisticsOptions.DryRun,
         !string.IsNullOrWhiteSpace(transitJazzConnectionString),
         !string.IsNullOrWhiteSpace(historicalStatisticsOptions.SourceEndpoint),
-        !string.IsNullOrWhiteSpace(historicalStatisticsOptions.ReaderAuthorization),
-        historicalStatisticsOptions.BackfillStartUtc is not null && historicalStatisticsOptions.BackfillEndUtc is not null);
+        !string.IsNullOrWhiteSpace(historicalStatisticsOptions.ReaderAuthorization));
 
 app.UseExceptionHandler();
 
