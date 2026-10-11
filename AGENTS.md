@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/056-city-transit-type-insights/plan.md
+at specs/057-hourly-route-history/plan.md
 <!-- SPECKIT END -->
 
 ## Git commits
