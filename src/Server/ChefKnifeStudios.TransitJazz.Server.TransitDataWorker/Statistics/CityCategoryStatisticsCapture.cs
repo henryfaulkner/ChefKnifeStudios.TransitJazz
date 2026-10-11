@@ -26,8 +26,10 @@ public sealed class CityCategoryStatisticsCapture
     {
         if (!IsEnabledFor(city)) return null;
         var state = _cities.GetOrAdd(city, name => new CityState(name, _options.GapLimitFor(name)));
-        state.AlignGeneration(geometryGeneration);
-        return new CityCategoryStatisticsCycle(city, configuredCategories, geometryGeneration);
+        var aligned = state.AlignGeneration(geometryGeneration);
+        var cycle = new CityCategoryStatisticsCycle(city, configuredCategories, geometryGeneration);
+        if (!aligned) cycle.MarkCaptureFailure();
+        return cycle;
     }
 
     public bool RecordEligibleVehicle(CityCategoryStatisticsCycle? cycle, string vehicleIdentity, string category)
@@ -136,10 +138,8 @@ public sealed class CityCategoryStatisticsCapture
         }
     }
 
-    public void InvalidateGeometry(string city, long newGeneration)
-    {
-        if (_cities.TryGetValue(city, out var state)) state.InvalidateGeometry(newGeneration);
-    }
+    public bool InvalidateGeometry(string city, long newGeneration, IReadOnlySet<string>? changedRoutes = null) =>
+        _cities.TryGetValue(city, out var state) && state.InvalidateGeometry(newGeneration, changedRoutes);
 
     public void PruneMovement(DateTime cutoffUtc)
     {
@@ -154,8 +154,8 @@ public sealed class CityCategoryStatisticsCapture
         }
         catch { }
         state.Accumulator.MarkQueueLoss(batch);
-        SafeLog(() => _logger.LogWarning("Category statistics queue admission failed for {City}; minuteRows={MinuteRows}, hourRows={HourRows}.",
-            state.CitySlug, batch.Minutes.Length, batch.Hours.Length));
+        SafeLog(() => _logger.LogWarning("Category statistics queue admission failed for {City}; EventName={EventName}, ReasonCode={ReasonCode}, minuteRows={MinuteRows}, hourRows={HourRows}.",
+            state.CitySlug, "CategoryStatisticsQueueLoss", "QUEUE_ADMISSION_FAILED", batch.Minutes.Length, batch.Hours.Length));
     }
 
     static void SafeLog(Action log)
@@ -199,13 +199,6 @@ public sealed class CityCategoryStatisticsCapture
                     _movement.Remove(id);
                     return Reject(MovementRejectionReason.InvalidGeometry);
                 }
-                if (_geometryGeneration != generation)
-                {
-                    _movement.Clear();
-                    _geometryGeneration = generation;
-                    Accumulator.MarkCaptureLoss();
-                }
-
                 if (!_movement.TryGetValue(id, out var prior))
                 {
                     _movement[id] = new(routeKey, timestamp.Value, meters, generation, lastSeenUtc);
@@ -230,17 +223,21 @@ public sealed class CityCategoryStatisticsCapture
             }
         }
 
-        public void AlignGeneration(long generation)
+        public bool AlignGeneration(long generation)
         {
             lock (_movementLock)
             {
-                if (_geometryGeneration == generation) return;
+                // A snapshot acquired immediately before a refresh may arrive late. Never
+                // let that old cycle roll back the current catalog or destroy intact baselines.
+                if (generation < _geometryGeneration) return false;
+                if (_geometryGeneration == generation) return true;
                 if (_geometryGeneration >= 0)
                 {
                     _movement.Clear();
                     Accumulator.MarkCaptureLoss();
                 }
                 _geometryGeneration = generation;
+                return true;
             }
         }
 
@@ -262,13 +259,19 @@ public sealed class CityCategoryStatisticsCapture
             }
         }
 
-        public void InvalidateGeometry(long generation)
+        public bool InvalidateGeometry(long generation, IReadOnlySet<string>? changedRoutes)
         {
             lock (_movementLock)
             {
-                _movement.Clear();
+                if (generation <= _geometryGeneration) return false;
+                foreach (var (id, baseline) in _movement.ToArray())
+                {
+                    if (changedRoutes is null || changedRoutes.Contains(baseline.RouteKey)) _movement.Remove(id);
+                    else _movement[id] = baseline with { GeometryGeneration = generation };
+                }
                 _geometryGeneration = generation;
                 Accumulator.MarkCaptureLoss();
+                return true;
             }
         }
 

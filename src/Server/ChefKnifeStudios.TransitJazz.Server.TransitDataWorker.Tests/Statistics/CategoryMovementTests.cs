@@ -112,6 +112,26 @@ public sealed class CategoryMovementTests
         Assert.Equal(0, TimestampWatermarkCount(fixture.Capture));
     }
 
+    [Fact]
+    public void Late_old_generation_cycle_cannot_roll_back_or_erase_compatible_baselines()
+    {
+        var fixture = new CategoryStatisticsCaptureFixture();
+        var initial = fixture.Begin();
+        fixture.Capture.ObserveMovement(initial, "vehicle", "bus", "unchanged-route", 100, 20, 1);
+        fixture.Capture.InvalidateGeometry(CategoryStatisticsCaptureFixture.City, 2, new HashSet<string>(StringComparer.Ordinal) { "changed-route" });
+
+        var late = fixture.Begin(1);
+        var staleMovement = fixture.Capture.ObserveMovement(late, "vehicle", "bus", "unchanged-route", 1_000, 90, 1);
+        fixture.Complete(late, fixture.Start.AddSeconds(10));
+        var current = fixture.Begin(2);
+        var movement = fixture.Capture.ObserveMovement(current, "vehicle", "bus", "unchanged-route", 101, 30, 2);
+
+        Assert.True(late.CaptureFailed);
+        Assert.Equal(MovementRejectionReason.GeometryChanged, staleMovement.RejectionReason);
+        Assert.True(movement.Accepted);
+        Assert.Equal(10m, movement.DistanceMeters);
+    }
+
     static int TimestampWatermarkCount(CityCategoryStatisticsCapture capture)
     {
         var cities = typeof(CityCategoryStatisticsCapture).GetField("_cities", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(capture)!;

@@ -38,6 +38,7 @@ public class Worker(
     readonly IRouteShapeSource _routeShapeSource = routeShapeSource ?? UnavailableRouteShapeSource.Instance;
     readonly CityCategoryStatisticsCapture? _categoryStatisticsCapture = categoryStatisticsCapture;
     readonly RouteHourStatisticsCapture? _routeHourStatisticsCapture = routeHourStatisticsCapture;
+    // Generations identify substantive catalog changes, not replacement index instances.
     readonly Dictionary<string, long> _routeGeometryGenerations = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, StructuredLogReasonCode> _activeCityAnomalyReasons = new(StringComparer.OrdinalIgnoreCase);
     readonly object _routeCatalogGate = new();
@@ -63,10 +64,9 @@ public class Worker(
         long Generation,
         bool Ready);
 
-    sealed class RouteHourCatalogGroup(string routeJoinKey, string category, string? routeShortName)
+    sealed class RouteHourCatalogGroup(string routeJoinKey, string? routeShortName)
     {
         public string RouteJoinKey { get; } = routeJoinKey;
-        public string Category { get; } = category;
         public string? RouteShortName { get; } = routeShortName;
         public List<string> StaticRouteIds { get; } = [];
         public List<string> Aliases { get; } = [];
@@ -473,9 +473,7 @@ public class Worker(
             try
             {
                 if (!routeHourGroups.TryGetValue(key, out var routeHourGroup))
-                    routeHourGroups[key] = routeHourGroup = new RouteHourCatalogGroup(key,
-                        string.IsNullOrWhiteSpace(shape.Properties.Category) ? "unknown" : shape.Properties.Category.ToLowerInvariant(),
-                        shape.Properties.RouteShortName);
+                    routeHourGroups[key] = routeHourGroup = new RouteHourCatalogGroup(key, shape.Properties.RouteShortName);
                 routeHourGroup.Geometry.AddRange(shape.Geometry.Coordinates.Select(coord => new RouteHourGeometryPoint(coord[1], coord[0])));
                 if (!string.IsNullOrWhiteSpace(rawId))
                 {
@@ -535,7 +533,8 @@ public class Worker(
             }
             try
             {
-                var inputs = groups.Values.Select(group => new RouteHourCatalogInput(group.RouteJoinKey, group.Category,
+                var inputs = groups.Values.Select(group => new RouteHourCatalogInput(group.RouteJoinKey,
+                    NormalizeCatalogCategory(modeResult[cityName][group.RouteJoinKey]),
                     group.RouteShortName, group.StaticRouteIds.Order(StringComparer.Ordinal).ToImmutableArray(),
                     group.Geometry.ToImmutableArray(), group.Aliases.ToImmutableArray())).ToArray();
                 routeHourCatalogs[cityName] = RouteHourCatalog.Create(inputs);
@@ -583,22 +582,74 @@ public class Worker(
             throw new InvalidOperationException("Route-shape source returned an empty catalogue.");
 
         var routeCatalog = BuildRouteIndex(shapes.ToList());
+        var applications = new List<(string City, long Generation, string ReasonCode, int? ChangedRoutes, string? PreviousFingerprint, string? CurrentFingerprint, bool CaptureInvalidated)>();
         lock (_routeCatalogGate)
         {
             var affectedCities = _routeIndex.Keys.Concat(routeCatalog.Item1.Keys)
                 .Concat(_routeGeometryGenerations.Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-            (_routeIndex, _routeMode, _routeCumDist, _routeTriggerPoints, _routeHourCatalogs) = routeCatalog;
             foreach (var city in affectedCities)
             {
+                if (!_routeIndex.ContainsKey(city) && !routeCatalog.Item1.ContainsKey(city)) continue;
+                _routeHourCatalogs.TryGetValue(city, out var previous);
+                routeCatalog.Item5.TryGetValue(city, out var current);
+                _routeMode.TryGetValue(city, out var previousCategories);
+                routeCatalog.Item2.TryGetValue(city, out var currentCategories);
+                var comparable = HasComparableCategoryCatalog(previous, previousCategories)
+                    && HasComparableCategoryCatalog(current, currentCategories);
+                var unchanged = comparable && string.Equals(previous!.ContentFingerprint, current!.ContentFingerprint, StringComparison.Ordinal);
+                if (unchanged)
+                {
+                    applications.Add((city, _routeGeometryGenerations[city], "CATALOG_CONTENT_UNCHANGED", 0,
+                        previous!.ContentFingerprint, current!.ContentFingerprint, false));
+                    continue;
+                }
+
+                // Unavailable/ambiguous identity cannot establish compatibility. Removed cities
+                // invalidate too; an unrelated city's refresh does not affect this city's capture.
+                IReadOnlySet<string>? changedRoutes = comparable
+                    ? previous!.Entries.Keys.Concat(current!.Entries.Keys).Where(key =>
+                        !previous.TryGet(key, out var oldEntry) || !current.TryGet(key, out var newEntry)
+                        || !string.Equals(oldEntry.Fingerprint, newEntry.Fingerprint, StringComparison.Ordinal))
+                        .ToHashSet(StringComparer.Ordinal)
+                    : null;
+                var initialized = !_routeGeometryGenerations.ContainsKey(city);
                 var generation = _routeGeometryGenerations.GetValueOrDefault(city) + 1;
                 _routeGeometryGenerations[city] = generation;
-                _categoryStatisticsCapture?.InvalidateGeometry(city, generation);
+                var captureInvalidated = !initialized && (_categoryStatisticsCapture?.InvalidateGeometry(city, generation, changedRoutes) ?? false);
+                applications.Add((city, generation, initialized ? "CATALOG_INITIALIZED"
+                    : comparable ? "CATALOG_CONTENT_CHANGED" : "CATALOG_IDENTITY_UNAVAILABLE",
+                    changedRoutes?.Count, previous?.ContentFingerprint, current?.ContentFingerprint, captureInvalidated));
             }
+            (_routeIndex, _routeMode, _routeCumDist, _routeTriggerPoints, _routeHourCatalogs) = routeCatalog;
             Volatile.Write(ref _routeIndexReady, 1);
+        }
+        foreach (var application in applications)
+        {
+            try
+            {
+                logger.LogInformation("Route catalog applied: EventName={EventName}, City={City}, ReasonCode={ReasonCode}, "
+                    + "GeometryGeneration={GeometryGeneration}, ChangedRouteCount={ChangedRouteCount}, "
+                    + "PreviousCatalogFingerprint={PreviousCatalogFingerprint}, CurrentCatalogFingerprint={CurrentCatalogFingerprint}, "
+                    + "CategoryCaptureInvalidated={CategoryCaptureInvalidated}.",
+                    "RouteCatalogApplied", application.City, application.ReasonCode, application.Generation, application.ChangedRoutes,
+                    application.PreviousFingerprint, application.CurrentFingerprint,
+                    application.CaptureInvalidated);
+            }
+            catch { } // Diagnostics must not fail an applied live index.
         }
     }
 
-    RouteCatalogSnapshot GetRouteCatalogSnapshot(string city)
+    static string NormalizeCatalogCategory(string? category) =>
+        string.IsNullOrWhiteSpace(category) ? "unknown" : category.ToLowerInvariant();
+
+    static bool HasComparableCategoryCatalog(RouteHourCatalog? catalog, IReadOnlyDictionary<string, string>? categories) =>
+        catalog is { GeometryIdentityAvailable: true } && catalog.AmbiguousAliases.IsEmpty && categories is not null
+        // Category activity uses the live alias map. A canonical fingerprint cannot establish
+        // unchanged category identity when aliases have inconsistent live classifications.
+        && categories.All(pair => catalog.TryResolve(pair.Key, out var entry)
+            && string.Equals(entry.Category, NormalizeCatalogCategory(pair.Value), StringComparison.Ordinal));
+
+    internal RouteCatalogSnapshot GetRouteCatalogSnapshot(string city)
     {
         lock (_routeCatalogGate)
         {
