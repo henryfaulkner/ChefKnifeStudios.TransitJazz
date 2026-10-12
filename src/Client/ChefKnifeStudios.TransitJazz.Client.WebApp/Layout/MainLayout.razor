@@ -2,18 +2,25 @@
 @implements IDisposable
 @inject IEventNotificationService EventNotificationService
 @inject ISettingsService SettingsService
+@inject IFeatureFlagService FeatureFlagService
 @using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Constants
 @using ChefKnifeStudios.TransitJazz.Client.Core.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Blades
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components.FABs
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Stats
+@using ChefKnifeStudios.TransitJazz.Shared
 
 <div class="mj-theme @(_isDark ? "mj-dark" : "")">
     <MatThemeProvider Theme="@_currentTheme">
         @Body
         <MatToastContainer />
         <AudioFab />
+        @if (StatsOverlayAvailable)
+        {
+            <StatsFab />
+        }
         <MapStyleFab />
         <DarkModeFab />
         <InfoFab />
@@ -25,6 +32,8 @@
 </div>
 
 @code {
+    private bool StatsOverlayAvailable => StatsOverlayFeaturePolicy.IsAvailable(FeatureFlagService);
+
     private MatTheme _currentTheme = LightTheme;
     private bool _isDark;
     private static readonly MatTheme LightTheme = new MatTheme

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -118,7 +118,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="RouteBlurbPlaceholder" xml:space="preserve">
-    <value>Route {0} — tone and Atlanta story coming soon.</value>
+    <value>Route {0} â€” tone and Atlanta story coming soon.</value>
   </data>
   <data name="RouteBlurbBarAriaLabel" xml:space="preserve">
     <value>Route information</value>
@@ -178,7 +178,7 @@
     <value>Every dot is a real bus. Dozens of them, maybe more, moving through a city that never agreed on a grid. They follow Peachtree and Cascade and Memorial Drive, routes drawn around what Atlanta actually is rather than what a planner imagined.</value>
   </data>
   <data name="AudioOverlayParagraph2" xml:space="preserve">
-    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony is slow and syncopated. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — deep in Vine City, crossing the connector, idling at Edgewood-Candler Park. Morning fills the piece with movement; after midnight the map goes quiet and the notes stretch out. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience â€” turn your device's sound on.&lt;/strong&gt; The harmony is slow and syncopated. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; â€” deep in Vine City, crossing the connector, idling at Edgewood-Candler Park. Morning fills the piece with movement; after midnight the map goes quiet and the notes stretch out. What is playing right now has not played before.</value>
   </data>
   <data name="AudioOverlayParagraph3" xml:space="preserve">
     <value>MARTA runs on faith. You wait, and then it comes. This is the music inside that waiting.</value>
@@ -190,7 +190,7 @@
     <value>Every dot is a real bus or train. Hundreds of them, spread across a city that was planned on a diagonal and then grew past every boundary. They follow Wisconsin and Georgia and Benning Road, and the Red Line arcing through Bethesda, routes drawn around three jurisdictions that never quite agreed on anything.</value>
   </data>
   <data name="WashingtonDcAudioOverlayParagraph2" xml:space="preserve">
-    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony shifts with the system. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — transferring at Metro Center, crossing the Anacostia, moving through Silver Spring at rush hour. Commuter peaks fill the piece with density; late nights thin it out to something sparse and unhurried. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience â€” turn your device's sound on.&lt;/strong&gt; The harmony shifts with the system. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; â€” transferring at Metro Center, crossing the Anacostia, moving through Silver Spring at rush hour. Commuter peaks fill the piece with density; late nights thin it out to something sparse and unhurried. What is playing right now has not played before.</value>
   </data>
   <data name="WashingtonDcAudioOverlayParagraph3" xml:space="preserve">
     <value>WMATA connects a capital to itself. Across DC, Maryland, and Virginia, something is always moving. This is the music inside that motion.</value>
@@ -199,25 +199,25 @@
     <value>Every dot is a real bus or train. Hundreds of them, spread across a region that grew outward from a harbor and never stopped. They follow Massachusetts Avenue and Blue Hill and the Riverside Line, routes drawn around Boston, Cambridge, Somerville, and the towns reaching out to Providence and Newburyport.</value>
   </data>
   <data name="BostonAudioOverlayParagraph2" xml:space="preserve">
-    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony follows the system. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — surfacing at Park Street, crossing the Charles, moving through Roxbury at rush hour. The Red, Orange, and Blue lines weave through the piece alongside hundreds of buses. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience â€” turn your device's sound on.&lt;/strong&gt; The harmony follows the system. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; â€” surfacing at Park Street, crossing the Charles, moving through Roxbury at rush hour. The Red, Orange, and Blue lines weave through the piece alongside hundreds of buses. What is playing right now has not played before.</value>
   </data>
   <data name="BostonAudioOverlayParagraph3" xml:space="preserve">
     <value>The T is the oldest subway in America. It carries the city forward on the same lines it always has. This is the music inside that motion.</value>
   </data>
   <data name="BostonOverlayParagraph1" xml:space="preserve">
-    <value>Every dot is a real MBTA vehicle, pulled live and turned into sound. Buses and trains — including the Red, Orange, and Blue lines — move through Greater Boston in real time, and the map plays what they're doing right now.</value>
+    <value>Every dot is a real MBTA vehicle, pulled live and turned into sound. Buses and trains â€” including the Red, Orange, and Blue lines â€” move through Greater Boston in real time, and the map plays what they're doing right now.</value>
   </data>
   <data name="TorontoAudioOverlayHeader" xml:space="preserve">
     <value>Toronto, ON, Canada</value>
   </data>
   <data name="TorontoAudioOverlayParagraph1" xml:space="preserve">
-    <value>Every dot is a real bus or streetcar. Hundreds of them, threading a city built on a grid until the ravines cut through it. They follow King and Queen and Dundas and Spadina — the streetcar lines Toronto never gave up — and Eglinton and Jane and Bathurst further out, where the grid finally wins.</value>
+    <value>Every dot is a real bus or streetcar. Hundreds of them, threading a city built on a grid until the ravines cut through it. They follow King and Queen and Dundas and Spadina â€” the streetcar lines Toronto never gave up â€” and Eglinton and Jane and Bathurst further out, where the grid finally wins.</value>
   </data>
   <data name="TorontoAudioOverlayParagraph2" xml:space="preserve">
-    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony rides low and steady, streetcar tracks worn into it like the rails themselves. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — turning onto Spadina, running the Queen line end to end, waiting out a light on King. Rush hour thickens the piece into something dense and overlapping; late at night it thins to a single streetcar bell in the quiet. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience â€” turn your device's sound on.&lt;/strong&gt; The harmony rides low and steady, streetcar tracks worn into it like the rails themselves. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; â€” turning onto Spadina, running the Queen line end to end, waiting out a light on King. Rush hour thickens the piece into something dense and overlapping; late at night it thins to a single streetcar bell in the quiet. What is playing right now has not played before.</value>
   </data>
   <data name="TorontoAudioOverlayParagraph3" xml:space="preserve">
-    <value>Toronto runs the largest streetcar network in the Americas, and it still owns the old downtown lines outright. The subway draws its shape on the map but keeps its own counsel here — the surface is where this city actually speaks. This is the music inside that motion.</value>
+    <value>Toronto runs the largest streetcar network in the Americas, and it still owns the old downtown lines outright. The subway draws its shape on the map but keeps its own counsel here â€” the surface is where this city actually speaks. This is the music inside that motion.</value>
   </data>
   <data name="PhiladelphiaAudioOverlayHeader" xml:space="preserve">
     <value>Philadelphia, PA, USA</value>
@@ -226,22 +226,22 @@
     <value>Every dot is a real bus, trolley, or train. Hundreds of them, crossing a city laid out on a grid two centuries before anyone called it that. They follow Broad Street straight down its spine, Market Street splitting the city into north and south, and the trolleys of West Philadelphia still climbing the old tracks toward 69th Street.</value>
   </data>
   <data name="PhiladelphiaAudioOverlayParagraph2" xml:space="preserve">
-    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony holds a rowhouse steadiness, block after block, close together. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — turning off Broad, rattling along Girard, climbing out of the subway-surface tunnel into daylight at 40th Street. Rush hour packs the piece tight against itself; late at night it opens up, one trolley bell in the quiet. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience â€” turn your device's sound on.&lt;/strong&gt; The harmony holds a rowhouse steadiness, block after block, close together. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; â€” turning off Broad, rattling along Girard, climbing out of the subway-surface tunnel into daylight at 40th Street. Rush hour packs the piece tight against itself; late at night it opens up, one trolley bell in the quiet. What is playing right now has not played before.</value>
   </data>
   <data name="PhiladelphiaAudioOverlayParagraph3" xml:space="preserve">
-    <value>Philadelphia was laid out on a grid before the country had a name for itself, and SEPTA still traces it — trolleys included, running since before anyone thought to call them historic. This is the music inside that motion.</value>
+    <value>Philadelphia was laid out on a grid before the country had a name for itself, and SEPTA still traces it â€” trolleys included, running since before anyone thought to call them historic. This is the music inside that motion.</value>
   </data>
   <data name="NewYorkCityAudioOverlayHeader" xml:space="preserve">
     <value>New York, NY, USA</value>
   </data>
   <data name="NewYorkCityAudioOverlayParagraph1" xml:space="preserve">
-    <value>Every dot is a real NYCT vehicle, thousands of them, and most of them are trains. The 7 curls above Queens toward Flushing, the A runs express down Manhattan's west side into Far Rockaway, the 2 and 3 climb through Harlem, the L cuts straight across 14th Street and under the river into Brooklyn, the F swings out over the Culver viaduct. Under all of it, buses fill in every block a tunnel skips — but this is a subway city, and the subway carries it.</value>
+    <value>Every dot is a real NYCT vehicle, thousands of them, and most of them are trains. The 7 curls above Queens toward Flushing, the A runs express down Manhattan's west side into Far Rockaway, the 2 and 3 climb through Harlem, the L cuts straight across 14th Street and under the river into Brooklyn, the F swings out over the Culver viaduct. Under all of it, buses fill in every block a tunnel skips â€” but this is a subway city, and the subway carries it.</value>
   </data>
   <data name="NewYorkCityAudioOverlayParagraph2" xml:space="preserve">
-    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — but a subway car never says exactly where it is between stations, so its note is inferred, pinned at each platform and drifting along the drawn track until the next one. Express trains skip local stops and their notes leap ahead; the local fills the spaces between. Buses report their own GPS block by block and thread through underneath. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience â€” turn your device's sound on.&lt;/strong&gt; &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; â€” but a subway car never says exactly where it is between stations, so its note is inferred, pinned at each platform and drifting along the drawn track until the next one. Express trains skip local stops and their notes leap ahead; the local fills the spaces between. Buses report their own GPS block by block and thread through underneath. What is playing right now has not played before.</value>
   </data>
   <data name="NewYorkCityAudioOverlayParagraph3" xml:space="preserve">
-    <value>The trains run all night, every night — the only lines in this project that never sleep. When the streets go quiet, the subway is still down there moving under them. This is the music inside that motion.</value>
+    <value>The trains run all night, every night â€” the only lines in this project that never sleep. When the streets go quiet, the subway is still down there moving under them. This is the music inside that motion.</value>
   </data>
   <data name="NewYorkCityOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real NYCT subway train or bus, pulled live and turned into sound. Both systems move through New York City in real time, and the map plays what they're doing right now.</value>
@@ -259,10 +259,10 @@
     <value>Every dot is a real bus or train. Hundreds of them, spread across a grid that runs true until the foothills interrupt it. They follow Colfax Avenue end to end, the light rail out to Golden along the old highway corridor, and the commuter rail line running straight for the airport across the plains northeast of downtown.</value>
   </data>
   <data name="DenverAudioOverlayParagraph2" xml:space="preserve">
-    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony sits open and high, thin air between the notes. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — crossing Speer Boulevard, climbing toward Golden on the W Line, out past Peña Boulevard on the way to the airport. Rush hour thickens downtown into something dense; late at night a single light-rail chime carries a long way. What is playing right now has not played before.</value>
+    <value>&lt;strong&gt;This is an audio experience â€” turn your device's sound on.&lt;/strong&gt; The harmony sits open and high, thin air between the notes. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; â€” crossing Speer Boulevard, climbing toward Golden on the W Line, out past PeÃ±a Boulevard on the way to the airport. Rush hour thickens downtown into something dense; late at night a single light-rail chime carries a long way. What is playing right now has not played before.</value>
   </data>
   <data name="DenverAudioOverlayParagraph3" xml:space="preserve">
-    <value>Denver's rail network is young — built mostly this century, laid down along corridors the city had already carved for cars and freight. This is the music inside that motion.</value>
+    <value>Denver's rail network is young â€” built mostly this century, laid down along corridors the city had already carved for cars and freight. This is the music inside that motion.</value>
   </data>
   <data name="DenverOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real RTD vehicle, pulled live and turned into sound. Buses, light rail, and commuter rail move through the Denver metro in real time, and the map plays what they're doing right now.</value>
@@ -309,8 +309,11 @@
   <data name="InfoOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real MARTA vehicle, pulled live and turned into sound. Buses and trains move through Atlanta in real time, and the map plays what they're doing right now.</value>
   </data>
+  <data name="InfoOverlayTitle" xml:space="preserve">
+    <value>About TransitJazz</value>
+  </data>
   <data name="InfoOverlayParagraph2" xml:space="preserve">
-    <value>Audio is required for the full experience — tap the volume button if you don't hear anything. Use the route filters to isolate routes and the layers button to toggle the city map.</value>
+    <value>Audio is required for the full experience â€” tap the volume button if you don't hear anything. Use the route filters to isolate routes and the layers button to toggle the city map.</value>
   </data>
   <data name="InfoOverlayParagraph3" xml:space="preserve">
     <value>Built as a small experiment in turning a transit feed into generative music. Each note is placed by where a vehicle sits along its route, so what you hear is never quite the same twice.</value>
@@ -327,4 +330,478 @@
   <data name="BostonAudioOverlayHeader" xml:space="preserve">
     <value>Boston, MA, USA</value>
   </data>
+  <data name="StatsTitle" xml:space="preserve">
+    <value>Transit statistics</value>
+  </data>
+  <data name="StatsOpen" xml:space="preserve">
+    <value>Open statistics</value>
+  </data>
+  <data name="StatsClose" xml:space="preserve">
+    <value>Close statistics</value>
+  </data>
+  <data name="StatsCategoryBus" xml:space="preserve"><value>Bus</value></data>
+  <data name="StatsCategoryRail" xml:space="preserve"><value>Rail</value></data>
+  <data name="StatsCategoryTram" xml:space="preserve"><value>Tram</value></data>
+  <data name="StatsCategoryFerry" xml:space="preserve"><value>Ferry</value></data>
+  <data name="StatsCategoryUnknown" xml:space="preserve"><value>Other or unknown category</value></data>
+  <data name="StatsLocalTime" xml:space="preserve"><value>Local end time</value></data>
+  <data name="StatsLoading" xml:space="preserve">
+    <value>Loading retained history…</value>
+  </data>
+  <data name="StatsRefreshing" xml:space="preserve">
+    <value>Refreshing this snapshot…</value>
+  </data>
+  <data name="StatsStale" xml:space="preserve">
+    <value>Showing the last successful snapshot</value>
+  </data>
+  <data name="StatsRetry" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="StatsCurrentCity" xml:space="preserve">
+    <value>Current city</value>
+  </data>
+  <data name="StatsAllCities" xml:space="preserve">
+    <value>All cities</value>
+  </data>
+  <data name="StatsOverview" xml:space="preserve">
+    <value>Overview</value>
+  </data>
+  <data name="StatsRoutes" xml:space="preserve">
+    <value>Routes</value>
+  </data>
+  <data name="StatsRouteSelectorHelp" xml:space="preserve">
+    <value>Select retained routes to filter every Stats panel. Selection is separate from the map and audio.</value>
+  </data>
+  <data name="StatsSelectAllRoutes" xml:space="preserve">
+    <value>Select all routes</value>
+  </data>
+  <data name="StatsInfo" xml:space="preserve">
+    <value>Information</value>
+  </data>
+  <data name="StatsScopeCity" xml:space="preserve">
+    <value>Current city: {0}</value>
+  </data>
+  <data name="StatsScope" xml:space="preserve">
+    <value>Scope</value>
+  </data>
+  <data name="StatsSelectionUpdating" xml:space="preserve">
+    <value>Updating route selection…</value>
+  </data>
+  <data name="StatsBubbleX" xml:space="preserve">
+    <value>Kilometers per route-hour</value>
+  </data>
+  <data name="StatsBubbleY" xml:space="preserve">
+    <value>Kilometers per active-clock hour</value>
+  </data>
+  <data name="StatsScopeAll" xml:space="preserve">
+    <value>Sum of each city's local day</value>
+  </data>
+  <data name="StatsLocalDate" xml:space="preserve">
+    <value>Local date</value>
+  </data>
+  <data name="StatsTimeZone" xml:space="preserve">
+    <value>Time zone</value>
+  </data>
+  <data name="StatsGeneratedAt" xml:space="preserve">
+    <value>Snapshot generated</value>
+  </data>
+  <data name="StatsCutoff" xml:space="preserve">
+    <value>Data cutoff</value>
+  </data>
+  <data name="StatsFreshness" xml:space="preserve">
+    <value>Only complete hours are included; recent hours may still be arriving.</value>
+  </data>
+  <data name="StatsCoverageComplete" xml:space="preserve">
+    <value>Complete coverage</value>
+  </data>
+  <data name="StatsCoveragePartial" xml:space="preserve">
+    <value>Partial coverage</value>
+  </data>
+  <data name="StatsCoveragePending" xml:space="preserve">
+    <value>Pending</value>
+  </data>
+  <data name="StatsCoverageUnavailable" xml:space="preserve">
+    <value>Unavailable</value>
+  </data>
+  <data name="StatsCoverageZero" xml:space="preserve">
+    <value>Complete zero activity</value>
+  </data>
+  <data name="StatsKnownSubtotal" xml:space="preserve">
+    <value>Known subtotal</value>
+  </data>
+  <data name="StatsExpected" xml:space="preserve">
+    <value>Expected</value>
+  </data>
+  <data name="StatsAvailable" xml:space="preserve">
+    <value>Available</value>
+  </data>
+  <data name="StatsHours" xml:space="preserve">
+    <value>Hours</value>
+  </data>
+  <data name="StatsRouteHours" xml:space="preserve">
+    <value>Route-hours</value>
+  </data>
+  <data name="StatsDistanceToday" xml:space="preserve">
+    <value>Distance today</value>
+  </data>
+  <data name="StatsDistanceLast24" xml:space="preserve">
+    <value>Last 24 completed hours</value>
+  </data>
+  <data name="StatsDistanceUnit" xml:space="preserve">
+    <value>kilometers</value>
+  </data>
+  <data name="StatsCategoryShares" xml:space="preserve">
+    <value>Distance by category</value>
+  </data>
+  <data name="StatsRouteActivity" xml:space="preserve">
+    <value>Route activity</value>
+  </data>
+  <data name="StatsCityActivity" xml:space="preserve">
+    <value>City activity</value>
+  </data>
+  <data name="StatsCityAtlanta" xml:space="preserve">
+    <value>Atlanta</value>
+  </data>
+  <data name="StatsCityWashingtonDc" xml:space="preserve">
+    <value>Washington, DC</value>
+  </data>
+  <data name="StatsCityBoston" xml:space="preserve">
+    <value>Boston</value>
+  </data>
+  <data name="StatsCityNewYorkCity" xml:space="preserve">
+    <value>New York City</value>
+  </data>
+  <data name="StatsCityToronto" xml:space="preserve">
+    <value>Toronto</value>
+  </data>
+  <data name="StatsCityPhiladelphia" xml:space="preserve">
+    <value>Philadelphia</value>
+  </data>
+  <data name="StatsCityDenver" xml:space="preserve">
+    <value>Denver</value>
+  </data>
+  <data name="StatsCityUnknown" xml:space="preserve">
+    <value>Transit city</value>
+  </data>
+  <data name="StatsHourlyDistance" xml:space="preserve">
+    <value>Hourly distance</value>
+  </data>
+  <data name="StatsCumulativeDistance" xml:space="preserve">
+    <value>Cumulative distance</value>
+  </data>
+  <data name="StatsBubbleSize" xml:space="preserve">
+    <value>Marker size represents mean active vehicles.</value>
+  </data>
+  <data name="StatsBubbleMinimum" xml:space="preserve">
+    <value>Markers have a 3 px minimum size.</value>
+  </data>
+  <data name="StatsBubbleOmitted" xml:space="preserve">
+    <value>This point is omitted because its coordinates or evidence are unavailable.</value>
+  </data>
+  <data name="StatsCoincidentPoints" xml:space="preserve">
+    <value>Some routes share the same coordinates; points are not moved.</value>
+  </data>
+  <data name="StatsShowAll" xml:space="preserve">
+    <value>Show all cities</value>
+  </data>
+  <data name="StatsHideAll" xml:space="preserve">
+    <value>Hide all cities</value>
+  </data>
+  <data name="StatsAllSeriesHidden" xml:space="preserve">
+    <value>All city lines are hidden. Show all to restore them.</value>
+  </data>
+  <data name="StatsVisibilityState" xml:space="preserve">
+    <value>visibility</value>
+  </data>
+  <data name="StatsVisible" xml:space="preserve">
+    <value>Visible</value>
+  </data>
+  <data name="StatsHidden" xml:space="preserve">
+    <value>Hidden</value>
+  </data>
+  <data name="StatsVisibleCityCount" xml:space="preserve">
+    <value>Visible cities: {0} of {1}</value>
+  </data>
+  <data name="StatsCityVisibility" xml:space="preserve">
+    <value>City timeline visibility controls</value>
+  </data>
+  <data name="StatsNoChart" xml:space="preserve">
+    <value>The chart could not load. The complete data table is still available.</value>
+  </data>
+  <data name="StatsDetails" xml:space="preserve">
+    <value>View data table</value>
+  </data>
+  <data name="StatsHideDetails" xml:space="preserve">
+    <value>Hide data table</value>
+  </data>
+  <data name="StatsDateTime" xml:space="preserve">
+    <value>Date and time</value>
+  </data>
+  <data name="StatsIntervalStart" xml:space="preserve">
+    <value>Interval start</value>
+  </data>
+  <data name="StatsIntervalEnd" xml:space="preserve">
+    <value>Interval end</value>
+  </data>
+  <data name="StatsUtcOffset" xml:space="preserve">
+    <value>UTC offset</value>
+  </data>
+  <data name="StatsElapsedHours" xml:space="preserve">
+    <value>Hours since local midnight</value>
+  </data>
+  <data name="StatsHourlyKnown" xml:space="preserve">
+    <value>Known distance this hour</value>
+  </data>
+  <data name="StatsKnownCumulative" xml:space="preserve">
+    <value>Known cumulative distance</value>
+  </data>
+  <data name="StatsPlottedCumulative" xml:space="preserve">
+    <value>Plotted cumulative distance</value>
+  </data>
+  <data name="StatsCombinedPlottedSubtotal" xml:space="preserve">
+    <value>Combined plotted subtotal</value>
+  </data>
+  <data name="StatsCoverageState" xml:space="preserve">
+    <value>Coverage</value>
+  </data>
+  <data name="StatsReason" xml:space="preserve">
+    <value>Reason</value>
+  </data>
+  <data name="StatsDenominator" xml:space="preserve">
+    <value>Denominator</value>
+  </data>
+  <data name="StatsNumerator" xml:space="preserve">
+    <value>Numerator</value>
+  </data>
+  <data name="StatsKilometers" xml:space="preserve">
+    <value>Kilometers</value>
+  </data>
+  <data name="StatsPercent" xml:space="preserve">
+    <value>Percent</value>
+  </data>
+  <data name="StatsVehicles" xml:space="preserve">
+    <value>Vehicles</value>
+  </data>
+  <data name="StatsActiveClockHours" xml:space="preserve">
+    <value>Active clock-hours</value>
+  </data>
+  <data name="StatsSampleCount" xml:space="preserve">
+    <value>Activity samples</value>
+  </data>
+  <data name="StatsTransfers" xml:space="preserve">
+    <value>Transfers count on every route they served.</value>
+  </data>
+  <data name="StatsDifferentRoutePeriods" xml:space="preserve">
+    <value>Routes cover different time periods.</value>
+  </data>
+  <data name="StatsCityDaysDiffer" xml:space="preserve">
+    <value>Cities use different local dates and day lengths.</value>
+  </data>
+  <data name="StatsHistoricalUnknown" xml:space="preserve">
+    <value>Historical route membership is unknown for some hours.</value>
+  </data>
+  <data name="StatsCatalogChanged" xml:space="preserve">
+    <value>Route category metadata changed during this period.</value>
+  </data>
+  <data name="StatsBoundaryExcluded" xml:space="preserve">
+    <value>A boundary hour is excluded because it is not a complete UTC hour.</value>
+  </data>
+  <data name="StatsPendingReason" xml:space="preserve">
+    <value>This hour is not complete yet.</value>
+  </data>
+  <data name="StatsFutureReason" xml:space="preserve">
+    <value>Future intervals have no measured values.</value>
+  </data>
+  <data name="StatsMissingCohort" xml:space="preserve">
+    <value>No complete retained cohort is available for this hour.</value>
+  </data>
+  <data name="StatsUnknownRoute" xml:space="preserve">
+    <value>This route is not present in the retained catalog.</value>
+  </data>
+  <data name="StatsRouteNotRetained" xml:space="preserve">
+    <value>This route has no retained evidence for this hour.</value>
+  </data>
+  <data name="StatsNoDataReason" xml:space="preserve">
+    <value>The retained cohort contains no activity samples.</value>
+  </data>
+  <data name="StatsConflictReason" xml:space="preserve">
+    <value>Conflicting retained rows make this hour unavailable.</value>
+  </data>
+  <data name="StatsUnsupportedReason" xml:space="preserve">
+    <value>This retained definition or cadence is unsupported.</value>
+  </data>
+  <data name="StatsBusyError" xml:space="preserve">
+    <value>The statistics service is busy. Try again shortly.</value>
+  </data>
+  <data name="StatsTimeoutError" xml:space="preserve">
+    <value>The request took too long. Try again shortly.</value>
+  </data>
+  <data name="StatsRateLimitedError" xml:space="preserve">
+    <value>Too many requests. Wait before retrying.</value>
+  </data>
+  <data name="StatsDisabledError" xml:space="preserve">
+    <value>Statistics are not available right now.</value>
+  </data>
+  <data name="StatsDependencyError" xml:space="preserve">
+    <value>Retained history is temporarily unavailable.</value>
+  </data>
+  <data name="StatsScopeTooLargeError" xml:space="preserve">
+    <value>This selection is too large to display safely.</value>
+  </data>
+  <data name="StatsInvalidRequestError" xml:space="preserve">
+    <value>The request could not be understood.</value>
+  </data>
+  <data name="StatsInvalidScopeError" xml:space="preserve">
+    <value>The requested statistics scope is invalid.</value>
+  </data>
+  <data name="StatsInvalidCityError" xml:space="preserve">
+    <value>The requested city is not available.</value>
+  </data>
+  <data name="StatsInvalidRouteKeyError" xml:space="preserve">
+    <value>One or more selected route keys are invalid.</value>
+  </data>
+  <data name="StatsChartLoading" xml:space="preserve">
+    <value>Loading chart…</value>
+  </data>
+  <data name="StatsChartFailure" xml:space="preserve">
+    <value>The chart could not be drawn. The values and table remain available.</value>
+  </data>
+  <data name="StatsChartEmpty" xml:space="preserve">
+    <value>No plotted values are available for this period.</value>
+  </data>
+  <data name="StatsChartTable" xml:space="preserve">
+    <value>View data table</value>
+  </data>
+  <data name="StatsChartTableScroll" xml:space="preserve">
+    <value>Scrollable chart data table</value>
+  </data>
+  <data name="StatsResponseTooLargeError" xml:space="preserve">
+    <value>This result is too large to display safely.</value>
+  </data>
+  <data name="StatsPartialExplanation" xml:space="preserve">
+    <value>The total includes available contributions; missing hours are not estimated.</value>
+  </data>
+  <data name="StatsZeroExplanation" xml:space="preserve">
+    <value>No distance was recorded during the covered hours.</value>
+  </data>
+  <data name="StatsCompleteExplanation" xml:space="preserve">
+    <value>This total includes all expected completed hours.</value>
+  </data>
+  <data name="StatsUnavailableExplanation" xml:space="preserve">
+    <value>Unavailable values are unknown and are not treated as zero.</value>
+  </data>
+  <data name="StatsPendingExplanation" xml:space="preserve">
+    <value>Pending hours are not complete and are excluded.</value>
+  </data>
+  <data name="StatsRoutesSelected" xml:space="preserve">
+    <value>{0} routes selected</value>
+  </data>
+  <data name="StatsClearRoutes" xml:space="preserve">
+    <value>Clear selected routes</value>
+  </data>
+  <data name="StatsSelectCategory" xml:space="preserve">
+    <value>Select category {0}</value>
+  </data>
+  <data name="StatsClearCategory" xml:space="preserve">
+    <value>Clear category {0}</value>
+  </data>
+  <data name="StatsClearAllRoutes" xml:space="preserve">
+    <value>Clear all routes</value>
+  </data>
+  <data name="StatsSelectedAbsent" xml:space="preserve">
+    <value>Selected route is unavailable in this history window.</value>
+  </data>
+  <data name="StatsCategoryChanged" xml:space="preserve">
+    <value>Category metadata changed</value>
+  </data>
+  <data name="StatsNoRoutes" xml:space="preserve">
+    <value>No retained routes are available for this city.</value>
+  </data>
+  <data name="StatsOpenDescription" xml:space="preserve">
+    <value>View retained transit statistics without changing the map or audio.</value>
+  </data>
+  <data name="StatsCloseDescription" xml:space="preserve">
+    <value>Close statistics and return to the map.</value>
+  </data>
+  <data name="StatsHelp" xml:space="preserve">
+    <value>Statistics describe retained completed transit hours, not live vehicle positions.</value>
+  </data>
+  <data name="StatsProblemGeneric" xml:space="preserve">
+    <value>Statistics could not be loaded. Try again later.</value>
+  </data>
+  <data name="StatsBubbleAreaMeasure" xml:space="preserve">
+    <value>Mean active vehicles</value>
+  </data>
+  <data name="StatsCategory" xml:space="preserve">
+    <value>Category</value>
+  </data>
+  <data name="StatsChartInvalidModel" xml:space="preserve">
+    <value>Chart evidence is unavailable because the supplied data is inconsistent.</value>
+  </data>
+  <data name="StatsCoverage" xml:space="preserve">
+    <value>Coverage</value>
+  </data>
+  <data name="StatsEntity" xml:space="preserve">
+    <value>Entity</value>
+  </data>
+  <data name="StatsKnownAmount" xml:space="preserve">
+    <value>known</value>
+  </data>
+  <data name="StatsMeanActiveVehicles" xml:space="preserve">
+    <value>Mean active vehicles</value>
+  </data>
+  <data name="StatsNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="StatsOmission" xml:space="preserve">
+    <value>Omission reason</value>
+  </data>
+  <data name="StatsShare" xml:space="preserve">
+    <value>Share</value>
+  </data>
+  <data name="StatsUnavailable" xml:space="preserve">
+    <value>Unavailable</value>
+  </data>
+  <data name="StatsReasonUnknownRoute" xml:space="preserve">
+    <value>Route is unknown</value>
+  </data>
+  <data name="StatsReasonRouteNotRetained" xml:space="preserve">
+    <value>Route was not retained in this window</value>
+  </data>
+  <data name="StatsReasonMissingCohort" xml:space="preserve">
+    <value>Complete cohort evidence is missing</value>
+  </data>
+  <data name="StatsReasonZeroDenominator" xml:space="preserve">
+    <value>Activity ratio has no valid denominator</value>
+  </data>
+  <data name="StatsReasonNoActiveVehicles" xml:space="preserve">
+    <value>No active vehicles were measured</value>
+  </data>
+  <data name="StatsReasonFuture" xml:space="preserve">
+    <value>Future hour</value>
+  </data>
+  <data name="StatsReasonPending" xml:space="preserve">
+    <value>Hour is still pending</value>
+  </data>
+  <data name="RouteSelectCategory" xml:space="preserve">
+    <value>Select all {0} routes</value>
+  </data>
+  <data name="RouteClearCategory" xml:space="preserve">
+    <value>Clear {0} route selection</value>
+  </data>
+  <data name="RouteFilterAccessibleName" xml:space="preserve">
+    <value>Route filters</value>
+  </data>
+  <data name="StatsRetryWait" xml:space="preserve">
+    <value>Please wait before requesting updated statistics.</value>
+  </data>
+  <data name="StatsReasonPartialCohort" xml:space="preserve"><value>Some routes in this hour are missing.</value></data>
+  <data name="StatsReasonConflict" xml:space="preserve"><value>Retained rows disagree for this hour.</value></data>
+  <data name="StatsReasonUnsupportedDefinition" xml:space="preserve"><value>The retained metric definition is unsupported.</value></data>
+  <data name="StatsReasonUnsupportedCadence" xml:space="preserve"><value>The retained cadence is unsupported.</value></data>
+  <data name="StatsReasonInconsistentCohort" xml:space="preserve"><value>Retained route-hour evidence is inconsistent.</value></data>
+  <data name="StatsReasonHistoryDisabled" xml:space="preserve"><value>Historical capture was disabled for this period.</value></data>
+  <data name="StatsReasonNotRetained" xml:space="preserve"><value>This period is not retained.</value></data>
+  <data name="StatsReasonBoundaryExcluded" xml:space="preserve"><value>This interval is excluded at the collection boundary.</value></data>
+  <data name="StatsReasonNoData" xml:space="preserve"><value>No retained data is available.</value></data>
 </root>

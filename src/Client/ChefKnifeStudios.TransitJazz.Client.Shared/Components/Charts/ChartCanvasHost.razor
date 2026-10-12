@@ -1,0 +1,220 @@
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using System.Threading
+@using System.Threading.Tasks
+@using Microsoft.Extensions.Logging
+@using Microsoft.Extensions.Options
+@using Microsoft.JSInterop
+@using pax.BlazorChartJs
+@implements IAsyncDisposable
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@inject IOptions<ChartJsSetupOptions> ChartSetupOptions
+@inject ILogger<ChartCanvasHost> Logger
+
+@if (Config is not null && _assetsReady && !_deadlineExpired)
+{
+    <ChartComponent @key="Config.ChartJsConfigGuid"
+                    ChartJsConfig="Config"
+                    OnEventTriggered="ForwardEventAsync"
+                    @ref="_chartComponent" />
+}
+
+@code {
+    [Parameter, EditorRequired] public ChartJsConfig? Config { get; set; }
+    [Parameter, EditorRequired] public ChartJsConfig? LatestConfig { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, bool>? DatasetVisibility { get; set; }
+    [Parameter] public EventCallback OnInitializationTimedOut { get; set; }
+    [Parameter] public EventCallback OnInitializationCompleted { get; set; }
+    [Parameter] public EventCallback<ChartJsLegendClickEvent> OnLegendClick { get; set; }
+
+    readonly TimeSpan _initializationDeadline = TimeSpan.FromSeconds(8);
+    const string AssetLoaderPath = "_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/chart-formatters.js";
+    CancellationTokenSource? _deadlineCancellation;
+    IJSObjectReference? _assetLoader;
+    Guid _configId;
+    Guid _lastAppliedInputId;
+    bool _assetPreparationStarted;
+    bool _assetsReady;
+    bool _deadlineExpired;
+    bool _disposed;
+    ChartComponent? _chartComponent;
+
+    public bool IsInitialized { get; private set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Config is null) return;
+        if (Config.ChartJsConfigGuid == _configId)
+        {
+            return;
+        }
+        _deadlineCancellation?.Cancel();
+        _deadlineCancellation?.Dispose();
+        _deadlineCancellation = new CancellationTokenSource();
+        _configId = Config.ChartJsConfigGuid;
+        _lastAppliedInputId = _configId;
+        _assetPreparationStarted = false;
+        _assetsReady = false;
+        _deadlineExpired = false;
+        IsInitialized = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await ApplyLatestInputAsync();
+        if (Config is not null && !_assetPreparationStarted)
+        {
+            _assetPreparationStarted = true;
+            var configId = _configId;
+            var cancellationToken = _deadlineCancellation!.Token;
+            _ = ObserveInitializationDeadlineAsync(configId, cancellationToken);
+            _ = PrepareChartAssetsAsync(configId, cancellationToken);
+        }
+    }
+
+    async Task ForwardEventAsync(ChartJsEvent chartEvent)
+    {
+        if (_disposed || chartEvent.ChartJsConfigGuid != _configId) return;
+        if (chartEvent is ChartJsInitEvent)
+        {
+            _deadlineCancellation?.Cancel();
+            IsInitialized = true;
+            await ApplyLatestInputAsync();
+            await ApplyDatasetVisibilityAsync();
+            await OnInitializationCompleted.InvokeAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        else if (chartEvent is ChartJsLegendClickEvent legendClick)
+        {
+            await OnLegendClick.InvokeAsync(legendClick);
+        }
+    }
+
+    public async ValueTask<bool?> GetDatasetVisibilityAsync(string datasetId)
+    {
+        var index = DatasetIndex(datasetId);
+        if (index < 0 || _chartComponent is null || !IsInitialized) return null;
+        return await _chartComponent.IsDatasetVisible(index);
+    }
+
+    public async ValueTask<bool> SetDatasetVisibilityAsync(string datasetId, bool visible)
+    {
+        var index = DatasetIndex(datasetId);
+        if (index < 0 || _chartComponent is null || !IsInitialized) return false;
+        await _chartComponent.SetDatasetVisibility(index, visible);
+        return true;
+    }
+
+    int DatasetIndex(string datasetId) => Config is null ? -1 : Config.Data.Datasets
+        .Select((dataset, index) => (dataset, index))
+        .Where(item => string.Equals(item.dataset.Id, datasetId, StringComparison.Ordinal))
+        .Select(item => item.index)
+        .DefaultIfEmpty(-1)
+        .FirstOrDefault();
+
+    async Task ApplyLatestInputAsync()
+    {
+        if (!IsInitialized || Config is null || LatestConfig is null
+            || LatestConfig.ChartJsConfigGuid == _lastAppliedInputId) return;
+
+        Config.Options = LatestConfig.Options;
+        Config.SetDatasetsSmooth(
+            datasets: LatestConfig.Data.Datasets,
+            labels: LatestConfig.Data.Labels,
+            updateOptions: true,
+            updateAnimation: "none");
+        _lastAppliedInputId = LatestConfig.ChartJsConfigGuid;
+        await ApplyDatasetVisibilityAsync();
+    }
+
+    async Task ApplyDatasetVisibilityAsync()
+    {
+        if (DatasetVisibility is null || !IsInitialized) return;
+        foreach (var (datasetId, visible) in DatasetVisibility)
+            await SetDatasetVisibilityAsync(datasetId, visible);
+    }
+
+    async Task ObserveInitializationDeadlineAsync(Guid configId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(_initializationDeadline, cancellationToken);
+            if (_disposed || configId != _configId || IsInitialized) return;
+            await ReportInitializationFailureAsync(configId, "Chart.js did not initialize before the deadline.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    async Task PrepareChartAssetsAsync(Guid configId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var setup = ChartSetupOptions.Value;
+            if (string.IsNullOrWhiteSpace(setup.ChartJsLocation)
+                || string.IsNullOrWhiteSpace(setup.ChartJsCallbacksModuleLocation))
+                throw new InvalidOperationException("Chart.js asset locations are not configured.");
+
+            _assetLoader ??= await JSRuntime.InvokeAsync<IJSObjectReference>(
+                "import",
+                cancellationToken,
+                new object[] { NavigationManager.ToAbsoluteUri(AssetLoaderPath).ToString() });
+            await _assetLoader.InvokeVoidAsync(
+                "prepareStatsChartAssets",
+                cancellationToken,
+                setup.ChartJsLocation,
+                setup.ChartJsCallbacksModuleLocation);
+
+            if (_disposed || cancellationToken.IsCancellationRequested || configId != _configId || _deadlineExpired) return;
+            await InvokeAsync(() =>
+            {
+                if (_disposed || configId != _configId || _deadlineExpired) return;
+                _assetsReady = true;
+                StateHasChanged();
+            });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+#if DEBUG
+            Logger.LogWarning(exception, "Stats chart assets failed to load for configuration {ConfigId}.", configId);
+#endif
+            await ReportInitializationFailureAsync(configId, "Chart.js assets could not be loaded.");
+        }
+    }
+
+    async Task ReportInitializationFailureAsync(Guid configId, string reason)
+    {
+        if (_disposed || configId != _configId || IsInitialized || _deadlineExpired) return;
+        _deadlineExpired = true;
+        _assetsReady = false;
+        _deadlineCancellation?.Cancel();
+#if DEBUG
+        Logger.LogWarning("Stats chart initialization failed for configuration {ConfigId}: {Reason}", configId, reason);
+#endif
+        await InvokeAsync(async () =>
+        {
+            if (_disposed || configId != _configId) return;
+            await OnInitializationTimedOut.InvokeAsync();
+            StateHasChanged();
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        _deadlineCancellation?.Cancel();
+        _deadlineCancellation?.Dispose();
+        _deadlineCancellation = null;
+        if (_assetLoader is not null)
+        {
+            try { await _assetLoader.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+}

@@ -1,0 +1,363 @@
+@using System.Globalization
+@using System.Collections.Generic
+@using System.Linq
+@using pax.BlazorChartJs
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services
+@inject StatsChartText T
+
+<ChartFrame Title="@Title"
+            Definition="@Definition"
+            PeriodLabel="@PeriodLabel"
+            Summary="@Summary"
+            CoverageDescription="@CoverageDescription"
+            State="@FrameState"
+            HasPlottableData="@HasPlottableData"
+            IsDark="@IsDark"
+            EmptyMessage="@EmptyMessage"
+            ErrorMessage="@ChartErrorMessage"
+            CanvasContent="@Canvas"
+            TableContent="@Table"
+            LegendContent="@Legend">
+</ChartFrame>
+
+@code {
+    [Parameter, EditorRequired] public SeriesChartModel? Model { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Definition { get; set; }
+    [Parameter] public string? PeriodLabel { get; set; }
+    [Parameter] public string? Summary { get; set; }
+    [Parameter] public string? CoverageDescription { get; set; }
+    [Parameter] public string? EmptyMessage { get; set; }
+    [Parameter] public ChartLoadState State { get; set; } = ChartLoadState.Ready;
+    [Parameter] public bool IsDark { get; set; }
+
+    ChartCanvasHost? _host;
+    ChartJsConfig? _config;
+    ChartJsConfig? _latestConfig;
+    SeriesChartModel? _lastConfiguredModel;
+    bool _lastDark;
+    bool _modelInvalid;
+    bool _chartFailed;
+    bool _chartInitialized;
+    readonly StatsTimelineVisibilityState _seriesVisibility = new();
+
+    bool HasPlottableData => State == ChartLoadState.Ready
+        && Model is not null
+        && Model.Series.Any(series => series.Values.Any(value => value.HasValue));
+
+    ChartLoadState FrameState => State == ChartLoadState.Loading
+        ? ChartLoadState.Loading
+        : State == ChartLoadState.Error || _chartFailed
+            ? ChartLoadState.Error
+            : ChartLoadState.Ready;
+
+    string ChartErrorMessage => T.Get("StatsChartFailure");
+
+    RenderFragment Canvas => builder =>
+    {
+        if (_config is not null)
+        {
+            builder.OpenComponent<ChartCanvasHost>(0);
+            builder.AddAttribute(1, "Config", _config);
+            builder.AddAttribute(2, "LatestConfig", _latestConfig ?? _config);
+            builder.AddAttribute(3, "OnInitializationTimedOut", EventCallback.Factory.Create(this, HandleInitializationTimedOutAsync));
+            builder.AddAttribute(4, "OnInitializationCompleted", EventCallback.Factory.Create(this, HandleInitializationCompletedAsync));
+            builder.AddAttribute(5, "DatasetVisibility", _seriesVisibility.Values);
+            builder.AddAttribute(6, "OnLegendClick", EventCallback.Factory.Create<ChartJsLegendClickEvent>(this, HandleNativeLegendClickAsync));
+            builder.AddComponentReferenceCapture(7, instance => _host = (ChartCanvasHost)instance);
+            builder.CloseComponent();
+        }
+    };
+
+    RenderFragment Table => builder =>
+    {
+        var model = Model;
+        if (model is null) return;
+        if (_modelInvalid)
+        {
+            builder.OpenElement(0, "p");
+            builder.AddContent(1, T.Get("StatsChartInvalidModel"));
+            builder.CloseElement();
+            return;
+        }
+        var hasPerSeriesEvidence = model.Series.Any(series => series.PointEvidence is not null);
+        var hasSharedEvidence = !hasPerSeriesEvidence && model.PointEvidence is not null;
+        builder.OpenElement(0, "table");
+        builder.OpenElement(1, "caption");
+        builder.AddContent(2, $"{Title} — {model.YAxisTitle}");
+        if (!string.IsNullOrWhiteSpace(PeriodLabel)) builder.AddContent(3, $" — {PeriodLabel}");
+        builder.CloseElement();
+        builder.OpenElement(4, "thead");
+        builder.OpenElement(5, "tr");
+        builder.AddContent(6, TableHeader(model.XAxisTitle));
+        foreach (var header in TableHeaders(model, hasSharedEvidence))
+            builder.AddContent(7, header);
+        builder.CloseElement();
+        builder.CloseElement();
+        builder.OpenElement(8, "tbody");
+        for (var index = 0; index < model.Labels.Count; index++)
+            builder.AddContent(9, BuildTableRow(model, index, hasSharedEvidence));
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    RenderFragment Legend => builder =>
+    {
+        if (Model?.EnableSeriesVisibility != true) return;
+        var model = Model;
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "stats-city-visibility");
+        builder.AddAttribute(2, "role", "group");
+        builder.AddAttribute(3, "aria-label", T.Get("StatsCityVisibility"));
+        builder.OpenElement(4, "span");
+        builder.AddAttribute(5, "class", "stats-city-visibility__count");
+        builder.AddContent(6, T.Get("StatsVisibleCityCount", model.Series.Count(series => IsSeriesVisible(series.Key)), model.Series.Count));
+        builder.CloseElement();
+        if (model.Series.All(series => !IsSeriesVisible(series.Key)))
+        {
+            builder.OpenElement(7, "span");
+            builder.AddAttribute(8, "class", "stats-city-visibility__hidden-message");
+            builder.AddAttribute(9, "role", "status");
+            builder.AddContent(10, T.Get("StatsAllSeriesHidden"));
+            builder.CloseElement();
+        }
+        foreach (var series in model.Series)
+            builder.AddContent(11, VisibilityButton(series));
+        builder.OpenElement(12, "button");
+        builder.AddAttribute(13, "type", "button");
+        builder.AddAttribute(14, "disabled", !_chartInitialized || model.Series.All(series => IsSeriesVisible(series.Key)));
+        builder.AddAttribute(15, "onclick", EventCallback.Factory.Create(this, () => SetAllSeriesVisibilityAsync(true)));
+        builder.AddContent(16, T.Get("StatsShowAll"));
+        builder.CloseElement();
+        builder.OpenElement(17, "button");
+        builder.AddAttribute(18, "type", "button");
+        builder.AddAttribute(19, "disabled", !_chartInitialized || model.Series.All(series => !IsSeriesVisible(series.Key)));
+        builder.AddAttribute(20, "onclick", EventCallback.Factory.Create(this, () => SetAllSeriesVisibilityAsync(false)));
+        builder.AddContent(21, T.Get("StatsHideAll"));
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (Model is null || State != ChartLoadState.Ready || !HasPlottableData)
+        {
+            _config = null;
+            _latestConfig = null;
+            _lastConfiguredModel = null;
+            _chartInitialized = false;
+            _seriesVisibility.Reset();
+            _chartFailed = false;
+            return;
+        }
+
+        try
+        {
+            Model.Validate();
+            SynchronizeVisibilityKeys();
+            if (_config is null)
+            {
+                _config = SeriesChartConfig.Build(Model, IsDark);
+                _latestConfig = _config;
+                _chartInitialized = false;
+                _lastConfiguredModel = Model;
+                _lastDark = IsDark;
+                _chartFailed = false;
+            }
+            else if (!ReferenceEquals(Model, _lastConfiguredModel) || _lastDark != IsDark)
+            {
+                _latestConfig = SeriesChartConfig.Build(Model, IsDark);
+                _lastConfiguredModel = Model;
+                _lastDark = IsDark;
+            }
+            _modelInvalid = false;
+        }
+        catch (ArgumentException)
+        {
+            _chartFailed = true;
+            _modelInvalid = true;
+        }
+    }
+
+    async Task HandleInitializationTimedOutAsync()
+    {
+        _chartInitialized = false;
+        _chartFailed = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task HandleInitializationCompletedAsync()
+    {
+        _chartInitialized = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task HandleNativeLegendClickAsync(ChartJsLegendClickEvent legendClick)
+    {
+        var series = Model?.Series.FirstOrDefault(item => string.Equals(item.Label, legendClick.Label, StringComparison.Ordinal));
+        if (series is null || _host is null) return;
+        var visible = await _host.GetDatasetVisibilityAsync(series.Key);
+        if (visible is not { } isVisible) return;
+        _seriesVisibility.SetVisibility(series.Key, isVisible);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    bool IsSeriesVisible(string key) => _seriesVisibility.IsVisible(key);
+
+    void SynchronizeVisibilityKeys()
+    {
+        if (Model?.EnableSeriesVisibility != true)
+        {
+            _seriesVisibility.Reset();
+            return;
+        }
+
+        _seriesVisibility.Reconcile(Model.Series.Select(series => series.Key));
+    }
+
+    async Task ToggleSeriesVisibilityAsync(string key) => await SetSeriesVisibilityAsync(key, !IsSeriesVisible(key));
+
+    async Task SetAllSeriesVisibilityAsync(bool visible)
+    {
+        if (Model?.EnableSeriesVisibility != true || _host is null) return;
+        foreach (var series in Model.Series)
+            if (await _host.SetDatasetVisibilityAsync(series.Key, visible))
+                _seriesVisibility.SetVisibility(series.Key, visible);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task SetSeriesVisibilityAsync(string key, bool visible, bool render = true)
+    {
+        if (!_chartInitialized || _host is null || !await _host.SetDatasetVisibilityAsync(key, visible)) return;
+        _seriesVisibility.SetVisibility(key, visible);
+        if (render) await InvokeAsync(StateHasChanged);
+    }
+
+    IEnumerable<RenderFragment> TableHeaders(SeriesChartModel model, bool hasSharedEvidence)
+    {
+        if (hasSharedEvidence)
+            foreach (var heading in SharedEvidenceHeadings())
+                yield return TableHeader(heading);
+
+        foreach (var series in model.Series)
+        {
+            yield return TableHeader(series.Label);
+            if (series.KnownValues is not null)
+                yield return TableHeader($"{series.Label} ({T.Get("StatsKnownAmount")})");
+            if (model.EnableSeriesVisibility)
+                yield return TableHeader($"{series.Label} ({T.Get("StatsVisibilityState")})");
+            if (series.PointEvidence is not null)
+                foreach (var heading in SeriesEvidenceHeadings(series.Label))
+                    yield return TableHeader(heading);
+        }
+
+        if (hasSharedEvidence)
+        {
+            yield return TableHeader(T.Get("StatsHourlyKnown"));
+            yield return TableHeader(T.Get("StatsKnownCumulative"));
+            yield return TableHeader(T.Get("StatsPlottedCumulative"));
+        }
+    }
+
+    RenderFragment BuildTableRow(SeriesChartModel model, int index, bool hasSharedEvidence) => builder =>
+    {
+        builder.OpenElement(0, "tr");
+        var cells = new List<RenderFragment>
+        {
+            TableHeader(hasSharedEvidence
+                ? model.PointEvidence![index]?.LocalLabel ?? model.Labels[index]
+                : model.Labels[index], rowHeader: true)
+        };
+        if (hasSharedEvidence && model.PointEvidence is { } evidence)
+        {
+            var point = evidence[index];
+            cells.Add(TextCell(point?.IntervalStartUtc));
+            cells.Add(TextCell(point?.IntervalEndUtc));
+            cells.Add(TextCell(point?.UtcOffset));
+            cells.Add(TextCell(point is null ? null : T.Get(ChartLocalization.CoverageKey(point.CoverageState))));
+        }
+        foreach (var series in model.Series)
+        {
+            cells.Add(NumberCell(series.TableValues[index]));
+            if (series.KnownValues is not null)
+                cells.Add(NumberCell(series.KnownValues[index]));
+            if (model.EnableSeriesVisibility)
+                cells.Add(TextCell(T.Get(IsSeriesVisible(series.Key) ? "StatsVisible" : "StatsHidden")));
+            if (series.PointEvidence is { } perSeries)
+                AddEvidenceCells(cells, perSeries[index]);
+        }
+        if (hasSharedEvidence && model.PointEvidence is { } details)
+        {
+            cells.Add(NumberCell(details[index]?.HourlyKnownKilometers));
+            cells.Add(NumberCell(details[index]?.KnownCumulativeKilometers));
+            cells.Add(NumberCell(details[index]?.CombinedPlottedSubtotal));
+        }
+        foreach (var cell in cells)
+            builder.AddContent(1, cell);
+        builder.CloseElement();
+    };
+
+    static RenderFragment TableHeader(string value, bool rowHeader = false) => builder =>
+    {
+        builder.OpenElement(0, rowHeader ? "th" : "th");
+        builder.AddAttribute(1, "scope", rowHeader ? "row" : "col");
+        builder.AddContent(2, value);
+        builder.CloseElement();
+    };
+
+    RenderFragment TextCell(string? value) => builder =>
+    {
+        builder.OpenElement(0, "td");
+        builder.AddContent(1, value ?? T.Get("StatsUnavailable"));
+        builder.CloseElement();
+    };
+
+    RenderFragment NumberCell(double? value) => TextCell(T.Format(value));
+
+    string[] SharedEvidenceHeadings() =>
+    [T.Get("StatsIntervalStart"), T.Get("StatsIntervalEnd"), T.Get("StatsUtcOffset"), T.Get("StatsCoverageState")];
+
+    string[] SeriesEvidenceHeadings(string label) =>
+    [
+        $"{label} ({T.Get("StatsLocalDate")})",
+        $"{label} ({T.Get("StatsIntervalStart")})",
+        $"{label} ({T.Get("StatsIntervalEnd")})",
+        $"{label} ({T.Get("StatsUtcOffset")})",
+        $"{label} ({T.Get("StatsCoverageState")})",
+        $"{label} ({T.Get("StatsReason")})",
+        $"{label} ({T.Get("StatsHourlyKnown")})",
+        $"{label} ({T.Get("StatsKnownCumulative")})",
+        $"{label} ({T.Get("StatsCombinedPlottedSubtotal")})"
+    ];
+
+    void AddEvidenceCells(List<RenderFragment> cells, ChartPointEvidence? point)
+    {
+        cells.Add(TextCell(point?.LocalLabel));
+        cells.Add(TextCell(point?.IntervalStartUtc));
+        cells.Add(TextCell(point?.IntervalEndUtc));
+        cells.Add(TextCell(point?.UtcOffset));
+        cells.Add(TextCell(point is null ? null : T.Get(ChartLocalization.CoverageKey(point.CoverageState))));
+        cells.Add(TextCell(point?.Reason is { } reason
+            ? T.Get(ChartLocalization.ReasonKey(reason))
+            : T.Get("StatsNone")));
+        cells.Add(NumberCell(point?.HourlyKnownKilometers));
+        cells.Add(NumberCell(point?.KnownCumulativeKilometers));
+        cells.Add(NumberCell(point?.CombinedPlottedSubtotal));
+    }
+
+    RenderFragment VisibilityButton(ChartSeries series) => builder =>
+    {
+        var visible = IsSeriesVisible(series.Key);
+        builder.OpenElement(0, "button");
+        builder.AddAttribute(1, "type", "button");
+        builder.AddAttribute(2, "disabled", !_chartInitialized);
+        builder.AddAttribute(3, "aria-pressed", visible ? "true" : "false");
+        builder.AddAttribute(4, "data-series-key", series.Key);
+        builder.AddAttribute(5, "style", $"border-color:{ChartPresentation.GetSeriesStyle(series.Key, IsDark).Color}");
+        builder.AddAttribute(6, "onclick", EventCallback.Factory.Create(this, () => ToggleSeriesVisibilityAsync(series.Key)));
+        builder.AddContent(7, series.Label);
+        builder.CloseElement();
+    };
+
+}

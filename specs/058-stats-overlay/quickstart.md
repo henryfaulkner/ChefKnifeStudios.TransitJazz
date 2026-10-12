@@ -1,32 +1,25 @@
-# Stats Overlay Implementation and Release Quickstart
+# Stats Overlay implementation quickstart
 
-**Status**: Planning instructions. Stats code and the commands specific to it become available after implementation. This planning stage has not built, tested, queried operator data or deployed the feature.
+**Navigation simplification (2026-10-12)**: Overlay navigation is withdrawn at the user's request. Stats uses a local visibility flag and the browser's native dialog; Info keeps its existing local open/close behavior. No shared coordinator, history entries/traversals, Info/Stats switching, modal lifecycle manager or special settings replacement is required. Earlier navigation prototype tasks and evidence are historical.
 
-## Prerequisites and contract review
+**Scope update (2026-10-12)**: The user has assessed the feature and confirmed it works. Remove the temporary chart prototype and browser-history diagnostic UI. Ship English only: no language selector, saved language preference, runtime language switching or Spanish satellite resource. Earlier Spanish/prototype validation records describe the prior implementation.
 
-Use the existing .NET10 repository/Azure configuration. Read [plan](plan.md), [research](research.md), [data model](data-model.md), [API](contracts/stats-overlay-api-v1.md), [read semantics](contracts/stats-overlay-read-v1.md) and [UI/history](contracts/stats-overlay-ui-v1.md) before implementation. Preserve AGENTS.md's prohibition on commits and the user's existing design/assets changes.
+**Status:** Local implementation is available. Both checked-in exposure defaults remain disabled. No production database was inspected and no deployment or public enablement occurred. See [validation.md](validation.md) for test/browser evidence and [release-handoff.md](release-handoff.md) for artifacts, measurements, and pending gates.
 
-Confirm existing route-hour schema/migration and configuration independently of whether capture is currently enabled. Never infer production retention from source defaults. Use the configured seven canonical cities/zones, `observed-city-route-hour-statistics-v1` and resolved RouteHours cadence. The Stats example city is `atlanta`, not `marta`.
+## Contract and data behavior
 
-For correctness checks, provision an explicitly disposable PostgreSQL admin database and use the existing `ROUTE_HOUR_HISTORY_DISPOSABLE_CONNECTION` opt-in pattern; fixtures create their own disposable child databases. Operator production/development history is not a disposable test target. Use fixture cohorts rather than modifying real retained observations to simulate conflicts/missing data.
+Read the [plan](plan.md), [research](research.md), [data model](data-model.md), [API contract](contracts/stats-overlay-api-v1.md), [read semantics](contracts/stats-overlay-read-v1.md), and [UI/history contract](contracts/stats-overlay-ui-v1.md) before changing behavior.
 
-## First implementation gates
+- Existing schema dependency: `20261010151240_CreateCityRouteHourStatistics`, table `public.city_route_hour_statistics`, metric definition `observed-city-route-hour-statistics-v1`, and existing `(city_slug, hour_start_utc, route_join_key)` index. Do not infer retention, persistence mode, or actual city coverage from source configuration.
+- Configured city identities: `atlanta`, `washington-dc`, `boston`, `new-york-city`, `toronto`, `philadelphia`, and `denver`. `marta` is not a public Stats city. Eastern cities use `America/New_York`; Toronto uses `America/Toronto`; Denver uses `America/Denver`. Current configured cadence is 30 seconds for each city.
+- A single server instant defines each response. The read cutoff is the UTC hour floor of that instant minus two minutes. Today uses each city's local calendar day; Last 24 Completed Hours is a separate UTC window. All compares each configured city's own local day.
+- Zero is reported only with eligible coverage. Partial totals retain known contributions; unknown evidence is not estimated. Future plot values are null. Selected route coverage preserves expected and available route-hours independently.
+- Bubble X is kilometers per route-vehicle-hour; Y is kilometers per active clock-hour; marker area represents weighted mean active vehicles. Counts are summed before division. City activity samples count once per city/hour.
+- API `StatsOverlay.Enabled=false` and client `AppSettings.FeatureFlags.StatsOverlay=false` are the checked-in defaults. Capture settings remain separate. Valid retained data can be read when capture is off, but actual history availability is an operator evidence gate.
 
-1. Freeze independently calculated positive/zero/partial/transfer/unknown/category-change fixtures and DTO null/reason contracts.
-2. Pin Pax 0.9.1, self-host Chart.js 4.5.1/license and align client direct Blazor package references to compatible 10.0.9. Render fixed pie/bubble/stacked/unstacked forms before network coupling. Prove lifecycle/native visibility/DST/table/failure behavior in real browsers.
-3. Prototype shared Stats/Info framework-owned same-URL history and full-screen modal focus before integrating dashboard requests. Exercise Back/Forward/explicit/repeated close/replacement/reload/foreign city and silent welcome access. Prove no map/audio remount.
-4. Implement one bounded parameterized snapshot read with all-cohort validation before filtering, then API/cache/admission/transport. Validate against disposable PostgreSQL and independent expected amounts; add no index unless measured plans require it.
-5. Integrate independent historical route grid, the two modes/all panels, culture/audio synchronization and one visible refresh session. Accessibility/coverage/failure copy accompanies each increment.
+## Run locally
 
-These steps establish local behavior; they do not authorize public exposure before the later gates.
-
-## Local configuration after implementation
-
-Keep committed API `StatsOverlay:Enabled=false` and client `AppSettings:FeatureFlags:StatsOverlay=false`. For an explicitly configured local fixture/development instance, enable the API through a local environment/config override and set the **same** client flag for welcome/map launchers. Reuse existing TransitJazzDB configuration without putting any connection string/secret in WASM. Enabling Stats must not alter HistoricalStatistics.Enabled, DryRun, Cities or category settings.
-
-The API must start safely when Stats is disabled without a configured DB; enabled reads with missing dependencies return safe 503. Existing valid retained history stays readable when capture is currently disabled. Missing/partial history returns 200 with honest evidence states.
-
-Run WebAPI and WebApp in separate PowerShell terminals from the repository root after implementation/configuration:
+Run the API and client in separate PowerShell terminals. Existing local HTTPS profiles use API port `52834` and client port `52832`; configure the development API base URL through existing local settings. Never put an API/database connection string or secret in WASM settings.
 
 ```powershell
 dotnet run --project ./src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj
@@ -36,57 +29,58 @@ dotnet run --project ./src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/Che
 dotnet run --project ./src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj
 ```
 
-Current local HTTPS profiles use API 52834/client 52832. Ensure the development named API base URL points to that API through existing local configuration. Start the client welcome screen; View statistics must work before audio unlock/map/feed readiness.
+For local fixture work only, a developer may override the API and client flags in untracked local settings. Do not edit tracked defaults or alter `HistoricalStatistics.Enabled`, dry-run, cities, categories, or capture configuration to enable the dashboard. Disabled API reads return safe `stats_disabled`; enabled reads without a usable dependency return safe `dependency_unavailable`. The welcome Stats entry does not unlock audio; the existing audio gesture and shared mute control remain authoritative.
 
-Example read once the endpoint exists and local exposure is enabled:
+The city request uses `POST /stats/overlay/query` with JSON such as:
 
-```powershell
-$statsRequest = @{ scope = 'city'; citySlug = 'atlanta'; routeJoinKeys = @() } | ConvertTo-Json -Compress
-Invoke-RestMethod -Method Post -Uri https://localhost:52834/stats/overlay/query -ContentType application/json -Body $statsRequest
+```json
+{"scope":"city","citySlug":"atlanta","routeJoinKeys":[]}
 ```
 
-Inspect generatedAtUtc/cutoff/window/date/coverage, not only plotted values. Test 200 pending/unavailable separately from 503 service unavailable. Verify explicit JSON nulls, no individual/internal identifiers, case-distinct route keys and safe unknown selection.
+The server owns time windows and the five-second read budget. Inspect `generatedAtUtc`, `cutoffUtc`, coverage, local dates, and reason codes as well as amounts. A successful pending/unavailable response is evidence state, not a transport error. Never display raw server exception details.
 
-## Focused validation after implementation
+## Run tests
 
-Use meaningful tests in existing projects; no new framework. The following commands are future implementation checks and have not been executed by planning:
+Use an explicitly provisioned disposable PostgreSQL admin database whose name contains `disposable`. The fixture families create and drop randomized child databases; do not point these variables at an operator or production database. Set the variables only in the test process/session and clear them afterward:
 
 ```powershell
-dotnet test ./src/ChefKnifeStudios.TransitJazz.Shared.Tests/ChefKnifeStudios.TransitJazz.Shared.Tests.csproj --filter FullyQualifiedName~Stats
+$env:ROUTE_HOUR_HISTORY_DISPOSABLE_CONNECTION = '<explicit disposable PostgreSQL connection string>'
+$env:CITY_CATEGORY_INSIGHTS_DISPOSABLE_CONNECTION = '<explicit disposable PostgreSQL connection string>'
+dotnet test ./src/ChefKnifeStudios.TransitJazz.Shared.Tests/ChefKnifeStudios.TransitJazz.Shared.Tests.csproj
 dotnet test ./src/Client/ChefKnifeStudios.TransitJazz.Client.Shared.Tests/ChefKnifeStudios.TransitJazz.Client.Shared.Tests.csproj
-dotnet test ./src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.csproj --filter FullyQualifiedName~Stats
-dotnet test ./src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.csproj --filter FullyQualifiedName~RouteHour
+dotnet test ./src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.csproj
+dotnet test ./src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.csproj
+Remove-Item Env:ROUTE_HOUR_HISTORY_DISPOSABLE_CONNECTION
+Remove-Item Env:CITY_CATEGORY_INSIGHTS_DISPOSABLE_CONNECTION
 ```
 
-Run existing map/selection/audio/history/query regressions appropriate to changed seams; run disposable DB tests with their opt-in connection and disclose skips. Build API/client and publish WASM to validate exact package patches, local static asset URLs, no chart CDN/plugin requests, Spanish satellite/globalization payload and document language:
+The latest full regression passed: Shared 38/38, Client.Shared 129/129, WebAPI 291/291, Worker 186/186; all had zero failures or skips. An earlier WebAPI run skipped 52 CityCategory PostgreSQL cases because `CITY_CATEGORY_INSIGHTS_DISPOSABLE_CONNECTION` was unset. They were opt-in disposable-database checks, not operator-host or API-key cases; rerunning with both disposable variables removed all skips. The suite needed a timezone-normalized UTC test assertion and an additive-migration expectation update.
 
-```powershell
-dotnet build ./src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj
-dotnet publish ./src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj -c Release
-```
+Final local Release API build and trimmed WASM publish succeeded. The publish includes pinned `pax.BlazorChartJs` 0.9.1, local Chart.js 4.5.1 and its license/provenance, local chart callbacks, Spanish satellite and ICU globalization data. Existing client workflows install `wasm-tools` and upload `publish/wwwroot`. The Chart.js request is local; the application retains its existing MapLibre CDN dependency. See `release-handoff.md` for exact artifact hashes and workflow details.
 
-Independent reconciliation must include 160 km/16-of 20 route-hour fixture, 30/6 X, 30/2 Y, 180/120 mean, city samples once/hour, 100+gap+40=140 cumulative known, whole-stack selected gap retaining amounts, conflict outside filter and All hidden lines still in totals. Browser checks include 4096 route-grid/bubble points, overlaps, blocked chart asset, rapid close/initialization/theme, keyboard/screen reader, 320px/200% zoom, touch, long Spanish strings, both themes/reduced motion and all history/focus paths.
+## Limits, errors, and evidence
 
-## Evidence required before staged exposure
+| Bound | Value |
+| --- | ---: |
+| Request body | 4 MiB |
+| Complete uncompressed response | 8 MiB |
+| Route options/selection per city | 4,096 |
+| Cities/categories | 32 each |
+| UTF-8 route key | 512 bytes |
+| Unfiltered successful cache | at most 33 replaceable scope slots; 64 MiB conservative estimated object weight; absolute 60 seconds from snapshot instant |
+| Cold reads | Four per API instance; immediate busy response, no queue |
+| Read deadline | Five seconds including connection acquisition |
+| Client selection debounce / visible refresh | 200 ms / 60 seconds |
+| Rate limiter | Burst 10, refill one token/second, no queue; peer IP partition |
 
-Record one release handoff with the following evidence and status. A skipped check remains an unresolved release gate.
+Failures are complete and safe: 400 for invalid scope/city/key, 422 for over-cap or oversized complete responses, 429 with `Retry-After` for rate refusal, and 503 for disabled/dependency/timeout/busy conditions. The client localizes finite codes, preserves same-scope stale evidence and its original timestamp, and observes cooldown across scope changes. Do not substitute a new error cause during cooldown.
 
-| Record | Required detail |
-| --- | --- |
-| Definitions and policies | Contract/observation versions, route-based X/active-hour Y, per-city local-day All, full hours, two-minute grace,60-second TTL/polling, cadence and boundary treatment |
-| Actual retained cities | Every configured city: actual persistence mode/earliest requested evidence, representative healthy day/coverage, partial/unavailable/zero/early-morning behavior; no assumed seven-city completeness |
-| Retention/freshness | Measured finalizer/writer lag and cutoff behavior around grace boundaries; complete-hour freshness copy |
-| SQL correctness | Disposable real-DB fixtures/concurrent quarantine consistency and representative EXPLAIN; existing index or documented migration dependency |
-| Capacity/load | Typical and 4,096-route/32-city/32-category scope, worst historical union, peak memory/cache object sizing, raw/compressed response bytes and safe-cap failure |
-| Latency/capture | Device/network/concurrency/replicas/cardinality/p95 samples; warm open/cold/prepared/deadline targets; combined history+Stats <=5% total matched-load budget and incremental Stats delta; no read-induced blockage/loss |
-| Ingress/admission | Trusted forwarded-client provenance, token burst/refill, four cold reads/instance, no queue, per-replica scaling and Retry-After |
-| Browser/user review | Chart/history/modal/accessibility/culture/audio evidence; at least four of five visitors explain scope/evidence/freshness/All days |
-| Safe operations | Disabled/no DB/schema/rate/deadline/cap responses, bounded telemetry, refresh/cooldown, API/client flag values, rollback and explicitly pending checks |
+One synthetic PostgreSQL fixture with 98,304 rows (4,096 routes × 32 categories × 24 hours) completed normal unfiltered and selected reads in 1.975s and 1.647s, respectively, with 4.78 MB/96.5 KB gzip and 6.52 MB/156.3 KB gzip responses. 512-byte-key unions returned complete 422 `response_too_large`; 4,097 routes returned 422 `scope_too_large`. These are single synthetic observations, not production p95, memory acceptance, or matched load. The same query plan ran 1.661–3.354s and selected sequential scans in this fixture, above the 250ms prepared-query target. Full details and raw plans are in `release-handoff.md` and `fixtures/evidence/`.
 
-The 5% ceiling is the existing total history overhead budget, not another 5% for Stats. Compare equivalent matched workload with combined history/reporting against baseline without that added work, and report Stats-on/off with capture fixed. If evidence fails or cannot be produced, keep exposure disabled and review the concrete result rather than changing confirmed behavior silently.
+Browser checks passed for DST axes, chart lifecycle/visibility, delayed/blocked Chart.js fallback tables, language/theme reprojection, modal/history ownership, actual welcome/map navigation, selected/All rendering, and 320px layout. Screen-reader/touch/200%-zoom, reduced-motion runtime, live feed playback, maximum-route render timing, actual retention/finalizer lag, trusted ingress/replicas, 100-sample matched load, visitor review, deployment and withdrawal remain pending. Keep both feature exposure flags false until all applicable G1-G8 gates are accepted. Do not treat disposable PostgreSQL or synthetic load evidence as actual retained-history evidence.
 
-## Deploy and rollback
+## Release and withdrawal
 
-Use existing GitHub Actions WASM/server artifacts and normal operator deployment. Validate/apply the existing route-history schema first; any measured index change uses the existing Data migration image before dependent code. Deploy API with bounded reads, then client with one shared launcher flag. Enable only after evidence acceptance; read exposure is independent of capture.
+The release order remains: validate the existing history schema/index dependency; deploy API with reads disabled; deploy client with its shared launcher flag false; accept actual history, accessibility, capacity, visitor and matched-load gates; then have the operator enable bounded reads and the client flag in the approved order. Keep capture settings independent. Use the existing bounded Stats telemetry with worker cycle/write evidence; do not add route/city-array labels or a new monitoring service.
 
-Rollback hides both launchers, disables Stats reads and rolls back its API/client artifacts. Preserve retained data and capture settings. Missing Stats service must leave map/music usable after dismissal. This planning workflow performs no commit, deployment or public enablement.
+On withdrawal, hide both launchers, disable reads, and restore the recorded API/client artifacts if needed. Preserve retained history and capture/dry-run/city/category settings. Verify map/music after dismissal. See [release-handoff.md](release-handoff.md); this implementation task performs no deployment, public enablement or commit.

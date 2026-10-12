@@ -1,0 +1,118 @@
+.stats-chart-frame {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0;
+    padding: 1rem;
+    color: var(--stats-chart-text);
+    background: var(--stats-chart-surface);
+    border: 1px solid var(--stats-chart-grid);
+    border-radius: .75rem;
+}
+
+.stats-chart-frame__caption h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.stats-chart-frame__caption p {
+    margin: .35rem 0 0;
+}
+
+.stats-chart-frame__definition,
+.stats-chart-frame__coverage {
+    color: inherit;
+}
+
+.stats-chart-frame__canvas {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    height: clamp(16rem, 40vh, 24rem);
+    margin-top: .75rem;
+}
+
+.stats-chart-frame__status {
+    margin: .8rem 0;
+}
+
+.stats-chart-frame__status--error {
+    color: var(--mdc-theme-error, #b3261e);
+}
+
+.stats-chart-frame__table {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    margin-top: .75rem;
+}
+
+.stats-chart-frame__legend {
+    margin-top: .75rem;
+}
+
+.stats-chart-frame__table ::deep .stats-chart-table-scroll {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.stats-chart-frame__table summary {
+    cursor: pointer;
+}
+
+.stats-chart-frame__table summary:focus-visible {
+    outline: 3px solid #6750a4;
+    outline-offset: 3px;
+}
+
+.stats-chart-frame__table ::deep table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    margin-top: .5rem;
+}
+
+.stats-chart-frame__table ::deep th,
+.stats-chart-frame__table ::deep td {
+    padding: .35rem .5rem;
+    border-bottom: 1px solid var(--mdc-theme-outline-variant, rgba(127, 127, 127, .3));
+    text-align: start;
+    white-space: nowrap;
+}
+
+.stats-chart-frame__legend ::deep .stats-city-visibility {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+}
+
+.stats-chart-frame__legend ::deep button {
+    min-height: 2.5rem;
+    padding: .35rem .6rem;
+    color: inherit;
+    background: transparent;
+    border: 1px solid currentColor;
+    border-radius: .4rem;
+    cursor: pointer;
+}
+
+.stats-chart-frame__legend ::deep button[aria-pressed="false"] {
+    opacity: .65;
+    text-decoration: line-through;
+}
+
+.stats-chart-frame__legend ::deep .stats-city-visibility__hidden-message {
+    padding: .3rem .5rem;
+    color: var(--mdc-theme-on-surface-variant, inherit);
+}
+
+.stats-chart-frame__legend ::deep button:disabled {
+    cursor: wait;
+}

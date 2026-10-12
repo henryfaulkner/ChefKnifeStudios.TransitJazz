@@ -19,6 +19,8 @@ public class PageVisibilityJsInterop : IPageVisibilityJsInterop
     IJSObjectReference? _listener;
     Action<bool>? _callback;
 
+    public event Action<bool>? VisibilityChanged;
+
     public PageVisibilityJsInterop(IJSRuntime jsRuntime, ILogger<PageVisibilityJsInterop> logger)
     {
         _logger = logger;
@@ -71,7 +73,11 @@ public class PageVisibilityJsInterop : IPageVisibilityJsInterop
     }
 
     [JSInvokable]
-    public void HandleVisibilityChanged(bool hidden) => _callback?.Invoke(hidden);
+    public void HandleVisibilityChanged(bool hidden)
+    {
+        _callback?.Invoke(hidden);
+        VisibilityChanged?.Invoke(hidden);
+    }
 
     public async ValueTask DisposeAsync()
     {

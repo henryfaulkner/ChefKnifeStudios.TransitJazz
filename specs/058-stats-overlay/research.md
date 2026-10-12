@@ -1,5 +1,9 @@
 # Stats Overlay: Research and Decisions
 
+**Navigation simplification (2026-10-12)**: Overlay navigation is withdrawn at the user's request. Stats uses a local visibility flag and the browser's native dialog; Info keeps its existing local open/close behavior. No shared coordinator, history entries/traversals, Info/Stats switching, modal lifecycle manager or special settings replacement is required. Earlier navigation prototype tasks and evidence are historical.
+
+**Scope update (2026-10-12)**: The user has assessed the feature and confirmed it works. Remove the temporary chart prototype and browser-history diagnostic UI. Ship English only: no language selector, saved language preference, runtime language switching or Spanish satellite resource. Earlier Spanish/prototype validation records describe the prior implementation.
+
 **Date**: 2026-10-11  
 **Inputs**: [specification](spec.md), [Stats design](../../docs/STATS_OVERLAY_DESIGN_DOCUMENT.md), [chart foundation](../../docs/PAX_BLAZOR_CHARTJS_COMPONENTS_DESIGN_DOCUMENT.md), constitution v3.3.2, and the current repository.  
 **Outcome**: Product and architecture questions are resolved for task generation. Prototypes, database execution, retained-data inspection and load measurements remain explicit implementation/release gates; they are not claimed as completed research experiments.

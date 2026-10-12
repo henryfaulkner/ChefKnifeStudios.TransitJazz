@@ -1,6 +1,7 @@
 using Ardalis.Result;
 using ChefKnifeStudios.TransitJazz.Shared;
 using Microsoft.Extensions.Logging;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -10,11 +11,18 @@ public interface IHttpService
 {
     Task<Result<T>> GetAsync<T>(string? requestUri, CancellationToken ct = default);
     Task<Result<T>> PostAsync<X, T>(string? requestUri, X body, CancellationToken ct = default);
+    Task<HttpServiceResponse<T>> PostWithMetadataAsync<X, T>(string? requestUri, X body, CancellationToken ct = default);
     Task<Result> PostAsync<X>(string? requestUri, X body, CancellationToken ct = default);
     Task<Result<T>> PutAsync<X, T>(string? requestUri, X body, CancellationToken ct = default);
     Task<Result<T>> PatchAsync<X, T>(string? requestUri, X body, CancellationToken ct = default);
     Task<Result<T>> DeleteAsync<T>(string? requestUri, CancellationToken ct = default);
 }
+
+public sealed record HttpServiceResponse<T>(
+    Result<T> Result,
+    HttpStatusCode? StatusCode,
+    string? ProblemCode,
+    TimeSpan? RetryAfter);
 
 public class HttpService : IHttpService
 {
@@ -61,6 +69,93 @@ public class HttpService : IHttpService
         {
             return Result<T>.Error(ex.Message);
         }
+    }
+
+    /// <summary>Opt-in POST path for callers that need safe status and retry metadata.</summary>
+    public async Task<HttpServiceResponse<T>> PostWithMetadataAsync<X, T>(string? requestUri, X body, CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = await _client.PostAsJsonAsync(requestUri, body, _options, ct);
+            var retryAfter = GetRetryAfter(response);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(ct);
+                var value = JsonSerializer.Deserialize<T>(content, _options);
+                if (value is null)
+                {
+                    return new HttpServiceResponse<T>(
+                        Result<T>.Error("invalid_response"), response.StatusCode, "invalid_response", retryAfter);
+                }
+                return new HttpServiceResponse<T>(
+                    Result<T>.Success(value!), response.StatusCode, null, retryAfter);
+            }
+
+            var code = await ReadSafeProblemCode(response, ct);
+            var result = response.StatusCode switch
+            {
+                HttpStatusCode.NotFound => Result<T>.NotFound(),
+                HttpStatusCode.Unauthorized => Result<T>.Unauthorized(),
+                HttpStatusCode.Forbidden => Result<T>.Forbidden(),
+                _ => Result<T>.Error(code ?? "request_failed")
+            };
+            return new HttpServiceResponse<T>(result, response.StatusCode, code, retryAfter);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (JsonException)
+        {
+            return new HttpServiceResponse<T>(Result<T>.Error("invalid_response"), null, "invalid_response", null);
+        }
+        catch (Exception)
+        {
+            return new HttpServiceResponse<T>(Result<T>.Error("request_failed"), null, "request_failed", null);
+        }
+    }
+
+    static readonly HashSet<string> SafeProblemCodes = new(StringComparer.Ordinal)
+    {
+        "stats_disabled", "dependency_unavailable", "invalid_request", "request_too_large",
+        "unsupported_media_type", "invalid_scope", "invalid_city", "invalid_route_key",
+        "scope_too_large", "response_too_large", "busy", "read_timeout", "rate_limited"
+    };
+
+    static async Task<string?> ReadSafeProblemCode(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("code", out var codeElement)
+                || codeElement.ValueKind != JsonValueKind.String)
+                return null;
+
+            var code = codeElement.GetString();
+            return code is not null && SafeProblemCodes.Contains(code) ? code : null;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    static TimeSpan? GetRetryAfter(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter?.Delta is { } delta) return delta < TimeSpan.Zero ? TimeSpan.Zero : delta;
+        if (retryAfter?.Date is { } date)
+        {
+            var remaining = date - DateTimeOffset.UtcNow;
+            return remaining < TimeSpan.Zero ? TimeSpan.Zero : remaining;
+        }
+        return null;
     }
 
     public async Task<Result> PostAsync<X>(string? requestUri, X body, CancellationToken ct = default)

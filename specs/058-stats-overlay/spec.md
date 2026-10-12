@@ -1,5 +1,11 @@
 # Feature Specification: TransitJazz Stats Overlay
 
+**Audio scope update (2026-10-12)**: Audio preference changes are withdrawn at the user's request. Restore the original AudioFAB settings/event implementation; Stats has no audio preference channel, mute/unmute controls or synth dependency. Earlier shared-audio tasks and evidence are historical.
+
+**Navigation simplification (2026-10-12)**: Overlay navigation is withdrawn at the user's request. Stats uses a local visibility flag and the browser's native dialog; Info keeps its existing local open/close behavior. No shared coordinator, history entries/traversals, Info/Stats switching, modal lifecycle manager or special settings replacement is required. Earlier navigation prototype tasks and evidence are historical.
+
+**Scope update (2026-10-12)**: The user has assessed the feature and confirmed it works. Remove the temporary chart prototype and browser-history diagnostic UI. Ship English only: no language selector, saved language preference, runtime language switching or Spanish satellite resource. Earlier Spanish/prototype validation records describe the prior implementation.
+
 **Feature Branch**: `058-stats-overlay`  
 **Feature Directory**: `specs/058-stats-overlay`  
 **Created**: 2026-10-11  
@@ -23,7 +29,7 @@ A visitor opens Stats from the welcome screen or map and sees the current city's
 **Acceptance Scenarios**:
 
 1. **Given** the welcome screen with audio locked, **When** the visitor chooses "View statistics", **Then** Stats fills the screen in current-city mode with no selected routes, shows the reporting snapshot without requiring live map/feed readiness, and leaves audio locked and the audio preference unchanged.
-2. **Given** audio is unlocked and playing, **When** the visitor opens Stats from the map, **Then** playback continues and a labeled mute/unmute control is available; an explicit change takes effect through the existing audio preference and remains effective after closing Stats.
+2. **Given** audio is unlocked and playing, **When** the visitor opens Stats from the map, **Then** playback and the current audio preference continue unchanged; Stats has no audio controls.
 3. **Given** a complete reporting fixture with positive observed movement, **When** Stats finishes loading, **Then** the category pie describes shares of today's observed distance, the two cards show their separate windows, one bubble describes each eligible route, and the cumulative chart groups today's contributions by transit category.
 4. **Given** healthy eligible observations with zero movement, **When** Stats loads, **Then** the cards show numeric zero, the pie explains that no movement was observed and retains category table rows, and a stationary active route remains a valid zero-coordinate bubble.
 5. **Given** no completed local hour is yet eligible today, **When** Stats opens, **Then** today's panels explain that the first complete hour is still being collected; any available last-24-hours distance remains independently usable.
@@ -66,46 +72,44 @@ A visitor chooses All to compare category contributions, summed distance, city b
 3. **Given** an All city bubble or line, **When** the visitor inspects it, **Then** its tooltip explains the measures and window without city drill-down, app-city change, route selection change or playback change.
 4. **Given** several city lines, **When** the visitor hides one through the chart legend or its keyboard equivalent, **Then** both controls agree, the visible-city count updates, all table rows remain, and the pie, cards and bubbles still describe all cities.
 5. **Given** all city lines are hidden, **When** the visitor views the timeline, **Then** it explains that the lines are hidden and offers "Show all" rather than reporting missing data; Show all restores every current city line.
-6. **Given** hidden city lines during an All session, **When** data, ordering, language or theme changes, **Then** visibility follows stable city identity, new cities start visible and removed cities disappear; leaving All or closing Stats resets all lines to visible.
+6. **Given** hidden city lines during an All session, **When** data, ordering, theme changes, **Then** visibility follows stable city identity, new cities start visible and removed cities disappear; leaving All or closing Stats resets all lines to visible.
 7. **Given** a 23-hour or 25-hour local day, **When** the visitor reads the timeline and table, **Then** the extent reflects the actual duration, repeated clock hours remain distinguishable by offset, and future hours contain no reported measurements.
 
 ---
 
-### User Story 4 - Open and dismiss overlays with predictable navigation (Priority: P2)
+### User Story 4 - Open and dismiss Stats with simple controls (Priority: P2)
 
-A visitor can use the Stats and existing Info controls, Escape, browser Back or phone Back without accidentally leaving the app. Forward can reopen an overlay during the same page session, while a full reload returns to the normal welcome flow.
+A visitor opens Stats from welcome or the map and closes it with the close button or Escape. Stats visibility is local UI state. Info retains its existing independent controls.
 
-**Why this priority**: A full-screen overlay must offer predictable navigation and focus restoration through the controls visitors already use.
+**Why this priority**: The full-screen view needs clear entry and exit controls and usable keyboard focus.
 
-**Independent Test**: Exercise Stats from welcome and map, and Info, through Back/Forward, explicit close, replacement and reload. Verify history, URL/city identity, focus and audio using the existing Info content independently of statistical arithmetic.
+**Independent Test**: Open Stats from welcome and the map, close with the button and Escape, reopen, and reload. Confirm the URL stays unchanged, native modal focus is contained and restored, and closing does not unlock audio.
 
 **Acceptance Scenarios**:
 
-1. **Given** the base welcome or map screen, **When** Stats or Info opens, **Then** exactly one overlay-owned entry is added at the existing URL, preserving city location and other navigation state, and only one modal surface can receive focus.
-2. **Given** either overlay is open, **When** browser/phone Back is used, **Then** the overlay closes promptly, its cleanup and focus restoration run, and audio state is preserved; the next Back performs ordinary navigation.
-3. **Given** a closed overlay entry from the current page session and current city, **When** Forward reaches it, **Then** that overlay reopens without adding an entry; Stats fetches a fresh current-city snapshot with empty route selection and default line visibility, while Info reopens its normal content.
-4. **Given** an open overlay, **When** the visitor uses Escape, its toggle/close control or Info's body close button, including rapid repeated activations, **Then** the UI dismisses immediately and consumes its owned entry exactly once without duplicate traversal.
-5. **Given** Stats or Info is open, **When** one replaces the other, **Then** the active surface and owned entry are replaced, so a single Back returns to the base screen without stacking dialogs.
-6. **Given** either overlay is open, **When** the page fully reloads, **Then** both overlays start closed at the existing welcome/audio-unlock screen, prior overlay markers cannot restore them, and startup preserves URL/city/navigation state without traversing Back.
-7. **Given** unrelated navigation, component removal, an obsolete-city entry or prior-session/foreign history state, **When** overlay lifecycle handling occurs, **Then** it never causes an unconditional Back or reopens an overlay for the wrong city.
-8. **Given** Stats was opened from the welcome screen with audio locked, **When** it closes, **Then** welcome and its invoking action regain focus with audio still locked; after unlock, closing returns focus to the map launcher when it still exists.
+1. **Given** welcome or the map, **When** Stats opens, **Then** it shows a named full-screen native dialog and starts a fresh default Stats session without changing the URL or browser history.
+2. **Given** Stats is open, **When** the visitor presses Escape or Close, **Then** it dismisses, cancels session work and returns focus to the available launcher.
+3. **Given** Stats was closed, **When** it reopens, **Then** current-city mode starts with empty route selection and default timeline visibility.
+4. **Given** an open Stats view, **When** the page reloads, **Then** Stats starts closed and the existing welcome/audio-unlock flow runs.
+5. **Given** Stats was opened from welcome while audio was locked, **When** it closes, **Then** welcome remains visible and audio remains locked.
+6. **Given** Stats or Info controls, **When** they open or close their view, **Then** browser Back/Forward retains ordinary navigation behavior; there are no controls that switch directly between Stats and Info.
 
 ---
 
 ### User Story 5 - Read and operate statistics accessibly (Priority: P2)
 
-A visitor can understand and control Stats on a phone, with a keyboard or screen reader, in English or Spanish, and in either theme. Text and tables remain useful when charts cannot render.
+A visitor can understand and control Stats on a phone, with a keyboard or screen reader, in English, and in either theme. Text and tables remain useful when charts cannot render.
 
 **Why this priority**: Accessible evidence and explanations are essential because charts alone cannot communicate unavailable values, coincident points or every route's coverage.
 
-**Independent Test**: Use fixed data to traverse the full overlay and tables with keyboard and assistive technology, a narrow viewport, zoom, both languages and themes, and unavailable chart rendering.
+**Independent Test**: Use fixed data to traverse the full overlay and tables with keyboard and assistive technology, a narrow viewport, zoom, English and both themes, and unavailable chart rendering.
 
 **Acceptance Scenarios**:
 
 1. **Given** a desktop or narrow phone viewport, **When** Stats opens, **Then** it covers the screen, presents a desktop two-by-two grid or a single-column reading order of pie, totals, bubbles and timeline, and keeps scope/close controls reachable without horizontal page scrolling.
 2. **Given** a keyboard or screen-reader visitor, **When** the overlay opens, **Then** the dialog is named, focus enters and remains within it, background controls are inert, every action has an accessible name and selected state, and Escape and explicit close are operable.
 3. **Given** any displayed chart, **When** the visitor expands its data section, **Then** a captioned table with units, row/column labels and matching evidence includes zero, unavailable, omitted and coincident points, plus hidden-city state where applicable.
-4. **Given** English or Spanish, light or dark theme, 200% zoom or reduced-motion preference, **When** the visitor uses Stats or changes supported presentation settings, **Then** labels, formatting, help and controls remain readable and operable, essential warnings remain visible text, and motion respects the preference.
+4. **Given** English, light or dark theme, 200% zoom or reduced-motion preference, **When** the visitor uses Stats or changes supported presentation settings, **Then** labels, formatting, help and controls remain readable and operable, essential warnings remain visible text, and motion respects the preference.
 5. **Given** the chart rendering asset fails, **When** data loads, **Then** metric text, definitions, summaries and accessible tables remain available with a chart failure explanation.
 
 ---
@@ -143,7 +147,7 @@ A visitor sees a consistent snapshot, knows how current its completed-hour evide
 - Coincident bubbles remain individually discoverable in tables. Minimum visible bubble size is disclosed and exact average active vehicles remains available.
 - All cities may be unavailable, or all city lines may be hidden; these are different states with different explanations and recovery actions.
 - A city or route union exceeding the supported display bounds fails with a scope explanation rather than dropping members. A smaller selection is not promised to fix oversized route metadata.
-- Rapid selection, refresh, reopening, theme/language changes and close during loading cannot restore stale scope, restart disposed work or erase a current All-session visibility choice.
+- Rapid selection, refresh, reopening, theme changes and close during loading cannot restore stale scope, restart disposed work or erase a current All-session visibility choice.
 - Expired page-session or originating-city history entries cannot reopen old surfaces. Repeated explicit close and Back acknowledgements cannot consume extra entries.
 - Disabled history, unavailable service or rendering failure cannot make audio unlock a prerequisite for Stats or automatically change the visitor's persisted audio preference.
 
@@ -158,7 +162,7 @@ A city/hour cohort is the collection of all route observations retained together
 - **FR-001**: Stats MUST have an accessible map launcher and a secondary "View statistics" welcome action, controlled together by the same client exposure setting. The launcher/close icon MUST distinguish "Open statistics" and "Close statistics".
 - **FR-002**: Every new Stats session MUST start in the map's current canonical city with an empty route selection. The city segment MUST use its display name; the other segment MUST be "All".
 - **FR-003**: Stats MUST open before audio unlock and without requiring live map, route geometry or vehicle-feed readiness. Opening MUST preserve audio lock and preferences; unlocked playback MUST continue.
-- **FR-004**: After audio unlock, Stats MUST offer the existing persisted mute/unmute setting through a synchronized, accessible control. Before unlock it MUST omit that control. Explicit audio changes MUST survive Stats dismissal.
+- **FR-004**: Stats MUST NOT offer audio preference controls or modify audio settings. Existing AudioFAB/settings controls retain their original behavior.
 - **FR-005**: Stats filtering, hovering and chart inspection MUST leave the map's city, route selection, emphasis, ongoing update lifecycle and music scope unchanged. A city change MUST close/reset Stats before its next session.
 
 #### Historical route selection
@@ -197,29 +201,29 @@ A city/hour cohort is the collection of all route observations retained together
 - **FR-031**: City X positions MUST use actual elapsed hours since local midnight with local-clock labels. All MUST align each series on elapsed hours since that city's own midnight and label that axis explicitly. Future hours MUST remain unavailable; interpolation, smoothing or connecting across missing evidence MUST NOT suggest measurements that do not exist.
 - **FR-032**: An excluded city/hour or any missing selected route in an hour MUST create a gap in the entire plotted category stack. Known contributions MUST remain in amounts and cumulative arithmetic, and later fully covered points MUST resume the cumulative known subtotal with the partial-coverage warning. If all plot points are gaps, useful amounts and tables MUST remain available with a plotting explanation.
 - **FR-033**: Healthy category shares, cards and cumulative endpoints MUST reconcile before display rounding. In All, every city's known endpoint MUST equal its today subtotal and their sum MUST equal the All today card, including hidden lines. Missing final plot points MUST NOT remove later known amounts from cards/tables; a midnight zero origin MUST NOT assert capture health.
-- **FR-034**: All-city timeline legend controls MUST hide/show lines only. Keyboard equivalents, visible-city count, table hidden-state labels and Show all MUST share that visibility state; hide-all MUST have its own explanation. Visibility MUST follow city identity through refresh/reordering/theme/language changes, with new cities visible, and reset on leaving All or closing Stats.
+- **FR-034**: All-city timeline legend controls MUST hide/show lines only. Keyboard equivalents, visible-city count, table hidden-state labels and Show all MUST share that visibility state; hide-all MUST have its own explanation. Visibility MUST follow city identity through refresh/reordering/theme changes, with new cities visible, and reset on leaving All or closing Stats.
 - **FR-035**: All-chart inspection MUST expose tooltips without drill-down or navigation. Returning to city mode MUST always represent the map's current city. All today copy MUST state "Sum of each city's local day" and explain differing dates/day extents without implying normalized performance rankings.
 
 #### Overlay layout, navigation and accessibility
 
 - **FR-036**: Stats MUST fill the viewport on desktop and mobile with no exposed map backdrop. Desktop MUST use Routes above a two-by-two panel grid; narrow screens MUST use one scrolling column in pie/totals/bubbles/timeline order, with persistent scope and close controls, safe-area accommodation and no horizontal page scrolling.
-- **FR-037**: Stats MUST behave as a labeled modal: focus enters, stays contained and returns to the invoking control when available; background UI is inert. Opening MUST coordinate welcome, settings and Info so only one modal receives focus. There MUST be no outside-backdrop dismissal target.
-- **FR-038**: Stats and existing Info MUST share one overlay history lifecycle. Opening from the base app MUST add exactly one entry at the same URL, preserve current city and unrelated navigation state, and associate entry ownership with the current page session and originating city.
-- **FR-039**: Back MUST close the active owned overlay before leaving the app. Every explicit close path, including Escape, toggles and Info's body button, MUST dismiss promptly and consume that owned entry once. Repeated close events and traversal acknowledgements MUST be idempotent; a later Back MUST retain ordinary navigation behavior.
-- **FR-040**: Forward into a valid current-session/current-city overlay entry MUST reopen its corresponding surface without pushing history. Stats MUST start a fresh default session and reporting window; Info MUST reopen its normal current-city content. Neither may restore old audio preferences or unlock audio.
-- **FR-041**: A full reload MUST start the existing welcome/audio-unlock flow with both overlays closed. Prior-session overlay state MUST never restore them; obsolete owned markers MUST be invalidated without startup Back traversal or altering URL/city/unrelated state. Obsolete-city or foreign entries MUST never reopen a wrong surface.
-- **FR-042**: Replacing Stats with Info or the reverse MUST replace the owned entry/surface instead of stacking overlays. Disposal, cancellation, unrelated navigation and city reload MUST never trigger unconditional Back. Entry ownership needed for same-session Forward MUST survive removal of the closed overlay's content.
+- **FR-037**: Stats MUST behave as a labeled native modal: focus enters, stays contained and returns to the invoking control when available; background UI is inert. There MUST be no outside-backdrop dismissal target.
+- **FR-038**: Stats and Info MUST use local open/close state. Opening or closing MUST NOT create or replace browser history entries or change the URL.
+- **FR-039**: Stats close and Escape MUST dismiss promptly and cancel session work without traversing browser history. Info retains its existing close controls.
+- **FR-040**: Browser Back/Forward MUST retain ordinary navigation behavior; overlay state MUST NOT be stored in or restored from history entries.
+- **FR-041**: A full reload MUST start the existing welcome/audio-unlock flow with Stats and Info closed; neither open state is persisted.
+- **FR-042**: Stats and Info MUST remain independent views with no shared navigation coordinator or controls that replace one with the other.
 - **FR-043**: Overlay entry motion MUST be 100 ms, dismissal immediate and hover pulse brief and reversible. Reduced-motion preference MUST suppress entrance/pulse motion; selected state MUST be conveyed through text and accessible semantics as well as color.
-- **FR-044**: Every panel MUST have a visible title, definition, period and coverage. Essential warnings MUST be persistent text; help MUST be available through focus/click as well as hover. Route buttons and all select/clear/visibility/audio/scope/close actions MUST have full accessible labels, focus indication and keyboard activation.
+- **FR-044**: Every panel MUST have a visible title, definition, period and coverage. Essential warnings MUST be persistent text; help MUST be available through focus/click as well as hover. Route buttons and all select/clear/visibility/scope/close actions MUST have full accessible labels, focus indication and keyboard activation.
 - **FR-045**: Every chart MUST provide an expandable keyboard-accessible table from the same evidence, with captions, row/column headers, units and all zero/unavailable/omitted points. Timeline rows MUST identify actual intervals, local date/time/offset, hourly and cumulative known amounts and coverage. Screen-reader status updates MUST announce refresh/errors/coverage without rereading whole tables.
-- **FR-046**: All user-visible text, help, statuses and accessible names MUST support English and Spanish using the app's existing localization conventions. Number formatting MUST follow language; dates MUST follow the city zone. All panels/controls MUST have light/dark parity, stable category/city colors and non-color ways to interpret data.
+- **FR-046**: All user-visible text, help, statuses and accessible names MUST use English through the app's existing localization conventions. No language selection or switching is available. Number formatting MUST use English; dates MUST follow the city zone. All panels/controls MUST have light/dark parity, stable category/city colors and non-color ways to interpret data.
 - **FR-047**: Touch, keyboard-only use, screen-reader traversal, 320-pixel viewport and 200% zoom MUST preserve readable data and reachable controls. Failed chart rendering MUST leave text, summaries, metric cards and tables usable with a safe explanation.
 
 #### Refresh, errors and operational readiness
 
 - **FR-048**: Stats MUST load immediately on opening and refresh every 60 seconds while open and visible, with at most one active request per session. Hidden state MUST suspend/cancel refresh; visibility restoration MUST refresh promptly within active cooldown rules. Close/navigation MUST stop work and prevent further state writes.
 - **FR-049**: Session, selection, mode and reporting-window changes MUST reject obsolete responses and publish labels, dates, charts, amounts, coverage and status together. Routine refresh MUST retain same-scope evidence with a refresh indication; failed refresh MUST label it stale with actual generation time and Retry. Initial failure MUST show an error instead of invented data.
-- **FR-050**: Theme and language changes MUST update presentation locally without requesting different evidence. Explicit retry and changed selections MUST respect active service cooldowns. Initial retry delay MUST be 60 seconds, increase to at most five minutes under continued failures, honor any longer service-provided delay and reset after success.
+- **FR-050**: Theme changes MUST update presentation locally without requesting different evidence. Explicit retry and changed selections MUST respect active service cooldowns. Initial retry delay MUST be 60 seconds, increase to at most five minutes under continued failures, honor any longer service-provided delay and reset after success.
 - **FR-051**: Public reporting MUST validate configured city identity and scope, allow up to 4,096 distinct selected/returned route keys per city and up to 32 cities and 32 categories, and reject malformed or excessive scope safely. Results MUST never silently truncate, drop unknown selection keys or expose arbitrary dates, city lists or metric expressions in this release.
 - **FR-052**: Reporting MUST remain bounded in execution and memory, protect live capture/update responsiveness under public load, and produce a safe unavailable result by the five-second read deadline. Service disablement, unavailable dependencies, rate limiting and scope limits MUST have localized recoverable explanations without raw operational errors.
 - **FR-053**: Reporting MUST be publicly readable aggregate history without individual vehicle, trip or listener identities, internal capture identifiers, raw feed records, credentials or unrestricted query access. The read feature MUST NOT mutate observations or capture settings.
@@ -246,7 +250,7 @@ An undefined divisor yields no ratio. No measure claims city-unique hourly vehic
 
 ### Scope Boundaries
 
-This feature delivers the Stats entry points and full-screen overlay, both modes and four panels, independent reusable route presentation, honest coverage and accessible evidence, English/Spanish and theme parity, bounded public aggregate reads, shared Stats/Info Back and Forward behavior, and operational release guidance. Existing Info content and its normal theme behavior remain supported throughout its navigation integration.
+This feature delivers the Stats entry points and full-screen overlay, both modes and four panels, independent reusable route presentation, honest coverage and accessible evidence, English and theme parity, bounded public aggregate reads, simple Stats open/close controls, and operational release guidance. Existing Info content, controls and theme behavior remain independent.
 
 Historical date pickers, exports, arbitrary metrics/ranges, route search, city drill-down, playback/listener statistics, individual vehicle records, unfinished-hour measurements, city-unique vehicle-hour capture and new retention/backfill jobs are excluded. The existing route-history collection definitions and prior internal insight contracts remain the source of truth.
 
@@ -259,7 +263,6 @@ Historical date pickers, exports, arbitrary metrics/ranges, route search, city d
 - **Coverage report**: Complete/partial/unavailable/pending state, expected/contributing/full-scope hours, known or unknown route-hour population, selected-route availability, exclusions, observed bounds and pending/boundary notices.
 - **Reporting snapshot**: One consistent generation instant/cutoff and normalized selection, city windows, unfiltered route options, distance summaries, category shares, bubble measures, timeline known/plot values and safe warnings.
 - **All-timeline visibility**: The visible city set for the current All session, synchronized across legend, accessible controls and table labels; it is presentation state rather than reporting scope.
-- **Overlay navigation entry**: Stats or Info surface, entry ownership, page-session identity and originating city. It supports same-session Back/Forward without persisting old filter/data/audio state.
 
 ## Success Criteria *(mandatory)*
 
@@ -269,9 +272,9 @@ Historical date pickers, exports, arbitrary metrics/ranges, route search, city d
 - **SC-002**: At least 95% of reporting reads return within two seconds when fresh computation is required and within 250 ms when already-prepared evidence can be reused; every read ends with a result or safe failure within five seconds.
 - **SC-003**: Independently calculated acceptance fixtures reconcile 100% of distance cards, category amounts, bubble numerators/denominators and known cumulative endpoints before rounding. The two-route 100-km/60-km fixture yields 160 km and 16/20 requested route-hours; 100 km before a gap plus 40 km afterward resumes at 140 km.
 - **SC-004**: Every missing/ineligible expected hour is distinguishable from observed zero, every relevant partial result shows its coverage qualification, and 100% of selected-route gap cases retain known contributions without estimating missing distance.
-- **SC-005**: In every acceptance interaction, Stats route selection, route hover, All inspection and line visibility leave map selection/city and playback scope intact; only explicit mute/unmute changes audio preference. Silent entry and close preserve locked audio in every welcome-flow case.
-- **SC-006**: All Stats and Info close/Back/Forward/reload scenarios consume at most their owned entry, preserve URL/city and current audio state, and reopen only valid same-session/current-city surfaces. Repeated traversals add no entries; a full reload restores zero overlays.
-- **SC-007**: Every control and every reported measure is reachable through keyboard and accessible text/table presentation in English and Spanish, both themes, at a 320-pixel viewport and 200% zoom. Chart failure preserves 100% of available text/table evidence.
+- **SC-005**: In every acceptance interaction, Stats route selection, route hover, All inspection and line visibility leave map selection/city and playback scope intact; Stats interactions do not change audio preferences. Silent entry and close preserve locked audio in every welcome-flow case.
+- **SC-006**: Stats opens from welcome and the map, closes with Close/Escape, reopens with default selection and remains closed after reload. These actions preserve the URL and audio state and do not add or traverse browser history.
+- **SC-007**: Every control and every reported measure is reachable through keyboard and accessible text/table presentation in English, both themes, at a 320-pixel viewport and 200% zoom. Chart failure preserves 100% of available text/table evidence.
 - **SC-008**: An open visible overlay refreshes at 60-second intervals with no more than one request in flight; hidden/closed/disposed sessions perform zero periodic reads, and no obsolete result overwrites a newer scope in any race acceptance case.
 - **SC-009**: All scope remains correct through hide/show, hide-all, refresh, reordered cities and presentation changes: 100% of amounts retain the all-city scope, hidden state follows city identity and Show all restores every current line.
 - **SC-010**: At the supported bounds of 4,096 routes per city, 32 cities and 32 categories, results remain complete within their stated scope or fail with an explicit capacity explanation. Typical compressed city results remain below 1 MiB and every uncompressed result stays at or below 8 MiB; no oversized result is presented as truncated success.
@@ -286,6 +289,6 @@ Historical date pickers, exports, arbitrary metrics/ranges, route search, city d
 - The configured public city set and existing canonical city/route identities are reused. Configured city zones control dates even when the visitor's own zone differs; future fractional-offset cities require honest boundary-exclusion presentation.
 - Public aggregate access follows the existing transit experience without requiring a new account. Stats exposes no individual transit or listener records.
 - The two-minute finalization allowance, 60-second evidence reuse/refresh interval, capacity bounds, response budgets and performance targets are initial documented policies to validate against retained coverage and representative load before exposure. A result requiring a change to confirmed behavior must bring that concrete tradeoff back for review.
-- The existing [constitution](../../.specify/memory/constitution.md) governs localization, themes and interaction. English and Spanish and the current app settings/visibility/audio paths are reused; the full-screen Stats route grid adapts the shared route presentation without applying dashboard selection to map/audio.
+- The existing [constitution](../../.specify/memory/constitution.md) governs localization, themes and interaction. English and the current app settings/visibility/audio paths are reused; the full-screen Stats route grid adapts the shared route presentation without applying dashboard selection to map/audio.
 - The 5% live-processing target interprets the source design's instruction to stay within the existing history overhead budget. The representative user review in SC-012 supplies a concrete acceptance threshold for understandable metric explanations.
 - This invocation creates specification documentation only. Planning must carry forward the source design's bounded read policies, chart/history/browser prototypes, consistency checks and release gates; this specification does not claim implementation, completed operational validation or deployment.

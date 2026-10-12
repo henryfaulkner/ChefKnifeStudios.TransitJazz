@@ -18,7 +18,9 @@ using ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -52,9 +54,12 @@ var metricsOptions = builder.Configuration.GetSection(MetricsOptions.SectionName
 metricsOptions.Validate(workerOptions.CycleIntervalSeconds, builder.Environment.IsProduction());
 if (metricsOptions.LocalPrometheusEnabled && !builder.Environment.IsDevelopment())
     throw new OptionsValidationException(MetricsOptions.SectionName, typeof(MetricsOptions), ["LocalPrometheusEnabled is development-only."]);
+var statsOverlayOptions = builder.Configuration.GetSection(StatsOverlayOptions.SectionName).Get<StatsOverlayOptions>() ?? new StatsOverlayOptions();
 
 builder.Services.AddSingleton(workerOptions);
 builder.Services.AddSingleton(metricsOptions);
+builder.Services.AddSingleton(statsOverlayOptions);
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddMetrics();
 
 var instanceId = $"{Environment.MachineName}-{Environment.ProcessId}-{Guid.NewGuid():N}";
@@ -69,6 +74,7 @@ builder.Services.AddOpenTelemetry()
     .WithMetrics(metrics =>
     {
         metrics.AddMeter(WorkerMetricsReporter.MeterName);
+        metrics.AddMeter(StatsOverlayTelemetry.MeterName);
         if (metricsOptions.Enabled && metricsOptions.LocalPrometheusEnabled)
         {
             metrics.AddPrometheusHttpListener(options =>
@@ -107,6 +113,12 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<StatsOverlayService>(sp => new StatsOverlayService(
+    sp.GetService<IStatsOverlayQuery>(),
+    sp.GetRequiredService<StatsOverlayOptions>(),
+    sp.GetRequiredService<TimeProvider>()));
+
+builder.Services.AddStatsOverlayRateLimiting();
 
 // Response compression (research D3): first-ever registration in src/Server. The
 // GetAllRouteShapes/GetAllRoutes catalog responses are megabytes of coordinate-dense JSON on
@@ -169,6 +181,9 @@ historicalStatisticsOptions.Validate();
 var routeHourHistoryOptions = historicalStatisticsOptions.RouteHours ?? new RouteHourHistoryOptions();
 historicalStatisticsOptions.RouteHours = routeHourHistoryOptions;
 routeHourHistoryOptions.Validate(workerOptions.CycleIntervalSeconds, historicalStatisticsOptions.Cities);
+statsOverlayOptions.PopulateConfiguredCityPolicy(cityConfigs, routeHourHistoryOptions,
+    requireLocalizedDisplayNames: statsOverlayOptions.Enabled);
+statsOverlayOptions.Validate(requireCities: statsOverlayOptions.Enabled);
 IEnumerable<string> configuredCityNamesSource = cityConfigs.Count == 0
     ? new[] { CityNames.Marta }
     : cityConfigs.Select(city => city.Name);
@@ -366,6 +381,7 @@ app.MapScalarApiReference(options =>
 });
 
 app.UseCors("Default");
+app.UseRateLimiter();
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
@@ -378,6 +394,7 @@ app.MapHub<WorkerTransitHub>("/hubs/worker-transit")
 
 app.MapTestEndpoints()
     .MapGtfsEndpoints()
-    .MapTransitEndpoints();
+    .MapTransitEndpoints()
+    .MapStatsEndpoints();
 
 app.Run();

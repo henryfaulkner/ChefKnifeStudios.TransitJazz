@@ -1,0 +1,63 @@
+.stats-overlay {
+    box-sizing: border-box;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    overflow-y: auto;
+    color: var(--mdc-theme-on-surface, #1c1b1f);
+    background: var(--mdc-theme-surface, #fffbfe);
+    border: 0;
+}
+
+.stats-overlay:not([open]) { display: none; }
+.stats-overlay[open] { animation: stats-overlay-enter 100ms ease-out both; }
+.stats-overlay::backdrop { background: transparent; }
+.stats-overlay--dark { color: #e6e1e5; background: #1c1b1f; }
+.stats-overlay * { box-sizing: border-box; }
+
+.stats-overlay__header,
+.stats-overlay__content { width: min(100%, 72rem); margin-inline: auto; }
+.stats-overlay__header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin-top: calc(-1 * max(1rem, env(safe-area-inset-top))); padding: max(1rem, env(safe-area-inset-top)) 0 .5rem; background: inherit; }
+.stats-overlay__header h1 { flex: 1 1 auto; margin: 0; font-size: clamp(1.25rem, 2vw, 1.75rem); }
+.stats-overlay__close { flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; border: 1px solid currentColor; border-radius: 50%; color: inherit; background: transparent; font-size: 1.75rem; cursor: pointer; }
+.stats-overlay__close:focus-visible,
+.stats-overlay__table-scroll:focus-visible { outline: 3px solid #6750a4; outline-offset: 3px; }
+.stats-overlay__notice { padding: .85rem 1rem; border: 1px solid currentColor; border-radius: .5rem; }
+.stats-overlay__meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .75rem; margin: 1rem 0; }
+.stats-overlay__meta > dl,
+.stats-overlay__totals article { padding: .9rem; border: 1px solid currentColor; border-radius: .5rem; }
+.stats-overlay__meta dt { font-size: .85rem; opacity: .75; }
+.stats-overlay__meta dd { margin: .25rem 0 0; overflow-wrap: anywhere; }
+.stats-overlay__workspace { display: grid; grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); align-items: start; gap: 1rem; }
+.stats-overlay__workspace--all { grid-template-columns: minmax(0, 1fr); }
+.stats-overlay__dashboard { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "pie totals" "bubbles line"; align-items: start; gap: 1rem; }
+.stats-overlay__dashboard > * { min-width: 0; max-width: 100%; }
+.stats-overlay__dashboard > :first-child { grid-area: pie; }
+.stats-overlay__dashboard > .stats-overlay__totals { grid-area: totals; }
+.stats-overlay__dashboard > :nth-child(3) { grid-area: bubbles; }
+.stats-overlay__dashboard > :nth-child(4) { grid-area: line; }
+.stats-overlay__totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .75rem; }
+.stats-overlay__totals h2 { margin: 0; font-size: 1rem; }
+.stats-overlay__totals p { margin: .5rem 0; font-size: 1.5rem; }
+.stats-overlay__totals strong { font-variant-numeric: tabular-nums; }
+.stats-overlay__totals span,
+.stats-overlay__freshness { opacity: .8; }
+.stats-overlay__table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.stats-overlay table { width: max-content; min-width: 100%; border-collapse: collapse; }
+.stats-overlay caption { text-align: start; padding: .5rem 0; }
+.stats-overlay th,
+.stats-overlay td { padding: .55rem .75rem; border-bottom: 1px solid currentColor; text-align: start; white-space: nowrap; }
+
+@media (max-width: 58rem) {
+    .stats-overlay__workspace { grid-template-columns: minmax(0, 1fr); }
+    .stats-overlay__dashboard { grid-template-columns: minmax(0, 1fr); grid-template-areas: "pie" "totals" "bubbles" "line"; }
+}
+
+@keyframes stats-overlay-enter { from { opacity: 0; transform: translateY(.25rem); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .stats-overlay[open] { animation: none; } }

@@ -1,0 +1,10 @@
+.stats-fab-container {
+    position: fixed;
+    bottom: 42px;
+    right: 174px;
+    z-index: 75;
+}
+
+::deep .mdc-fab {
+    box-shadow: none !important;
+}

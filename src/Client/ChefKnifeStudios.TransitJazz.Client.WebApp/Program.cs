@@ -17,10 +17,18 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using pax.BlazorChartJs;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
+
+var culture = CultureInfo.GetCultureInfo("en");
+CultureInfo.DefaultThreadCurrentCulture = culture;
+CultureInfo.DefaultThreadCurrentUICulture = culture;
+CultureInfo.CurrentCulture = culture;
+CultureInfo.CurrentUICulture = culture;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -53,6 +61,7 @@ builder.Services.AddSingleton<ISignalRNotificationService, SignalRNotificationSe
 
 builder.Services.AddSingleton<IGtfsEndpointsService, GtfsEndpointsService>();
 builder.Services.AddSingleton<ITransitEndpointsService, TransitEndpointsService>();
+builder.Services.AddSingleton<IStatsEndpointsService, StatsEndpointsService>();
 
 builder.Services.AddSingleton<IApplicationViewModel, ApplicationViewModel>();
 
@@ -67,6 +76,11 @@ builder.Services.AddScoped<IRouteFilterViewModel, RouteFilterViewModel>();
 builder.Services.AddSingleton<IRouteBlurbStore, RouteBlurbStore>();
 
 builder.Services.AddMatBlazor();
+builder.Services.AddChartJs(options =>
+{
+    options.ChartJsLocation = $"{builder.HostEnvironment.BaseAddress}vendor/chartjs/4.5.1/chart.umd.min.js";
+    options.ChartJsCallbacksModuleLocation = $"{builder.HostEnvironment.BaseAddress}_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/chart-formatters.js";
+});
 
 builder.Services.AddMatToaster(new MatToastConfiguration
 {
@@ -85,6 +99,7 @@ builder.Services.AddSingleton<IViewportSizeJsInterop, ViewportSizeJsInterop>();
 builder.Services.AddSingleton<IPageVisibilityJsInterop, PageVisibilityJsInterop>();
 
 builder.Services.AddLocalization();
+builder.Services.AddScoped<StatsChartText>();
 
 builder.Logging.SetMinimumLevel(LogLevel.Debug);
 

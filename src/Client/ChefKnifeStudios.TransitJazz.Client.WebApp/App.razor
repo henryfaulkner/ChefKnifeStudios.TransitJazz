@@ -1,5 +1,6 @@
 @using ChefKnifeStudios.TransitJazz.Client.Shared.ViewModels
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services
 @using Microsoft.Extensions.Localization
 @inject IApplicationViewModel ApplicationViewModel
 @inject IStringLocalizer<RouteFilterResources> Loc
@@ -20,8 +21,8 @@
 @code {
     // Kick off app-lifetime singleton processes as early as possible, from inside the
     // Blazor DI scope (resolving these from the root provider in Program.cs throws,
-    // because their graph reaches WASM scoped services). Fire-and-forget so the router
-    // renders immediately; ApplicationViewModel.InitializeAsync is idempotent.
+    // because their graph reaches WASM scoped services). ApplicationViewModel initialization
+    // remains idempotent.
     protected override void OnInitialized()
     {
         _ = ApplicationViewModel.InitializeAsync();

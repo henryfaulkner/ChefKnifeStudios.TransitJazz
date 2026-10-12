@@ -20,7 +20,6 @@ erDiagram
     ReportingSnapshot ||--o{ TimelineSeries : plots
     TimelineSeries ||--o{ TimelineBucket : preserves
     OverlaySession ||--o| ReportingSnapshot : accepts
-    OverlayHistoryEntry ||--o| OverlaySession : opens
 ```
 
 ## 2. Existing retained evidence
@@ -91,26 +90,24 @@ JSON explicitly writes nullable metric fields despite current global omit-null s
 
 ChartFrame owns caption/status/table structure, renderers own typed projection, and ChartCanvasHost owns config initialization/update/disposal. Every table and canvas use the same model; no client metric formula registry.
 
-## 7. Overlay and navigation state
+## 7. Local overlay session state
 
 `OverlaySession` is local to each Stats mount: session ID, generation, map current city, mode, ordinal route selection, parent visibility, cancellation/timer, accepted snapshot, load/refresh/stale/error state, cooldown, All visibility and invoker focus target. An accepted response must match current generation/normalized selection and a live session; publish all models/labels/coverage atomically.
 
 | Event | Transition |
 | --- | --- |
-| Open or valid Forward | Fresh default city session, empty selection/all lines visible, fetch immediately subject to cooldown policy |
+| Open | Fresh default city session, empty selection/all lines visible, fetch immediately subject to cooldown policy |
 | Select/mode change | Increment generation, cancel old work, clear old-scope snapshot, debounce 200 ms selection; mode change clears route selection |
 | Same-scope refresh | Retain Ready snapshot with refreshing notice; success atomically replaces; failure marks stale at its actual generation time |
 | Hide | Cancel/suspend polling; do not overwrite parent's visibility listener |
 | Visible | Refresh promptly under cooldown, resume one 60-second schedule |
-| Theme/language | Reproject accepted evidence locally; no API request |
+| Theme | Reproject accepted evidence locally; no API request |
 | Close/navigation/city reload/dispose | Invalidate generation, cancel timer/request, unsubscribe, clear selection/visibility; no post-disposal writes |
 
-`OverlayHistoryEntry` is coordinator-owned: namespace/version, unique entry ID, page session ID, surface (`stats`/`info`), originating canonical city and preserved prior user state. Active entry ownership and pending explicit-close acknowledgement survive component unmount for valid same-session Forward. Framework index/state remains NavigationManager-owned.
-
-Base open pushes once; replacing a surface replaces once; Back closes; valid Forward adopts without push. Explicit close dismisses immediately and traverses only a demonstrably owned current entry once. Old session/city/foreign entries never reopen. Full reload strips only obsolete feature marker through replacement without Back. Audio lock/preferences, Stats selections/snapshots and All visibility are never restored from entry payload.
+StatsFab owns a local boolean visibility flag. StatsOverlay receives IsOpen and OnClose; its request/session state remains component-local. The native dialog handles modal focus. Info keeps its own open flag. No overlay state is persisted or represented in browser history.
 
 ## 8. Exposure, culture and ephemeral cache
 
-Server `StatsOverlay.Enabled` and client `FeatureFlags.StatsOverlay` independently gate reads/presentation; both default false and both launchers share the client flag. History controls stay independent. Read limits/cache policy are centrally validated; cache/fill dictionaries have finite configured scope slots and expire/replace generations.
+Server `StatsOverlay.Enabled` and client `FeatureFlags.StatsOverlay` independently gate reads/presentation; both default false and both launchers share the client flag. Info controls stay independent. Read limits/cache policy are centrally validated; cache/fill dictionaries have finite configured scope slots and expire/replace generations.
 
-Language uses existing Settings persistence plus `en`/`es` culture/event/document language and the one RouteFilterResources store. Additive settings evolution preserves audio/theme preferences. Presentation changes do not alter reporting city zones or data. Shared explicit audio action uses Settings.IsAudioEnabled/AudioSettingChanged and keeps both controls synchronized.
+English culture and document language are fixed at startup. The neutral RouteFilterResources store supplies all copy; no saved language preference, selector or switching event is used. Saved audio/theme preferences remain compatible, and presentation does not alter reporting city zones or data. Existing AudioFAB/settings controls manage audio through their original settings/events. Stats does not read or change audio preferences.
