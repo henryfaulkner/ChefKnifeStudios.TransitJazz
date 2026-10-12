@@ -388,10 +388,10 @@
     <value>Updating route selection…</value>
   </data>
   <data name="StatsBubbleX" xml:space="preserve">
-    <value>Kilometers per route-hour</value>
+    <value>Average vehicle speed</value>
   </data>
   <data name="StatsBubbleY" xml:space="preserve">
-    <value>Kilometers per active-clock hour</value>
+    <value>Average distance per hour</value>
   </data>
   <data name="StatsScopeAll" xml:space="preserve">
     <value>Sum of each city's local day</value>
@@ -804,4 +804,7 @@
   <data name="StatsReasonNotRetained" xml:space="preserve"><value>This period is not retained.</value></data>
   <data name="StatsReasonBoundaryExcluded" xml:space="preserve"><value>This interval is excluded at the collection boundary.</value></data>
   <data name="StatsReasonNoData" xml:space="preserve"><value>No retained data is available.</value></data>
+  <data name="StatsAverageVehicles" xml:space="preserve"><value>Average vehicles</value></data>
+  <data name="StatsAverageKilometersPerHour" xml:space="preserve"><value>Average distance per hour</value></data>
+  <data name="StatsAverageDistancePerVehicleHour" xml:space="preserve"><value>Average vehicle speed</value></data>
 </root>

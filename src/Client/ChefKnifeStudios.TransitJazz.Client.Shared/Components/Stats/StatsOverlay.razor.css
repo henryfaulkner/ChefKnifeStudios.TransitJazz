@@ -43,7 +43,6 @@
 .stats-overlay__totals h2 { margin: 0; font-size: 1rem; }
 .stats-overlay__totals p { margin: .5rem 0; font-size: 1.5rem; }
 .stats-overlay__totals strong { font-variant-numeric: tabular-nums; }
-.stats-overlay__totals span { opacity: .8; }
 .stats-overlay__table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 .stats-overlay table { width: max-content; min-width: 100%; border-collapse: collapse; }
 .stats-overlay caption { text-align: start; padding: .5rem 0; }

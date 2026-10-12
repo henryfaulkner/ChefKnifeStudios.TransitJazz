@@ -78,14 +78,10 @@
                         <article>
                             <h2>@T.Get("StatsDistanceToday")</h2>
                             <p><strong>@T.Format(ToDouble(dashboard.Snapshot.TodayDistance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
-                            <span>@T.Get(ChartLocalization.CoverageKey(dashboard.Snapshot.TodayDistance.Coverage.State))</span>
-                            <p>@CoverageSummary(dashboard.Snapshot.TodayDistance.Coverage, dashboard.Snapshot.TodayDistance.Kilometers)</p>
                         </article>
                         <article>
                             <h2>@T.Get("StatsDistanceLast24")</h2>
                             <p><strong>@T.Format(ToDouble(dashboard.Snapshot.Last24Distance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
-                            <span>@T.Get(ChartLocalization.CoverageKey(dashboard.Snapshot.Last24Distance.Coverage.State))</span>
-                            <p>@CoverageSummary(dashboard.Snapshot.Last24Distance.Coverage, dashboard.Snapshot.Last24Distance.Kilometers)</p>
                         </article>
                     </section>
                     <BubbleChart Model="@dashboard.Bubbles" Title="@T.Get(dashboard.Snapshot.Selection.Scope == "city" ? "StatsRouteActivity" : "StatsCityActivity")"
@@ -589,16 +585,6 @@
     }
 
     static double? ToDouble(decimal? value) => value is { } number ? (double)number : null;
-
-    string CoverageSummary(StatsCoverage coverage, decimal? kilometers) => coverage.State switch
-    {
-        "partial" => T.Get("StatsPartialExplanation"),
-        "pending" => T.Get("StatsPendingExplanation"),
-        "unavailable" => T.Get("StatsUnavailableExplanation"),
-        _ when coverage.ExpectedClosedHours == 0 => T.Get("StatsPendingExplanation"),
-        _ when kilometers is > 0 => T.Get("StatsCompleteExplanation"),
-        _ => T.Get("StatsZeroExplanation")
-    };
 
     public void Dispose()
     {

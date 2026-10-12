@@ -57,7 +57,7 @@ public static class StatsOverlayProjection
                 item.Coverage.State,
                 item.OmissionReason,
                 item.EntityKind == "city" ? "city:" + item.CitySlug : item.CategoryKey ?? item.EntityKey,
-                BubbleTooltip(item, label, selectedRouteCoverage, localize, culture),
+                BubbleTooltip(item, label, localize, culture),
                 ToDouble(item.DistanceKilometers),
                 ToDouble(item.RouteVehicleHours),
                 ToDouble(item.ActiveClockHours),
@@ -202,20 +202,17 @@ public static class StatsOverlayProjection
     static IReadOnlyList<string> BubbleTooltip(
         StatsBubbleStatistic item,
         string label,
-        StatsSelectedRouteCoverage? routeCoverage,
         Func<string, string> localize,
         CultureInfo culture)
     {
-        var lines = new List<string> { label };
-        if (item.DistanceKilometers is { } km) lines.Add($"{localize("StatsDistanceToday")}: {km.ToString("#,##0.##", culture)} km");
-        if (item.RouteVehicleHours is { } routeHours) lines.Add($"{localize("StatsRouteHours")}: {routeHours.ToString("N0", culture)}");
-        if (item.ActiveClockHours is { } activeHours) lines.Add($"{localize("StatsActiveClockHours")}: {activeHours.ToString("N0", culture)}");
-        if (item.MeanActiveVehicles is { } mean) lines.Add($"{localize("StatsMeanActiveVehicles")}: {mean.ToString("#,##0.###", culture)}");
-        if (item.ActivitySampleNumerator is { } numerator && item.SampleDenominator is { } denominator)
-            lines.Add($"{localize("StatsNumerator")}/{localize("StatsDenominator")}: {numerator.ToString("N0", culture)}/{denominator.ToString("N0", culture)}");
-        var expected = routeCoverage?.ExpectedHours ?? item.Coverage.ExpectedClosedHours;
-        var available = routeCoverage?.AvailableHours ?? item.Coverage.ContributingHours;
-        lines.Add($"{localize("StatsCoverage")}: {available.ToString("N0", culture)}/{expected.ToString("N0", culture)}");
+        string Format(decimal? value) => value?.ToString("#,##0.##", culture) ?? localize("StatsUnavailable");
+        var lines = new List<string>
+        {
+            label,
+            $"{localize("StatsAverageVehicles")}: {Format(item.MeanActiveVehicles)}",
+            $"{localize("StatsAverageKilometersPerHour")}: {Format(item.Y)}",
+            $"{localize("StatsAverageDistancePerVehicleHour")}: {Format(item.X)}"
+        };
         if (item.OmissionReason is { } reason) lines.Add(localize(ChartLocalization.ReasonKey(reason)));
         return lines;
     }
