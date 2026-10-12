@@ -41,12 +41,8 @@
 @media (max-width: 1099.98px) {
     .stats-overlay__routes { width: 100%; }
 }
-.stats-overlay__dashboard { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "pie totals" "bubbles line"; align-items: start; gap: 1rem; }
+.stats-overlay__dashboard { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 1rem; }
 .stats-overlay__dashboard > * { min-width: 0; max-width: 100%; }
-.stats-overlay__dashboard > :first-child { grid-area: pie; }
-.stats-overlay__dashboard > .stats-overlay__totals { grid-area: totals; }
-.stats-overlay__dashboard > :nth-child(3) { grid-area: bubbles; }
-.stats-overlay__dashboard > :nth-child(4) { grid-area: line; }
 .stats-overlay__totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .75rem; }
 .stats-overlay__totals h2 { margin: 0; font-size: 1rem; }
 .stats-overlay__totals p { margin: .5rem 0; font-size: 1.5rem; }
@@ -58,7 +54,7 @@
 .stats-overlay td { padding: .55rem .75rem; border-bottom: 1px solid currentColor; text-align: start; white-space: nowrap; }
 
 @media (max-width: 58rem) {
-    .stats-overlay__dashboard { grid-template-columns: minmax(0, 1fr); grid-template-areas: "pie" "totals" "bubbles" "line"; }
+    .stats-overlay__dashboard { grid-template-columns: minmax(0, 1fr); }
 }
 
 @keyframes stats-overlay-enter { from { opacity: 0; } to { opacity: 1; } }

@@ -78,8 +78,8 @@
             @if (_presentation is { } dashboard)
             {
                 <section class="stats-overlay__dashboard">
-                    <PieChart Model="@dashboard.CategoryPie" Title="@T.Get("StatsCategoryShares")"
-                              State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
+                    <SeriesChart Model="@dashboard.Timeline" Title="@T.Get("StatsCumulativeDistance")"
+                                 State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
                     <section class="stats-overlay__totals" aria-label="@T.Get("StatsDistanceToday")">
                         <article>
                             <h2>@T.Get("StatsDistanceToday")</h2>
@@ -93,8 +93,8 @@
                     <BubbleChart Model="@dashboard.Bubbles" Title="@T.Get(dashboard.Snapshot.Selection.Scope == "city" ? "StatsRouteActivity" : "StatsCityActivity")"
                                  XAxisTitle="@T.Get("StatsBubbleX")" YAxisTitle="@T.Get("StatsBubbleY")"
                                  State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
-                    <SeriesChart Model="@dashboard.Timeline" Title="@T.Get("StatsCumulativeDistance")"
-                                 State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
+                    <PieChart Model="@dashboard.CategoryPie" Title="@T.Get("StatsCategoryShares")"
+                              State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
                 </section>
             }
         @if (_presentation is not null)
