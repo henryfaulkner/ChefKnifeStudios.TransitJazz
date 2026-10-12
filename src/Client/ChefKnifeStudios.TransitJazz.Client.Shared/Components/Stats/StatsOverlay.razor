@@ -32,9 +32,15 @@
         aria-label="@T.Get("StatsTitle")"
         @ref="_overlayElement"
         @onkeydown="HandleKeyDown">
-    <div class="stats-overlay__scope" role="group" aria-label="@T.Get("StatsScope")">
-        <button type="button" aria-pressed="@(_scope == "city" ? "true" : "false")" @onclick='() => ChangeScopeAsync("city")'>@T.Get("StatsCurrentCity")</button>
-        <button type="button" aria-pressed="@(_scope == "all" ? "true" : "false")" @onclick='() => ChangeScopeAsync("all")'>@T.Get("StatsAllCities")</button>
+    <div class="stats-overlay__scope" role="radiogroup" aria-label="@T.Get("StatsScope")">
+        <label>
+            <input type="radio" name="stats-scope" value="city" checked="@(_scope == "city")" @onchange='() => ChangeScopeAsync("city")' />
+            <span>@T.Get("StatsCurrentCity")</span>
+        </label>
+        <label>
+            <input type="radio" name="stats-scope" value="all" checked="@(_scope == "all")" @onchange='() => ChangeScopeAsync("all")' />
+            <span>@T.Get("StatsAllCities")</span>
+        </label>
     </div>
 
     @if (_scope == "city" && (_hasAcceptedCityOptions || _routeSelection.Count > 0))

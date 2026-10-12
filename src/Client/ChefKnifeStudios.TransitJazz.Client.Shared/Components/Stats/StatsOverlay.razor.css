@@ -24,9 +24,13 @@
 .stats-overlay .stats-overlay__loader { position: fixed; inset: 0; height: 100%; background: transparent; }
 .stats-overlay .app-loader__ring { border-right-color: currentColor; border-top-color: currentColor; }
 .stats-overlay .app-loader__label { color: inherit; }
-.stats-overlay__scope { position: fixed; bottom: max(42px, env(safe-area-inset-bottom)); left: max(1.5rem, env(safe-area-inset-left)); z-index: 75; display: flex; gap: .25rem; padding: .25rem; border-radius: .25rem; background: inherit; }
-.stats-overlay__scope button { min-height: 2.75rem; cursor: pointer; }
-.stats-overlay__scope button:focus-visible,
+.stats-overlay__scope { position: fixed; bottom: max(42px, env(safe-area-inset-bottom)); left: max(1.5rem, env(safe-area-inset-left)); z-index: 75; display: flex; gap: .25rem; padding: .25rem; border: 1px solid currentColor; border-radius: 999px; background: inherit; }
+.stats-overlay__scope label { position: relative; cursor: pointer; }
+.stats-overlay__scope input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.stats-overlay__scope span { display: flex; align-items: center; min-height: 2.75rem; padding: .5rem 1rem; border-radius: 999px; }
+.stats-overlay__scope input:checked + span { background: #546e7a; color: #fff; }
+.stats-overlay--dark .stats-overlay__scope input:checked + span { background: #b0bec5; color: #1A1C1E; }
+.stats-overlay__scope input:focus-visible + span,
 .stats-overlay__table-scroll:focus-visible { outline: 3px solid #6750a4; outline-offset: 3px; }
 .stats-overlay__totals article { padding: .9rem; border: 1px solid currentColor; border-radius: .5rem; }
 .stats-overlay__routes { position: fixed; top: 0; left: 0; width: 425px; z-index: 25; }
