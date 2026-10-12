@@ -132,7 +132,8 @@ public static class StatsOverlayProjection
         {
             var maxHour = Math.Max(0, (int)Math.Ceiling((double)response.Timeline.ElapsedHourExtent));
             var coordinates = Enumerable.Range(1, maxHour).Select(value => (double)value).ToArray();
-            var labels = coordinates.Select(value => value.ToString("0", CultureInfo.InvariantCulture)).ToArray();
+            var labels = coordinates.Select(value => TimeOnly.MinValue.AddHours(value)
+                .ToString("h tt", CultureInfo.GetCultureInfo("en"))).ToArray();
             var series = response.Timeline.Series.Select(city =>
             {
                 var byHour = city.Buckets.ToDictionary(bucket => (double)bucket.ElapsedHours);
@@ -142,13 +143,13 @@ public static class StatsOverlayProjection
                     localize, citySlug: city.CitySlug);
             }).ToArray();
             return new SeriesChartModel(
-                localize("StatsElapsedHours"),
+                localize("StatsLocalTime"),
                 localize("StatsCumulativeDistance"),
                 labels,
                 coordinates,
                 series,
                 isStacked: false,
-                numericAxisLabelMode: NumericAxisLabelMode.ElapsedHours,
+                numericAxisLabelMode: NumericAxisLabelMode.LocalClockOffset,
                 enableSeriesVisibility: true);
         }
 
