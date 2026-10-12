@@ -9,14 +9,13 @@
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components
 @using ChefKnifeStudios.TransitJazz.Client.Core.Services.EndpointsServices
 @using ChefKnifeStudios.TransitJazz.Shared.Stats
-@using System.Globalization
 @using System.ComponentModel
 @using System.Net
 @using System.Threading
 @using System.Threading.Tasks
 @using Microsoft.JSInterop
 @using Microsoft.AspNetCore.Components.Routing
-@implements IAsyncDisposable
+@implements IDisposable
 @inject IEventNotificationService EventNotificationService
 @inject ISettingsService SettingsService
 @inject IApplicationViewModel ApplicationViewModel
@@ -24,27 +23,40 @@
 @inject IStatsEndpointsService StatsEndpoints
 @inject IPageVisibilityJsInterop PageVisibility
 @inject NavigationManager NavigationManager
-@inject IJSRuntime JS
 
-<dialog class="stats-overlay @(_isDark ? "stats-overlay--dark" : "")"
-        aria-labelledby="stats-overlay-title"
-        aria-describedby="stats-overlay-description"
-        @ref="_dialogElement"
+@if (_isOpen)
+{
+<div class="stats-overlay @(_isDark ? "stats-overlay--dark" : "")"
+        role="dialog"
+        tabindex="-1"
+        aria-label="@T.Get("StatsTitle")"
+        @ref="_overlayElement"
         @onkeydown="HandleKeyDown">
-    <header class="stats-overlay__header">
-        <h1 id="stats-overlay-title">@T.Get("StatsTitle")</h1>
-        <div class="stats-overlay__scope" role="group" aria-label="@T.Get("StatsScope")">
-            <button type="button" aria-pressed="@(_scope == "city" ? "true" : "false")" @onclick='() => ChangeScopeAsync("city")'>@T.Get("StatsCurrentCity")</button>
-            <button type="button" aria-pressed="@(_scope == "all" ? "true" : "false")" @onclick='() => ChangeScopeAsync("all")'>@T.Get("StatsAllCities")</button>
-        </div>
-        <button type="button" class="stats-overlay__close" autofocus aria-label="@T.Get("StatsClose")" @onclick="CloseAsync">
-            <span aria-hidden="true">&#215;</span>
-        </button>
-    </header>
+    <div class="stats-overlay__scope" role="group" aria-label="@T.Get("StatsScope")">
+        <button type="button" aria-pressed="@(_scope == "city" ? "true" : "false")" @onclick='() => ChangeScopeAsync("city")'>@T.Get("StatsCurrentCity")</button>
+        <button type="button" aria-pressed="@(_scope == "all" ? "true" : "false")" @onclick='() => ChangeScopeAsync("all")'>@T.Get("StatsAllCities")</button>
+    </div>
 
+    @if (_scope == "city" && (_hasAcceptedCityOptions || _routeSelection.Count > 0))
+    {
+        <div class="stats-overlay__routes">
+            <MatAccordion Class="">
+                <MatExpansionPanel @bind-Expanded="_accordionExpanded">
+                    <MatExpansionPanelSummary>
+                        <MatExpansionPanelHeader>@T.Get("RoutesLabel")</MatExpansionPanelHeader>
+                    </MatExpansionPanelSummary>
+                    <MatExpansionPanelDetails>
+                        <RouteFilterList CssClass="stats-route-list" Model="@RouteListModel" IsDark="@_isDark"
+                                         AriaLabel="@T.Get("RoutesLabel")"
+                                         OnToggle="ToggleRouteAsync" OnSelectCategory="SelectRouteCategoryAsync"
+                                         OnClearCategory="ClearRouteCategoryAsync" />
+                    </MatExpansionPanelDetails>
+                </MatExpansionPanel>
+            </MatAccordion>
+        </div>
+    }
 
     <main class="stats-overlay__content">
-        <p id="stats-overlay-description" class="stats-overlay__notice">@T.Get("StatsHelp")</p>
         @if (_selectionPending)
         {
             <p class="stats-overlay__status" role="status">@T.Get("StatsSelectionUpdating")</p>
@@ -57,41 +69,10 @@
         {
             <p class="stats-overlay__status" role="status">@T.Get("StatsStale")</p>
         }
-        @if (_presentation is { } presentation)
-        {
-            <section class="stats-overlay__meta" aria-label="@T.Get("StatsOverview")">
-                <dl><dt>@T.Get("StatsScope")</dt><dd>@ScopeDescription(presentation.Snapshot)</dd></dl>
-                <dl><dt>@T.Get("StatsLocalDate")</dt><dd>@string.Join(", ", presentation.Snapshot.Cities.Select(city => $"{CityName(city)}: {FormatLocalDate(city.LocalDate)}"))</dd></dl>
-                <dl><dt>@T.Get("StatsTimeZone")</dt><dd>@string.Join(", ", presentation.Snapshot.Cities.Select(city => $"{CityName(city)}: {city.TimeZone}"))</dd></dl>
-                <dl><dt>@T.Get("StatsGeneratedAt")</dt><dd>@FormatUtc(presentation.Snapshot.GeneratedAtUtc)</dd></dl>
-                <dl><dt>@T.Get("StatsCutoff")</dt><dd>@FormatUtc(presentation.Snapshot.CutoffUtc)</dd></dl>
-            </section>
-        }
-        <div class="stats-overlay__workspace @(_scope == "all" ? "stats-overlay__workspace--all" : "")">
-            @if (_scope == "city" && (_hasAcceptedCityOptions || _routeSelection.Count > 0))
-            {
-                <MatAccordion Class="">
-                    <MatExpansionPanel @bind-Expanded="_accordionExpanded">
-                        <MatExpansionPanelSummary>
-                            <MatExpansionPanelHeader>@T.Get("RoutesLabel")</MatExpansionPanelHeader>
-                        </MatExpansionPanelSummary>
-                        <MatExpansionPanelDetails>
-                            <RouteFilterList CssClass="stats-route-list" Model="@RouteListModel" IsDark="@_isDark"
-                                             AriaLabel="@T.Get("RoutesLabel")" HelpText="@T.Get("StatsRouteSelectorHelp")"
-                                             SelectedSummary="@T.Get("StatsRoutesSelected", _routeSelection.Count)"
-                                             SelectAllText="@T.Get("StatsSelectAllRoutes")" ClearAllText="@T.Get("StatsClearAllRoutes")"
-                                             OnToggle="ToggleRouteAsync" OnSelectCategory="SelectRouteCategoryAsync"
-                                             OnClearCategory="ClearRouteCategoryAsync" OnSelectAll="SelectAllRoutesAsync"
-                                             OnClearAll="ClearAllRoutesAsync" />
-                        </MatExpansionPanelDetails>
-                    </MatExpansionPanel>
-                </MatAccordion>
-            }
             @if (_presentation is { } dashboard)
             {
                 <section class="stats-overlay__dashboard">
                     <PieChart Model="@dashboard.CategoryPie" Title="@T.Get("StatsCategoryShares")"
-                              Definition="@T.Get("StatsTransfers")" PeriodLabel="@T.Get("StatsDistanceToday")"
                               State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
                     <section class="stats-overlay__totals" aria-label="@T.Get("StatsDistanceToday")">
                         <article>
@@ -108,16 +89,13 @@
                         </article>
                     </section>
                     <BubbleChart Model="@dashboard.Bubbles" Title="@T.Get(dashboard.Snapshot.Selection.Scope == "city" ? "StatsRouteActivity" : "StatsCityActivity")"
-                                 Definition="@BubbleDefinition"
-                                 PeriodLabel="@T.Get("StatsDistanceToday")" XAxisTitle="@T.Get("StatsBubbleX")" YAxisTitle="@T.Get("StatsBubbleY")"
+                                 XAxisTitle="@T.Get("StatsBubbleX")" YAxisTitle="@T.Get("StatsBubbleY")"
                                  State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
                     <SeriesChart Model="@dashboard.Timeline" Title="@T.Get("StatsCumulativeDistance")"
-                                 Definition="@T.Get("StatsKnownSubtotal")" PeriodLabel="@T.Get("StatsDistanceToday")"
                                  State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
                 </section>
             }
-        </div>
-        @if (_presentation is { } accepted)
+        @if (_presentation is not null)
         {
             @if (_isStale && _errorCode is not null)
             {
@@ -126,19 +104,13 @@
                     <button type="button" disabled="@_retryPolicy.IsCoolingDown(DateTimeOffset.UtcNow)" @onclick="RetryAsync">@T.Get("StatsRetry")</button>
                 </div>
             }
-            @if (accepted.Snapshot.Selection.Scope == "all")
-            {
-                <p class="stats-overlay__freshness">@T.Get("StatsScopeAll")</p>
-            }
-            @foreach (var warning in accepted.Snapshot.Warnings)
-            {
-                <p class="stats-overlay__warning">@T.Get(WarningKey(warning))</p>
-            }
-            <p class="stats-overlay__freshness">@T.Get("StatsFreshness")</p>
         }
         else if (_isLoading)
         {
-            <p class="stats-overlay__status" role="status">@T.Get("StatsLoading")</p>
+            <div class="app-loader stats-overlay__loader" role="status" aria-live="polite">
+                <div class="app-loader__ring" aria-hidden="true"></div>
+                <span class="app-loader__label">loading...</span>
+            </div>
         }
         else if (_errorCode is not null)
         {
@@ -148,7 +120,8 @@
             </div>
         }
     </main>
-</dialog>
+</div>
+}
 
 @code {
     [Parameter] public bool IsOpen { get; set; }
@@ -158,8 +131,8 @@
     bool _isDark;
     bool _accordionExpanded;
     bool _disposed;
-    ElementReference _dialogElement;
-    IJSObjectReference? _dialogModule;
+    ElementReference _overlayElement;
+    bool _focusOnRender;
     readonly StatsOverlayAcceptedSnapshotState _acceptedSnapshot = new();
     StatsOverlayResponse? _snapshot => _acceptedSnapshot.Current?.Snapshot;
     StatsOverlayPresentation? _presentation => _acceptedSnapshot.Current?.Presentation;
@@ -198,6 +171,7 @@
     {
         if (_isOpen == IsOpen) return;
         _isOpen = IsOpen;
+        _focusOnRender = _isOpen;
         if (_isOpen) _ = InvokeAsync(StartNewSessionAsync);
         else CloseSession();
     }
@@ -245,19 +219,11 @@
             }
             catch (JSException) { }
         }
-        if (_isOpen && _dialogModule is null)
+        if (_focusOnRender && _isOpen && !_disposed)
         {
-            var module = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "./_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/stats-dialog.js");
-            if (_disposed)
-            {
-                await module.DisposeAsync();
-                return;
-            }
-            _dialogModule = module;
+            _focusOnRender = false;
+            await _overlayElement.FocusAsync();
         }
-        if (_dialogModule is not null)
-            await _dialogModule.InvokeVoidAsync("setOpen", _dialogElement, _isOpen);
     }
 
     void HandleEvent(object sender, IEventArgs args)
@@ -361,20 +327,6 @@
     {
         if (!_isOpen || _scope != "city") return Task.CompletedTask;
         _routeSelection.Toggle(routeJoinKey);
-        return ScheduleSelectionRequestAsync();
-    }
-
-    Task SelectAllRoutesAsync()
-    {
-        if (!_isOpen || _scope != "city") return Task.CompletedTask;
-        _routeSelection.SelectAll(CurrentRouteOptions);
-        return ScheduleSelectionRequestAsync();
-    }
-
-    Task ClearAllRoutesAsync()
-    {
-        if (!_isOpen || _scope != "city") return Task.CompletedTask;
-        _routeSelection.Clear();
         return ScheduleSelectionRequestAsync();
     }
 
@@ -636,16 +588,6 @@
         request?.Cancel();
     }
 
-    string ScopeDescription(StatsOverlayResponse snapshot) => snapshot.Selection.Scope == "all"
-        ? T.Get("StatsScopeAll")
-        : T.Get("StatsScopeCity", CityName(snapshot.Cities.FirstOrDefault(city => city.CitySlug == snapshot.Selection.CitySlug)));
-
-    string BubbleDefinition => $"{T.Get("StatsBubbleSize")} {T.Get("StatsBubbleMinimum")}";
-
-    string CityName(StatsCityWindow? city) => city is null ? T.Get("StatsCityUnknown") : T.Get(city.DisplayNameKey);
-    string FormatLocalDate(DateOnly date) => date.ToString("D", CultureInfo.GetCultureInfo("en"));
-    string FormatUtc(DateTime value) => DateTime.SpecifyKind(value, DateTimeKind.Utc)
-        .ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.GetCultureInfo("en"));
     static double? ToDouble(decimal? value) => value is { } number ? (double)number : null;
 
     string CoverageSummary(StatsCoverage coverage, decimal? kilometers) => coverage.State switch
@@ -658,18 +600,7 @@
         _ => T.Get("StatsZeroExplanation")
     };
 
-    static string WarningKey(string warning) => warning switch
-    {
-        "partial_coverage" => "StatsPartialExplanation",
-        "city_days_differ" => "StatsCityDaysDiffer",
-        "catalog_changed" => "StatsCatalogChanged",
-        "boundary_excluded" => "StatsBoundaryExcluded",
-        "historical_membership_unknown" => "StatsHistoricalUnknown",
-        "different_route_periods" => "StatsDifferentRoutePeriods",
-        _ => "StatsProblemGeneric"
-    };
-
-    public async ValueTask DisposeAsync()
+    public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
@@ -678,12 +609,5 @@
         EventNotificationService.EventReceived -= HandleEvent;
         NavigationManager.LocationChanged -= HandleLocationChanged;
         PageVisibility.VisibilityChanged -= HandlePageVisibilityChanged;
-        if (_dialogModule is null) return;
-        try
-        {
-            await _dialogModule.InvokeVoidAsync("setOpen", _dialogElement, false);
-            await _dialogModule.DisposeAsync();
-        }
-        catch (JSDisconnectedException) { }
     }
 }

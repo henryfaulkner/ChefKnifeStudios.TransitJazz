@@ -82,8 +82,8 @@ public sealed class SeriesChartModel
         if (NumericAxisLabelMode == NumericAxisLabelMode.LocalClockOffset
             && (NumericXValues is null || Series.Any(item => item.PointEvidence is null)))
             throw new ArgumentException("Local-clock numeric axes need aligned per-series point evidence.");
-        if (EnableSeriesVisibility && (IsStacked || Series.Any(item => !item.Key.StartsWith("city:", StringComparison.Ordinal))))
-            throw new ArgumentException("Legend visibility is available only for unstacked city series.");
+        if (EnableSeriesVisibility && IsStacked)
+            throw new ArgumentException("Legend visibility is available only for unstacked series.");
 
         var keys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in Series)

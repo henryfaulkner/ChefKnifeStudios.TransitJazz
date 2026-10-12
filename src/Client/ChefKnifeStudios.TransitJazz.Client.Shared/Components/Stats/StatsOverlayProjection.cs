@@ -81,6 +81,7 @@ public static class StatsOverlayProjection
     {
         "bus" => "StatsCategoryBus",
         "rail" or "train" => "StatsCategoryRail",
+        "streetcar" => "streetcar",
         "tram" => "StatsCategoryTram",
         "ferry" => "StatsCategoryFerry",
         _ => "StatsCategoryUnknown"
@@ -97,7 +98,11 @@ public static class StatsOverlayProjection
                 series => series.Buckets.OrderBy(bucket => bucket.ElapsedHours).ToArray(), StringComparer.Ordinal);
             var orderedBuckets = response.Timeline.Series.SelectMany(series => series.Buckets)
                 .GroupBy(bucket => bucket.ElapsedHours).OrderBy(group => group.Key).Select(group => group.First()).ToArray();
-            var labels = orderedBuckets.Select(bucket => FormatLocalBucket(bucket, culture)).ToArray();
+            var labels = orderedBuckets.Select(bucket =>
+            {
+                var time = TimeOnly.ParseExact(bucket.LocalEndLabel, "HH:mm", CultureInfo.InvariantCulture);
+                return time.ToString(time.Minute == 0 ? "h tt" : "h:mm tt", CultureInfo.GetCultureInfo("en"));
+            }).ToArray();
             var x = orderedBuckets.Select(bucket => (double)bucket.ElapsedHours).ToArray();
             var categories = response.Timeline.Series.OrderBy(series => series.CategoryKey, StringComparer.Ordinal).ToArray();
             var perCategoryValues = categories.ToDictionary(series => series.Key,
@@ -108,13 +113,8 @@ public static class StatsOverlayProjection
                 var category = categories[categoryIndex];
                 var rows = perCategoryValues[category.Key];
                 var aligned = orderedBuckets.Select(bucket => rows.TryGetValue(bucket.ElapsedHours, out var row) ? row : null).ToArray();
-                var combinedTotals = orderedBuckets.Select((bucket, index) =>
-                {
-                    if (aligned[index]?.PlotCumulativeKilometers is null) return (double?)null;
-                    var values = categories.Select(sibling => perCategoryValues[sibling.Key].GetValueOrDefault(bucket.ElapsedHours)?.PlotCumulativeKilometers);
-                    return values.Any(value => value is null) ? null : (double?)values.Sum(value => (double)value!.Value);
-                }).ToArray();
-                series.Add(ProjectSeries(category.Key, localize(CategoryResourceKey(category.CategoryKey)), aligned, combinedTotals, culture, localize));
+                var categoryTotals = aligned.Select(bucket => ToDouble(bucket?.PlotCumulativeKilometers)).ToArray();
+                series.Add(ProjectSeries(category.Key, localize(CategoryResourceKey(category.CategoryKey)), aligned, categoryTotals, culture, localize));
             }
 
             return new SeriesChartModel(
@@ -123,8 +123,9 @@ public static class StatsOverlayProjection
                 labels,
                 x,
                 series,
-                isStacked: true,
-                numericAxisLabelMode: NumericAxisLabelMode.LocalClockOffset);
+                isStacked: false,
+                numericAxisLabelMode: NumericAxisLabelMode.LocalClockOffset,
+                enableSeriesVisibility: true);
         }
 
         if (response.Timeline.SeriesKind == "city")
@@ -206,15 +207,15 @@ public static class StatsOverlayProjection
         CultureInfo culture)
     {
         var lines = new List<string> { label };
-        if (item.DistanceKilometers is { } km) lines.Add($"{localize("StatsDistanceToday")}: {km.ToString("0.##", culture)} km");
-        if (item.RouteVehicleHours is { } routeHours) lines.Add($"{localize("StatsRouteHours")}: {routeHours.ToString(culture)}");
-        if (item.ActiveClockHours is { } activeHours) lines.Add($"{localize("StatsActiveClockHours")}: {activeHours.ToString(culture)}");
-        if (item.MeanActiveVehicles is { } mean) lines.Add($"{localize("StatsMeanActiveVehicles")}: {mean.ToString("0.###", culture)}");
+        if (item.DistanceKilometers is { } km) lines.Add($"{localize("StatsDistanceToday")}: {km.ToString("#,##0.##", culture)} km");
+        if (item.RouteVehicleHours is { } routeHours) lines.Add($"{localize("StatsRouteHours")}: {routeHours.ToString("N0", culture)}");
+        if (item.ActiveClockHours is { } activeHours) lines.Add($"{localize("StatsActiveClockHours")}: {activeHours.ToString("N0", culture)}");
+        if (item.MeanActiveVehicles is { } mean) lines.Add($"{localize("StatsMeanActiveVehicles")}: {mean.ToString("#,##0.###", culture)}");
         if (item.ActivitySampleNumerator is { } numerator && item.SampleDenominator is { } denominator)
-            lines.Add($"{localize("StatsNumerator")}/{localize("StatsDenominator")}: {numerator.ToString(culture)}/{denominator.ToString(culture)}");
+            lines.Add($"{localize("StatsNumerator")}/{localize("StatsDenominator")}: {numerator.ToString("N0", culture)}/{denominator.ToString("N0", culture)}");
         var expected = routeCoverage?.ExpectedHours ?? item.Coverage.ExpectedClosedHours;
         var available = routeCoverage?.AvailableHours ?? item.Coverage.ContributingHours;
-        lines.Add($"{localize("StatsCoverage")}: {available.ToString(culture)}/{expected.ToString(culture)}");
+        lines.Add($"{localize("StatsCoverage")}: {available.ToString("N0", culture)}/{expected.ToString("N0", culture)}");
         if (item.OmissionReason is { } reason) lines.Add(localize(ChartLocalization.ReasonKey(reason)));
         return lines;
     }

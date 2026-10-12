@@ -52,7 +52,14 @@ internal static class PieChartConfig
             MaintainAspectRatio = false,
             Color = new IndexableOption<string>(theme.TextColor),
             // Category slices are evidence, not independent filters; hiding one would mislead the total.
-            Plugins = new Plugins { Legend = new Legend { Display = false } }
+            Plugins = new Plugins
+            {
+                Legend = new Legend { Display = false },
+                Tooltip = new Tooltip
+                {
+                    Callbacks = new TooltipCallbacks { Label = ChartJsFunction.FromName("formatStatsPiePercentage") }
+                }
+            }
         };
     }
 }

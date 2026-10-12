@@ -1,4 +1,10 @@
 export const chartJsCallbacks = {
+    formatStatsPiePercentage(context) {
+        const total = context.dataset.data.reduce((sum, value) => sum + value, 0);
+        const share = total > 0 ? context.parsed / total : 0;
+        return `${new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 2 }).format(share)} of total distance`;
+    },
+
     formatStatsTooltip(context) {
         const lines = context?.raw?.tooltipLines;
         return Array.isArray(lines) && lines.length > 0
@@ -8,12 +14,14 @@ export const chartJsCallbacks = {
 
     formatStatsElapsedTick(value) {
         const datasets = this?.chart?.data?.datasets ?? [];
+        let hasLocalClockLabels = false;
         for (const dataset of datasets) {
+            hasLocalClockLabels ||= dataset.data?.some(item => item?.tickLabel) ?? false;
             const point = dataset.data?.find(item =>
                 item && typeof item === "object" && Number(item.x) === Number(value));
             if (point?.tickLabel) return point.tickLabel;
         }
-        return `${value} h`;
+        return hasLocalClockLabels ? "" : `${value} h`;
     },
 
     disableStatsLegendToggle() {

@@ -30,11 +30,11 @@ public sealed class StatsChartText(IStringLocalizer<RouteFilterResources> locali
         }
     }
 
-    public string Format(double? value, string format = "0.##") => value is { } number
+    public string Format(double? value, string format = "#,##0.##") => value is { } number
         ? number.ToString(format, CultureInfo.GetCultureInfo("en"))
         : Get("StatsUnavailable");
 
     public string Format(long? value) => value is { } number
-        ? number.ToString(CultureInfo.GetCultureInfo("en"))
+        ? number.ToString("N0", CultureInfo.GetCultureInfo("en"))
         : Get("StatsUnavailable");
 }

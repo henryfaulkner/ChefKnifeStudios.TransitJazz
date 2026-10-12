@@ -17,8 +17,7 @@
             EmptyMessage="@EmptyMessage"
             ErrorMessage="@ChartErrorMessage"
             CanvasContent="@Canvas"
-            TableContent="@Table"
-            LegendContent="@Legend">
+            TableContent="@Table">
 </ChartFrame>
 
 @code {
@@ -102,43 +101,6 @@
         builder.CloseElement();
     };
 
-    RenderFragment Legend => builder =>
-    {
-        if (Model?.EnableSeriesVisibility != true) return;
-        var model = Model;
-        builder.OpenElement(0, "div");
-        builder.AddAttribute(1, "class", "stats-city-visibility");
-        builder.AddAttribute(2, "role", "group");
-        builder.AddAttribute(3, "aria-label", T.Get("StatsCityVisibility"));
-        builder.OpenElement(4, "span");
-        builder.AddAttribute(5, "class", "stats-city-visibility__count");
-        builder.AddContent(6, T.Get("StatsVisibleCityCount", model.Series.Count(series => IsSeriesVisible(series.Key)), model.Series.Count));
-        builder.CloseElement();
-        if (model.Series.All(series => !IsSeriesVisible(series.Key)))
-        {
-            builder.OpenElement(7, "span");
-            builder.AddAttribute(8, "class", "stats-city-visibility__hidden-message");
-            builder.AddAttribute(9, "role", "status");
-            builder.AddContent(10, T.Get("StatsAllSeriesHidden"));
-            builder.CloseElement();
-        }
-        foreach (var series in model.Series)
-            builder.AddContent(11, VisibilityButton(series));
-        builder.OpenElement(12, "button");
-        builder.AddAttribute(13, "type", "button");
-        builder.AddAttribute(14, "disabled", !_chartInitialized || model.Series.All(series => IsSeriesVisible(series.Key)));
-        builder.AddAttribute(15, "onclick", EventCallback.Factory.Create(this, () => SetAllSeriesVisibilityAsync(true)));
-        builder.AddContent(16, T.Get("StatsShowAll"));
-        builder.CloseElement();
-        builder.OpenElement(17, "button");
-        builder.AddAttribute(18, "type", "button");
-        builder.AddAttribute(19, "disabled", !_chartInitialized || model.Series.All(series => !IsSeriesVisible(series.Key)));
-        builder.AddAttribute(20, "onclick", EventCallback.Factory.Create(this, () => SetAllSeriesVisibilityAsync(false)));
-        builder.AddContent(21, T.Get("StatsHideAll"));
-        builder.CloseElement();
-        builder.CloseElement();
-    };
-
     protected override void OnParametersSet()
     {
         if (Model is null || State != ChartLoadState.Ready || !HasPlottableData)
@@ -156,7 +118,8 @@
         {
             Model.Validate();
             SynchronizeVisibilityKeys();
-            if (_config is null)
+            // Recreate on theme changes so Chart.js rebuilds point styles as well as line styles.
+            if (_config is null || _lastDark != IsDark)
             {
                 _config = SeriesChartConfig.Build(Model, IsDark);
                 _latestConfig = _config;
@@ -165,7 +128,7 @@
                 _lastDark = IsDark;
                 _chartFailed = false;
             }
-            else if (!ReferenceEquals(Model, _lastConfiguredModel) || _lastDark != IsDark)
+            else if (!ReferenceEquals(Model, _lastConfiguredModel))
             {
                 _latestConfig = SeriesChartConfig.Build(Model, IsDark);
                 _lastConfiguredModel = Model;
@@ -214,24 +177,6 @@
         }
 
         _seriesVisibility.Reconcile(Model.Series.Select(series => series.Key));
-    }
-
-    async Task ToggleSeriesVisibilityAsync(string key) => await SetSeriesVisibilityAsync(key, !IsSeriesVisible(key));
-
-    async Task SetAllSeriesVisibilityAsync(bool visible)
-    {
-        if (Model?.EnableSeriesVisibility != true || _host is null) return;
-        foreach (var series in Model.Series)
-            if (await _host.SetDatasetVisibilityAsync(series.Key, visible))
-                _seriesVisibility.SetVisibility(series.Key, visible);
-        await InvokeAsync(StateHasChanged);
-    }
-
-    async Task SetSeriesVisibilityAsync(string key, bool visible, bool render = true)
-    {
-        if (!_chartInitialized || _host is null || !await _host.SetDatasetVisibilityAsync(key, visible)) return;
-        _seriesVisibility.SetVisibility(key, visible);
-        if (render) await InvokeAsync(StateHasChanged);
     }
 
     IEnumerable<RenderFragment> TableHeaders(SeriesChartModel model, bool hasSharedEvidence)
@@ -346,18 +291,5 @@
         cells.Add(NumberCell(point?.CombinedPlottedSubtotal));
     }
 
-    RenderFragment VisibilityButton(ChartSeries series) => builder =>
-    {
-        var visible = IsSeriesVisible(series.Key);
-        builder.OpenElement(0, "button");
-        builder.AddAttribute(1, "type", "button");
-        builder.AddAttribute(2, "disabled", !_chartInitialized);
-        builder.AddAttribute(3, "aria-pressed", visible ? "true" : "false");
-        builder.AddAttribute(4, "data-series-key", series.Key);
-        builder.AddAttribute(5, "style", $"border-color:{ChartPresentation.GetSeriesStyle(series.Key, IsDark).Color}");
-        builder.AddAttribute(6, "onclick", EventCallback.Factory.Create(this, () => ToggleSeriesVisibilityAsync(series.Key)));
-        builder.AddContent(7, series.Label);
-        builder.CloseElement();
-    };
 
 }

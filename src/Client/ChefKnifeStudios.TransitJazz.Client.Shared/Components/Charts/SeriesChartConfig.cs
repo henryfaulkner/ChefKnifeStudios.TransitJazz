@@ -38,7 +38,7 @@ internal static class SeriesChartConfig
                     tooltipLines = evidence is not null
                         ? new[] { $"{series.Label}: {Format(series.CanvasValues[index])}" }.Concat(evidence.TooltipLines).ToArray()
                         : new[] { $"{series.Label}: {Format(series.CanvasValues[index])}" },
-                    tickLabel = model.NumericAxisLabelMode == NumericAxisLabelMode.LocalClockOffset ? evidence?.LocalLabel : null
+                    tickLabel = model.NumericAxisLabelMode == NumericAxisLabelMode.LocalClockOffset ? model.Labels[index] : null
                     };
                 }).ToList();
             return (ChartJsDataset)new LineDataset
@@ -113,11 +113,10 @@ internal static class SeriesChartConfig
             {
                 Legend = new Legend
                 {
-                    Display = model.IsStacked || model.EnableSeriesVisibility,
+                    Display = model.Series.Count > 1 || model.IsStacked || model.EnableSeriesVisibility,
                     OnClickEvent = model.EnableSeriesVisibility,
-                    OnClick = model.IsStacked ? ChartJsFunction.FromName("disableStatsLegendToggle")
-                        : model.EnableSeriesVisibility ? ChartJsFunction.FromName("toggleStatsCityLegend")
-                        : null
+                    OnClick = model.EnableSeriesVisibility ? ChartJsFunction.FromName("toggleStatsCityLegend")
+                        : ChartJsFunction.FromName("disableStatsLegendToggle")
                 },
                 Tooltip = new Tooltip
                 {
@@ -127,5 +126,5 @@ internal static class SeriesChartConfig
         };
     }
 
-    static string Format(double? value) => value?.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture) ?? "—";
+    static string Format(double? value) => value?.ToString("#,##0.##", System.Globalization.CultureInfo.GetCultureInfo("en")) ?? "—";
 }

@@ -158,7 +158,7 @@
         var cells = new[]
         {
             Format(row.X), Format(row.Y), Format(row.DistanceKilometers), Format(row.RouteVehicleHours),
-            Format(row.ActiveClockHours), T.Format(row.MeanActiveVehicles, "0.###"),
+            Format(row.ActiveClockHours), T.Format(row.MeanActiveVehicles, "#,##0.###"),
             Format(row.ActivitySampleNumerator), Format(row.ActivitySampleDenominator),
             Format(row.ExpectedCoverageHours), Format(row.AvailableCoverageHours),
             T.Get(ChartLocalization.CoverageKey(row.CoverageState)),
