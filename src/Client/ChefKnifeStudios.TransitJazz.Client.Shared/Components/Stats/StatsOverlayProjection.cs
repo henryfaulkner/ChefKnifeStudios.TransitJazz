@@ -210,9 +210,9 @@ public static class StatsOverlayProjection
         var lines = new List<string>
         {
             label,
-            $"{localize("StatsAverageVehicles")}: {Format(item.MeanActiveVehicles)}",
-            $"{localize("StatsAverageKilometersPerHour")}: {Format(item.Y)}",
-            $"{localize("StatsAverageDistancePerVehicleHour")}: {Format(item.X)}"
+            $"{localize("StatsAverageVehicles")}: {Format(item.MeanActiveVehicles)} vehicles",
+            $"{localize("StatsAverageKilometersPerHour")}: {Format(item.Y)} km/hr",
+            $"{localize("StatsAverageDistancePerVehicleHour")}: {Format(item.X)} km/hr"
         };
         if (item.OmissionReason is { } reason) lines.Add(localize(ChartLocalization.ReasonKey(reason)));
         return lines;
