@@ -1,4 +1,8 @@
 export const chartJsCallbacks = {
+    formatStatsTimelineTitle(items) {
+        return items?.[0]?.raw?.tooltipTitle ?? "";
+    },
+
     formatStatsPiePercentage(context) {
         const total = context.dataset.data.reduce((sum, value) => sum + value, 0);
         const share = total > 0 ? context.parsed / total : 0;

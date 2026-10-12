@@ -1,6 +1,8 @@
 #nullable enable
 
 using System.Collections.Generic;
+using System;
+using System.Globalization;
 using System.Linq;
 using pax.BlazorChartJs;
 
@@ -35,9 +37,8 @@ internal static class SeriesChartConfig
                     {
                     x = model.NumericXValues is null ? (object)model.Labels[index] : model.NumericXValues[index],
                     y = series.CanvasValues[index],
-                    tooltipLines = evidence is not null
-                        ? new[] { $"{series.Label}: {Format(series.CanvasValues[index])}" }.Concat(evidence.TooltipLines).ToArray()
-                        : new[] { $"{series.Label}: {Format(series.CanvasValues[index])}" },
+                    tooltipLines = new[] { $"{series.Label}: {Format(series.CanvasValues[index])} km" },
+                    tooltipTitle = FormatTooltipTime(evidence) ?? model.Labels[index],
                     tickLabel = model.NumericAxisLabelMode == NumericAxisLabelMode.LocalClockOffset ? model.Labels[index] : null
                     };
                 }).ToList();
@@ -120,11 +121,24 @@ internal static class SeriesChartConfig
                 },
                 Tooltip = new Tooltip
                 {
-                    Callbacks = new TooltipCallbacks { Label = ChartJsFunction.FromName("formatStatsTooltip") }
+                    Callbacks = new TooltipCallbacks
+                    {
+                        Title = ChartJsFunction.FromName("formatStatsTimelineTitle"),
+                        Label = ChartJsFunction.FromName("formatStatsTooltip")
+                    }
                 }
             }
         };
     }
 
-    static string Format(double? value) => value?.ToString("#,##0.##", System.Globalization.CultureInfo.GetCultureInfo("en")) ?? "—";
+    static string? FormatTooltipTime(ChartPointEvidence? evidence)
+    {
+        if (evidence is null
+            || !DateTimeOffset.TryParse(evidence.IntervalEndUtc, CultureInfo.InvariantCulture, DateTimeStyles.None, out var end)
+            || !TimeSpan.TryParse(evidence.UtcOffset, CultureInfo.InvariantCulture, out var offset)) return null;
+        var local = end.ToOffset(offset);
+        return local.ToString(local.Minute == 0 ? "h tt" : "h:mm tt", CultureInfo.GetCultureInfo("en"));
+    }
+
+    static string Format(double? value) => value?.ToString("#,##0.##", CultureInfo.GetCultureInfo("en")) ?? "—";
 }

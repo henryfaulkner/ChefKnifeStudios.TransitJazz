@@ -35,7 +35,7 @@
     <div class="stats-overlay__scope" role="radiogroup" aria-label="@T.Get("StatsScope")">
         <label>
             <input type="radio" name="stats-scope" value="city" checked="@(_scope == "city")" @onchange='() => ChangeScopeAsync("city")' />
-            <span>@T.Get("StatsCurrentCity")</span>
+            <span>@CurrentCityName</span>
         </label>
         <label>
             <input type="radio" name="stats-scope" value="all" checked="@(_scope == "all")" @onchange='() => ChangeScopeAsync("all")' />
@@ -148,6 +148,17 @@
     readonly StatsOverlayRequestGate _requestGate = new();
     readonly StatsOverlayRetryPolicy _retryPolicy = new();
     string _citySlug = string.Empty;
+    string CurrentCityName => T.Get(_citySlug switch
+    {
+        "atlanta" => "StatsCityAtlanta",
+        "boston" => "StatsCityBoston",
+        "denver" => "StatsCityDenver",
+        "new-york-city" => "StatsCityNewYorkCity",
+        "philadelphia" => "StatsCityPhiladelphia",
+        "toronto" => "StatsCityToronto",
+        "washington-dc" => "StatsCityWashingtonDc",
+        _ => "StatsCityUnknown"
+    });
     string _scope = "city";
     string? _errorCode;
     DateTimeOffset? _lastSuccessAtUtc;

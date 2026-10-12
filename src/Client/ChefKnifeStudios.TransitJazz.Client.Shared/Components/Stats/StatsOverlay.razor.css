@@ -30,6 +30,10 @@
 .stats-overlay__scope span { display: flex; align-items: center; min-height: 2.75rem; padding: .5rem 1rem; border-radius: 999px; }
 .stats-overlay__scope input:checked + span { background: #546e7a; color: #fff; }
 .stats-overlay--dark .stats-overlay__scope input:checked + span { background: #b0bec5; color: #1A1C1E; }
+@media (max-width: 639.98px) {
+    .stats-overlay__scope { left: max(.5rem, env(safe-area-inset-left)); gap: .125rem; padding: .125rem; font-size: .75rem; }
+    .stats-overlay__scope span { min-height: 2rem; padding: .25rem .5rem; }
+}
 .stats-overlay__scope input:focus-visible + span,
 .stats-overlay__table-scroll:focus-visible { outline: 3px solid #6750a4; outline-offset: 3px; }
 .stats-overlay__totals article { padding: .9rem; border: 1px solid currentColor; border-radius: .5rem; }
