@@ -1,0 +1,183 @@
+@using System.Globalization
+@using pax.BlazorChartJs
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services
+@inject StatsChartText T
+
+<ChartFrame Title="@Title"
+            Definition="@Definition"
+            PeriodLabel="@PeriodLabel"
+            Summary="@Summary"
+            CoverageDescription="@CoverageDescription"
+            State="@FrameState"
+            HasPlottableData="@HasPlottableData"
+            IsDark="@IsDark"
+            EmptyMessage="@EmptyMessage"
+            ErrorMessage="@T.Get("StatsChartFailure")"
+            CanvasContent="@Canvas"
+            TableContent="@Table">
+</ChartFrame>
+
+@code {
+    [Parameter, EditorRequired] public BubbleChartModel? Model { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Definition { get; set; }
+    [Parameter] public string? PeriodLabel { get; set; }
+    [Parameter] public string? Summary { get; set; }
+    [Parameter] public string? CoverageDescription { get; set; }
+    [Parameter] public string? EmptyMessage { get; set; }
+    [Parameter] public ChartLoadState State { get; set; } = ChartLoadState.Ready;
+    [Parameter] public bool IsDark { get; set; }
+    [Parameter] public string XAxisTitle { get; set; } = string.Empty;
+    [Parameter] public string YAxisTitle { get; set; } = string.Empty;
+
+    ChartJsConfig? _config;
+    ChartJsConfig? _latestConfig;
+    BubbleChartModel? _lastModel;
+    string? _lastXTitle;
+    string? _lastYTitle;
+    bool _lastDark;
+    bool _chartFailed;
+    bool _modelInvalid;
+    ChartCanvasHost? _host;
+    bool HasPlottableData => State == ChartLoadState.Ready && Model?.GetPlottedPoints().Count > 0;
+    ChartLoadState FrameState => State == ChartLoadState.Loading ? ChartLoadState.Loading : _chartFailed || State == ChartLoadState.Error ? ChartLoadState.Error : ChartLoadState.Ready;
+
+    RenderFragment Canvas => builder =>
+    {
+        if (_config is not null)
+        {
+            builder.OpenComponent<ChartCanvasHost>(0);
+            builder.AddAttribute(1, "Config", _config);
+            builder.AddAttribute(2, "LatestConfig", _latestConfig ?? _config);
+            builder.AddAttribute(3, "OnInitializationTimedOut", EventCallback.Factory.Create(this, HandleInitializationTimedOutAsync));
+            builder.AddComponentReferenceCapture(4, instance => _host = (ChartCanvasHost)instance);
+            builder.CloseComponent();
+        }
+    };
+
+    RenderFragment Table => builder =>
+    {
+        if (Model is null) return;
+        if (_modelInvalid)
+        {
+            builder.OpenElement(0, "p");
+            builder.AddContent(1, T.Get("StatsChartInvalidModel"));
+            builder.CloseElement();
+            return;
+        }
+
+        builder.OpenElement(0, "table");
+        builder.OpenElement(1, "caption");
+        builder.AddContent(2, $"{Title} — {XAxisTitle}; {YAxisTitle}; {T.Get("StatsBubbleAreaMeasure")}");
+        if (!string.IsNullOrWhiteSpace(PeriodLabel)) builder.AddContent(3, $" — {PeriodLabel}");
+        builder.CloseElement();
+        builder.OpenElement(4, "thead");
+        builder.OpenElement(5, "tr");
+        builder.AddContent(6, Header(T.Get("StatsEntity")));
+        builder.AddContent(6, Header(XAxisTitle));
+        builder.AddContent(6, Header(YAxisTitle));
+        builder.AddContent(6, Header(T.Get("StatsKilometers")));
+        builder.AddContent(6, Header(T.Get("StatsRouteHours")));
+        builder.AddContent(6, Header(T.Get("StatsActiveClockHours")));
+        builder.AddContent(6, Header(T.Get("StatsMeanActiveVehicles")));
+        builder.AddContent(6, Header(T.Get("StatsNumerator")));
+        builder.AddContent(6, Header(T.Get("StatsDenominator")));
+        builder.AddContent(6, Header(T.Get("StatsExpected")));
+        builder.AddContent(6, Header(T.Get("StatsAvailable")));
+        builder.AddContent(6, Header(T.Get("StatsCoverage")));
+        builder.AddContent(6, Header(T.Get("StatsOmission")));
+        builder.CloseElement();
+        builder.CloseElement();
+        builder.OpenElement(7, "tbody");
+        foreach (var row in Model.Rows)
+            builder.AddContent(8, BuildRow(row));
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (Model is null || State != ChartLoadState.Ready || !HasPlottableData)
+        {
+            _config = null;
+            _latestConfig = null;
+            _lastModel = null;
+            _chartFailed = false;
+            _modelInvalid = false;
+            return;
+        }
+        try
+        {
+            Model.Validate();
+            if (_config is null)
+            {
+                _config = BubbleChartConfig.Build(Model, IsDark, XAxisTitle, YAxisTitle);
+                _latestConfig = _config;
+                _lastModel = Model;
+                _lastDark = IsDark;
+                _lastXTitle = XAxisTitle;
+                _lastYTitle = YAxisTitle;
+            }
+            else if (!ReferenceEquals(Model, _lastModel) || IsDark != _lastDark
+                || XAxisTitle != _lastXTitle || YAxisTitle != _lastYTitle)
+            {
+                _latestConfig = BubbleChartConfig.Build(Model, IsDark, XAxisTitle, YAxisTitle);
+                _lastModel = Model;
+                _lastDark = IsDark;
+                _lastXTitle = XAxisTitle;
+                _lastYTitle = YAxisTitle;
+            }
+            _chartFailed = false;
+            _modelInvalid = false;
+        }
+        catch (ArgumentException) { _chartFailed = true; _modelInvalid = true; }
+    }
+
+    async Task HandleInitializationTimedOutAsync()
+    {
+        _chartFailed = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    RenderFragment Header(string text) => builder =>
+    {
+        builder.OpenElement(0, "th");
+        builder.AddAttribute(1, "scope", "col");
+        builder.AddContent(2, text);
+        builder.CloseElement();
+    };
+
+    RenderFragment BuildRow(BubbleChartRow row) => builder =>
+    {
+        builder.OpenElement(0, "tr");
+        builder.OpenElement(1, "th");
+        builder.AddAttribute(2, "scope", "row");
+        builder.AddContent(3, row.Label);
+        builder.CloseElement();
+        var cells = new[]
+        {
+            Format(row.X), Format(row.Y), Format(row.DistanceKilometers), Format(row.RouteVehicleHours),
+            Format(row.ActiveClockHours), T.Format(row.MeanActiveVehicles, "#,##0.###"),
+            Format(row.ActivitySampleNumerator), Format(row.ActivitySampleDenominator),
+            Format(row.ExpectedCoverageHours), Format(row.AvailableCoverageHours),
+            T.Get(ChartLocalization.CoverageKey(row.CoverageState)),
+            row.OmissionReason is null ? T.Get("StatsNone") : T.Get(ChartLocalization.ReasonKey(row.OmissionReason))
+        };
+        foreach (var cell in cells)
+            builder.AddContent(4, Cell(cell));
+        builder.CloseElement();
+    };
+
+    static RenderFragment Cell(string text) => builder =>
+    {
+        builder.OpenElement(0, "td");
+        builder.AddContent(1, text);
+        builder.CloseElement();
+    };
+
+    string Format(double? value) => T.Format(value);
+    string Format(long? value) => T.Format(value);
+
+
+}

@@ -29,7 +29,7 @@ public sealed class RouteHourStatisticsQueryTests
         var routeCoverage = json.RootElement.GetProperty("route_coverage").EnumerateArray().ToArray();
         Assert.Equal(2, routeCoverage.Length);
         Assert.Contains(routeCoverage, row => row.GetProperty("route_join_key").GetString() == "route-a"
-            && row.GetProperty("earliest_retained_hour_utc").GetDateTime() == retainedHour);
+            && row.GetProperty("earliest_retained_hour_utc").GetDateTime().ToUniversalTime() == retainedHour);
         Assert.Contains(routeCoverage, row => row.GetProperty("route_join_key").GetString() == "route-removed"
             && row.GetProperty("earliest_retained_hour_utc").ValueKind == JsonValueKind.Null);
         Assert.All(json.RootElement.GetProperty("periods").EnumerateArray(), period =>

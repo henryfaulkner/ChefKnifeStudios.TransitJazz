@@ -16,7 +16,10 @@ public sealed class CityCategoryStatisticsMigrationTests
             SELECT table_name AS "Value" FROM information_schema.tables
             WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name <> '__EFMigrationsHistory'
             """).ToListAsync();
-        Assert.Equal(new[] { "city_category_hour_statistics", "city_category_minute_statistics", "city_minute_statistics" }, tables.Order(StringComparer.Ordinal));
+        Assert.Equal(new[]
+        {
+            "city_category_hour_statistics", "city_category_minute_statistics", "city_minute_statistics", "city_route_hour_statistics"
+        }, tables.Order(StringComparer.Ordinal));
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
 
         var foreignKeys = await context.Database.SqlQueryRaw<long>("""

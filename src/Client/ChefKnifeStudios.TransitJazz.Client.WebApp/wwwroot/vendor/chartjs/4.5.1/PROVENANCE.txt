@@ -1,0 +1,9 @@
+Package: chart.js
+Version: 4.5.1
+Distribution: dist/chart.umd.min.js
+Source: https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js
+Upstream repository: https://github.com/chartjs/Chart.js
+Upstream tag: v4.5.1
+License: MIT (see LICENSE.md)
+
+This file is self-hosted by the TransitJazz WebAssembly app. The app must not request Chart.js from a runtime CDN.

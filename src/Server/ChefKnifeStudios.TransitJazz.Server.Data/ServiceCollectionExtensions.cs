@@ -1,4 +1,5 @@
 ﻿using ChefKnifeStudios.TransitJazz.Server.Data.Repos;
+using ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped(typeof(IRepository<>), typeof(EfRepository<>));
         services.AddScoped(typeof(IReadRepository<>), typeof(EfReadRepository<>));
+        services.AddSingleton<IStatsOverlayQuery, StatsOverlayQuery>();
 
         return services;
     }

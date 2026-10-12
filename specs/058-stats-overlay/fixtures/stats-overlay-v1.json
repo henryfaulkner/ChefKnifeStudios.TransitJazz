@@ -1,0 +1,44 @@
+{
+  "contractVersion": "stats-overlay-v1",
+  "metricDefinitionVersion": "observed-city-route-hour-statistics-v1",
+  "identityCases": {
+    "canonicalCity": "atlanta",
+    "caseDistinctRouteKeys": ["10", "10A", "10a"],
+    "normalizedSelection": ["10", "10A", "10a"]
+  },
+  "selectedRouteCoverage": {
+    "windowHours": 10,
+    "routes": [
+      { "routeJoinKey": "bus-a", "availableHours": 10, "kilometers": 100 },
+      { "routeJoinKey": "bus-b", "availableHours": 6, "kilometers": 60 }
+    ],
+    "expectedRouteHours": 20,
+    "availableRouteHours": 16,
+    "knownKilometers": 160
+  },
+  "bubbleRatios": {
+    "kilometers": 30,
+    "routeVehicleHours": 6,
+    "activeClockHours": 2,
+    "activitySampleNumerator": 180,
+    "sampleDenominator": 120,
+    "xKilometersPerRouteVehicleHour": 5,
+    "yKilometersPerActiveClockHour": 15,
+    "meanActiveVehicles": 1.5
+  },
+  "knownPrefixWithGap": [
+    { "hour": 0, "hourlyKnownKilometers": 100, "cumulativeObservedKilometers": 100, "plotCumulativeKilometers": 100 },
+    { "hour": 1, "hourlyKnownKilometers": null, "cumulativeObservedKilometers": 100, "plotCumulativeKilometers": null },
+    { "hour": 2, "hourlyKnownKilometers": 40, "cumulativeObservedKilometers": 140, "plotCumulativeKilometers": 140 }
+  ],
+  "cohortCases": {
+    "conflictOutsideSelectedRoutes": "exclude_entire_city_hour",
+    "completeInactive": "numeric_zero",
+    "missingCohort": "unknown_amount",
+    "partialSelectedMembership": {
+      "knownAvailableRouteCount": 2,
+      "expectedSelectedRouteCount": 3,
+      "plotCumulativeKilometers": null
+    }
+  }
+}

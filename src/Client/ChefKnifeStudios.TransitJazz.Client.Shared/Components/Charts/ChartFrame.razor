@@ -1,0 +1,94 @@
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using System.Globalization
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services
+@inject StatsChartText T
+
+@{ var theme = ChartPresentation.GetThemeColors(IsDark); }
+<figure class="stats-chart-frame" style="@($"--stats-chart-text: {theme.TextColor}; --stats-chart-surface: {theme.SurfaceColor}; --stats-chart-grid: {theme.GridColor}")">
+    <figcaption class="stats-chart-frame__caption">
+        <h2>@Title</h2>
+        @if (!string.IsNullOrWhiteSpace(Definition))
+        {
+            <p class="stats-chart-frame__definition">@Definition</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(PeriodLabel))
+        {
+            <p class="stats-chart-frame__period">@PeriodLabel</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(Summary))
+        {
+            <p class="stats-chart-frame__summary">@Summary</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(CoverageDescription))
+        {
+            <p class="stats-chart-frame__coverage">@CoverageDescription</p>
+        }
+    </figcaption>
+
+    @if (State == ChartLoadState.Loading)
+    {
+        <p class="stats-chart-frame__status" role="status">@T.Get("StatsChartLoading")</p>
+    }
+    else if (State == ChartLoadState.Error)
+    {
+        <p class="stats-chart-frame__status stats-chart-frame__status--error" role="alert">@(ErrorMessage ?? T.Get("StatsChartFailure"))</p>
+    }
+    else if (!HasPlottableData)
+    {
+        <p class="stats-chart-frame__status" role="status">@(EmptyMessage ?? T.Get("StatsChartEmpty"))</p>
+    }
+    else
+    {
+        <div class="stats-chart-frame__canvas" aria-hidden="true">
+            @CanvasContent
+        </div>
+        @if (LegendContent is not null)
+        {
+            <div class="stats-chart-frame__legend">
+                @LegendContent
+            </div>
+        }
+    }
+
+    @if (State != ChartLoadState.Loading && TableContent is not null)
+    {
+        <details class="stats-chart-frame__table" open="@_tableExpanded">
+            <summary aria-expanded="@(_tableExpanded ? "true" : "false")" aria-controls="@_tableId" @onclick="ToggleTable" @onclick:preventDefault="true">
+                @T.Get("StatsChartTable")
+            </summary>
+            @if (_tableExpanded)
+            {
+                <div id="@_tableId" class="stats-chart-table-scroll" tabindex="0" aria-label="@T.Get("StatsChartTableScroll")">
+                    @TableContent
+                </div>
+            }
+        </details>
+    }
+</figure>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Definition { get; set; }
+    [Parameter] public string? PeriodLabel { get; set; }
+    [Parameter] public string? Summary { get; set; }
+    [Parameter] public string? CoverageDescription { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public string? EmptyMessage { get; set; }
+    [Parameter] public ChartLoadState State { get; set; } = ChartLoadState.Ready;
+    [Parameter] public bool HasPlottableData { get; set; }
+    [Parameter] public bool IsDark { get; set; }
+    [Parameter] public RenderFragment? CanvasContent { get; set; }
+    [Parameter] public RenderFragment? TableContent { get; set; }
+    [Parameter] public RenderFragment? LegendContent { get; set; }
+    readonly string _tableId = $"stats-chart-table-{Guid.NewGuid():N}";
+    bool _tableExpanded;
+
+    void ToggleTable() => _tableExpanded = !_tableExpanded;
+
+    protected override void OnParametersSet()
+    {
+        if (State == ChartLoadState.Loading)
+            _tableExpanded = false;
+    }
+
+}

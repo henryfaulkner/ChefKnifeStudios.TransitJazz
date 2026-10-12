@@ -1,0 +1,39 @@
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Stats
+@using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
+@using ChefKnifeStudios.TransitJazz.Client.Core.Services
+@implements IDisposable
+@inject StatsChartText T
+@inject IEventNotificationService EventNotificationService
+
+<div class="stats-fab-container">
+    <MatFAB Icon="@(_isOpen ? "close" : "query_stats")"
+            Mini="true"
+            aria-label="@T.Get(_isOpen ? "StatsClose" : "StatsOpen")"
+            title="@T.Get(_isOpen ? "StatsClose" : "StatsOpen")"
+            @onclick="Toggle" />
+</div>
+
+<StatsOverlay IsOpen="@_isOpen" OnClose="() => _isOpen = false" />
+
+@code {
+    // ponytail: local visibility; opening Stats does not change browser history.
+    bool _isOpen;
+
+    protected override void OnInitialized() => EventNotificationService.EventReceived += HandleEvent;
+
+    void Toggle()
+    {
+        _isOpen = !_isOpen;
+        if (_isOpen)
+            EventNotificationService.PostEvent(this, new BladeEventArgs { Type = BladeEventArgs.Types.Stats });
+    }
+
+    void HandleEvent(object sender, IEventArgs args)
+    {
+        if (args is BladeEventArgs { Type: BladeEventArgs.Types.Stats or BladeEventArgs.Types.Info } blade)
+            _ = InvokeAsync(() => { _isOpen = blade.Type == BladeEventArgs.Types.Stats; StateHasChanged(); });
+    }
+
+    public void Dispose() => EventNotificationService.EventReceived -= HandleEvent;
+}

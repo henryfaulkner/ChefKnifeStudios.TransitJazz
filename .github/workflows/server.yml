@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 058-stats-overlay]
 
 env:
   REGISTRY: chefknife.azurecr.io

@@ -19,4 +19,9 @@ public static class ApiEndpoints
     {
         public const string GetLastBatch = "/transit/last-batch";
     }
+
+    public static class Stats
+    {
+        public const string Query = "/stats/overlay/query";
+    }
 }

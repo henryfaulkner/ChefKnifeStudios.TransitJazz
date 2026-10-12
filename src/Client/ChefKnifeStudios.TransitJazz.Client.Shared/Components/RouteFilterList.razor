@@ -1,0 +1,116 @@
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Components
+
+<section class="route-filter-list @(IsDark ? "route-filter-list--dark" : "") @CssClass" aria-label="@(AriaLabel ?? Title ?? string.Empty)">
+    @if (Title is not null || HelpText is not null || SelectedSummary is not null || OnSelectAll.HasDelegate || OnClearAll.HasDelegate)
+    {
+        <header class="route-filter-list__header">
+            <div>
+                @if (Title is not null) { <h2>@Title</h2> }
+                @if (HelpText is not null) { <p>@HelpText</p> }
+                @if (SelectedSummary is not null) { <p aria-live="polite">@SelectedSummary</p> }
+            </div>
+            @if (OnSelectAll.HasDelegate || OnClearAll.HasDelegate)
+            {
+                <div class="route-filter-list__actions">
+                    @if (OnSelectAll.HasDelegate)
+                    {
+                        <MatButton Outlined="true" Dense="true" Disabled="@(Model.SelectedCount == Model.ItemCount || Model.ItemCount == 0)"
+                                   @onclick="OnSelectAll">@SelectAllText</MatButton>
+                    }
+                    @if (OnClearAll.HasDelegate)
+                    {
+                        <MatButton Outlined="true" Dense="true" Disabled="@(Model.SelectedCount == 0)"
+                                   @onclick="OnClearAll">@ClearAllText</MatButton>
+                    }
+                </div>
+            }
+        </header>
+    }
+
+    @if (Model.ItemCount == 0)
+    {
+        @if (Model.EmptyMessage is not null) { <p role="status">@Model.EmptyMessage</p> }
+    }
+    else
+    {
+        <div class="route-filter-list__groups">
+            @foreach (var group in Model.Groups)
+            {
+                <section @key="group.Key" class="route-filter-list__group" data-category="@group.Key"
+                         aria-labelledby="@HeadingId(group.Key)">
+                    <header class="route-filter-list__group-header">
+                        <MatSubtitle1 id="@HeadingId(group.Key)" Class="route-filter-list__category-heading" aria-label="@group.Label">
+                            @if (group.SelectActionLabel is not null && OnSelectCategory.HasDelegate)
+                            {
+                                <MatButton Class="route-filter-list__category-select" aria-label="@group.SelectActionLabel"
+                                           @onmouseenter="() => OnHoverCategory.InvokeAsync(group.Key)"
+                                           @onmouseleave="() => OnHoverCategory.InvokeAsync(null)"
+                                           @onclick="() => OnSelectCategory.InvokeAsync(group.Key)">@group.Label</MatButton>
+                            }
+                            else
+                            {
+                                @group.Label
+                            }
+                        </MatSubtitle1>
+                        @if (group.ClearActionLabel is not null && group.HasSelection)
+                        {
+                            <MatIconButton Icon="close" Class="route-filter-list__category-clear"
+                                           aria-label="@group.ClearActionLabel" title="@group.ClearActionLabel"
+                                           @onclick="() => OnClearCategory.InvokeAsync(group.Key)" />
+                        }
+                    </header>
+                    <div class="route-filter-list__routes">
+                        @foreach (var item in group.Items)
+                        {
+                            <MatButton @key="item.RouteKey"
+                                       Class="@($"route-filter-list__route {(item.IsMuted ? "route-filter-list__route--muted" : "")} {(item.IsHovered ? "route-filter-list__route--hovered" : "")}")"
+                                       style="@(item.Color is null ? null : $"--route-filter-color: {item.Color}")"
+                                       aria-pressed="@(item.IsSelected ? "true" : "false")"
+                                       aria-label="@item.AccessibleLabel" title="@item.AccessibleLabel"
+                                       @onmouseenter="() => OnHoverRoute.InvokeAsync(item.RouteKey)"
+                                       @onmouseleave="() => OnHoverRoute.InvokeAsync(null)"
+                                       @onclick="() => OnToggle.InvokeAsync(item.RouteKey)">
+                                <span class="route-filter-list__pill-label">@(item.Label.Length > 5 ? item.Label[..5] : item.Label)</span>
+                            </MatButton>
+                        }
+                    </div>
+                    @if (group.Items.Any(item => item.BadgeText is not null || item.AvailabilityText is not null))
+                    {
+                        <ul class="route-filter-list__notes">
+                            @foreach (var item in group.Items.Where(item => item.BadgeText is not null || item.AvailabilityText is not null))
+                            {
+                                <li @key="item.RouteKey">
+                                    <strong>@item.Label:</strong>
+                                    @if (item.BadgeText is not null) { <span>@item.BadgeText</span> }
+                                    @if (item.AvailabilityText is not null) { <span>@item.AvailabilityText</span> }
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public RouteFilterListModel Model { get; set; } = new([], 0, 0);
+    [Parameter] public string? CssClass { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? HelpText { get; set; }
+    [Parameter] public string? SelectedSummary { get; set; }
+    [Parameter] public string? SelectAllText { get; set; }
+    [Parameter] public string? ClearAllText { get; set; }
+    [Parameter] public bool IsDark { get; set; }
+    [Parameter] public EventCallback<string> OnToggle { get; set; }
+    [Parameter] public EventCallback<string> OnSelectCategory { get; set; }
+    [Parameter] public EventCallback<string> OnClearCategory { get; set; }
+    [Parameter] public EventCallback OnSelectAll { get; set; }
+    [Parameter] public EventCallback OnClearAll { get; set; }
+    [Parameter] public EventCallback<string?> OnHoverRoute { get; set; }
+    [Parameter] public EventCallback<string?> OnHoverCategory { get; set; }
+
+    readonly string _idPrefix = $"route-filter-{Guid.NewGuid():N}";
+    string HeadingId(string key) => $"{_idPrefix}-{new string(key.Select(character => char.IsLetterOrDigit(character) ? character : '-').ToArray())}";
+}

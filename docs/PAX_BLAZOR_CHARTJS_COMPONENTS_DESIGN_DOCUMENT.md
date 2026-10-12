@@ -3,6 +3,13 @@
 **Status:** Proposed  
 **Date:** 2026-10-04
 
+**Extension proposed:** 2026-10-11 — [Stats Overlay design](STATS_OVERLAY_DESIGN_DOCUMENT.md).
+The [Stats Overlay extension](#stats-overlay-extension-2026-10-11) below adds
+concrete pie, bubble, numeric-X, and stacked-line requirements. It supersedes
+the initial single-renderer composition and label-only limits only where
+explicitly stated; the dependency, identity, validation, and lifecycle policies
+remain the foundation.
+
 ## Purpose
 
 Define how TransitJazz can add reusable Chart.js views to its existing Blazor
@@ -578,6 +585,108 @@ contract are required even if only one chart ships initially.
 
 No package installation or client code change is part of this design document.
 
+## Stats Overlay extension (2026-10-11)
+
+The [Stats Overlay design](STATS_OVERLAY_DESIGN_DOCUMENT.md) now supplies the
+separate feature scope anticipated above: a public read API, independent route
+selection, distance cards, category pie, route/city bubble plot, stacked category
+timeline, and unstacked city comparison. Its statistical definitions, coverage,
+time windows, and wire DTOs are authoritative for that feature. The original
+City/Category Insights and Hourly Route History analyst interfaces are unchanged.
+These are proposed additions, not already implemented components.
+
+### Concrete additions to the display layer
+
+| Capability | App-owned contract | Shared implementation |
+| --- | --- | --- |
+| Pie | Stable slice key/label, nullable amount, authoritative display percentage, unit | `PieChart` plus a pure `PieChartConfig`; map amounts to a pie dataset and keep zero/unavailable rows in its table. |
+| Bubble | Stable point key/label, nullable X/Y, average-active quantity, axis units and coverage | `BubbleChart` plus `BubbleChartConfig`; map quantity to area through a square-root radius policy, with exact values in tooltip/table. |
+| Numeric X series | Ordered finite increasing X coordinates, display labels and aligned nullable values; per-series point descriptions | Extend `SeriesChartModel` with an explicit numeric-X variant while retaining label-only series for existing consumers. Use a linear scale without a date adapter. |
+| Cumulative category stacks | `SeriesStackMode.None` or `CumulativeContributions` | A bounded `SeriesChartConfig` branch stacks raw category cumulative values once; normal city comparisons stay unstacked. |
+
+Do not add Pie or Bubble to `SeriesChartKind`: their data shapes and accessible
+tables differ. Do not turn the display contract into a mirror of every Chart.js
+option. Keep types finite and purposeful, and validate before JS interop.
+
+The second and third renderers now meet the original extraction rule. Extract
+`ChartFrame` for the MatPaper/figure title, summary, period, coverage, load state,
+canvas slot and accessible-table slot. It must not query data or understand
+Stats DTOs. Tables remain typed renderer projections of the same models used by
+the canvas. A small internal `ChartCanvasHost` owns Pax config identity,
+initialization, latest pending input, synchronization and disposal for all three
+renderers. It is composition, not a generic chart base class or public package
+options escape hatch.
+
+Move genuinely shared palette, stable keyed style and formatting policy into
+`ChartPresentation`, called by the three mapping helpers. Keep series-specific
+axes and pie/bubble-specific options in their own helpers. Theme updates use
+the existing settings/events pattern and rebuild both datasets and options.
+There is still one mutable Pax config per mounted canvas, with one coordinated
+update path and deliberate remount on chart-kind changes.
+
+### Required behavior
+
+- Stats owns all metric arithmetic on the server, including shares, weighted
+  denominators and cumulative known subtotals. Client projection aligns data,
+  formats text and selects chart presentation only. Radius conversion is visual
+  encoding, not a second statistical formula.
+- Category stacks receive each category's own cumulative amount. A stack tooltip
+  reports that raw contribution and the combined sum; it must not report the
+  top-of-stack coordinate as the category's amount. An unavailable bucket makes
+  the entire plotted category stack null, with gap bridging disabled. Keep plot
+  values separate from table/detail known amounts: an hour can retain some selected
+  routes' valid contributions even when its plotted point is null for incomplete
+  selection coverage. Never discard those contributions from later cumulative
+  values. The Stats design owns this coverage policy and the plot values it returns.
+- Numeric X supports actual 23/25-hour days and different city extents. City mode
+  labels local clock time with offsets for repeated hours; All mode labels elapsed
+  hours since each city's own midnight. UTC and local identity remain in tooltips
+  and tables. The Stats document specifies the exact projection.
+- Use native Chart.js legends and data tooltips; essential definitions and coverage
+  remain visible HTML. User-confirmed: enable native legend toggles for the All-city
+  line comparison, affecting that chart's visibility only. Keep toggling disabled
+  for the pie and category stack. No plugin is necessary for slice labels; the
+  legend/table provides them.
+- Add a narrow `AllowSeriesVisibilityToggle` parameter for the All-city line view.
+  Retain native Chart.js hide/show behavior; preserve hidden state by stable city
+  key across refresh, reorder, theme and language changes, and reset on mode change
+  or close. Display a visible-series count and Show all action. Keep hidden series
+  in the accessible table and provide synchronized keyboard controls in its
+  expandable HTML section. Any necessary internal bridge delegates to native
+  behavior and uses the existing lifecycle/update path. Verify Pax hidden-state
+  preservation before deciding whether an adapter must reapply it. See the
+  [Chart.js legend contract](https://www.chartjs.org/docs/latest/configuration/legend.html)
+  and the companion design's All-city line visibility section.
+- Reuse the named trusted JS callback mechanism only for formatting that requires
+  it or for the confirmed native visibility synchronization above. Resolve point
+  labels/coverage from the selected snapshot; never evaluate API-provided code.
+  One local callback module is enough if needed.
+- An observed all-zero pie has an explanatory empty visual and a zero-valued
+  table. A valid zero-coordinate bubble remains visible when its size measure is
+  positive. Missing coordinates are omitted visually and retained with reasons
+  in the table.
+- The overlay may keep a same-selection Ready model while a routine refresh runs,
+  with a separate refresh/stale notice. This does not change `ChartLoadState` or
+  make the chart renderer responsible for networking. Selection changes replace
+  that snapshot with Loading, preserving the base deterministic-state policy.
+
+### Integration and validation order
+
+Prove all four visual forms with fixed representative models before attaching
+the API: pie, bubble, stacked category line and unstacked city line. Verify the
+pinned Pax version actually maps the required point, stack and tooltip options;
+package support is a prototype acceptance gate, not an assumed method signature.
+Retain the foundation's local Chart.js asset policy and package patch-alignment
+checks.
+
+Add focused mapping checks for stacking exactly once, stable keys, null gaps,
+square-root area scaling, and increasing numeric X. Browser checks must cover
+multiple canvases, pending initialization updates, theme changes, rapid close /
+reopen, max expected bubble cardinality, responsive sizing, blocked chart assets,
+and keyboard-accessible tables. The complete API, coverage, state isolation and
+rollout acceptance plan lives in the companion design, rather than being repeated
+as a second feature plan here.
+
 ## References
 
 - [`pax.BlazorChartJs` repository and README](https://github.com/ipax77/pax.BlazorChartJs)
@@ -590,5 +699,6 @@ No package installation or client code change is part of this design document.
 - [`pax` 0.9.1 component lifecycle](https://github.com/ipax77/pax.BlazorChartJs/blob/v0.9.1/src/pax.BlazorChartJs/ChartComponent.razor.cs)
 - [`pax` 0.9.1 dataset synchronization](https://github.com/ipax77/pax.BlazorChartJs/blob/v0.9.1/src/pax.BlazorChartJs/ChartJsConfig/ChartJsConfig.Datasets.cs)
 - [TransitJazz City and Transit Type Insights design](CITY_TRANSIT_TYPE_INSIGHTS_DESIGN_DOCUMENT.md)
+- [TransitJazz Stats Overlay design](STATS_OVERLAY_DESIGN_DOCUMENT.md)
 - [Client.Shared project](../src/Client/ChefKnifeStudios.TransitJazz.Client.Shared/ChefKnifeStudios.TransitJazz.Client.Shared.csproj)
 - [Client.WebApp project](../src/Client/ChefKnifeStudios.TransitJazz.Client.WebApp/ChefKnifeStudios.TransitJazz.Client.WebApp.csproj)

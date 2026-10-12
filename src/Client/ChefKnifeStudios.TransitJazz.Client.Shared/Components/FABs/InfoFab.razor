@@ -31,7 +31,7 @@
             </button>
         </div>
         <div class="info-overlay__footer">
-            <span>@Loc["InfoOverlayFooter"]</span>
+            @* <span>@Loc["InfoOverlayFooter"]</span> *@
             <a href="https://ko-fi.com/chefknifestudios"
                target="_blank"
                rel="noopener noreferrer"
@@ -69,7 +69,10 @@
     {
         _isOpen = !_isOpen;
         if (_isOpen)
+        {
             _focusOnRender = true;
+            EventNotificationService.PostEvent(this, new BladeEventArgs { Type = BladeEventArgs.Types.Info });
+        }
     }
 
     void HandleKeyDown(KeyboardEventArgs e)
@@ -80,7 +83,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_focusOnRender)
+        if (_focusOnRender && _isOpen)
         {
             _focusOnRender = false;
             await _overlayElement.FocusAsync();
@@ -89,6 +92,15 @@
 
     void HandleEvent(object sender, IEventArgs e)
     {
+        if (e is BladeEventArgs { Type: BladeEventArgs.Types.Stats })
+        {
+            _ = InvokeAsync(() =>
+            {
+                _isOpen = false;
+                _focusOnRender = false;
+                StateHasChanged();
+            });
+        }
         if (e is ThemeChangedEventArgs theme)
         {
             _isDark = theme.IsDarkMode;

@@ -1,6 +1,7 @@
 @using System.ComponentModel
 @using ChefKnifeStudios.TransitJazz.Client.Core.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Constants
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services
 @using Microsoft.Extensions.Localization
@@ -17,7 +18,8 @@
         @if (count > 0 || RouteFilterViewModel.HasEmphasisFor(category))
         {
             <div class="transit-running-label__row">
-                <MatBody2 class="transit-running-label__icon" data-category="@category"></MatBody2>
+                <MatBody2 class="transit-running-label__icon" data-category="@category"
+                          Style="@($"background-color: {TransportCategoryColors.Get(category, _isDark)}")"></MatBody2>
                 <MatBody2 class="transit-running-label__count">@count</MatBody2>
                 <MatBody2 class="transit-running-label__text">@RunningNoun(category)</MatBody2>
             </div>
@@ -48,23 +50,6 @@
         border-radius: 64px;
     }
 
-    /* Neutral default for any category without bespoke styling (D11) */
-    .transit-running-label__icon[data-category] {
-        background-color: #616161;
-    }
-
-    .transit-running-label__icon[data-category="rail"] {
-        background-color: #1a237e;
-    }
-
-    .transit-running-label__icon[data-category="bus"] {
-        background-color: darkgreen;
-    }
-
-    .transit-running-label__icon[data-category="streetcar"] {
-        background-color: #b71c1c;
-    }
-
     .transit-running-label__count, .transit-running-label__text {
         text-wrap-mode: nowrap;
         color: #171717;
@@ -76,21 +61,6 @@
         color: rgba(226, 226, 230, 0.9);
     }
 
-    .transit-running-label--dark .transit-running-label__icon[data-category] {
-        background-color: #9e9e9e;
-    }
-
-    .transit-running-label--dark .transit-running-label__icon[data-category="rail"] {
-        background-color: #7986cb;
-    }
-
-    .transit-running-label--dark .transit-running-label__icon[data-category="bus"] {
-        background-color: #66bb6a;
-    }
-
-    .transit-running-label--dark .transit-running-label__icon[data-category="streetcar"] {
-        background-color: #e57373;
-    }
 </style>
 
 @code {

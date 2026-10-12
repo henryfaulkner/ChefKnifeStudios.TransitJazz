@@ -14,7 +14,7 @@
         <div class="settings-list">
             @foreach (var prop in typeof(Settings).GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                if (prop.GetCustomAttribute<HiddenSettingAttribute>() is not null)
+                if (prop.GetCustomAttribute<HiddenSettingAttribute>() is not null || prop.PropertyType != typeof(bool))
                 {
                     continue;
                 }
