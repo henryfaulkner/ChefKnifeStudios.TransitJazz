@@ -1,5 +1,21 @@
 /* MatBlazor/MDC component style overrides */
 
+@media (max-width: 639.98px) {
+    .mj-theme [class$="-fab-container"] .mdc-fab--mini {
+        width: 36px;
+        height: 36px;
+    }
+
+    .mj-theme [class$="-fab-container"] .mdc-fab__icon { font-size: 20px; }
+    .mj-theme div.city-fab-container { right: 12px; }
+    .mj-theme div.darkmode-fab-container { right: 56px; }
+    .mj-theme div.audio-fab-container { right: 100px; }
+    .mj-theme div.stats-fab-container { right: 144px; }
+    .mj-theme div.mapstyle-fab-container { right: 188px; }
+    .mj-theme div.info-fab-container { right: 232px; }
+    .mj-theme div.settings-fab-container { right: 12px; }
+}
+
 /* CityFab menu: MatMenu portals .mdc-menu into <body>, outside the scoped component tree,
    so ::deep in CityFab.razor.css never reaches it. Global rule required. */
 .city-fab-menu.mdc-menu {
