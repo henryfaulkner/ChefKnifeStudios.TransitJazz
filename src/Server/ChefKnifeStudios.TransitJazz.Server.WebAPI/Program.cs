@@ -174,7 +174,8 @@ builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection
 builder.Services.AddSingleton<MartaCity>();
 
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
-var reportedVehicleConfiguration = ReportedVehicleCaptureConfiguration.FromConfiguration(builder.Configuration, cityConfigs);
+var reportedVehicleConfiguration = ReportedVehicleCaptureConfiguration.FromConfiguration(
+    builder.Configuration, cityConfigs, ReportedVehicleCaptureHost.WebApi);
 
 var historicalStatisticsOptions = builder.Configuration.GetSection(HistoricalStatisticsOptions.SectionName).Get<HistoricalStatisticsOptions>()
     ?? new HistoricalStatisticsOptions();
@@ -188,8 +189,8 @@ statsOverlayOptions.PopulateConfiguredCityPolicy(cityConfigs, routeHourHistoryOp
 statsOverlayOptions.Validate(requireCities: statsOverlayOptions.Enabled);
 if (statsOverlayOptions.ReportedVehiclesEnabled)
 {
-    var reportingCatalog = ReportedVehicleCatalogBuilder.Build(cityConfigs,
-        statsOverlayOptions.Cities.Select(city => city.CitySlug));
+    var reportingCatalog = ReportedVehicleCatalogBuilder.Build(cityConfigs.Where(city =>
+        statsOverlayOptions.Cities.Any(policy => string.Equals(policy.CitySlug, city.Name, StringComparison.OrdinalIgnoreCase))));
     builder.Services.AddSingleton(new StatsOverlayReportedVehiclePolicyCatalog(reportingCatalog));
 }
 IEnumerable<string> configuredCityNamesSource = cityConfigs.Count == 0

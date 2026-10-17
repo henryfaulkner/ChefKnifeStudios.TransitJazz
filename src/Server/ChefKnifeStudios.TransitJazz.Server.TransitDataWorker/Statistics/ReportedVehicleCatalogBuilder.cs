@@ -7,17 +7,18 @@ namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 /// <summary>Builds the fixed source set used by a host from endpoint-aligned configuration.</summary>
 public static class ReportedVehicleCatalogBuilder
 {
-    public static ReportedVehicleSourceCatalog Build(IEnumerable<CityConfig> configuredCities,
-        IEnumerable<string> selectedCities)
+    public static ReportedVehicleSourceCatalog Build(IEnumerable<CityConfig> configuredCities)
     {
         ArgumentNullException.ThrowIfNull(configuredCities);
-        ArgumentNullException.ThrowIfNull(selectedCities);
         var cities = configuredCities.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
         var entries = new List<ReportedVehicleSourceCatalogEntry>();
-        foreach (var slug in selectedCities)
+        foreach (var (slug, city) in cities)
         {
-            if (!cities.TryGetValue(slug, out var city))
-                throw new InvalidOperationException($"Reported-vehicle city {slug} is not configured.");
+            // An absent policy makes the entire city unsupported. Once any policy
+            // is supplied, require a complete valid catalog; never infer sources.
+            if (city.ReportedVehicleSources.Length == 0 && city.BusReportedVehicleSources.Length == 0
+                && city.RailRealtime?.ReportedVehicleSource is null)
+                continue;
 
             var sources = new List<ReportedVehicleSourceDefinition>();
             if (string.Equals(slug, CityNames.Marta, StringComparison.OrdinalIgnoreCase)

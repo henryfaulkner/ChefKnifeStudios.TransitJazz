@@ -395,10 +395,9 @@ public sealed class StatsOverlayService(
             MaximumCategories = options.MaximumCategories,
             ReportedVehiclesEnabled = options.ReportedVehiclesEnabled,
             ReportedVehiclePolicies = options.ReportedVehiclesEnabled
-                ? plan.Cities.Select(city =>
+                ? plan.Cities.Where(city => reportedVehicleCatalog!.TryGet(city.City.CitySlug, out _)).Select(city =>
                 {
-                    var catalog = reportedVehicleCatalog!.Cities.Single(entry =>
-                        string.Equals(entry.CitySlug, city.City.CitySlug, StringComparison.Ordinal));
+                    reportedVehicleCatalog!.TryGet(city.City.CitySlug, out var catalog);
                     return new StatsOverlayReportedVehiclePolicy(city.City.CitySlug,
                         reportedVehicleCatalog.SourceSetFingerprint(city.City.CitySlug),
                         reportedVehicleCatalog.CadencePolicyFingerprint(city.City.CitySlug),

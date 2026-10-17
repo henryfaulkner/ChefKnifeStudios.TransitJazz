@@ -60,7 +60,7 @@ Names are recommendations pending inspection of actual configured enabled endpoi
 
 **Decision**: Item caps plus conservative byte reservation for extracted payloads, current/prior accumulators and queue; bounded store commands/retries and finite cleanup. Single capture owner/city required before enabling persistence. Contradictory retained cohorts quarantine; changed configuration excludes incompatible hours instead of mixing identity domains.
 
-**Rationale**: 32 batches times 100,000 long identities can consume gigabytes; count-only bounds are insufficient. Observed fleets and allocation overhead must validate proposed bounds. Existing host registration order allows capture flush before writer admission closes. Ownership is operational, not a new distributed-election subsystem.
+**Rationale**: 32 batches times 100,000 long identities can consume gigabytes; count-only bounds are insufficient. Observed fleets and allocation overhead must validate proposed bounds. Existing host registration order allows capture flush before writer admission closes. A shared explicit host guard reserves Persistence for WebAPI and rejects standalone Worker persistence before startup. Ownership among multiple WebAPI replicas remains operational; no distributed-election subsystem is added.
 
 **Alternatives considered**: Unlimited sets/queue block or exhaust polling; silent truncation creates wrong counts; unioning replicas launders missing coverage. Separate new distributed ownership infrastructure is unnecessary for a default-disabled feature with explicit deployment prerequisite.
 

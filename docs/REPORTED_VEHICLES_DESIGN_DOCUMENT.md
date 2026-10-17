@@ -137,7 +137,7 @@ Explain in concise visitor-facing copy: "Distinct vehicles reported by transit f
 3. Implement bounded capture and per-source coverage, immutable storage mappings/migration, asynchronous writer, and retention cleanup.
 4. Extend the existing aggregate query and typed API with independently covered vehicle summaries.
 5. Add the two secondary metrics and coverage text to the existing cards.
-6. Deploy schema first, enable collection for selected cities, inspect retained evidence, then enable reported reads and presentation. Existing history cannot backfill missing identity memberships.
+6. Deploy schema first, enable collection for every configured city with an explicit valid source catalog in a single WebAPI owner, inspect retained evidence, then enable reported reads and presentation. Existing history cannot backfill missing identity memberships.
 
 Do not enable capture or apply a production migration as part of writing this design. Historical rollout and source identity behavior must be verified during implementation.
 

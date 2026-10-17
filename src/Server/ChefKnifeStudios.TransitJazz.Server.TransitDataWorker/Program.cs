@@ -48,9 +48,8 @@ builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
 
 // Build city registry from Cities: config array
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
-var reportedVehicleConfiguration = ReportedVehicleCaptureConfiguration.FromConfiguration(builder.Configuration, cityConfigs);
-if (reportedVehicleConfiguration.Runtime.Mode == ReportedVehicleCaptureMode.Persistence)
-    throw new InvalidOperationException("Standalone TransitDataWorker has no reported-vehicle database sink; persistent capture must run in the WebAPI host.");
+var reportedVehicleConfiguration = ReportedVehicleCaptureConfiguration.FromConfiguration(
+    builder.Configuration, cityConfigs, ReportedVehicleCaptureHost.StandaloneWorker);
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton(reportedVehicleConfiguration.Options);
 builder.Services.AddSingleton(reportedVehicleConfiguration.Runtime);

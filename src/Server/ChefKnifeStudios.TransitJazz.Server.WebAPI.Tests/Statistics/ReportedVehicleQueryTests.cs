@@ -25,6 +25,51 @@ public sealed class ReportedVehicleQueryTests
     }
 
     [ReportedVehiclePostgresFact]
+    public async Task MissingPoliciesReturnUnavailableEvenWithRetainedMemberships()
+    {
+        await using var database = await ReportedVehicleDatabaseFixture.CreateAsync();
+        var hour = new DateTime(2026, 8, 20, 8, 0, 0, DateTimeKind.Utc);
+        await using (var context = database.CreateDbContext())
+        {
+            context.CityReportedVehicleHours.AddRange(
+                Header("atlanta", hour, [Membership("atlanta", hour, "bus", "descriptor", "known")]),
+                Header("unsupported", hour, [Membership("unsupported", hour, "bus", "descriptor", "old-policy")]));
+            await context.SaveChangesAsync();
+        }
+        var query = new StatsOverlayQuery(database);
+        var hours = new[] { Hour("atlanta", hour), Hour("unsupported", hour), Hour("absent", hour) };
+        var policies = Input("city", [Hour("atlanta", hour)]).ReportedVehiclePolicies;
+        var input = Input("all", hours, policies: policies);
+
+        var result = await query.ReadAsync(input, TimeSpan.FromSeconds(5), CancellationToken.None);
+
+        Assert.Equal(6, result.ReportedVehicleWindows.Count);
+        foreach (var row in result.ReportedVehicleWindows)
+        {
+            if (row.CitySlug == "atlanta")
+            {
+                Assert.Equal(1, row.Count);
+                Assert.Equal(1, row.ContributingHours);
+                continue;
+            }
+            Assert.Null(row.Count);
+            Assert.Equal(0, row.ContributingHours);
+            Assert.Equal(0, row.FullyCoveredHours);
+            Assert.Equal(1, row.ExpectedHours);
+            var exclusion = Assert.Single(row.Exclusions);
+            Assert.Equal("source_policy_mismatch", exclusion.Code);
+            Assert.Equal(1, exclusion.Hours);
+        }
+
+        var noPolicies = await query.ReadAsync(Input("all", hours, policies: []), TimeSpan.FromSeconds(5), CancellationToken.None);
+        Assert.All(noPolicies.ReportedVehicleWindows, row =>
+        {
+            Assert.Null(row.Count);
+            Assert.Equal(0, row.ContributingHours);
+        });
+    }
+
+    [ReportedVehiclePostgresFact]
     public async Task WindowCountsUnionWholeHourMembershipsAndKeepCityPopulationsSeparate()
     {
         await using var database = await ReportedVehicleDatabaseFixture.CreateAsync();
@@ -111,13 +156,14 @@ public sealed class ReportedVehicleQueryTests
         Assert.Equal(1, visible.ContributingHours);
     }
 
-    static StatsOverlayQueryInput Input(string scope, StatsOverlayQueryHour[] hours, string[]? routes = null) => new()
+    static StatsOverlayQueryInput Input(string scope, StatsOverlayQueryHour[] hours, string[]? routes = null,
+        StatsOverlayReportedVehiclePolicy[]? policies = null) => new()
     {
         Scope = scope,
         SelectedRouteKeys = routes ?? [],
         Hours = hours,
         ReportedVehiclesEnabled = true,
-        ReportedVehiclePolicies = hours.Select(hour => hour.CitySlug).Distinct(StringComparer.Ordinal)
+        ReportedVehiclePolicies = policies ?? hours.Select(hour => hour.CitySlug).Distinct(StringComparer.Ordinal)
             .Select(city => new StatsOverlayReportedVehiclePolicy(city, new string('a', 64), new string('b', 64),
                 [new StatsOverlayReportedVehicleSource("feed-a", 30)])).ToArray(),
     };

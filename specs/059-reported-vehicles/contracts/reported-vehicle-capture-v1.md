@@ -2,7 +2,7 @@
 
 ## Source policy and extraction
 
-`ReportedVehicleHistory` has independent Disabled/DryRun/Persistence mode, selected canonical cities and validated finite limits; default Disabled. Resolve enabled sources before capture begins. Each source has explicit stable key, ID namespace, identity rule/version and expected cadence/gap. Neither source keys nor namespaces include endpoints/credentials. Stable policy fingerprints include membership, rules and gaps. Overlapping feeds share identity domain; independently assigned ID systems differ. Source-set mutation during an hour invalidates that cohort; configuration takes effect cleanly at an hour boundary where possible.
+`ReportedVehicleHistory` has independent Disabled/DryRun/Persistence mode and validated finite limits; default Disabled. There is no per-city capture selector. Disabled enables no cities. DryRun and Persistence enable every city in the configured registry with an explicit valid source catalog. A city with no source policies is unsupported and excluded from capture; an incomplete, misaligned or invalid explicit catalog fails startup. DryRun validates and logs bounded diagnostics without database persistence. Resolve enabled sources before capture begins. Each source has explicit stable key, ID namespace, identity rule/version and expected cadence/gap. Neither source keys nor namespaces include endpoints/credentials. Stable policy fingerprints include membership, rules and gaps. Overlapping feeds share identity domain; independently assigned ID systems differ. Source-set mutation during an hour invalidates that cohort; configuration takes effect cleanly at an hour boundary where possible.
 
 Per decoded source response record receipt UTC from injected TimeProvider immediately before raw extraction. A timestamp at whole-city fetch/cycle completion is prohibited. Parse failures use attempt-completion UTC and failure disposition, not successful-empty. Successful source parse permits empty population; null/malformed root is failure. Preserve the source observation collection when combining city results. Submit observations before processing/publication; source outcome is independent of synthesized feed outcome.
 
@@ -28,7 +28,7 @@ Use checked integer arithmetic for counters. Overflow means integrity loss. Main
 
 | Option | Initial proposal / rule |
 | --- | --- |
-| Selected cities / sources per city | <=32 / <=32; enabled nonempty source catalog required |
+| Eligible configured cities / sources per city | <=32 / <=32; enabled nonempty source catalog required |
 | Distinct identities per city/hour | <=100,000 |
 | Value / domain / kind / source key bytes | <=512 / <=64 / <=64 / <=64 UTF-8; no NUL |
 | Open hours per city | <=2; no arbitrary late-hour creation |
@@ -50,7 +50,7 @@ Limit overflow or extraction error marks the affected population identity_integr
 
 Writer follows existing host registration order: register writer before capture lifecycle and Worker so shutdown stops Worker/sweeper and flushes before writer closes/drains. Persistence needs configured DB connection; dry run uses no DB. Atomic city/hour advisory lock has a reported-specific namespace. Header plus complete membership chunks commit together, including valid empty headers. Exact semantic payload retry is Unchanged; different run/header/membership population sets sticky HasConflict and returns Quarantined. Persisted timestamp and conflict flag do not participate in semantic equality. Sorted exact tuple comparison is authoritative; digest alone is insufficient. NoData/lost/conflicted hours never become complete via retry or union.
 
-Single active capture owner/city is mandatory for persistence enablement. Deployment must document replica topology or disjoint city assignment; concurrent conflicting batches quarantine and emit diagnostics, never merge. This plan adds no distributed leader election. Restart uses a new run ID, and closure of an already persisted partial hour can only quarantine on different evidence.
+Single active capture owner/city is mandatory for persistence enablement. A shared host-level guard reserves Persistence exclusively for WebAPI; standalone Worker Persistence is rejected at configuration binding before hosted services start, even when both hosts receive identical global settings. Standalone Worker supports Disabled and DryRun only. Deployment must document a single WebAPI replica per city (or disjoint configured city registries); concurrent conflicting batches quarantine and emit diagnostics, never merge. This plan adds no distributed leader election. Restart uses a new run ID, and closure of an already persisted partial hour can only quarantine on different evidence.
 
 Retention uses bounded server-side header deletion and cascade with cutoff earlier than every active supported Stats window. Seven days safely exceeds current completed-hour/local-day horizons; validate options against ingestion grace. Cleanup is hosted outside requests, bounded by command deadline and cancellation, no row/identity dumps. Delayed cleanup increases storage, not counts. Schema/data deletion is not part of planning.
 

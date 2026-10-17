@@ -15,6 +15,12 @@ dotnet test src/Client/ChefKnifeStudios.TransitJazz.Client.Shared.Tests/ChefKnif
 
 Use existing xUnit conventions, injected TimeProvider and deterministic fixtures; no wall-clock sleeps. Inspect current PostgreSQL fixture opt-in configuration in `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests/Statistics/RouteHourStatisticsDatabaseFixture.cs`, then use equivalent disposable-database setup for new store/query/migration fixtures. Record skipped integration tests explicitly; do not report SQL validation from mocked tests.
 
+### Capture configuration in an authorized test environment
+
+Both hosts default to `ReportedVehicleHistory:Mode=Disabled`. Set only the mode to `DryRun` (environment form: `ReportedVehicleHistory__Mode=DryRun`) to capture every configured city with a valid explicit source catalog. There is no per-city capture selector. No-policy cities are unsupported; partial or invalid explicit catalogs fail startup. DryRun validates/logs without persistence. After schema and owner prerequisites pass, `Persistence` is accepted exclusively by WebAPI; standalone Worker rejects it even with identical global settings. Keep exactly one WebAPI persistence owner per city.
+
+`StatsOverlay:ReportedVehiclesEnabled` (environment form: `StatsOverlay__ReportedVehiclesEnabled`) remains independent and defaults false, allowing collection and audit before Stats exposes history. Supported read policies can still read retained history while capture is Disabled. Missing policies keep their expected Stats windows but return unavailable/null counts with source_policy_mismatch; no identities, successful-empty evidence or contributing coverage are inferred.
+
 ## 2. Independent arithmetic oracle
 
 Create manual evidence not derived from the implementation accumulator:
@@ -58,6 +64,6 @@ Browser check real Stats dialog at 320px and larger, 200% zoom, both themes, lon
 
 Benchmark matched existing history/Stats load with and without reported capture/read against original recorded baseline. Record worker p95 cycle overhead, extraction/accumulator/queue allocations, max reserved/live memory, query EXPLAIN ANALYZE, cold/prepared Stats p95 and whole five-second timeout, response/cache bytes and seven-day projected membership storage. Combined overhead <=5%; no second allowance. Bound-sized cases must fail explicitly without starving polling; validate actual source cadence especially sequential NYC feeds. Proposed finite defaults are subject to these measurements, never certified by writing this document.
 
-Release order requires a separately authorized operational task: verify actual identity contracts and single owner per city; deploy schema; DryRun; enable selected-city persistence; audit retained source coverage/integrity; pass performance/browser/visitor evidence; then enable reported reads. Default settings remain disabled in source control. Disable reads then collection for rollback. No backfill from existing hourly counts is possible.
+Release order requires a separately authorized operational task: verify actual identity contracts and single owner per city; deploy schema; DryRun; enable persistence for all eligible configured cities in the WebAPI host; audit retained source coverage/integrity; pass performance/browser/visitor evidence; then enable reported reads. Default settings remain disabled in source control. Disable reads then collection for rollback. No backfill from existing hourly counts is possible.
 
 During implementation record actual target, schema version, UTC coverage range, source contract references, limits, ownership, query plans, fixtures, browser/visitor and budget evidence in `specs/059-reported-vehicles/validation.md`. Update canonical `skills/transitjazz-db/references/{tables,queries,results}.md` to distinguish exact membership union from sampled/hourly counts, then run existing skill synchronization procedure. Planning does not query live DB or enable collection.

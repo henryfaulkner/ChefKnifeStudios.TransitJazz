@@ -10,20 +10,21 @@ public sealed record ReportedVehicleCaptureConfiguration(
     ReportedVehicleHistoryRuntimeOptions Runtime)
 {
     public static ReportedVehicleCaptureConfiguration FromConfiguration(IConfiguration configuration,
-        IReadOnlyCollection<CityConfig> cityConfigs)
+        IReadOnlyCollection<CityConfig> cityConfigs, ReportedVehicleCaptureHost host)
     {
         var options = configuration.GetSection(ReportedVehicleHistoryOptions.SectionName)
             .Get<ReportedVehicleHistoryOptions>() ?? new ReportedVehicleHistoryOptions();
         options.Validate();
+        options.ValidateHost(host);
 
         var catalog = options.Mode == ReportedVehicleCaptureMode.Disabled
             ? new ReportedVehicleSourceCatalog([])
-            : ReportedVehicleCatalogBuilder.Build(cityConfigs, options.SelectedCities);
+            : ReportedVehicleCatalogBuilder.Build(cityConfigs);
         if (options.Mode != ReportedVehicleCaptureMode.Disabled)
             options.Validate(catalog.Cities);
 
         var runtime = new ReportedVehicleHistoryRuntimeOptions(options.Mode,
-            options.SelectedCities.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), options);
+            catalog.Cities.Select(city => city.CitySlug).ToImmutableHashSet(StringComparer.OrdinalIgnoreCase), options);
         return new ReportedVehicleCaptureConfiguration(options, catalog, runtime);
     }
 }

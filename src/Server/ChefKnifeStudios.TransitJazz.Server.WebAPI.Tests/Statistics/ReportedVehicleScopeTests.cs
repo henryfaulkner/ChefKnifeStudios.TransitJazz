@@ -12,6 +12,52 @@ public sealed class ReportedVehicleScopeTests
     static readonly DateTimeOffset Now = new(2026, 1, 2, 12, 2, 30, TimeSpan.Zero);
 
     [Fact]
+    public async Task UnsupportedCityRemainsUnavailableInOneBoundedAllRequest()
+    {
+        var query = new ReportedVehicleQuery();
+        var service = new StatsOverlayService(query, Options(
+            new StatsOverlayCityOptions { CitySlug = "atlanta", DisplayNameKey = "StatsCityAtlanta", TimeZoneId = "UTC" },
+            new StatsOverlayCityOptions { CitySlug = "denver", DisplayNameKey = "StatsCityDenver", TimeZoneId = "UTC" }),
+            new FixedClock(Now), Catalog("atlanta"));
+
+        var response = await service.ReadAsync(new StatsOverlayRequest { Scope = "all", RouteJoinKeys = [] }, CancellationToken.None);
+
+        var input = Assert.Single(query.Inputs);
+        Assert.Equal(48, input.Hours.Length);
+        Assert.Equal("atlanta", Assert.Single(input.ReportedVehiclePolicies).CitySlug);
+        var unsupported = Assert.Single(response.Last24ReportedVehicles.Cities, city => city.CitySlug == "denver");
+        Assert.Equal("unavailable", unsupported.State);
+        Assert.Null(unsupported.Count);
+        Assert.Equal(0, unsupported.ContributingHours);
+        Assert.Equal(0, unsupported.FullyCoveredHours);
+        Assert.Equal(24, unsupported.ExpectedHours);
+        Assert.Contains(unsupported.Exclusions, reason => reason.Code == "source_policy_mismatch" && reason.Hours == 24);
+        Assert.Equal(8, response.Last24ReportedVehicles.Count);
+        Assert.Equal("partial", response.Last24ReportedVehicles.State);
+        Assert.Equal(48, response.Last24ReportedVehicles.ExpectedCityHours);
+    }
+
+    [Fact]
+    public async Task EmptyReadCatalogReturnsUnavailableWithoutChangingDistanceRequest()
+    {
+        var query = new ReportedVehicleQuery();
+        var service = new StatsOverlayService(query, Options(
+            new StatsOverlayCityOptions { CitySlug = "atlanta", DisplayNameKey = "StatsCityAtlanta", TimeZoneId = "UTC" }),
+            new FixedClock(Now), Catalog());
+
+        var response = await service.ReadAsync(CityRequest(["route-a"]), CancellationToken.None);
+
+        var input = Assert.Single(query.Inputs);
+        Assert.True(input.ReportedVehiclesEnabled);
+        Assert.Empty(input.ReportedVehiclePolicies);
+        Assert.Equal(["route-a"], input.SelectedRouteKeys);
+        Assert.Equal(24, input.Hours.Length);
+        Assert.Equal("unavailable", response.Last24ReportedVehicles.State);
+        Assert.Null(response.Last24ReportedVehicles.Count);
+        Assert.Equal(0, response.Last24ReportedVehicles.ContributingCityHours);
+    }
+
+    [Fact]
     public async Task AllAddsPerCityPopulationsAndRetainsDifferentLocalWindows()
     {
         var query = new ReportedVehicleQuery();
@@ -139,6 +185,15 @@ public sealed class ReportedVehicleScopeTests
                     var windowHours = cityGroup.Where(hour => window == "today" ? hour.IsToday : hour.IsLast24).ToArray();
                     var expected = windowHours.Length;
                     if (expected == 0) continue;
+                    if (!input.ReportedVehiclePolicies.Any(policy => policy.CitySlug == cityGroup.Key))
+                    {
+                        result.ReportedVehicleWindows.Add(new StatsOverlayReportedVehicleWindow
+                        {
+                            CitySlug = cityGroup.Key, Window = window, ExpectedHours = expected,
+                            Exclusions = [new StatsOverlayReportedVehicleExclusion { Code = "source_policy_mismatch", Hours = expected }],
+                        });
+                        continue;
+                    }
                     result.ReportedVehicleWindows.Add(new StatsOverlayReportedVehicleWindow
                     {
                         CitySlug = cityGroup.Key,

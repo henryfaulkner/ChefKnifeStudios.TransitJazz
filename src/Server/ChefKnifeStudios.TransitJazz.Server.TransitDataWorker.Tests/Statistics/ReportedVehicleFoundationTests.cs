@@ -68,10 +68,9 @@ public sealed class ReportedVehicleFoundationTests
         Assert.Throws<ArgumentOutOfRangeException>(() => invalidRetention.Validate());
         var invalidMode = new ReportedVehicleHistoryOptions
         {
-            Mode = ReportedVehicleCaptureMode.DryRun,
-            SelectedCities = [],
+            Mode = (ReportedVehicleCaptureMode)99,
         };
-        Assert.Throws<ArgumentException>(() => invalidMode.Validate());
+        Assert.Throws<ArgumentOutOfRangeException>(() => invalidMode.Validate());
     }
 
     [Fact]
@@ -100,7 +99,7 @@ public sealed class ReportedVehicleFoundationTests
     }
 
     [Fact]
-    public void CaptureConfigurationRequiresEverySelectedEndpointToHaveOneExplicitPolicy()
+    public void CaptureConfigurationRequiresEveryEndpointInACatalogToHaveOneExplicitPolicy()
     {
         var city = new CityConfig
         {
@@ -114,10 +113,10 @@ public sealed class ReportedVehicleFoundationTests
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ReportedVehicleHistory:Mode"] = "DryRun",
-            ["ReportedVehicleHistory:SelectedCities:0"] = "fixture-city",
         }).Build();
 
-        Assert.Throws<InvalidOperationException>(() => ReportedVehicleCaptureConfiguration.FromConfiguration(config, [city]));
+        Assert.Throws<InvalidOperationException>(() => ReportedVehicleCaptureConfiguration.FromConfiguration(
+            config, [city], ReportedVehicleCaptureHost.WebApi));
     }
 
     static ReportedVehicleSourceDefinition Source(string key, string domain, string kind, int cadence, int gap) => new()

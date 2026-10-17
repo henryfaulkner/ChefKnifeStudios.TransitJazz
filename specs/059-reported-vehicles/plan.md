@@ -17,7 +17,7 @@ Add two secondary metrics beneath existing distance values. Extract identifiable
 **Project Type**: Worker capture, relational retention, bounded aggregate reporting, existing Stats cards.
 **Performance Goals**: Existing <=5-second whole Stats deadline, prepared read p95 <=250 ms and cold read p95 <=2 seconds under existing matched conditions; combined history-plus-Stats worker p95 overhead <=5% against recorded baseline. No additional allowance.
 **Constraints**: Exact cross-hour deduplication, per-response receipt UTC, private identities, independent feed coverage, no storage waits in polling, finite byte/item bounds, single capture owner/city, no count-only backfill, default-disabled rollout.
-**Scale/Scope**: Seven current cities; <=32 selected cities and sources/city. Initial proposals: <=100,000 distinct identities/city/hour, <=512 UTF-8 bytes/value, <=64-byte source/domain/kind keys, two open hours/city, queue <=32 batches, seven-day retention. Global byte admission also applies; see capture contract. Bounds require measured release validation.
+**Scale/Scope**: Seven current cities; <=32 eligible configured cities and sources/city. Initial proposals: <=100,000 distinct identities/city/hour, <=512 UTF-8 bytes/value, <=64-byte source/domain/kind keys, two open hours/city, queue <=32 batches, seven-day retention. Global byte admission also applies; see capture contract. Bounds require measured release validation.
 
 ## Constitution Check
 
@@ -101,7 +101,7 @@ Timestamp each successfully decoded response immediately with TimeProvider befor
 
 Per-source rolling summaries preserve success/failure, first/last receipt, maximum gap and boundary witnesses without retaining poll logs. Require all expected sources, stable source/policy set, healthy successful start/end continuity, no failed polls, no missing IDs and intact populations for Complete. Intact Partial with at least one successful response contributes; no success => NoData excluded. Identity loss, conflict, unsupported policy or clock regression excludes the hour. Successor evidence proves continuity only; its identities belong to its own receipt hour.
 
-Sweep/shutdown independently of polling. Current and preceding grace hour are the only open states/city. Restart creates a new run ID; no unverified merging. Atomic store quarantines contradictory city/hour cohorts. Operational single owner/city is a rollout prerequisite; configuration/ownership conflicts cannot be repaired by unioning populations.
+Sweep/shutdown independently of polling. Current and preceding grace hour are the only open states/city. Restart creates a new run ID; no unverified merging. Atomic store quarantines contradictory city/hour cohorts. An explicit host guard reserves Persistence for WebAPI and rejects standalone Worker persistence before registration. Operational single WebAPI replica/city is a rollout prerequisite; configuration/ownership conflicts cannot be repaired by unioning populations.
 
 ### Storage
 
@@ -119,7 +119,7 @@ Per-city/window COUNT DISTINCT over domain/kind/value across eligible hours, the
 
 Two secondary heading/value groups in existing cards, English integers, independent states/coverage, accessible heading association and both themes. All copy resides in existing neutral resx. Partial always displays observed qualification and contributing/expected city-hours; Pending/Unavailable never appear as zero. Route selections show persistent city-wide scope; All discloses sum and per-city windows.
 
-Separate default-disabled ReportedVehicleHistory mode/cities from StatsOverlay.ReportedVehiclesEnabled read setting. Schema first, certified source contracts and single owner, dry run, selected persistence, retained-evidence/performance review, read enablement. Rollback disables reads then collection. No production migration, enablement or backfill occurs in planning.
+Separate default-disabled ReportedVehicleHistory mode from StatsOverlay.ReportedVehiclesEnabled read setting. DryRun and Persistence apply to every configured city with an explicit valid source catalog. Cities without policies are unsupported; incomplete or invalid explicit catalogs fail startup. Schema first, certified source contracts and single WebAPI owner, global dry run, global eligible-city persistence, retained-evidence/performance review, read enablement. Rollback disables reads then collection. No production migration, enablement or backfill occurs in planning.
 
 ## Phase 0: Research Results
 

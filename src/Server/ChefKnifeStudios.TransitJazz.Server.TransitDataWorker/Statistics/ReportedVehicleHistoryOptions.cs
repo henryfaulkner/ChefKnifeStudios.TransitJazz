@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 
 public enum ReportedVehicleCaptureMode { Disabled, DryRun, Persistence }
+public enum ReportedVehicleCaptureHost { WebApi, StandaloneWorker }
 public enum ReportedVehicleBufferKind { Extracted, Active, Queued }
 
 /// <summary>Independent bounded controls for raw reported-vehicle collection.</summary>
@@ -13,7 +14,6 @@ public sealed class ReportedVehicleHistoryOptions
     public const int MaxDistinctIdentitiesPerCityHour = 100_000;
 
     public ReportedVehicleCaptureMode Mode { get; set; } = ReportedVehicleCaptureMode.Disabled;
-    public string[] SelectedCities { get; set; } = [];
     public int MaxCities { get; set; } = 32;
     public int MaxSourcesPerCity { get; set; } = 32;
     public int MaxDistinctPerCityHour { get; set; } = MaxDistinctIdentitiesPerCityHour;
@@ -37,10 +37,8 @@ public sealed class ReportedVehicleHistoryOptions
     public void Validate(IEnumerable<ReportedVehicleSourceCatalogEntry>? catalogs = null)
     {
         if (!Enum.IsDefined(Mode)) throw new ArgumentOutOfRangeException(nameof(Mode));
-        if (SelectedCities is null || SelectedCities.Length > MaxCities || MaxCities is < 1 or > 32
-            || SelectedCities.Any(string.IsNullOrWhiteSpace)
-            || SelectedCities.Distinct(StringComparer.OrdinalIgnoreCase).Count() != SelectedCities.Length)
-            throw new ArgumentException("Selected city scope must be unique, nonblank, and contain at most 32 cities.", nameof(SelectedCities));
+        if (MaxCities is < 1 or > 32)
+            throw new ArgumentOutOfRangeException(nameof(MaxCities));
         if (MaxSourcesPerCity is < 1 or > 32 || MaxDistinctPerCityHour is < 1 or > MaxDistinctIdentitiesPerCityHour
             || MaxOpenHoursPerCity is < 1 or > 2 || MaxActiveIdentityBytes is < 1 or > 64L * 1024 * 1024
             || MaxExtractedEvidenceBytes is < 1 or > 32L * 1024 * 1024
@@ -51,29 +49,37 @@ public sealed class ReportedVehicleHistoryOptions
             || MaxWriteAttempts is < 1 or > 3 || ShutdownDrainSeconds is < 1 or > 15)
             throw new ArgumentOutOfRangeException(nameof(MaxActiveIdentityBytes), "Reported-vehicle limits must stay within the documented finite bounds.");
 
-        var selected = SelectedCities.ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (catalogs is not null)
         {
-            foreach (var catalog in catalogs)
+            var entries = catalogs.ToArray();
+            if (entries.Length > MaxCities)
+                throw new ArgumentException("Reported-vehicle catalogs exceed the configured city limit.", nameof(catalogs));
+            foreach (var catalog in entries)
             {
-                if (!selected.Contains(catalog.CitySlug)) throw new ArgumentException("Source catalog belongs to an unselected city.");
                 if (catalog.Sources.Length is < 1 || catalog.Sources.Length > MaxSourcesPerCity)
                     throw new ArgumentException("Enabled city catalogs require 1-32 explicit sources.");
                 if (catalog.Sources.Select(x => x.SourceKey).Distinct(StringComparer.Ordinal).Count() != catalog.Sources.Length)
                     throw new ArgumentException("Source keys must be unique within a city.");
             }
         }
-        if (Mode != ReportedVehicleCaptureMode.Disabled && SelectedCities.Length == 0)
-            throw new ArgumentException("DryRun and Persistence require an explicit nonempty city selection.");
+    }
+
+    // The standalone host has no database sink. Reserve persistence for WebAPI,
+    // including when both hosts receive the same global capture configuration.
+    public void ValidateHost(ReportedVehicleCaptureHost host)
+    {
+        if (!Enum.IsDefined(host)) throw new ArgumentOutOfRangeException(nameof(host));
+        if (Mode == ReportedVehicleCaptureMode.Persistence && host != ReportedVehicleCaptureHost.WebApi)
+            throw new InvalidOperationException("Reported-vehicle persistence is owned exclusively by the WebAPI host; standalone Worker persistence would duplicate ownership and is not supported.");
     }
 }
 
 public sealed record ReportedVehicleHistoryRuntimeOptions(
     ReportedVehicleCaptureMode Mode,
-    ImmutableHashSet<string> SelectedCities,
+    ImmutableHashSet<string> EligibleCities,
     ReportedVehicleHistoryOptions Limits)
 {
-    public bool IsEnabledFor(string city) => Mode != ReportedVehicleCaptureMode.Disabled && SelectedCities.Contains(city);
+    public bool IsEnabledFor(string city) => Mode != ReportedVehicleCaptureMode.Disabled && EligibleCities.Contains(city);
 }
 
 /// <summary>Global bounded reservation accounting shared by extraction, active hours and queued writes.</summary>

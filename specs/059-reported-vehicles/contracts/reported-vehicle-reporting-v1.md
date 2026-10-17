@@ -49,6 +49,10 @@ In All, cities with zero expected today hours are per-city Pending and do not in
 
 Exclusion/reason codes include missing_hour, no_usable_observation, conflict, identity_loss, unsupported_definition, source_policy_mismatch, cadence_policy_mismatch, source_failure, source_missing, start_boundary_missing, end_boundary_missing, cadence_gap, missing_identity, fallback_identity, source_set_changed, clock_regression, storage_unavailable, reported_reads_disabled and boundary_excluded. Distinguish limiting reasons on contributing Partial hours from excluded-hour reasons; never add these overlapping diagnostics into a fabricated coverage denominator. Definition copy says observed identities, not verified physical fleet.
 
+## Missing source catalogs
+
+Build read policies independently of capture mode and the Stats read flag independently of capture registration. Policies may be a unique validated subset of the requested city set; never invent a policy for an unsupported city. Retain that city in the existing finite hour grid and coverage denominators. Missing policy yields `source_policy_mismatch`, unavailable/null counts and no contributing or fully covered hours, even if retained evidence exists. A supported city with genuinely absent evidence still yields `missing_hour`. All retains the supported city sums with partial qualification. No extra query, timeout allowance or identity output is introduced.
+
 ## Compatibility and cache
 
 StatsOverlay.ReportedVehiclesEnabled defaults false. Disabled query SQL has NO references to new relations; output summaries use unavailable/disabled except genuinely pending today. Select enabled/disabled SQL text server-side before execution, not CASE around absent relations. Deployment setting enables reads only after migration and evidence readiness; enabled unexpected missing-schema errors follow existing endpoint error policy and operational diagnostics.

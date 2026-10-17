@@ -205,8 +205,8 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
     static void ValidateReportedPolicies(StatsOverlayQueryInput input)
     {
         var cities = input.Hours.Select(x => x.CitySlug).Distinct(StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-        if (input.ReportedVehiclePolicies.Length != cities.Count
-            || input.ReportedVehiclePolicies.Select(policy => policy.CitySlug).Distinct(StringComparer.Ordinal).Count() != cities.Count
+        if (input.ReportedVehiclePolicies.Length > cities.Count
+            || input.ReportedVehiclePolicies.Select(policy => policy.CitySlug).Distinct(StringComparer.Ordinal).Count() != input.ReportedVehiclePolicies.Length
             || input.ReportedVehiclePolicies.Any(policy => !cities.Contains(policy.CitySlug)
                 || !IsFingerprint(policy.SourceSetFingerprint) || !IsFingerprint(policy.CadencePolicyFingerprint)
                 || policy.Sources is null || policy.Sources.Length is < 1 or > 32
@@ -214,7 +214,7 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
                 || policy.Sources.Any(source => string.IsNullOrWhiteSpace(source.SourceKey)
                     || System.Text.Encoding.UTF8.GetByteCount(source.SourceKey) > 64
                     || source.GapLimitSeconds is < 2 or > 300)))
-            throw new ArgumentException("Reported-vehicle query policies must exactly cover the requested city set.", nameof(input));
+            throw new ArgumentException("Reported-vehicle query policies must be unique, valid, and limited to requested cities.", nameof(input));
 
         static bool IsFingerprint(string value) => value is { Length: 64 }
             && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
@@ -605,7 +605,8 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
             FROM target_hours AS t
             LEFT JOIN reported_policy AS p ON p.city_slug = t.city_slug COLLATE "C"
             LEFT JOIN public.city_reported_vehicle_hours AS h
-              ON h.city_slug COLLATE "C" = t.city_slug COLLATE "C" AND h.hour_start_utc = t.hour_start_utc
+              ON p.source_set_fingerprint IS NOT NULL
+                AND h.city_slug COLLATE "C" = t.city_slug COLLATE "C" AND h.hour_start_utc = t.hour_start_utc
             LEFT JOIN LATERAL (
                 SELECT count(*)::bigint AS actual_membership_count
                 FROM public.city_reported_vehicle_hour_memberships AS m
@@ -663,8 +664,8 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
                      AND d.distinct_source_count = h.expected_source_count
                      AND h.expected_source_count = h.configured_source_count, false) AS diagnostics_fully_covered,
                    CASE
-                     WHEN NOT h.has_header THEN 'missing_hour'
                      WHEN h.expected_source_fingerprint IS NULL THEN 'source_policy_mismatch'
+                     WHEN NOT h.has_header THEN 'missing_hour'
                      WHEN h.definition_version <> 'reported-vehicles-v1' THEN 'unsupported_definition'
                      WHEN h.source_set_fingerprint <> h.expected_source_fingerprint THEN 'source_policy_mismatch'
                      WHEN h.cadence_policy_fingerprint <> h.expected_cadence_fingerprint THEN 'cadence_policy_mismatch'
