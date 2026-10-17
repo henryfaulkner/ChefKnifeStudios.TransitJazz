@@ -101,4 +101,82 @@ public sealed class StatsOverlayContractTests
             """{"scope":"city","citySlug":"atlanta","routeJoinKeys":[],"startDate":"2026-01-01"}""",
             JsonSettings.DefaultOptions));
     }
+
+    [Fact]
+    public void ReportedVehicleSummaryPreservesNullAndDoesNotExposeIdentityMaterial()
+    {
+        var summary = new StatsReportedVehicleSummary
+        {
+            Window = "today",
+            Count = null,
+            State = "unavailable",
+            PopulationScope = "cityFeeds",
+            ExpectedCityHours = 4,
+            ContributingCityHours = 0,
+            FullyCoveredCityHours = 0,
+            Cities =
+            [
+                new StatsReportedVehicleCitySummary
+                {
+                    CitySlug = "atlanta",
+                    WindowReference = "today",
+                    Count = null,
+                    State = "unavailable",
+                    Exclusions = [new StatsReportedVehicleExclusion("missing_hour", 4)],
+                }
+            ],
+            Limitations = ["descriptor_identity"],
+        };
+
+        var json = JsonSerializer.Serialize(summary, JsonSettings.DefaultOptions);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("count").ValueKind);
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("cities")[0].GetProperty("count").ValueKind);
+        Assert.Contains("reported-vehicles-v1", json);
+        Assert.DoesNotContain("vehicleId", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("identityValue", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("https://", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("apiKey", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void OlderOverlayPayloadGetsUnavailableReportedSummaries()
+    {
+        // Omitted additive fields are populated from their CLR defaults.
+        var response = new StatsOverlayResponse
+        {
+            GeneratedAtUtc = DateTime.UnixEpoch,
+            CutoffUtc = DateTime.UnixEpoch,
+            Selection = new StatsSelection("city", "atlanta", []),
+            Cities = [],
+            RouteOptions = [],
+            TodayDistance = new StatsDistanceSummary
+            {
+                Window = "today", Kilometers = null,
+                Coverage = EmptyCoverage(),
+            },
+            Last24Distance = new StatsDistanceSummary
+            {
+                Window = "last24", Kilometers = null,
+                Coverage = EmptyCoverage(),
+            },
+            CategoryShares = [],
+            Bubbles = [],
+            Timeline = new StatsTimeline { SeriesKind = "none", Series = [] },
+            Warnings = [],
+        };
+
+        var json = JsonSerializer.Serialize(response, JsonSettings.DefaultOptions);
+        var oldPayload = json.Replace(",\"todayReportedVehicles\":{\"window\":\"today\",\"count\":null,\"state\":\"unavailable\",\"populationScope\":\"cityFeeds\",\"definitionVersion\":\"reported-vehicles-v1\",\"expectedCityHours\":0,\"contributingCityHours\":0,\"fullyCoveredCityHours\":0,\"expectedCityCount\":0,\"contributingCityCount\":0,\"cities\":[],\"limitations\":[]},\"last24ReportedVehicles\":{\"window\":\"last24\",\"count\":null,\"state\":\"unavailable\",\"populationScope\":\"cityFeeds\",\"definitionVersion\":\"reported-vehicles-v1\",\"expectedCityHours\":0,\"contributingCityHours\":0,\"fullyCoveredCityHours\":0,\"expectedCityCount\":0,\"contributingCityCount\":0,\"cities\":[],\"limitations\":[]}", string.Empty, StringComparison.Ordinal);
+        var deserialized = JsonSerializer.Deserialize<StatsOverlayResponse>(oldPayload, JsonSettings.DefaultOptions)!;
+
+        Assert.Equal("unavailable", deserialized.TodayReportedVehicles.State);
+        Assert.Null(deserialized.TodayReportedVehicles.Count);
+        Assert.Equal("unavailable", deserialized.Last24ReportedVehicles.State);
+    }
+
+    static StatsCoverage EmptyCoverage() => new()
+    {
+        State = "unavailable", Exclusions = [], PendingThroughUtc = DateTime.UnixEpoch,
+    };
 }

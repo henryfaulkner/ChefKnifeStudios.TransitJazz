@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
 
@@ -19,7 +20,8 @@ namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
 public sealed class StatsOverlayService(
     IStatsOverlayQuery? query,
     StatsOverlayOptions options,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    ReportedVehicleSourceCatalog? reportedVehicleCatalog = null)
 {
     const long MaxJavaScriptExactInteger = 9_007_199_254_740_991L;
     static readonly HashSet<string> SafeReasons = new(StatsOverlayVocabulary.Reasons, StringComparer.Ordinal);
@@ -188,7 +190,9 @@ public sealed class StatsOverlayService(
         try
         {
             if (query is null) throw new StatsOverlayRequestException("dependency_unavailable", 503);
-            var queryInput = BuildQueryInput(plan, options);
+            if (options.ReportedVehiclesEnabled && reportedVehicleCatalog is null)
+                throw new StatsOverlayRequestException("dependency_unavailable", 503);
+            var queryInput = BuildQueryInput(plan, options, reportedVehicleCatalog);
             StatsOverlayQueryResult result;
             try
             {
@@ -253,6 +257,8 @@ public sealed class StatsOverlayService(
                     : [],
                 TodayDistance = todayDistance,
                 Last24Distance = last24Distance,
+                TodayReportedVehicles = BuildReportedVehicleSummary("today", plan, result, options),
+                Last24ReportedVehicles = BuildReportedVehicleSummary("last24CompletedHours", plan, result, options),
                 CategoryShares = categoryShares,
                 Bubbles = bubbles,
                 Timeline = timeline,
@@ -348,20 +354,29 @@ public sealed class StatsOverlayService(
             ? "all"
             : "city:" + selection.CitySlug;
 
-    static string BuildCacheKey(StatsOverlayRequest selection, StatsSnapshotPlan plan, StatsOverlayOptions options)
+    string BuildCacheKey(StatsOverlayRequest selection, StatsSnapshotPlan plan, StatsOverlayOptions options)
     {
         var planKey = string.Join(";", plan.Cities.Select(city => string.Join(",", city.City.CitySlug,
             city.LocalDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), city.City.TimeZoneId,
             city.City.HealthyCadenceLimitSeconds.ToString(CultureInfo.InvariantCulture))));
         var material = string.Join("|", selection.Scope, selection.CitySlug ?? string.Empty,
             plan.CutoffUtc.ToString("O", CultureInfo.InvariantCulture), planKey,
-            JsonSerializer.Serialize(options));
+            JsonSerializer.Serialize(options),
+            options.ReportedVehiclesEnabled ? ReportedVehicleCacheIdentity() : "reported-disabled");
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material)));
     }
 
+    string ReportedVehicleCacheIdentity() => reportedVehicleCatalog is null
+        ? "reported-policy-missing"
+        : string.Join(";", reportedVehicleCatalog.Cities.OrderBy(city => city.CitySlug, StringComparer.Ordinal)
+            .Select(city => string.Join(":", city.CitySlug,
+                reportedVehicleCatalog.SourceSetFingerprint(city.CitySlug),
+                reportedVehicleCatalog.CadencePolicyFingerprint(city.CitySlug))));
+
     static string[] RouteKeys(StatsOverlayRequest request) => request.RouteJoinKeys ?? [];
 
-    static StatsOverlayQueryInput BuildQueryInput(StatsSnapshotPlan plan, StatsOverlayOptions options)
+    StatsOverlayQueryInput BuildQueryInput(StatsSnapshotPlan plan, StatsOverlayOptions options,
+        ReportedVehicleSourceCatalog? reportedVehicleCatalog)
     {
         var target = new Dictionary<(string City, DateTime Hour), StatsOverlayQueryHour>();
         foreach (var city in plan.Cities)
@@ -378,8 +393,121 @@ public sealed class StatsOverlayService(
             SelectedRouteKeys = RouteKeys(plan.Selection),
             MaximumRoutesPerCity = options.MaximumSelectedRoutes,
             MaximumCategories = options.MaximumCategories,
+            ReportedVehiclesEnabled = options.ReportedVehiclesEnabled,
+            ReportedVehiclePolicies = options.ReportedVehiclesEnabled
+                ? plan.Cities.Select(city =>
+                {
+                    var catalog = reportedVehicleCatalog!.Cities.Single(entry =>
+                        string.Equals(entry.CitySlug, city.City.CitySlug, StringComparison.Ordinal));
+                    return new StatsOverlayReportedVehiclePolicy(city.City.CitySlug,
+                        reportedVehicleCatalog.SourceSetFingerprint(city.City.CitySlug),
+                        reportedVehicleCatalog.CadencePolicyFingerprint(city.City.CitySlug),
+                        catalog.Sources.Select(source => new StatsOverlayReportedVehicleSource(
+                            source.SourceKey, source.GapLimitSeconds)).ToArray());
+                }).ToArray()
+                : [],
             Hours = target.Values.OrderBy(row => row.CitySlug, StringComparer.Ordinal)
                 .ThenBy(row => row.HourStartUtc).ToArray()
+        };
+    }
+
+    static StatsReportedVehicleSummary BuildReportedVehicleSummary(string window,
+        StatsSnapshotPlan plan, StatsOverlayQueryResult result, StatsOverlayOptions options)
+    {
+        var isToday = window == "today";
+        var publicWindow = isToday ? "today" : "last24";
+        var queryWindow = isToday ? "today" : "last24CompletedHours";
+        var expectedTotal = plan.Cities.Sum(city => (long)(isToday ? city.TodayHoursUtc.Count : city.Last24HoursUtc.Count));
+        var resultByCity = result.ReportedVehicleWindows
+            .Where(row => string.Equals(row.Window, queryWindow, StringComparison.Ordinal))
+            .ToDictionary(row => row.CitySlug, StringComparer.Ordinal);
+
+        if (!options.ReportedVehiclesEnabled)
+            return new StatsReportedVehicleSummary
+            {
+                Window = publicWindow,
+                State = isToday && expectedTotal == 0 ? "pending" : "unavailable",
+                PopulationScope = plan.Selection.Scope == "all" ? "sumOfCityFeeds" : "cityFeeds",
+                ExpectedCityHours = checked((int)expectedTotal),
+                ExpectedCityCount = plan.Cities.Count,
+                Cities = plan.Cities.Select(city => new StatsReportedVehicleCitySummary
+                {
+                    CitySlug = city.City.CitySlug,
+                    WindowReference = city.City.CitySlug + ":" + queryWindow,
+                    State = isToday && city.TodayHoursUtc.Count == 0 ? "pending" : "unavailable",
+                    ExpectedHours = isToday ? city.TodayHoursUtc.Count : city.Last24HoursUtc.Count,
+                    BoundaryExcludedHours = isToday ? city.BoundaryExcludedTodayHours : 0,
+                    Exclusions = [new StatsReportedVehicleExclusion("reported_reads_disabled", 0)],
+                    Limitations = ["reported_reads_disabled"],
+                }).ToArray(),
+                Limitations = ["reported_reads_disabled"],
+            };
+
+        var citySummaries = new List<StatsReportedVehicleCitySummary>(plan.Cities.Count);
+        foreach (var city in plan.Cities)
+        {
+            var expected = isToday ? city.TodayHoursUtc.Count : city.Last24HoursUtc.Count;
+            var boundary = isToday ? city.BoundaryExcludedTodayHours : 0;
+            resultByCity.TryGetValue(city.City.CitySlug, out var row);
+            var contributing = row?.ContributingHours ?? 0;
+            var fullyCovered = row?.FullyCoveredHours ?? 0;
+            var count = row?.Count;
+            var state = expected == 0 && isToday ? "pending"
+                : count is null ? "unavailable"
+                : fullyCovered == expected && boundary == 0 ? "complete" : "partial";
+            var exclusions = row?.Exclusions
+                .Where(x => ReportedVehicleVocabularies.ExclusionReasons.Contains(x.Code, StringComparer.Ordinal))
+                .Select(x => new StatsReportedVehicleExclusion(x.Code, x.Hours)).ToList() ?? [];
+            if (boundary > 0) exclusions.Add(new StatsReportedVehicleExclusion("boundary_excluded", boundary));
+            var limitations = row?.Limitations
+                .Where(x => ReportedVehicleVocabularies.IncompleteReasons.Contains(x, StringComparer.Ordinal)
+                    || ReportedVehicleVocabularies.IdentityLimitations.Contains(x, StringComparer.Ordinal))
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray() ?? [];
+            citySummaries.Add(new StatsReportedVehicleCitySummary
+            {
+                CitySlug = city.City.CitySlug,
+                WindowReference = city.City.CitySlug + ":" + queryWindow,
+                Count = count,
+                State = state,
+                ExpectedHours = expected,
+                ContributingHours = contributing,
+                FullyCoveredHours = fullyCovered,
+                BoundaryExcludedHours = boundary,
+                FirstContributingUtc = row?.FirstContributingUtc,
+                LastContributingUtc = row?.LastContributingUtc,
+                Exclusions = exclusions,
+                UnidentifiableRecordCount = row?.UnidentifiableRecordCount ?? 0,
+                FallbackRecordCount = row?.FallbackRecordCount ?? 0,
+                Limitations = limitations,
+            });
+        }
+
+        var contributingCities = citySummaries.Where(city => city.Count is not null).ToArray();
+        long? totalCount = contributingCities.Length == 0 ? null
+            : contributingCities.Aggregate(0L, (sum, city) => checked(sum + city.Count!.Value));
+        var contributingHoursTotal = citySummaries.Sum(city => (long)city.ContributingHours);
+        var fullyCoveredHoursTotal = citySummaries.Sum(city => (long)city.FullyCoveredHours);
+        var hasPendingCity = citySummaries.Any(city => city.State == "pending");
+        var hasBoundary = citySummaries.Any(city => city.BoundaryExcludedHours > 0);
+        var aggregateState = expectedTotal == 0 && isToday ? "pending"
+            : totalCount is null ? "unavailable"
+            : citySummaries.All(city => city.State == "complete") && !hasPendingCity && !hasBoundary ? "complete" : "partial";
+        var aggregateLimitations = citySummaries.SelectMany(city => city.Limitations)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
+        return new StatsReportedVehicleSummary
+        {
+            Window = publicWindow,
+            Count = totalCount,
+            State = aggregateState,
+            PopulationScope = plan.Selection.Scope == "all" ? "sumOfCityFeeds" : "cityFeeds",
+            ExpectedCityHours = checked((int)expectedTotal),
+            ContributingCityHours = checked((int)contributingHoursTotal),
+            FullyCoveredCityHours = checked((int)fullyCoveredHoursTotal),
+            ExpectedCityCount = plan.Cities.Count,
+            ContributingCityCount = contributingCities.Length,
+            Cities = citySummaries,
+            Limitations = aggregateLimitations,
         };
     }
 
@@ -1015,5 +1143,19 @@ public sealed class StatsOverlayService(
             if (Unsafe(bubble.RouteVehicleHours) || Unsafe(bubble.ActiveClockHours)
                 || Unsafe(bubble.ActivitySampleNumerator) || Unsafe(bubble.SampleDenominator))
                 throw new StatsOverlayRequestException("scope_too_large", 422);
+        CheckReported(response.TodayReportedVehicles);
+        CheckReported(response.Last24ReportedVehicles);
+
+        static void CheckReported(StatsReportedVehicleSummary summary)
+        {
+            if (Unsafe(summary.Count) || summary.ExpectedCityHours < 0 || summary.ContributingCityHours < 0
+                || summary.FullyCoveredCityHours < 0 || summary.ExpectedCityCount < 0 || summary.ContributingCityCount < 0)
+                throw new StatsOverlayRequestException("scope_too_large", 422);
+            foreach (var city in summary.Cities)
+                if (Unsafe(city.Count) || Unsafe(city.UnidentifiableRecordCount) || Unsafe(city.FallbackRecordCount)
+                    || city.ExpectedHours < 0 || city.ContributingHours < 0 || city.FullyCoveredHours < 0
+                    || city.BoundaryExcludedHours < 0 || city.Exclusions.Any(exclusion => exclusion.Hours < 0))
+                    throw new StatsOverlayRequestException("scope_too_large", 422);
+        }
     }
 }

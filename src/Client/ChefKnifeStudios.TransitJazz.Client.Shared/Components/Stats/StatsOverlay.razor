@@ -84,10 +84,48 @@
                         <article>
                             <h2>@T.Get("StatsDistanceToday")</h2>
                             <p><strong>@T.Format(ToDouble(dashboard.Snapshot.TodayDistance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
+                            <section class="stats-overlay__reported" aria-labelledby="stats-reported-today-heading">
+                                <h3 id="stats-reported-today-heading">@T.Get(dashboard.TodayReportedVehicles.HeadingKey)</h3>
+                                <p class="stats-overlay__reported-count"><strong>@dashboard.TodayReportedVehicles.CountText</strong></p>
+                                <p>@dashboard.TodayReportedVehicles.CoverageText</p>
+                                <p>@dashboard.TodayReportedVehicles.ScopeText</p>
+                                <p class="stats-overlay__reported-explanation">@dashboard.TodayReportedVehicles.DefinitionText</p>
+                                @if (dashboard.TodayReportedVehicles.CityDetails.Count > 0)
+                                {
+                                    <details>
+                                        <summary>@T.Get("StatsReportedVehicleCoverageDetails")</summary>
+                                        <ul>
+                                            @foreach (var detail in dashboard.TodayReportedVehicles.CityDetails)
+                                            {
+                                                <li>@detail</li>
+                                            }
+                                        </ul>
+                                    </details>
+                                }
+                            </section>
                         </article>
                         <article>
                             <h2>@T.Get("StatsDistanceLast24")</h2>
                             <p><strong>@T.Format(ToDouble(dashboard.Snapshot.Last24Distance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
+                            <section class="stats-overlay__reported" aria-labelledby="stats-reported-last24-heading">
+                                <h3 id="stats-reported-last24-heading">@T.Get(dashboard.Last24ReportedVehicles.HeadingKey)</h3>
+                                <p class="stats-overlay__reported-count"><strong>@dashboard.Last24ReportedVehicles.CountText</strong></p>
+                                <p>@dashboard.Last24ReportedVehicles.CoverageText</p>
+                                <p>@dashboard.Last24ReportedVehicles.ScopeText</p>
+                                <p class="stats-overlay__reported-explanation">@dashboard.Last24ReportedVehicles.DefinitionText</p>
+                                @if (dashboard.Last24ReportedVehicles.CityDetails.Count > 0)
+                                {
+                                    <details>
+                                        <summary>@T.Get("StatsReportedVehicleCoverageDetails")</summary>
+                                        <ul>
+                                            @foreach (var detail in dashboard.Last24ReportedVehicles.CityDetails)
+                                            {
+                                                <li>@detail</li>
+                                            }
+                                        </ul>
+                                    </details>
+                                }
+                            </section>
                         </article>
                     </section>
                     <BubbleChart Model="@dashboard.Bubbles" Title="@T.Get(dashboard.Snapshot.Selection.Scope == "city" ? "StatsRouteActivity" : "StatsCityActivity")"

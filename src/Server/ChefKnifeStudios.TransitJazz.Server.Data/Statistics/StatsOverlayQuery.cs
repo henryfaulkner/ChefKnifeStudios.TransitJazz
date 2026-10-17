@@ -24,7 +24,17 @@ public sealed class StatsOverlayQueryInput
     public int MaximumRoutesPerCity { get; init; } = 4096;
     public int MaximumCategories { get; init; } = 32;
     public StatsOverlayQueryHour[] Hours { get; init; } = [];
+    public bool ReportedVehiclesEnabled { get; init; }
+    public StatsOverlayReportedVehiclePolicy[] ReportedVehiclePolicies { get; init; } = [];
 }
+
+public sealed record StatsOverlayReportedVehiclePolicy(
+    string CitySlug,
+    string SourceSetFingerprint,
+    string CadencePolicyFingerprint,
+    StatsOverlayReportedVehicleSource[] Sources);
+
+public sealed record StatsOverlayReportedVehicleSource(string SourceKey, int GapLimitSeconds);
 
 public sealed class StatsOverlayQueryHour
 {
@@ -45,7 +55,30 @@ public sealed class StatsOverlayQueryResult
     public List<StatsOverlayCategoryHour> CategoryHours { get; set; } = [];
     public List<StatsOverlayCategoryTotal> CategoryTotals { get; set; } = [];
     public List<StatsOverlayCityHour> CityHours { get; set; } = [];
+    public List<StatsOverlayReportedVehicleWindow> ReportedVehicleWindows { get; set; } = [];
     public List<string> Categories { get; set; } = [];
+}
+
+public sealed class StatsOverlayReportedVehicleWindow
+{
+    public string CitySlug { get; set; } = string.Empty;
+    public string Window { get; set; } = string.Empty;
+    public long? Count { get; set; }
+    public int ExpectedHours { get; set; }
+    public int ContributingHours { get; set; }
+    public int FullyCoveredHours { get; set; }
+    public DateTime? FirstContributingUtc { get; set; }
+    public DateTime? LastContributingUtc { get; set; }
+    public long UnidentifiableRecordCount { get; set; }
+    public long FallbackRecordCount { get; set; }
+    public List<StatsOverlayReportedVehicleExclusion> Exclusions { get; set; } = [];
+    public List<string> Limitations { get; set; } = [];
+}
+
+public sealed class StatsOverlayReportedVehicleExclusion
+{
+    public string Code { get; set; } = string.Empty;
+    public int Hours { get; set; }
 }
 
 public sealed class StatsOverlayCohortHour
@@ -142,7 +175,8 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
                 throw new TimeoutException("Stats query deadline elapsed while acquiring a connection.");
 
             await using var command = context.Database.GetDbConnection().CreateCommand();
-            command.CommandText = QuerySql;
+            if (input.ReportedVehiclesEnabled) ValidateReportedPolicies(input);
+            command.CommandText = BuildCommandText(input.ReportedVehiclesEnabled);
             command.CommandTimeout = Math.Max(1, (int)Math.Min(int.MaxValue, Math.Ceiling(remaining.TotalSeconds)));
             var parameter = command.CreateParameter();
             parameter.ParameterName = "input";
@@ -160,6 +194,30 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
         {
             await context.Database.CloseConnectionAsync();
         }
+    }
+
+    public static string BuildCommandText(bool reportedVehiclesEnabled) => reportedVehiclesEnabled
+        ? QuerySql.Replace("/* REPORTED_VEHICLE_CTES */", ReportedVehicleCtes, StringComparison.Ordinal)
+            .Replace("/* REPORTED_VEHICLE_JSON */", ReportedVehicleJson, StringComparison.Ordinal)
+        : QuerySql.Replace("/* REPORTED_VEHICLE_CTES */", string.Empty, StringComparison.Ordinal)
+            .Replace("/* REPORTED_VEHICLE_JSON */", "'reportedVehicleWindows', '[]'::jsonb", StringComparison.Ordinal);
+
+    static void ValidateReportedPolicies(StatsOverlayQueryInput input)
+    {
+        var cities = input.Hours.Select(x => x.CitySlug).Distinct(StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
+        if (input.ReportedVehiclePolicies.Length != cities.Count
+            || input.ReportedVehiclePolicies.Select(policy => policy.CitySlug).Distinct(StringComparer.Ordinal).Count() != cities.Count
+            || input.ReportedVehiclePolicies.Any(policy => !cities.Contains(policy.CitySlug)
+                || !IsFingerprint(policy.SourceSetFingerprint) || !IsFingerprint(policy.CadencePolicyFingerprint)
+                || policy.Sources is null || policy.Sources.Length is < 1 or > 32
+                || policy.Sources.Select(source => source.SourceKey).Distinct(StringComparer.Ordinal).Count() != policy.Sources.Length
+                || policy.Sources.Any(source => string.IsNullOrWhiteSpace(source.SourceKey)
+                    || System.Text.Encoding.UTF8.GetByteCount(source.SourceKey) > 64
+                    || source.GapLimitSeconds is < 2 or > 300)))
+            throw new ArgumentException("Reported-vehicle query policies must exactly cover the requested city set.", nameof(input));
+
+        static bool IsFingerprint(string value) => value is { Length: 64 }
+            && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
     }
 
     const string QuerySql = """
@@ -476,6 +534,7 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
             ORDER BY e.category COLLATE "C"
             LIMIT (SELECT maximum_categories FROM request_scope)
         )
+        /* REPORTED_VEHICLE_CTES */
         SELECT jsonb_build_object(
             'scopeTooLarge', (SELECT scope_too_large FROM scope_validation),
             'cohortHours', COALESCE((SELECT jsonb_agg(jsonb_build_object(
@@ -510,7 +569,182 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
                 'activeClockHours', active_clock_hours, 'activitySampleNumerator', activity_sample_numerator,
                 'sampleDenominator', sample_denominator
             ) ORDER BY city_slug COLLATE "C", window_key, hour_start_utc) FROM city_hours), '[]'::jsonb),
-            'categories', COALESCE((SELECT jsonb_agg(category_key ORDER BY category_key COLLATE "C") FROM categories), '[]'::jsonb)
+            'categories', COALESCE((SELECT jsonb_agg(category_key ORDER BY category_key COLLATE "C") FROM categories), '[]'::jsonb),
+            /* REPORTED_VEHICLE_JSON */
         )::text;
+        """;
+
+    const string ReportedVehicleJson = "'reportedVehicleWindows', COALESCE((SELECT jsonb_agg(jsonb_build_object("
+        + "'citySlug', city_slug, 'window', window_key, 'count', population_count,"
+        + "'expectedHours', expected_hours, 'contributingHours', contributing_hours, 'fullyCoveredHours', fully_covered_hours,"
+        + "'firstContributingUtc', CASE WHEN first_contributing_utc IS NULL THEN NULL ELSE to_char(first_contributing_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') END,"
+        + "'lastContributingUtc', CASE WHEN last_contributing_utc IS NULL THEN NULL ELSE to_char(last_contributing_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') END,"
+        + "'unidentifiableRecordCount', unidentifiable_record_count, 'fallbackRecordCount', fallback_record_count,"
+        + "'exclusions', exclusions, 'limitations', limitations) ORDER BY city_slug COLLATE \"C\", window_key) FROM reported_window_results), '[]'::jsonb)";
+
+    const string ReportedVehicleCtes = """
+        , reported_policy AS (
+            SELECT p.city_slug COLLATE "C" AS city_slug, p.source_set_fingerprint,
+                   p.cadence_policy_fingerprint, p.sources
+            FROM request CROSS JOIN LATERAL jsonb_to_recordset(doc->'reported_vehicle_policies') AS p(
+                city_slug text, source_set_fingerprint text, cadence_policy_fingerprint text, sources jsonb)
+        ),
+        reported_headers AS (
+            SELECT t.city_slug, t.hour_start_utc, t.is_today, t.is_last24,
+                   p.source_set_fingerprint AS expected_source_fingerprint,
+                   p.cadence_policy_fingerprint AS expected_cadence_fingerprint,
+                   p.sources AS expected_sources,
+                   CASE WHEN jsonb_typeof(p.sources) = 'array' THEN jsonb_array_length(p.sources) ELSE 0 END::integer AS configured_source_count,
+                   h.city_slug IS NOT NULL AS has_header,
+                   h.definition_version, h.source_set_fingerprint, h.cadence_policy_fingerprint,
+                   h.collection_status, h.has_conflict, h.identity_integrity, h.membership_count,
+                   h.successful_poll_count, h.failed_poll_count, h.unidentifiable_record_count,
+                   h.fallback_record_count, h.expected_source_count, h.source_diagnostics_json,
+                   h.incomplete_reasons, h.identity_limitations,
+                   COALESCE(mc.actual_membership_count, 0)::bigint AS actual_membership_count
+            FROM target_hours AS t
+            LEFT JOIN reported_policy AS p ON p.city_slug = t.city_slug COLLATE "C"
+            LEFT JOIN public.city_reported_vehicle_hours AS h
+              ON h.city_slug COLLATE "C" = t.city_slug COLLATE "C" AND h.hour_start_utc = t.hour_start_utc
+            LEFT JOIN LATERAL (
+                SELECT count(*)::bigint AS actual_membership_count
+                FROM public.city_reported_vehicle_hour_memberships AS m
+                WHERE m.city_slug COLLATE "C" = t.city_slug COLLATE "C" AND m.hour_start_utc = t.hour_start_utc
+            ) AS mc ON h.city_slug IS NOT NULL
+        ),
+        reported_diagnostics AS (
+            SELECT h.city_slug, h.hour_start_utc,
+                   count(d.value)::integer AS diagnostic_count,
+                   count(DISTINCT d.value->>'SourceKey')::integer AS distinct_source_count,
+                   bool_and(
+                     jsonb_typeof(d.value) = 'object'
+                     AND h.expected_source_count = h.configured_source_count
+                     AND expected.value IS NOT NULL
+                     AND COALESCE(d.value->>'SuccessfulPollCount' ~ '^[0-9]+$', false)
+                     AND COALESCE(d.value->>'FailedPollCount' ~ '^[0-9]+$', false)
+                     AND COALESCE(d.value->>'UnidentifiableRecordCount' ~ '^[0-9]+$', false)
+                     AND COALESCE(d.value->>'FallbackRecordCount' ~ '^[0-9]+$', false)
+                     AND d.value->>'StartBoundaryOk' IN ('true','false')
+                     AND d.value->>'EndBoundaryOk' IN ('true','false')
+                     AND jsonb_typeof(d.value->'Reasons') = 'array'
+                     AND (d.value->'Reasons') <@ '["cadence_gap","clock_regression","end_boundary_missing","identity_limit_exceeded","missing_identity","missing_source","source_failure","source_set_changed","start_boundary_missing","startup_fragment","shutdown_fragment"]'::jsonb
+                     AND (d.value->>'StartBoundaryOk' <> 'true' OR COALESCE(d.value->>'PredecessorWitnessUtc' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*(Z|[+][0-9]{2}:[0-9]{2})$', false))
+                     AND (d.value->>'EndBoundaryOk' <> 'true' OR COALESCE(d.value->>'SuccessorWitnessUtc' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*(Z|[+][0-9]{2}:[0-9]{2})$', false))
+                     AND ((d.value->>'SuccessfulPollCount') = '0' OR (COALESCE(d.value->>'FirstSuccessfulUtc' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*(Z|[+][0-9]{2}:[0-9]{2})$', false) AND COALESCE(d.value->>'LastSuccessfulUtc' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*(Z|[+][0-9]{2}:[0-9]{2})$', false)))
+                     AND (d.value->>'MaximumGapSeconds' IS NULL OR COALESCE(d.value->>'MaximumGapSeconds' ~ '^[0-9]+([.][0-9]+)?$', false))
+                   ) AS diagnostics_valid,
+                   bool_and(
+                     CASE WHEN COALESCE(d.value->>'SuccessfulPollCount' ~ '^[0-9]+$', false)
+                       AND COALESCE(d.value->>'FailedPollCount' ~ '^[0-9]+$', false)
+                       AND COALESCE(d.value->>'UnidentifiableRecordCount' ~ '^[0-9]+$', false)
+                       AND COALESCE(d.value->>'MaximumGapSeconds' ~ '^[0-9]+([.][0-9]+)?$', false)
+                       THEN (d.value->>'SuccessfulPollCount')::numeric > 0
+                         AND (d.value->>'FailedPollCount')::numeric = 0
+                         AND d.value->>'StartBoundaryOk' = 'true'
+                         AND d.value->>'EndBoundaryOk' = 'true'
+                         AND (d.value->>'MaximumGapSeconds')::numeric <= (expected.value->>'gap_limit_seconds')::numeric
+                         AND (d.value->>'UnidentifiableRecordCount')::numeric = 0
+                       ELSE false END
+                   ) AS diagnostics_fully_covered
+            FROM reported_headers AS h
+            LEFT JOIN LATERAL jsonb_array_elements(
+                CASE WHEN jsonb_typeof(h.source_diagnostics_json) = 'array' THEN h.source_diagnostics_json ELSE '[]'::jsonb END) AS d(value) ON true
+            LEFT JOIN LATERAL jsonb_array_elements(
+                CASE WHEN jsonb_typeof(h.expected_sources) = 'array' THEN h.expected_sources ELSE '[]'::jsonb END) AS expected(value)
+              ON expected.value->>'source_key' = d.value->>'SourceKey'
+            GROUP BY h.city_slug, h.hour_start_utc
+        ),
+        reported_evaluated AS (
+            SELECT h.*,
+                   COALESCE(d.diagnostics_valid AND d.diagnostic_count = h.expected_source_count
+                     AND d.distinct_source_count = h.expected_source_count
+                     AND h.expected_source_count = h.configured_source_count, false) AS diagnostics_valid,
+                   COALESCE(d.diagnostics_fully_covered AND d.diagnostic_count = h.expected_source_count
+                     AND d.distinct_source_count = h.expected_source_count
+                     AND h.expected_source_count = h.configured_source_count, false) AS diagnostics_fully_covered,
+                   CASE
+                     WHEN NOT h.has_header THEN 'missing_hour'
+                     WHEN h.expected_source_fingerprint IS NULL THEN 'source_policy_mismatch'
+                     WHEN h.definition_version <> 'reported-vehicles-v1' THEN 'unsupported_definition'
+                     WHEN h.source_set_fingerprint <> h.expected_source_fingerprint THEN 'source_policy_mismatch'
+                     WHEN h.cadence_policy_fingerprint <> h.expected_cadence_fingerprint THEN 'cadence_policy_mismatch'
+                     WHEN h.has_conflict THEN 'conflict'
+                     WHEN NOT h.identity_integrity OR h.actual_membership_count <> h.membership_count THEN 'identity_loss'
+                     WHEN NOT COALESCE(d.diagnostics_valid AND d.diagnostic_count = h.expected_source_count
+                       AND d.distinct_source_count = h.expected_source_count
+                       AND h.expected_source_count = h.configured_source_count, false) THEN 'identity_loss'
+                     WHEN h.collection_status = 'NoData' OR h.successful_poll_count = 0 THEN 'no_usable_observation'
+                     ELSE ''
+                   END AS exclusion_reason
+            FROM reported_headers AS h
+            LEFT JOIN reported_diagnostics AS d USING (city_slug, hour_start_utc)
+        ),
+        reported_window_hours AS (
+            SELECT e.city_slug, e.hour_start_utc, w.window_key,
+                   (e.exclusion_reason = '') AS contributes,
+                   (e.exclusion_reason = '' AND e.collection_status = 'Complete'
+                     AND e.failed_poll_count = 0 AND e.unidentifiable_record_count = 0
+                     AND cardinality(e.incomplete_reasons) = 0 AND e.diagnostics_fully_covered) AS fully_covered,
+                   e.exclusion_reason, e.unidentifiable_record_count, e.fallback_record_count,
+                   e.incomplete_reasons, e.identity_limitations
+            FROM reported_evaluated AS e
+            CROSS JOIN LATERAL (VALUES ('today', e.is_today), ('last24CompletedHours', e.is_last24)) AS w(window_key, included)
+            WHERE w.included
+        ),
+        reported_distinct_memberships AS (
+            SELECT DISTINCT h.city_slug COLLATE "C" AS city_slug, h.window_key,
+                   m.identity_namespace COLLATE "C" AS identity_namespace,
+                   m.identity_kind COLLATE "C" AS identity_kind,
+                   m.identity_value COLLATE "C" AS identity_value
+            FROM reported_window_hours AS h
+            JOIN public.city_reported_vehicle_hour_memberships AS m
+              ON m.city_slug COLLATE "C" = h.city_slug COLLATE "C" AND m.hour_start_utc = h.hour_start_utc
+            WHERE h.contributes
+        ),
+        reported_population_counts AS (
+            SELECT city_slug, window_key, count(*)::bigint AS population_count
+            FROM reported_distinct_memberships
+            GROUP BY city_slug, window_key
+        ),
+        reported_exclusion_counts AS (
+            SELECT city_slug, window_key, exclusion_reason AS code, count(*)::integer AS hours
+            FROM reported_window_hours
+            WHERE exclusion_reason <> ''
+            GROUP BY city_slug, window_key, exclusion_reason
+        ),
+        reported_limitations AS (
+            SELECT DISTINCT h.city_slug, h.window_key, codes.code
+            FROM reported_window_hours AS h
+            CROSS JOIN LATERAL (
+                SELECT jsonb_array_elements_text(to_jsonb(h.incomplete_reasons)) AS code WHERE h.contributes
+                UNION ALL
+                SELECT jsonb_array_elements_text(to_jsonb(h.identity_limitations)) AS code WHERE h.contributes
+            ) AS codes
+        ),
+        reported_window_aggregates AS (
+            SELECT city_slug, window_key,
+                   count(*)::integer AS expected_hours,
+                   count(*) FILTER (WHERE contributes)::integer AS contributing_hours,
+                   count(*) FILTER (WHERE fully_covered)::integer AS fully_covered_hours,
+                   min(hour_start_utc) FILTER (WHERE contributes) AS first_contributing_utc,
+                   max(hour_start_utc) FILTER (WHERE contributes) AS last_contributing_utc,
+                   COALESCE(sum(unidentifiable_record_count) FILTER (WHERE contributes), 0)::bigint AS unidentifiable_record_count,
+                   COALESCE(sum(fallback_record_count) FILTER (WHERE contributes), 0)::bigint AS fallback_record_count
+            FROM reported_window_hours
+            GROUP BY city_slug, window_key
+        ),
+        reported_window_results AS (
+            SELECT a.city_slug, a.window_key,
+                   CASE WHEN a.contributing_hours = 0 THEN NULL ELSE COALESCE(p.population_count, 0) END AS population_count,
+                   a.expected_hours, a.contributing_hours, a.fully_covered_hours,
+                   a.first_contributing_utc, a.last_contributing_utc,
+                   a.unidentifiable_record_count, a.fallback_record_count,
+                   COALESCE((SELECT jsonb_agg(jsonb_build_object('code', x.code, 'hours', x.hours) ORDER BY x.code)
+                       FROM reported_exclusion_counts AS x WHERE x.city_slug = a.city_slug AND x.window_key = a.window_key), '[]'::jsonb) AS exclusions,
+                   COALESCE((SELECT jsonb_agg(x.code ORDER BY x.code)
+                       FROM reported_limitations AS x WHERE x.city_slug = a.city_slug AND x.window_key = a.window_key), '[]'::jsonb) AS limitations
+            FROM reported_window_aggregates AS a
+            LEFT JOIN reported_population_counts AS p USING (city_slug, window_key)
+        )
         """;
 }

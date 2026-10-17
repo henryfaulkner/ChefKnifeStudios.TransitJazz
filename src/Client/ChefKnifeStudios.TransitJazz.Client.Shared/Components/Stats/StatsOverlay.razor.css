@@ -47,6 +47,14 @@
 .stats-overlay__totals h2 { margin: 0; font-size: 1rem; }
 .stats-overlay__totals p { margin: .5rem 0; font-size: 1.5rem; }
 .stats-overlay__totals strong { font-variant-numeric: tabular-nums; }
+.stats-overlay__reported { margin-top: .85rem; padding-top: .65rem; border-top: 1px solid currentColor; font-size: .875rem; line-height: 1.4; }
+.stats-overlay__reported h3 { margin: 0; font-size: .95rem; font-weight: 600; }
+.stats-overlay__reported p { margin: .35rem 0; font-size: .875rem; }
+.stats-overlay__reported .stats-overlay__reported-count { margin: .25rem 0; font-size: 1.25rem; }
+.stats-overlay__reported-explanation { opacity: .78; }
+.stats-overlay__reported details { margin-top: .4rem; }
+.stats-overlay__reported summary { cursor: pointer; min-height: 2rem; }
+.stats-overlay__reported ul { margin: .35rem 0 0; padding-inline-start: 1.25rem; overflow-wrap: anywhere; }
 .stats-overlay__table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 .stats-overlay table { width: max-content; min-width: 100%; border-collapse: collapse; }
 .stats-overlay caption { text-align: start; padding: .5rem 0; }

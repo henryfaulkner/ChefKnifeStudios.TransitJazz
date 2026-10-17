@@ -116,7 +116,8 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<StatsOverlayService>(sp => new StatsOverlayService(
     sp.GetService<IStatsOverlayQuery>(),
     sp.GetRequiredService<StatsOverlayOptions>(),
-    sp.GetRequiredService<TimeProvider>()));
+    sp.GetRequiredService<TimeProvider>(),
+    sp.GetService<StatsOverlayReportedVehiclePolicyCatalog>()?.Catalog));
 
 builder.Services.AddStatsOverlayRateLimiting();
 
@@ -173,6 +174,7 @@ builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection
 builder.Services.AddSingleton<MartaCity>();
 
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
+var reportedVehicleConfiguration = ReportedVehicleCaptureConfiguration.FromConfiguration(builder.Configuration, cityConfigs);
 
 var historicalStatisticsOptions = builder.Configuration.GetSection(HistoricalStatisticsOptions.SectionName).Get<HistoricalStatisticsOptions>()
     ?? new HistoricalStatisticsOptions();
@@ -184,6 +186,12 @@ routeHourHistoryOptions.Validate(workerOptions.CycleIntervalSeconds, historicalS
 statsOverlayOptions.PopulateConfiguredCityPolicy(cityConfigs, routeHourHistoryOptions,
     requireLocalizedDisplayNames: statsOverlayOptions.Enabled);
 statsOverlayOptions.Validate(requireCities: statsOverlayOptions.Enabled);
+if (statsOverlayOptions.ReportedVehiclesEnabled)
+{
+    var reportingCatalog = ReportedVehicleCatalogBuilder.Build(cityConfigs,
+        statsOverlayOptions.Cities.Select(city => city.CitySlug));
+    builder.Services.AddSingleton(new StatsOverlayReportedVehiclePolicyCatalog(reportingCatalog));
+}
 IEnumerable<string> configuredCityNamesSource = cityConfigs.Count == 0
     ? new[] { CityNames.Marta }
     : cityConfigs.Select(city => city.Name);
@@ -220,6 +228,9 @@ else if (historicalStatisticsOptions.Enabled)
 {
     throw new InvalidOperationException("Historical statistics collection requires ConnectionStrings:TransitJazzDB.");
 }
+ReportedVehicleCaptureServiceCollectionExtensions.ValidatePersistencePrerequisites(
+    reportedVehicleConfiguration.Runtime, transitJazzConnectionString);
+builder.Services.AddReportedVehicleCaptureRuntime(reportedVehicleConfiguration);
 
 var cityCategoryInsightsOptions = CityCategoryInsightsOptions.FromConfiguration(builder.Configuration);
 cityCategoryInsightsOptions.Validate(workerOptions.CycleIntervalSeconds);
@@ -253,9 +264,18 @@ RouteHourCaptureServiceCollectionExtensions.ValidatePersistencePrerequisites(rou
 builder.Services.AddRouteHourStatisticsCaptureRuntime(routeHourRuntime);
 
 var nymtaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase));
+var martaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Marta, StringComparison.OrdinalIgnoreCase));
+builder.Services.PostConfigure<RailRealtimeOptions>(options =>
+{
+    options.ReportedVehicleCaptureEnabled = reportedVehicleConfiguration.Runtime.IsEnabledFor(CityNames.Marta);
+    options.BusReportedVehicleSource = martaConfig?.ReportedVehicleSources.SingleOrDefault();
+    options.RailReportedVehicleSource = martaConfig?.RailRealtime?.ReportedVehicleSource;
+});
 builder.Services.Configure<SubwaySynthesisOptions>(o =>
 {
     o.GtfsRtUrls = nymtaConfig?.GtfsRtUrls ?? [];
+    o.ReportedVehicleCaptureEnabled = reportedVehicleConfiguration.Runtime.IsEnabledFor(CityNames.Nymta);
+    o.ReportedVehicleSources = nymtaConfig?.ReportedVehicleSources ?? [];
 });
 builder.Services.AddSingleton(sp =>
 {
@@ -268,13 +288,17 @@ builder.Services.AddSingleton(sp =>
         ApiKeyEnvVar = nymtaConfig?.ApiKeyEnvVar,
         ApiKeyQueryParam = nymtaConfig?.ApiKeyQueryParam ?? "api_key",
         RouteIdNormalization = nymtaConfig?.RouteIdNormalization ?? [],
+        ReportedVehicleSources = nymtaConfig?.BusReportedVehicleSources ?? [],
     };
     return new NymtaCity(
         sp.GetRequiredService<IHttpClientFactory>(),
         sp.GetRequiredService<IOptions<SubwaySynthesisOptions>>(),
         busConfig,
         sp.GetRequiredService<ILogger<NymtaCity>>(),
-        sp.GetRequiredService<ILogger<GtfsRtCity>>());
+        sp.GetRequiredService<ILogger<GtfsRtCity>>(),
+        sp.GetRequiredService<TimeProvider>(),
+        sp.GetRequiredService<ReportedVehicleBufferBudget>(),
+        reportedVehicleConfiguration.Options);
 });
 
 builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
@@ -294,7 +318,9 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
         }
         else
         {
-            cities.Add(new GtfsRtCity(cfg, httpFactory, logFactory.CreateLogger<GtfsRtCity>()));
+            cities.Add(new GtfsRtCity(cfg, httpFactory, logFactory.CreateLogger<GtfsRtCity>(),
+                sp.GetRequiredService<TimeProvider>(), reportedVehicleConfiguration.Runtime.IsEnabledFor(cfg.Name),
+                sp.GetRequiredService<ReportedVehicleBufferBudget>(), reportedVehicleConfiguration.Options));
         }
     }
     if (cities.Count == 0)
