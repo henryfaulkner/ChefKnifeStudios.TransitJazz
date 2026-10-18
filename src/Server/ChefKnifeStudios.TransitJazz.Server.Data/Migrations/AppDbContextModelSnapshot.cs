@@ -358,6 +358,172 @@ namespace ChefKnifeStudios.TransitJazz.Server.Data.Migrations
                     b.ToTable("city_minute_statistics", (string)null);
                 });
 
+            modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityReportedVehicleHour", b =>
+                {
+                    b.Property<string>("CitySlug")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("city_slug");
+
+                    b.Property<DateTime>("HourStartUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("hour_start_utc");
+
+                    b.Property<string>("CadencePolicyFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("cadence_policy_fingerprint");
+
+                    b.Property<Guid>("CaptureRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("capture_run_id");
+
+                    b.Property<string>("CollectionStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("collection_status");
+
+                    b.Property<string>("DefinitionVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("definition_version");
+
+                    b.Property<int>("ExpectedSourceCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("expected_source_count");
+
+                    b.Property<long>("FailedPollCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("failed_poll_count");
+
+                    b.Property<long>("FallbackRecordCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("fallback_record_count");
+
+                    b.Property<bool>("HasConflict")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("has_conflict");
+
+                    b.Property<bool>("IdentityIntegrity")
+                        .HasColumnType("boolean")
+                        .HasColumnName("identity_integrity");
+
+                    b.PrimitiveCollection<string[]>("IdentityLimitations")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("identity_limitations")
+                        .HasDefaultValueSql("ARRAY[]::text[]");
+
+                    b.PrimitiveCollection<string[]>("IncompleteReasons")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("incomplete_reasons")
+                        .HasDefaultValueSql("ARRAY[]::text[]");
+
+                    b.Property<long>("MembershipCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("membership_count");
+
+                    b.Property<DateTime?>("ObservedEndUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("observed_end_utc");
+
+                    b.Property<DateTime?>("ObservedStartUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("observed_start_utc");
+
+                    b.Property<DateTime>("PersistedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("persisted_at_utc")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("SourceDiagnosticsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("source_diagnostics_json");
+
+                    b.Property<string>("SourceSetFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_set_fingerprint");
+
+                    b.Property<long>("SuccessfulPollCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("successful_poll_count");
+
+                    b.Property<long>("UnidentifiableRecordCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("unidentifiable_record_count");
+
+                    b.HasKey("CitySlug", "HourStartUtc");
+
+                    b.HasIndex("HourStartUtc", "CitySlug");
+
+                    b.ToTable("city_reported_vehicle_hours", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_reported_vehicle_hour_aligned", "date_trunc('hour', hour_start_utc AT TIME ZONE 'UTC') = hour_start_utc AT TIME ZONE 'UTC'");
+
+                            t.HasCheckConstraint("ck_reported_vehicle_hour_complete", "collection_status <> 'Complete' OR (identity_integrity AND NOT has_conflict AND failed_poll_count = 0 AND unidentifiable_record_count = 0 AND cardinality(incomplete_reasons) = 0)");
+
+                            t.HasCheckConstraint("ck_reported_vehicle_hour_identity", "length(btrim(city_slug)) > 0 AND length(btrim(definition_version)) > 0 AND source_set_fingerprint ~ '^[0-9a-f]{64}$' AND cadence_policy_fingerprint ~ '^[0-9a-f]{64}$' AND capture_run_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_reported_vehicle_hour_no_data", "collection_status <> 'NoData' OR (successful_poll_count = 0 AND membership_count = 0)");
+
+                            t.HasCheckConstraint("ck_reported_vehicle_hour_nonnegative", "membership_count BETWEEN 0 AND 100000 AND successful_poll_count >= 0 AND failed_poll_count >= 0 AND unidentifiable_record_count >= 0 AND fallback_record_count >= 0 AND expected_source_count BETWEEN 1 AND 32 AND octet_length(source_diagnostics_json::text) <= 16384");
+
+                            t.HasCheckConstraint("ck_reported_vehicle_hour_reasons", "incomplete_reasons <@ ARRAY['cadence_gap','clock_regression','end_boundary_missing','identity_limit_exceeded','missing_identity','missing_source','source_failure','source_set_changed','start_boundary_missing','startup_fragment','shutdown_fragment']::text[] AND identity_limitations <@ ARRAY['agency_fallback_identity','descriptor_identity','identity_limit_exceeded']::text[]");
+
+                            t.HasCheckConstraint("ck_reported_vehicle_hour_status", "collection_status IN ('Complete','Partial','NoData')");
+
+                            t.HasCheckConstraint("ck_reported_vehicle_hour_times", "(observed_start_utc IS NULL AND observed_end_utc IS NULL) OR (observed_start_utc IS NOT NULL AND observed_end_utc IS NOT NULL AND observed_start_utc <= observed_end_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityReportedVehicleHourMembership", b =>
+                {
+                    b.Property<string>("CitySlug")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("city_slug");
+
+                    b.Property<DateTime>("HourStartUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("hour_start_utc");
+
+                    b.Property<string>("IdentityNamespace")
+                        .HasColumnType("text")
+                        .HasColumnName("identity_namespace")
+                        .UseCollation("C");
+
+                    b.Property<string>("IdentityKind")
+                        .HasColumnType("text")
+                        .HasColumnName("identity_kind")
+                        .UseCollation("C");
+
+                    b.Property<string>("IdentityValue")
+                        .HasColumnType("text")
+                        .HasColumnName("identity_value")
+                        .UseCollation("C");
+
+                    b.HasKey("CitySlug", "HourStartUtc", "IdentityNamespace", "IdentityKind", "IdentityValue");
+
+                    b.HasIndex("CitySlug", "HourStartUtc");
+
+                    b.ToTable("city_reported_vehicle_hour_memberships", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_reported_vehicle_membership_identity", "length(btrim(identity_namespace)) > 0 AND length(btrim(identity_kind)) > 0 AND length(btrim(identity_value)) > 0 AND octet_length(identity_namespace) <= 64 AND octet_length(identity_kind) <= 64 AND octet_length(identity_value) <= 512");
+                        });
+                });
+
             modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityRouteHourStatistic", b =>
                 {
                     b.Property<string>("CitySlug")
@@ -557,6 +723,22 @@ namespace ChefKnifeStudios.TransitJazz.Server.Data.Migrations
 
                             t.HasCheckConstraint("ck_city_route_hour_status", "collection_status IN ('Complete','Partial','NoData')");
                         });
+                });
+
+            modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityReportedVehicleHourMembership", b =>
+                {
+                    b.HasOne("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityReportedVehicleHour", "Hour")
+                        .WithMany("Memberships")
+                        .HasForeignKey("CitySlug", "HourStartUtc")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Hour");
+                });
+
+            modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityReportedVehicleHour", b =>
+                {
+                    b.Navigation("Memberships");
                 });
 #pragma warning restore 612, 618
         }

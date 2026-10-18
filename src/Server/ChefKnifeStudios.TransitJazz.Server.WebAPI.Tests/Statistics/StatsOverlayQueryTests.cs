@@ -7,6 +7,20 @@ namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.Statistics;
 
 public sealed class StatsOverlayQueryTests
 {
+    [Fact]
+    public void DisabledReportedVehicleSqlHasNoReferencesToTheNewRelations()
+    {
+        var disabled = StatsOverlayQuery.BuildCommandText(reportedVehiclesEnabled: false);
+        var enabled = StatsOverlayQuery.BuildCommandText(reportedVehiclesEnabled: true);
+
+        Assert.DoesNotContain("city_reported_vehicle_hours", disabled, StringComparison.Ordinal);
+        Assert.DoesNotContain("city_reported_vehicle_hour_memberships", disabled, StringComparison.Ordinal);
+        Assert.Contains("city_reported_vehicle_hours", enabled, StringComparison.Ordinal);
+        Assert.Contains("city_reported_vehicle_hour_memberships", enabled, StringComparison.Ordinal);
+        Assert.DoesNotContain("REPORTED_VEHICLE_CTES", disabled, StringComparison.Ordinal);
+        Assert.DoesNotContain("REPORTED_VEHICLE_CTES", enabled, StringComparison.Ordinal);
+    }
+
     [RouteHourPostgresFact]
     public async Task OneBoundedReadChecksWholeCohortsAndReturnsBothWindowsAndAllCities()
     {

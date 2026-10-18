@@ -74,8 +74,116 @@ public static class StatsOverlayProjection
         pie.Validate();
         bubbles.Validate();
         timeline.Validate();
-        return new StatsOverlayPresentation(response, pie, bubbles, timeline);
+        return new StatsOverlayPresentation(response, pie, bubbles, timeline,
+            ProjectReportedVehicles(response.TodayReportedVehicles, response, localize, culture),
+            ProjectReportedVehicles(response.Last24ReportedVehicles, response, localize, culture));
     }
+
+    static StatsReportedVehiclePresentation ProjectReportedVehicles(StatsReportedVehicleSummary summary,
+        StatsOverlayResponse response, Func<string, string> localize, CultureInfo culture)
+    {
+        var heading = summary.Window == "today" ? "StatsReportedVehiclesToday" : "StatsReportedVehiclesLast24";
+        var count = summary.Count?.ToString("N0", culture)
+            ?? localize(summary.State switch
+            {
+                "pending" => "StatsCoveragePending",
+                _ => "StatsCoverageUnavailable",
+            });
+        var coverage = summary.State switch
+        {
+            "complete" => localize("StatsReportedVehicleComplete"),
+            "partial" => string.Format(culture, localize("StatsReportedVehiclePartial"),
+                summary.ContributingCityHours, summary.ExpectedCityHours),
+            "pending" => localize("StatsCoveragePending"),
+            _ => localize("StatsCoverageUnavailable"),
+        };
+        var details = summary.Cities.Select(city =>
+        {
+            var window = response.Cities.FirstOrDefault(x => x.CitySlug == city.CitySlug);
+            var cityName = window is null ? localize("StatsCityUnknown") : localize(window.DisplayNameKey);
+            var period = window is null ? city.WindowReference : WindowPeriod(window, summary.Window == "today");
+            var state = city.State switch
+            {
+                "complete" => localize("StatsReportedVehicleComplete"),
+                "partial" => string.Format(culture, localize("StatsReportedVehiclePartial"), city.ContributingHours, city.ExpectedHours),
+                "pending" => localize("StatsCoveragePending"),
+                _ => localize("StatsCoverageUnavailable"),
+            };
+            var localCount = city.Count?.ToString("N0", culture) ?? state;
+            var text = $"{cityName}: {localCount}; {state}; {period}";
+            if (city.UnidentifiableRecordCount > 0)
+                text += "; " + string.Format(culture, localize("StatsReportedVehicleMissingIdentity"), city.UnidentifiableRecordCount);
+            if (city.FallbackRecordCount > 0)
+                text += "; " + string.Format(culture, localize("StatsReportedVehicleFallbackIdentity"), city.FallbackRecordCount);
+            foreach (var exclusion in city.Exclusions.Where(item => item.Hours > 0))
+            {
+                var key = ExclusionResourceKey(exclusion.Code);
+                if (key is not null)
+                    text += "; " + string.Format(culture, localize(key), exclusion.Hours);
+            }
+            foreach (var limitation in city.Limitations)
+            {
+                var key = LimitationResourceKey(limitation);
+                if (key is not null) text += "; " + localize(key);
+            }
+            return text;
+        }).ToArray();
+        return new StatsReportedVehiclePresentation(heading, count, coverage, details);
+    }
+
+    static string WindowPeriod(StatsCityWindow city, bool today)
+    {
+        if (today) return $"{city.LocalDate.ToString("d", CultureInfo.GetCultureInfo("en"))} ({city.TimeZone})";
+        try
+        {
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(city.TimeZone);
+            var start = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(city.Last24StartUtc, DateTimeKind.Utc), zone);
+            var end = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(city.Last24EndUtc, DateTimeKind.Utc), zone);
+            var utc = CultureInfo.GetCultureInfo("en");
+            return $"{start.ToString("g", utc)}–{end.ToString("g", utc)} ({city.TimeZone}; UTC {city.Last24StartUtc:HH:mm}–{city.Last24EndUtc:HH:mm})";
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return $"{UtcText(city.Last24StartUtc)}–{UtcText(city.Last24EndUtc)}";
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return $"{UtcText(city.Last24StartUtc)}–{UtcText(city.Last24EndUtc)}";
+        }
+    }
+
+    static string? ExclusionResourceKey(string code) => code switch
+    {
+        "missing_hour" => "StatsReportedVehicleMissingHour",
+        "no_usable_observation" => "StatsReportedVehicleNoObservation",
+        "conflict" => "StatsReportedVehicleConflict",
+        "identity_loss" => "StatsReportedVehicleIdentityLoss",
+        "unsupported_definition" => "StatsReportedVehicleUnsupportedDefinition",
+        "source_policy_mismatch" => "StatsReportedVehicleSourcePolicyChanged",
+        "cadence_policy_mismatch" => "StatsReportedVehicleCadencePolicyChanged",
+        "source_failure" => "StatsReportedVehicleSourceFailure",
+        "source_missing" => "StatsReportedVehicleSourceMissing",
+        "boundary_excluded" => "StatsReportedVehicleBoundaryExcluded",
+        _ => null,
+    };
+
+    static string? LimitationResourceKey(string code) => code switch
+    {
+        "cadence_gap" => "StatsReportedVehicleCadenceGap",
+        "clock_regression" => "StatsReportedVehicleClockRegression",
+        "end_boundary_missing" => "StatsReportedVehicleEndBoundaryMissing",
+        "identity_limit_exceeded" => "StatsReportedVehicleIdentityLimit",
+        "missing_identity" => "StatsReportedVehicleMissingIdentityLimitation",
+        "missing_source" => "StatsReportedVehicleSourceMissingLimitation",
+        "source_failure" => "StatsReportedVehicleSourceFailureLimitation",
+        "source_set_changed" => "StatsReportedVehicleSourceSetChanged",
+        "start_boundary_missing" => "StatsReportedVehicleStartBoundaryMissing",
+        "startup_fragment" => "StatsReportedVehicleStartupFragment",
+        "shutdown_fragment" => "StatsReportedVehicleShutdownFragment",
+        "agency_fallback_identity" => "StatsReportedVehicleAgencyFallbackLimitation",
+        "descriptor_identity" => "StatsReportedVehicleDescriptorIdentityLimitation",
+        _ => null,
+    };
 
     public static string CategoryResourceKey(string? key) => key?.Trim().ToLowerInvariant() switch
     {
@@ -243,4 +351,12 @@ public sealed record StatsOverlayPresentation(
     StatsOverlayResponse Snapshot,
     PieChartModel CategoryPie,
     BubbleChartModel Bubbles,
-    SeriesChartModel Timeline);
+    SeriesChartModel Timeline,
+    StatsReportedVehiclePresentation TodayReportedVehicles,
+    StatsReportedVehiclePresentation Last24ReportedVehicles);
+
+public sealed record StatsReportedVehiclePresentation(
+    string HeadingKey,
+    string CountText,
+    string CoverageText,
+    IReadOnlyList<string> CityDetails);

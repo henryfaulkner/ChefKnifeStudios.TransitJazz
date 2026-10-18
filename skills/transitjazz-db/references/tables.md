@@ -11,6 +11,7 @@ Use these directory aliases for the file references below:
 - **Worker**: `src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker`
 - **Contracts**: `specs/056-city-transit-type-insights/contracts`
 - **RouteContracts**: `specs/057-hourly-route-history/contracts`
+- **ReportedVehicleContracts**: `specs/059-reported-vehicles/contracts`
 
 `Data/AppDbContext.cs` exposes four statistics entity sets. `Data/Configurations/*.cs`, the three creation migrations, and `Data/Migrations/AppDbContextModelSnapshot.cs` define the physical model. Stores and contracts address these tables in `public`.
 
@@ -20,17 +21,29 @@ Use these directory aliases for the file references below:
 | `public.city_category_minute_statistics` | One city/category's accumulated cycle observations in a UTC minute | `city_slug, category, stat_minute_utc` | Category capture coverage, activity/movement/publication diagnostics, and hourly backing evidence |
 | `public.city_category_hour_statistics` | One city/category's finalized UTC hour, with exact hour-scoped distinct activity population | `city_slug, category, hour_start_utc` | Verified hourly movement, average activity, published cadence, weighted period and local-hour reports |
 | `public.city_route_hour_statistics` | One canonical resolved route's aggregate for a UTC hour, retained with its entire city/hour cohort | `city_slug, route_join_key, hour_start_utc` | Route activity/peak, processing/staleness, movement, detected/published crossings, suppression, and coverage |
+| `public.city_reported_vehicle_hours` | One immutable city/UTC-hour capture header and source-coverage summary | `city_slug, hour_start_utc` | Source coverage, collection status, identity integrity, definition/policy fingerprints, and bounded diagnostics |
+| `public.city_reported_vehicle_hour_memberships` | One exact ordinal identity in a complete city/hour population | `city_slug, hour_start_utc, identity_namespace, identity_kind, identity_value` | Private membership storage used for distinct unions across completed windows; never a vehicle event log |
 | `public."__EFMigrationsHistory"` | An applied EF migration | `"MigrationId"` in the standard EF history table | Establish which checked-in migrations were applied; introspect actual columns/location first |
 
-The four statistics entities do not inherit `BaseEntity`. There are no `id`, `is_deleted`, `created_on_utc`, or `modified_on_utc` columns in their mappings. The creation migrations declare composite primary keys and no foreign keys. The route-hour table additionally indexes `(city_slug, hour_start_utc, route_join_key)` and has `persisted_at_utc` provenance. Definition versions are metadata, not part of those primary keys.
+The six statistics entities do not inherit `BaseEntity`. There are no `id`, `is_deleted`, `created_on_utc`, or `modified_on_utc` columns in their mappings. Their creation migrations declare composite primary keys; the reported-vehicle membership table has a cascading composite foreign key to its hour header. The route-hour table additionally indexes `(city_slug, hour_start_utc, route_join_key)` and has `persisted_at_utc` provenance. Definition versions are metadata, not part of those primary keys.
 
-There is no persistent route catalog/dimension, route-minute history, or vehicle, trip, listener, or user entity table in this context. Route-hour aggregates retain historical route metadata without a foreign key to today's catalog. `API/Repositories/InMemoryKeyValueRepository.cs` and `API/GtfsStatic/GtfsStaticLoader.cs` supply the runtime GTFS catalog. A deployed database may contain unrelated or legacy tables; inspect them rather than assigning TransitJazz meaning without a producer/mapping.
+There is no persistent route catalog/dimension, route-minute history, mutable vehicle/trip entity, listener, or user entity table in this context. Reported-vehicle membership strings are the privacy-sensitive exception: they retain exact vehicle identity values per city/hour so supported windows can deduplicate across hours. Do not expose or export those values. Route-hour aggregates retain historical route metadata without a foreign key to today's catalog. `API/Repositories/InMemoryKeyValueRepository.cs` and `API/GtfsStatic/GtfsStaticLoader.cs` supply the runtime GTFS catalog. A deployed database may contain unrelated or legacy tables; inspect them rather than assigning TransitJazz meaning without a producer/mapping.
 
 All time windows use UTC, start inclusive and end exclusive. `timestamptz` is PostgreSQL `timestamp with time zone`; normalize display to UTC. Configured city slugs are `atlanta`, `washington-dc`, `boston`, `new-york-city`, `toronto`, `philadelphia`, and `denver` in the committed server settings. Re-read `API/appsettings.json` and the selected runtime configuration when resolving current membership.
 
 ## city_route_hour_statistics
 
 Read [route-hours.md](route-hours.md) for the full column guide, canonical route identity, capture controls, cohort quarantine, coverage criteria, and weighted metric definitions. Sources include `Data/Models/CityRouteHourStatistic.cs`, `Data/Configurations/CityRouteHourStatisticConfiguration.cs`, `Data/Statistics/CityRouteHourStatisticsStore.cs`, `Data/Migrations/20261010151240_CreateCityRouteHourStatistics.cs`, and RouteContracts. Feature 057's spec/plan describe intent; checked-in mappings, producers, and the selected database establish implementation and rollout.
+
+## city_reported_vehicle_hours and city_reported_vehicle_hour_memberships
+
+**Sources**: `Data/Models/CityReportedVehicleHour{,Membership}.cs`, their configurations, `Data/Statistics/CityReportedVehicleHoursStore.cs`, migration `20261015114433_CreateCityReportedVehicleHours`, worker capture contracts in `ReportedVehicleContracts/reported-vehicle-capture-v1.md`, and reporting contract `ReportedVehicleContracts/reported-vehicle-reporting-v1.md`.
+
+The header is an immutable capture cohort keyed by city and aligned UTC hour. It records definition/run IDs, stable source and cadence fingerprints, Complete/Partial/NoData status, identity integrity/conflict flags, membership and poll counts, source diagnostics, bounded reason codes, and optional observed boundaries. A successful empty population still has a header with zero memberships. A missing header is not an observed zero. The child table stores the entire distinct population as exact ordinal namespace/kind/value tuples; its composite key uses PostgreSQL `C` collation and its city/hour foreign key cascades on bounded retention deletion. Identity component limits are 64 UTF-8 bytes for namespace/kind and 512 bytes for value; the supported hour population cap is 100,000.
+
+The store writes a header and all memberships atomically. Exact semantic retries are unchanged; any differing header or member set quarantines the cohort, and conflict remains sticky. Retention is finite and child cleanup follows header deletion. There is no count-only backfill: existing hourly or route counts cannot reconstruct these membership sets. Committed capture and read settings are disabled, and the checked-in migration does not prove that any selected database has applied it.
+
+Reported counts are exact `COUNT(DISTINCT (identity_namespace, identity_kind, identity_value))` unions over eligible city/hour memberships for a whole reporting window. Never add hourly distinct counts to produce a period distinct population. Eligibility also depends on current trusted source/cadence fingerprints, observation success, integrity, conflict state, membership-count parity, complete diagnostics, and the window's expected hour grid; see `API/Statistics/StatsOverlayQuery.cs` and the reporting contract. The Stats endpoint returns aggregate-only counts and bounded allowlisted diagnostics, never identity values.
 
 ## city_minute_statistics
 

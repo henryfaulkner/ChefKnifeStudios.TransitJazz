@@ -9,6 +9,117 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.Tests;
 
 public sealed class StatsOverlayProjectionTests
 {
+    [Fact]
+    public void ReportedVehicleProjectionKeepsNullSeparateFromZeroAndFormatsIntegerCounts()
+    {
+        string Localize(string key) => key switch
+        {
+            "StatsCoverageUnavailable" => "Unavailable",
+            "StatsCoveragePending" => "Pending",
+            "StatsReportedVehiclePartial" => "Observed; partial coverage ({0} of {1} city-hours)",
+            "StatsReportedVehicleMissingIdentity" => "Records without a usable vehicle ID: {0}",
+            _ => key,
+        };
+        var legacyResponse = Response("city", [], [], [], []) with
+        {
+            Timeline = new StatsTimeline { SeriesKind = "city", Series = [] }
+        };
+        var legacy = StatsOverlayProjection.Build(legacyResponse, Localize);
+        Assert.Equal("Unavailable", legacy.TodayReportedVehicles.CountText);
+        Assert.DoesNotContain("0", legacy.TodayReportedVehicles.CountText);
+
+        var response = Response("city", [], [], [], []) with
+        {
+            TodayReportedVehicles = new StatsReportedVehicleSummary
+            {
+                Window = "today", Count = 0, State = "partial", ExpectedCityHours = 8,
+                ContributingCityHours = 5, FullyCoveredCityHours = 2, ExpectedCityCount = 1,
+                ContributingCityCount = 1,
+                Cities = [new StatsReportedVehicleCitySummary
+                {
+                    CitySlug = "toronto", WindowReference = "toronto:today", Count = 0,
+                    State = "partial", ExpectedHours = 8, ContributingHours = 5, FullyCoveredHours = 2,
+                    UnidentifiableRecordCount = 3
+                }]
+            }
+        };
+
+        response = response with { Timeline = new StatsTimeline { SeriesKind = "city", Series = [] } };
+        var projected = StatsOverlayProjection.Build(response, Localize).TodayReportedVehicles;
+        Assert.Equal("0", projected.CountText);
+        Assert.Equal("Observed; partial coverage (5 of 8 city-hours)", projected.CoverageText);
+        Assert.Contains("Records without a usable vehicle ID: 3", Assert.Single(projected.CityDetails));
+    }
+
+    [Fact]
+    public void AllReportedVehicleProjectionShowsCountAndEachLocalWindow()
+    {
+        string Localize(string key) => key;
+        var response = Response("all", [], [], [], [],
+            [City("denver", "StatsCityDenver", new DateOnly(2026, 4, 1), "America/Denver"),
+             City("toronto", "StatsCityToronto", new DateOnly(2026, 11, 1), "America/Toronto")]) with
+        {
+            Last24ReportedVehicles = new StatsReportedVehicleSummary
+            {
+                Window = "last24", Count = 17, State = "partial", PopulationScope = "sumOfCityFeeds",
+                ExpectedCityHours = 48, ContributingCityHours = 47, FullyCoveredCityHours = 40,
+                Cities =
+                [
+                    new StatsReportedVehicleCitySummary { CitySlug = "denver", WindowReference = "denver:last24", Count = 8, State = "complete", ExpectedHours = 24, ContributingHours = 24, FullyCoveredHours = 24 },
+                    new StatsReportedVehicleCitySummary { CitySlug = "toronto", WindowReference = "toronto:last24", Count = 9, State = "partial", ExpectedHours = 24, ContributingHours = 23, FullyCoveredHours = 16 },
+                ]
+            }
+        };
+
+        response = response with { Timeline = new StatsTimeline { SeriesKind = "city", Series = [] } };
+        var projected = StatsOverlayProjection.Build(response, Localize).Last24ReportedVehicles;
+        Assert.Equal("17", projected.CountText);
+        Assert.Contains(projected.CityDetails, detail => detail.Contains("StatsCityDenver", StringComparison.Ordinal)
+            && detail.Contains("America/Denver", StringComparison.Ordinal));
+        Assert.Contains(projected.CityDetails, detail => detail.Contains("StatsCityToronto", StringComparison.Ordinal)
+            && detail.Contains("America/Toronto", StringComparison.Ordinal));
+        Assert.Contains(projected.CityDetails, detail => detail.Contains("UTC", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ReportedVehicleProjectionLocalizesBoundedCoverageReasonsWithoutExposingWireCodes()
+    {
+        string Localize(string key) => key switch
+        {
+            "StatsCoverageUnavailable" => "Unavailable",
+            "StatsCoveragePending" => "Pending",
+            "StatsReportedVehiclePartial" => "Observed; partial coverage ({0} of {1} city-hours)",
+            "StatsReportedVehicleMissingHour" => "Missing hours: {0}",
+            "StatsReportedVehicleSourcePolicyChanged" => "Source policy changed: {0} hours",
+            "StatsReportedVehicleCadenceGap" => "Feed cadence gap detected",
+            _ => key,
+        };
+        var response = Response("city", [], [], [], []) with
+        {
+            Timeline = new StatsTimeline { SeriesKind = "city", Series = [] },
+            TodayReportedVehicles = new StatsReportedVehicleSummary
+            {
+                Window = "today", Count = 4, State = "partial", ExpectedCityHours = 2,
+                ContributingCityHours = 1, PopulationScope = "cityFeeds",
+                Cities = [new StatsReportedVehicleCitySummary
+                {
+                    CitySlug = "toronto", WindowReference = "toronto:today", Count = 4,
+                    State = "partial", ExpectedHours = 2, ContributingHours = 1,
+                    Exclusions = [new("missing_hour", 1), new("source_policy_mismatch", 1)],
+                    Limitations = ["cadence_gap"],
+                }]
+            }
+        };
+
+        var detail = Assert.Single(StatsOverlayProjection.Build(response, Localize)
+            .TodayReportedVehicles.CityDetails);
+        Assert.Contains("Missing hours: 1", detail);
+        Assert.Contains("Source policy changed: 1 hours", detail);
+        Assert.Contains("Feed cadence gap detected", detail);
+        Assert.DoesNotContain("source_policy_mismatch", detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("cadence_gap", detail, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

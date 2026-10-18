@@ -27,6 +27,7 @@ FROM information_schema.columns
 WHERE table_schema = 'public'
   AND table_name IN ('city_minute_statistics', 'city_category_minute_statistics',
                      'city_category_hour_statistics', 'city_route_hour_statistics',
+                     'city_reported_vehicle_hours', 'city_reported_vehicle_hour_memberships',
                      '__EFMigrationsHistory')
 ORDER BY table_name, ordinal_position;
 '@
@@ -40,7 +41,7 @@ FROM public."__EFMigrationsHistory"
 ORDER BY "MigrationId";
 ```
 
-Checked-in creation migrations are `20260920201730_CreateCityMinuteStatistics`, `20261001204629_CreateCityCategoryStatistics`, and `20261010151240_CreateCityRouteHourStatistics`. A model file or migration class does not prove it has been applied. If a live table/column differs from [tables.md](tables.md), establish the active migration and producer contract before interpreting it. Do not run `dotnet ef database update` or the migration image for a query request.
+Checked-in creation migrations include `20260920201730_CreateCityMinuteStatistics`, `20261001204629_CreateCityCategoryStatistics`, `20261010151240_CreateCityRouteHourStatistics`, and `20261015114433_CreateCityReportedVehicleHours`. A model file or migration class does not prove it has been applied. If a live table/column differs from [tables.md](tables.md), establish the active migration and producer contract before interpreting it. Do not run `dotnet ef database update` or the migration image for a query request.
 
 ## Inspect city dashboard history
 
@@ -210,6 +211,33 @@ The helper handles named `:parameters`, not positional `$1` bindings. Do not pas
 Feature 057's plan records deterministic checks as implemented, while real disposable PostgreSQL, migration-image/load, production observation, and analyst validation remain pending. The contract/SQL still carry planning labels. Inspect the selected schema and exercise the recipe read-only before claiming operational validation.
 
 Display at most the requested preview rows after calculating full coverage and period results. Keep every selected route's missing pairs explicit. A zero-contributor period's zero sums describe an empty contributing set, not observed inactivity. For local-hour results, use `hourly` for individual dates/offsets/UTC keys and `typical_local_hours` for bucket totals; no averaging hourly ratios or counting local labels as elapsed hours.
+
+## Reported-vehicle history
+
+The authoritative visitor-facing query is the existing `API/Statistics/StatsOverlayQuery.cs` statement, with trusted source and cadence fingerprints supplied by `StatsOverlayService`. It builds the expected city/hour grid, validates per-source boundary/gap/failure diagnostics and membership integrity, then computes the exact window population using `COUNT(DISTINCT (identity_namespace, identity_kind, identity_value))` over eligible memberships. Do not sum hourly `membership_count` values: one identity can appear in multiple hours. For All, first deduplicate inside each city and then sum city populations; identities are not deduplicated between cities. Route selection affects distance, not reported-vehicle population.
+
+For a bounded storage-level health review, compare header and child counts without selecting identity values:
+
+```sql
+SELECT h.city_slug, h.hour_start_utc, h.definition_version,
+       h.collection_status, h.identity_integrity, h.has_conflict,
+       h.membership_count,
+       count(m.identity_value) AS actual_membership_count,
+       h.successful_poll_count, h.failed_poll_count,
+       h.unidentifiable_record_count, h.incomplete_reasons,
+       h.identity_limitations
+FROM public.city_reported_vehicle_hours AS h
+LEFT JOIN public.city_reported_vehicle_hour_memberships AS m
+  ON m.city_slug = h.city_slug AND m.hour_start_utc = h.hour_start_utc
+WHERE h.city_slug = :city_slug
+  AND h.hour_start_utc >= :from_utc::timestamptz
+  AND h.hour_start_utc < :to_utc::timestamptz
+GROUP BY h.city_slug, h.hour_start_utc
+ORDER BY h.hour_start_utc
+LIMIT :row_limit;
+```
+
+This parity check is not a reporting eligibility query. A window count must also apply the current definition, trusted source/cadence fingerprints, expected hour grid, and validated per-source diagnostics exactly as the Stats statement does. Do not select, display, or export `identity_namespace`, `identity_kind`, or `identity_value`; these are private stored membership values, not public diagnostics. Do not run a membership backfill from category or route aggregates.
 
 ## JSON and CSV
 

@@ -1,0 +1,5 @@
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
+
+namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
+
+public sealed record StatsOverlayReportedVehiclePolicyCatalog(ReportedVehicleSourceCatalog Catalog);

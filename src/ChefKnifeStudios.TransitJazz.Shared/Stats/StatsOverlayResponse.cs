@@ -33,6 +33,8 @@ public sealed record StatsOverlayResponse
     public required IReadOnlyList<StatsRouteOption> RouteOptions { get; init; }
     public required StatsDistanceSummary TodayDistance { get; init; }
     public required StatsDistanceSummary Last24Distance { get; init; }
+    public StatsReportedVehicleSummary TodayReportedVehicles { get; init; } = StatsReportedVehicleSummary.Unavailable("today");
+    public StatsReportedVehicleSummary Last24ReportedVehicles { get; init; } = StatsReportedVehicleSummary.Unavailable("last24");
     public required IReadOnlyList<StatsCategoryShare> CategoryShares { get; init; }
     public required IReadOnlyList<StatsBubbleStatistic> Bubbles { get; init; }
     public required StatsTimeline Timeline { get; init; }

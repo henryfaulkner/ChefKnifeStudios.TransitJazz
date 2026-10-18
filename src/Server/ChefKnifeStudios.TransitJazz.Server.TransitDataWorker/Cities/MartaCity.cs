@@ -1,6 +1,7 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
 using Microsoft.Extensions.Logging;
@@ -14,10 +15,14 @@ namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 public class MartaCity(
     IHttpClientFactory httpClientFactory,
     IOptions<RailRealtimeOptions> railOptions,
-    ILogger<MartaCity> logger) : ITransitCity
+    ILogger<MartaCity> logger,
+    TimeProvider? timeProvider = null,
+    ReportedVehicleBufferBudget? reportedVehicleBufferBudget = null,
+    ReportedVehicleHistoryOptions? reportedVehicleHistoryOptions = null) : ITransitCity
 {
     static readonly JsonSerializerOptions _railJsonOptions = new() { PropertyNameCaseInsensitive = true };
     const string BusUrl = "https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb";
+    readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public string Name => CityNames.Marta;
 
@@ -42,11 +47,20 @@ public class MartaCity(
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning("MARTA bus feed returned {StatusCode}", response.StatusCode);
-                return CityFetchResult.FromSources(null, 0, 1);
+                return CityFetchResult.FromSources(null, 0, 1, reportedVehicleObservations: FailedBusObservation("source_failure"));
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
-            return CityFetchResult.FromSources(ProtoBuf.Serializer.Deserialize<FeedMessage>(stream), 1, 0);
+            var feed = ProtoBuf.Serializer.Deserialize<FeedMessage>(stream)
+                ?? throw new InvalidDataException("MARTA bus feed returned a null protobuf root.");
+            var receiptUtc = _timeProvider.GetUtcNow();
+            var options = railOptions.Value;
+            var source = options.ReportedVehicleCaptureEnabled ? ReportedSource(options.BusReportedVehicleSource) : null;
+            var observations = source is null ? [] : new[]
+            {
+                SuccessfulObservation(source, receiptUtc, VehicleDescriptorIds(feed))
+            };
+            return CityFetchResult.FromSources(feed, 1, 0, reportedVehicleObservations: observations);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -56,7 +70,7 @@ public class MartaCity(
         {
             logger.LogWarning("MARTA bus source failed; exception type {ExceptionType}.",
                 StructuredLogRedactor.SafeExceptionType(ex));
-            return CityFetchResult.FromSources(null, 0, 1);
+            return CityFetchResult.FromSources(null, 0, 1, reportedVehicleObservations: FailedBusObservation("source_failure"));
         }
     }
 
@@ -74,7 +88,13 @@ public class MartaCity(
 
             var json = await client.GetStringAsync(requestUri, ct);
             var arrivals = JsonSerializer.Deserialize<List<RailArrivalDto>>(json, _railJsonOptions)
-                           ?? new List<RailArrivalDto>();
+                           ?? throw new JsonException("MARTA rail feed returned a null root.");
+            var receiptUtc = _timeProvider.GetUtcNow();
+            var source = opts.ReportedVehicleCaptureEnabled ? ReportedSource(opts.RailReportedVehicleSource) : null;
+            var observations = source is null ? [] : new[]
+            {
+                SuccessfulObservation(source, receiptUtc, ReportedVehicleRailExtractor.TrainIds(arrivals))
+            };
 
             var realtime = arrivals.Where(a =>
                 string.Equals(a.IsRealtime?.Trim(), "true", StringComparison.OrdinalIgnoreCase));
@@ -112,7 +132,8 @@ public class MartaCity(
             }
 
             logger.LogDebug("MARTA rail source fetched {Count} train entities.", entities.Count);
-            return CityFetchResult.FromSources(new FeedMessage { Entities = entities }, 1, 0);
+            return CityFetchResult.FromSources(new FeedMessage { Entities = entities }, 1, 0,
+                reportedVehicleObservations: observations);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -122,7 +143,37 @@ public class MartaCity(
         {
             logger.LogWarning("MARTA rail source failed; bus path unaffected. Exception type {ExceptionType}.",
                 StructuredLogRedactor.SafeExceptionType(ex));
-            return CityFetchResult.FromSources(null, 0, 1);
+            return CityFetchResult.FromSources(null, 0, 1, reportedVehicleObservations: FailedRailObservation());
         }
+    }
+
+    IEnumerable<ReportedVehicleSourceObservation> FailedBusObservation(string code)
+    {
+        var options = railOptions.Value;
+        var source = options.ReportedVehicleCaptureEnabled ? ReportedSource(options.BusReportedVehicleSource) : null;
+        return source is null ? [] : [ReportedVehicleSourceObservation.Failed(source, _timeProvider.GetUtcNow(), code)];
+    }
+
+    IEnumerable<ReportedVehicleSourceObservation> FailedRailObservation()
+    {
+        var options = railOptions.Value;
+        var source = options.ReportedVehicleCaptureEnabled ? ReportedSource(options.RailReportedVehicleSource) : null;
+        return source is null ? [] : [ReportedVehicleSourceObservation.Failed(source, _timeProvider.GetUtcNow(), "parse_failure")];
+    }
+
+    static ReportedVehicleSourceDefinition? ReportedSource(ReportedVehicleSourceConfig? config) => config?.ToDefinition();
+
+    ReportedVehicleSourceObservation SuccessfulObservation(ReportedVehicleSourceDefinition source,
+        DateTimeOffset receiptUtc, IEnumerable<string?> values) => reportedVehicleBufferBudget is not null
+        && reportedVehicleHistoryOptions is not null
+            ? ReportedVehicleSourceObservation.Successful(source, receiptUtc, values,
+                reportedVehicleHistoryOptions, reportedVehicleBufferBudget)
+            : ReportedVehicleSourceObservation.Successful(source, receiptUtc, values);
+
+    static IEnumerable<string?> VehicleDescriptorIds(FeedMessage feed)
+    {
+        foreach (var entity in feed.Entities)
+            if (entity.IsDeleted != true && entity.Vehicle is not null)
+                yield return entity.Vehicle.Vehicle?.Id;
     }
 }

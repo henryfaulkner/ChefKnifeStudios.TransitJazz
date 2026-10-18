@@ -71,10 +71,6 @@
         {
             <p class="stats-overlay__status" role="status">@T.Get("StatsRefreshing")</p>
         }
-        else if (_isStale)
-        {
-            <p class="stats-overlay__status" role="status">@T.Get("StatsStale")</p>
-        }
             @if (_presentation is { } dashboard)
             {
                 <section class="stats-overlay__dashboard">
@@ -88,6 +84,14 @@
                         <article>
                             <h2>@T.Get("StatsDistanceLast24")</h2>
                             <p><strong>@T.Format(ToDouble(dashboard.Snapshot.Last24Distance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
+                        </article>
+                        <article class="stats-overlay__reported" aria-labelledby="stats-reported-today-heading">
+                            <h2 id="stats-reported-today-heading">@T.Get(dashboard.TodayReportedVehicles.HeadingKey)</h2>
+                            <p class="stats-overlay__reported-count"><strong>@dashboard.TodayReportedVehicles.CountText</strong></p>
+                        </article>
+                        <article class="stats-overlay__reported" aria-labelledby="stats-reported-last24-heading">
+                            <h2 id="stats-reported-last24-heading">@T.Get(dashboard.Last24ReportedVehicles.HeadingKey)</h2>
+                            <p class="stats-overlay__reported-count"><strong>@dashboard.Last24ReportedVehicles.CountText</strong></p>
                         </article>
                     </section>
                     <BubbleChart Model="@dashboard.Bubbles" Title="@T.Get(dashboard.Snapshot.Selection.Scope == "city" ? "StatsRouteActivity" : "StatsCityActivity")"

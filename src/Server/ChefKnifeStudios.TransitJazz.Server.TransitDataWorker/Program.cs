@@ -48,6 +48,31 @@ builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
 
 // Build city registry from Cities: config array
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
+var reportedVehicleConfiguration = ReportedVehicleCaptureConfiguration.FromConfiguration(
+    builder.Configuration, cityConfigs, ReportedVehicleCaptureHost.StandaloneWorker);
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.AddSingleton(reportedVehicleConfiguration.Options);
+builder.Services.AddSingleton(reportedVehicleConfiguration.Runtime);
+builder.Services.AddSingleton(reportedVehicleConfiguration.Catalog);
+builder.Services.AddSingleton(new ReportedVehicleBufferBudget(reportedVehicleConfiguration.Options));
+builder.Services.AddSingleton<IReportedVehicleStatisticsSink>(sp => reportedVehicleConfiguration.Runtime.Mode switch
+{
+    ReportedVehicleCaptureMode.Disabled => NullReportedVehicleStatisticsSink.Instance,
+    ReportedVehicleCaptureMode.DryRun => new DryRunReportedVehicleStatisticsSink(
+        sp.GetRequiredService<ILogger<DryRunReportedVehicleStatisticsSink>>(), reportedVehicleConfiguration.Options),
+    _ => throw new InvalidOperationException("Unsupported standalone reported-vehicle capture mode."),
+});
+builder.Services.AddSingleton<ReportedVehicleCapture>();
+if (reportedVehicleConfiguration.Runtime.Mode != ReportedVehicleCaptureMode.Disabled)
+    builder.Services.AddHostedService<ReportedVehicleCaptureLifecycleService>();
+
+var martaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Marta, StringComparison.OrdinalIgnoreCase));
+builder.Services.PostConfigure<RailRealtimeOptions>(options =>
+{
+    options.ReportedVehicleCaptureEnabled = reportedVehicleConfiguration.Runtime.IsEnabledFor(CityNames.Marta);
+    options.BusReportedVehicleSource = martaConfig?.ReportedVehicleSources.SingleOrDefault();
+    options.RailReportedVehicleSource = martaConfig?.RailRealtime?.ReportedVehicleSource;
+});
 var routeHourOptions = builder.Configuration.GetSection("HistoricalStatistics:RouteHours").Get<RouteHourHistoryOptions>()
     ?? new RouteHourHistoryOptions();
 var selectedRouteCities = builder.Configuration.GetSection("HistoricalStatistics:Cities").Get<List<string>>() ?? [];
@@ -71,6 +96,8 @@ var nymtaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityName
 builder.Services.Configure<SubwaySynthesisOptions>(o =>
 {
     o.GtfsRtUrls = nymtaConfig?.GtfsRtUrls ?? [];
+    o.ReportedVehicleCaptureEnabled = reportedVehicleConfiguration.Runtime.IsEnabledFor(CityNames.Nymta);
+    o.ReportedVehicleSources = nymtaConfig?.ReportedVehicleSources ?? [];
 });
 builder.Services.AddSingleton(sp =>
 {
@@ -83,13 +110,17 @@ builder.Services.AddSingleton(sp =>
         ApiKeyEnvVar = nymtaConfig?.ApiKeyEnvVar,
         ApiKeyQueryParam = nymtaConfig?.ApiKeyQueryParam ?? "api_key",
         RouteIdNormalization = nymtaConfig?.RouteIdNormalization ?? [],
+        ReportedVehicleSources = nymtaConfig?.BusReportedVehicleSources ?? [],
     };
     return new NymtaCity(
         sp.GetRequiredService<IHttpClientFactory>(),
         sp.GetRequiredService<IOptions<SubwaySynthesisOptions>>(),
         busConfig,
         sp.GetRequiredService<ILogger<NymtaCity>>(),
-        sp.GetRequiredService<ILogger<GtfsRtCity>>());
+        sp.GetRequiredService<ILogger<GtfsRtCity>>(),
+        sp.GetRequiredService<TimeProvider>(),
+        sp.GetRequiredService<ReportedVehicleBufferBudget>(),
+        reportedVehicleConfiguration.Options);
 });
 
 builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
@@ -110,7 +141,9 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
         }
         else
         {
-            cities.Add(new GtfsRtCity(cfg, httpFactory, logFactory.CreateLogger<GtfsRtCity>()));
+            cities.Add(new GtfsRtCity(cfg, httpFactory, logFactory.CreateLogger<GtfsRtCity>(),
+                sp.GetRequiredService<TimeProvider>(), reportedVehicleConfiguration.Runtime.IsEnabledFor(cfg.Name),
+                sp.GetRequiredService<ReportedVehicleBufferBudget>(), reportedVehicleConfiguration.Options));
         }
     }
 

@@ -1,6 +1,7 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.EventData;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
@@ -23,11 +24,16 @@ public class NymtaCity(
     IOptions<SubwaySynthesisOptions> options,
     CityConfig busConfig,
     ILogger<NymtaCity> logger,
-    ILogger<GtfsRtCity> busLogger) : ITransitCity
+    ILogger<GtfsRtCity> busLogger,
+    TimeProvider? timeProvider = null,
+    ReportedVehicleBufferBudget? reportedVehicleBufferBudget = null,
+    ReportedVehicleHistoryOptions? reportedVehicleHistoryOptions = null) : ITransitCity
 {
     static readonly TimeSpan TableTtl = TimeSpan.FromHours(24);
+    readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
-    readonly GtfsRtCity _busCity = new(busConfig, httpClientFactory, busLogger);
+    readonly GtfsRtCity _busCity = new(busConfig, httpClientFactory, busLogger, timeProvider,
+        options.Value.ReportedVehicleCaptureEnabled, reportedVehicleBufferBudget, reportedVehicleHistoryOptions);
 
     // Per-train last synthesized distance-along-shape + OUR wall-clock time of that
     // synthesis, so movement is paced by our own tick cadence rather than the RT feed's
@@ -53,50 +59,33 @@ public class NymtaCity(
 
     async Task<CityFetchResult> FetchAndSynthesizeSubwayAsync(CancellationToken ct)
     {
-        if (!await EnsureTableAsync(ct))
-            return CityFetchResult.FromSources(null, 0, 1);
-
-        var table = _table;
-        if (table is null)
-            return CityFetchResult.FromSources(null, 0, 1);
-
-        var merged = new FeedMessage();
         var successfulSources = 0;
         var failedSources = 0;
-        int synthesizedStopped = 0, synthesizedInTransit = 0, skippedUnknownStation = 0;
-        var nominalRunSeconds = options.Value.NominalRunSeconds;
+        var observations = new List<ReportedVehicleSourceObservation>();
+        var rawFeeds = new List<FeedMessage>();
+        if (options.Value.ReportedVehicleCaptureEnabled && options.Value.ReportedVehicleSources.Length != 0
+            && options.Value.ReportedVehicleSources.Length != options.Value.GtfsRtUrls.Length)
+            throw new InvalidOperationException("NYC subway reported-vehicle source policies must match the subway endpoint list.");
 
-        foreach (var url in options.Value.GtfsRtUrls)
+        for (var index = 0; index < options.Value.GtfsRtUrls.Length; index++)
         {
+            var url = options.Value.GtfsRtUrls[index];
+            var source = options.Value.ReportedVehicleCaptureEnabled && index < options.Value.ReportedVehicleSources.Length
+                ? options.Value.ReportedVehicleSources[index].ToDefinition() : null;
             try
             {
                 var feed = await FetchFeedAsync(url, ct);
                 if (feed is null)
                 {
                     failedSources++;
+                    if (source is not null) observations.Add(ReportedVehicleSourceObservation.Failed(source, _timeProvider.GetUtcNow()));
                     continue;
                 }
+                var receiptUtc = _timeProvider.GetUtcNow();
                 successfulSources++;
-                merged.Header ??= feed.Header;
-
-                foreach (var entity in feed.Entities)
-                {
-                    var (synthesized, outcome) = SynthesizeEntity(table, entity, nominalRunSeconds);
-                    switch (outcome)
-                    {
-                        case SynthesisOutcome.Stopped:
-                            synthesizedStopped++;
-                            merged.Entities.Add(synthesized!);
-                            break;
-                        case SynthesisOutcome.InTransit:
-                            synthesizedInTransit++;
-                            merged.Entities.Add(synthesized!);
-                            break;
-                        default:
-                            skippedUnknownStation++;
-                            break;
-                    }
-                }
+                rawFeeds.Add(feed);
+                if (source is not null)
+                    observations.Add(SuccessfulObservation(source, receiptUtc, VehicleDescriptorIds(feed)));
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -107,6 +96,40 @@ public class NymtaCity(
                 logger.LogWarning("NymtaCity: source failed at {Endpoint}; exception type {ExceptionType}.",
                     StructuredLogRedactor.SafeEndpointIdentity(url), StructuredLogRedactor.SafeExceptionType(ex));
                 failedSources++;
+                if (source is not null)
+                    observations.Add(ReportedVehicleSourceObservation.Failed(source, _timeProvider.GetUtcNow(), "parse_failure"));
+            }
+        }
+
+        var merged = new FeedMessage();
+        if (!await EnsureTableAsync(ct) || _table is null)
+            return CityFetchResult.FromSources(merged, successfulSources, failedSources,
+                reportedVehicleObservations: observations);
+
+        var table = _table;
+        int synthesizedStopped = 0, synthesizedInTransit = 0, skippedUnknownStation = 0;
+        var nominalRunSeconds = options.Value.NominalRunSeconds;
+
+        foreach (var feed in rawFeeds)
+        {
+            merged.Header ??= feed.Header;
+            foreach (var entity in feed.Entities)
+            {
+                var (synthesized, outcome) = SynthesizeEntity(table, entity, nominalRunSeconds);
+                switch (outcome)
+                {
+                    case SynthesisOutcome.Stopped:
+                        synthesizedStopped++;
+                        merged.Entities.Add(synthesized!);
+                        break;
+                    case SynthesisOutcome.InTransit:
+                        synthesizedInTransit++;
+                        merged.Entities.Add(synthesized!);
+                        break;
+                    default:
+                        skippedUnknownStation++;
+                        break;
+                }
             }
         }
 
@@ -114,7 +137,22 @@ public class NymtaCity(
             "NymtaCity: synthesizedStopped={Stopped}, synthesizedInTransit={InTransit}, skippedUnknownStation={Skipped}.",
             synthesizedStopped, synthesizedInTransit, skippedUnknownStation);
 
-        return CityFetchResult.FromSources(merged, successfulSources, failedSources);
+        return CityFetchResult.FromSources(merged, successfulSources, failedSources,
+            reportedVehicleObservations: observations);
+    }
+
+    ReportedVehicleSourceObservation SuccessfulObservation(ReportedVehicleSourceDefinition source,
+        DateTimeOffset receiptUtc, IEnumerable<string?> values) => reportedVehicleBufferBudget is not null
+        && reportedVehicleHistoryOptions is not null
+            ? ReportedVehicleSourceObservation.Successful(source, receiptUtc, values,
+                reportedVehicleHistoryOptions, reportedVehicleBufferBudget)
+            : ReportedVehicleSourceObservation.Successful(source, receiptUtc, values);
+
+    static IEnumerable<string?> VehicleDescriptorIds(FeedMessage feed)
+    {
+        foreach (var entity in feed.Entities)
+            if (entity.IsDeleted != true && entity.Vehicle is not null)
+                yield return entity.Vehicle.Vehicle?.Id;
     }
 
     (FeedEntity? Entity, SynthesisOutcome Outcome) SynthesizeEntity(StopOffsetTable table, FeedEntity entity, double nominalRunSeconds)

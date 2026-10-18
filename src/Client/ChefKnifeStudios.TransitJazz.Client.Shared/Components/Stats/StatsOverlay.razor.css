@@ -47,6 +47,9 @@
 .stats-overlay__totals h2 { margin: 0; font-size: 1rem; }
 .stats-overlay__totals p { margin: .5rem 0; font-size: 1.5rem; }
 .stats-overlay__totals strong { font-variant-numeric: tabular-nums; }
+.stats-overlay__reported { font-size: .875rem; line-height: 1.4; }
+.stats-overlay__reported p { margin: .35rem 0; font-size: .875rem; }
+.stats-overlay__reported .stats-overlay__reported-count { margin: .25rem 0; font-size: 1.25rem; }
 .stats-overlay__table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 .stats-overlay table { width: max-content; min-width: 100%; border-collapse: collapse; }
 .stats-overlay caption { text-align: start; padding: .5rem 0; }

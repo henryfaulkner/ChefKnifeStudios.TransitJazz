@@ -21,6 +21,7 @@ public sealed class StatsOverlayOptions
     };
 
     public bool Enabled { get; set; }
+    public bool ReportedVehiclesEnabled { get; set; }
     public int IngestionGraceMinutes { get; set; } = 2;
     public int MaximumRequestBytes { get; set; } = 4 * 1024 * 1024;
     public int MaximumResponseBytes { get; set; } = 8 * 1024 * 1024;

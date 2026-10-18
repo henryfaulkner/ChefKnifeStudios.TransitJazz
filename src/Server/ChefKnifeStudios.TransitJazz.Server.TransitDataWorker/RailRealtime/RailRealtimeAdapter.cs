@@ -1,5 +1,6 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using Microsoft.Extensions.Options;
 using System.Globalization;
@@ -16,9 +17,13 @@ public interface IRailRealtimeAdapter
 public class RailRealtimeAdapter(
     IHttpClientFactory httpClientFactory,
     IOptions<RailRealtimeOptions> options,
-    ILogger<RailRealtimeAdapter> logger) : IRailRealtimeAdapter
+    ILogger<RailRealtimeAdapter> logger,
+    TimeProvider? timeProvider = null,
+    ReportedVehicleBufferBudget? reportedVehicleBufferBudget = null,
+    ReportedVehicleHistoryOptions? reportedVehicleHistoryOptions = null) : IRailRealtimeAdapter
 {
     static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
+    readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public async Task<CityFetchResult> FetchAsync(CancellationToken ct)
     {
@@ -37,7 +42,13 @@ public class RailRealtimeAdapter(
                 StructuredLogRedactor.SafeEndpointIdentity(requestUri.ToString()));
             var json = await client.GetStringAsync(requestUri, ct);
             var arrivals = JsonSerializer.Deserialize<List<RailArrivalDto>>(json, _jsonOptions)
-                           ?? new List<RailArrivalDto>();
+                           ?? throw new JsonException("MARTA rail feed returned a null root.");
+            var receiptUtc = _timeProvider.GetUtcNow();
+            var source = opts.ReportedVehicleCaptureEnabled ? opts.RailReportedVehicleSource?.ToDefinition() : null;
+            var observations = source is null ? [] : new[]
+            {
+                SuccessfulObservation(source, receiptUtc, ReportedVehicleRailExtractor.TrainIds(arrivals))
+            };
 
             // Realtime filter (FR-004): drop IS_REALTIME != "true" before dedup
             var realtime = arrivals.Where(a =>
@@ -102,7 +113,8 @@ public class RailRealtimeAdapter(
             }
 
             logger.LogDebug("Rail adapter fetched {EntityCount} train entities from {RowCount} rows ({Skipped} skipped).", entities.Count, arrivals.Count, skipped);
-            return CityFetchResult.FromSources(new FeedMessage { Entities = entities }, 1, 0);
+            return CityFetchResult.FromSources(new FeedMessage { Entities = entities }, 1, 0,
+                reportedVehicleObservations: observations);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -112,7 +124,20 @@ public class RailRealtimeAdapter(
         {
             logger.LogWarning("Rail realtime source failed; bus path unaffected. Exception type {ExceptionType}.",
                 StructuredLogRedactor.SafeExceptionType(ex));
-            return CityFetchResult.FromSources(null, 0, 1);
+            var opts = options.Value;
+            var source = opts.ReportedVehicleCaptureEnabled ? opts.RailReportedVehicleSource?.ToDefinition() : null;
+            var observations = source is null ? [] : new[]
+            {
+                ReportedVehicleSourceObservation.Failed(source, _timeProvider.GetUtcNow(), "parse_failure")
+            };
+            return CityFetchResult.FromSources(null, 0, 1, reportedVehicleObservations: observations);
         }
     }
+
+    ReportedVehicleSourceObservation SuccessfulObservation(ReportedVehicleSourceDefinition source,
+        DateTimeOffset receiptUtc, IEnumerable<string?> values) => reportedVehicleBufferBudget is not null
+        && reportedVehicleHistoryOptions is not null
+            ? ReportedVehicleSourceObservation.Successful(source, receiptUtc, values,
+                reportedVehicleHistoryOptions, reportedVehicleBufferBudget)
+            : ReportedVehicleSourceObservation.Successful(source, receiptUtc, values);
 }

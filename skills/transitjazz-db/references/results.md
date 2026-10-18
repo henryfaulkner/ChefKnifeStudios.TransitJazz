@@ -14,6 +14,7 @@ Before or after the table, state:
 - Actual contributing range, row count and display limit; disclose truncation. Do not truncate the coverage calculation or sum a displayed subset and present it as the full period.
 - Coverage and exclusions relevant to the measure. For definitive category reports, include complete contributing UTC hours, expected/requested windows, missing/Partial/NoData/conflicting exclusions and reasons, and beginning of retained category capture.
 - For route reports, include requested/fully-contained/contributing route-hours, city-hour cohort coverage/quarantine, incomplete reasons and unsupported definitions, earliest retained route hour, and relevant catalog fingerprints/changes. Disclose explicit versus discovered keys and unknown historical membership for missing pairs. Route coverage has no backing-minute reconciliation.
+- For reported-vehicle summaries, state the observed-identity definition, exact city-local/UTC windows, contributing versus expected city-hours, Complete/Partial/Pending/Unavailable meaning, and allowlisted exclusions or limitations. Counts are distinct identity tuples across the whole eligible window, not sums of hourly counts; All sums per-city populations without cross-city deduplication. State that route selection does not filter these city-feed counts and that reported identities do not establish the physical fleet.
 
 For category and route means expose the numerator and its actual denominator. Label route movement denominators as observed route-vehicle-hours, activity as vehicles/sample, processing as observations, and cadence as published opportunities/Complete UTC hour. Route-hour populations do not establish unique vehicles over a period or city. Add policy/version columns when multiple groups exist. If there are many exclusions, summarize counts by reason and show a small representative selection; keep the full report available when requested. Boundary context is labeled with whole-window bounds and requested intersection, never prorated.
 
@@ -38,10 +39,16 @@ The example combines two verified hours with 1,200/3 and 1,800/2: `3000 / 5 = 60
 | Category `has_conflict=true` | `Conflict`; exclude even if the immutable collection status says Complete. |
 | Any route `has_conflict=true` in the city/hour | `Conflict` for the entire retained city/hour cohort, including selected routes without their own flag; exclude all cohort measures. |
 | Partial request boundary | Label whole-minute/hour context and its exact bounds; exclude from fully contained definitive windows. |
+| Reported-vehicle header with intact successful empty population | A valid eligible empty cohort contributes observed `0`; it is distinct from a missing header or NoData. |
+| Reported-vehicle missing header, NoData, conflict, policy mismatch, or identity-integrity failure | Exclude the hour and preserve the reason; do not turn it into zero. If no eligible reported population remains, return `Unavailable`/null. |
+| Reported-vehicle Partial window with at least one eligible contributing city-hour | Show its observed distinct count with contributing/expected city-hours and exclusions. Do not label it Complete or add overlapping reasons to the denominator. |
+| Reported-vehicle Pending today window | No completed reporting hours exist yet; display Pending rather than zero. |
 
 An empty result means no matching retained/contributing rows. It does not establish that the city's vehicles were inactive. Distinguish no category/route history, missing hours, disabled capture (only if verified), definition/filter mismatch, and incomplete/conflicting coverage. An all-route request with no discovered keys still needs city-hour coverage; today's catalog cannot fill that history. For a failed query, state the failure instead of presenting any earlier emitted result sets as a complete report.
 
 Dashboard latest sampled counts, rates, and p95 estimates retain their meanings. Do not label `sum(vehicles_processed)` as the number of distinct vehicles or `sum(tones_emitted)` as actual notes heard. Do not compute a period p95 by averaging minute p95 estimates.
+
+Reported-vehicle identity values are private membership data. Public Stats output is aggregate-only and bounded; never include raw namespace/kind/value tuples, source URLs, or credentials in a report or export. A successful empty cohort is an observed zero only when its status, source diagnostics, trusted fingerprints, membership parity, and window eligibility pass. A blank table preview or missing hour is not a zero. No count-only backfill can recreate exact identity membership.
 
 ## Exports
 

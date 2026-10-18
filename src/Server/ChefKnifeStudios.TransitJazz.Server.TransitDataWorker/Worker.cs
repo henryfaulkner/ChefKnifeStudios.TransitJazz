@@ -26,7 +26,8 @@ public class Worker(
     IWorkerStructuredEventLogger? structuredEventLogger = null,
     IRouteShapeSource? routeShapeSource = null,
     CityCategoryStatisticsCapture? categoryStatisticsCapture = null,
-    RouteHourStatisticsCapture? routeHourStatisticsCapture = null) : BackgroundService, IRouteIndexReadiness
+    RouteHourStatisticsCapture? routeHourStatisticsCapture = null,
+    ReportedVehicleCapture? reportedVehicleCapture = null) : BackgroundService, IRouteIndexReadiness
 {
     readonly Dictionary<string, ConcurrentDictionary<string, VehicleState>> _vehicleStateCaches = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ulong?> _lastFeedHeaderTimestamps = new(StringComparer.OrdinalIgnoreCase);
@@ -38,6 +39,7 @@ public class Worker(
     readonly IRouteShapeSource _routeShapeSource = routeShapeSource ?? UnavailableRouteShapeSource.Instance;
     readonly CityCategoryStatisticsCapture? _categoryStatisticsCapture = categoryStatisticsCapture;
     readonly RouteHourStatisticsCapture? _routeHourStatisticsCapture = routeHourStatisticsCapture;
+    readonly ReportedVehicleCapture? _reportedVehicleCapture = reportedVehicleCapture;
     // Generations identify substantive catalog changes, not replacement index instances.
     readonly Dictionary<string, long> _routeGeometryGenerations = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, StructuredLogReasonCode> _activeCityAnomalyReasons = new(StringComparer.OrdinalIgnoreCase);
@@ -131,6 +133,7 @@ public class Worker(
                 try
                 {
                     fetch = await city.FetchVehiclesAsync(stoppingToken);
+                    _reportedVehicleCapture?.Observe(city.Name, fetch.ReportedVehicleObservations);
 
                     if (fetch.Outcome == CityFetchOutcome.Failure)
                     {

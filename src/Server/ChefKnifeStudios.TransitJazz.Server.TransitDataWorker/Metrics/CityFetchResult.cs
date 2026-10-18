@@ -1,4 +1,6 @@
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
+using System.Collections.Immutable;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 
@@ -24,12 +26,14 @@ public sealed record CityFetchResult(
     int FailedSourceCount)
 {
     public bool HasSuccessfulSource => SuccessfulSourceCount > 0;
+    public ImmutableArray<ReportedVehicleSourceObservation> ReportedVehicleObservations { get; init; } = [];
 
     public static CityFetchResult FromSources(
         FeedMessage? feed,
         int successfulSourceCount,
         int failedSourceCount,
-        DateTimeOffset? sourceTimestampUtc = null)
+        DateTimeOffset? sourceTimestampUtc = null,
+        IEnumerable<ReportedVehicleSourceObservation>? reportedVehicleObservations = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(successfulSourceCount);
         ArgumentOutOfRangeException.ThrowIfNegative(failedSourceCount);
@@ -48,7 +52,10 @@ public sealed record CityFetchResult(
             validRecordCount,
             sourceTimestampUtc ?? ToTimestamp(normalized.Header?.Timestamp),
             successfulSourceCount,
-            failedSourceCount);
+            failedSourceCount)
+        {
+            ReportedVehicleObservations = reportedVehicleObservations?.ToImmutableArray() ?? [],
+        };
     }
 
     public static CityFetchResult Combine(params IEnumerable<CityFetchResult> sources)
@@ -57,18 +64,20 @@ public sealed record CityFetchResult(
         var successful = 0;
         var failed = 0;
         DateTimeOffset? newestTimestamp = null;
+        var observations = ImmutableArray.CreateBuilder<ReportedVehicleSourceObservation>();
 
         foreach (var source in sources)
         {
             feed.Entities.AddRange(source.Feed.Entities);
             successful += source.SuccessfulSourceCount;
             failed += source.FailedSourceCount;
+            observations.AddRange(source.ReportedVehicleObservations);
             if (source.SourceTimestampUtc is { } timestamp
                 && (newestTimestamp is null || timestamp > newestTimestamp))
                 newestTimestamp = timestamp;
         }
 
-        return FromSources(feed, successful, failed, newestTimestamp);
+        return FromSources(feed, successful, failed, newestTimestamp, observations);
     }
 
     public static DateTimeOffset? ToTimestamp(ulong? unixSeconds) =>

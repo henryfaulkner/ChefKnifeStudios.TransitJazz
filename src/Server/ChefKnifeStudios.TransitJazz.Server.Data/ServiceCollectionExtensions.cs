@@ -20,6 +20,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped(typeof(IRepository<>), typeof(EfRepository<>));
         services.AddScoped(typeof(IReadRepository<>), typeof(EfReadRepository<>));
         services.AddSingleton<IStatsOverlayQuery, StatsOverlayQuery>();
+        services.AddSingleton<CityReportedVehicleHoursStore>();
 
         return services;
     }
