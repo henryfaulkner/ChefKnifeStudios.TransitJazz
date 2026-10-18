@@ -97,9 +97,6 @@ public static class StatsOverlayProjection
             "pending" => localize("StatsCoveragePending"),
             _ => localize("StatsCoverageUnavailable"),
         };
-        var scope = summary.PopulationScope == "sumOfCityFeeds"
-            ? localize("StatsReportedVehicleAllScope")
-            : localize("StatsReportedVehicleRouteScope");
         var details = summary.Cities.Select(city =>
         {
             var window = response.Cities.FirstOrDefault(x => x.CitySlug == city.CitySlug);
@@ -131,8 +128,7 @@ public static class StatsOverlayProjection
             }
             return text;
         }).ToArray();
-        return new StatsReportedVehiclePresentation(heading, count, coverage, scope,
-            localize("StatsReportedVehicleDefinition"), details);
+        return new StatsReportedVehiclePresentation(heading, count, coverage, details);
     }
 
     static string WindowPeriod(StatsCityWindow city, bool today)
@@ -363,6 +359,4 @@ public sealed record StatsReportedVehiclePresentation(
     string HeadingKey,
     string CountText,
     string CoverageText,
-    string ScopeText,
-    string DefinitionText,
     IReadOnlyList<string> CityDetails);

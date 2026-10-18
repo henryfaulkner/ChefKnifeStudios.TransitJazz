@@ -17,7 +17,6 @@ public sealed class StatsOverlayProjectionTests
             "StatsCoverageUnavailable" => "Unavailable",
             "StatsCoveragePending" => "Pending",
             "StatsReportedVehiclePartial" => "Observed; partial coverage ({0} of {1} city-hours)",
-            "StatsReportedVehicleRouteScope" => "All city feeds; independent of route selection",
             "StatsReportedVehicleMissingIdentity" => "Records without a usable vehicle ID: {0}",
             _ => key,
         };
@@ -49,16 +48,13 @@ public sealed class StatsOverlayProjectionTests
         var projected = StatsOverlayProjection.Build(response, Localize).TodayReportedVehicles;
         Assert.Equal("0", projected.CountText);
         Assert.Equal("Observed; partial coverage (5 of 8 city-hours)", projected.CoverageText);
-        Assert.Contains("All city feeds; independent of route selection", projected.ScopeText);
         Assert.Contains("Records without a usable vehicle ID: 3", Assert.Single(projected.CityDetails));
     }
 
     [Fact]
-    public void AllReportedVehicleProjectionShowsSumScopeAndEachLocalWindow()
+    public void AllReportedVehicleProjectionShowsCountAndEachLocalWindow()
     {
-        string Localize(string key) => key == "StatsReportedVehicleAllScope"
-            ? "Sum of city feed populations; independent of route selection. Each city uses its own local reporting window."
-            : key;
+        string Localize(string key) => key;
         var response = Response("all", [], [], [], [],
             [City("denver", "StatsCityDenver", new DateOnly(2026, 4, 1), "America/Denver"),
              City("toronto", "StatsCityToronto", new DateOnly(2026, 11, 1), "America/Toronto")]) with
@@ -78,7 +74,6 @@ public sealed class StatsOverlayProjectionTests
         response = response with { Timeline = new StatsTimeline { SeriesKind = "city", Series = [] } };
         var projected = StatsOverlayProjection.Build(response, Localize).Last24ReportedVehicles;
         Assert.Equal("17", projected.CountText);
-        Assert.Contains("Sum of city feed populations", projected.ScopeText);
         Assert.Contains(projected.CityDetails, detail => detail.Contains("StatsCityDenver", StringComparison.Ordinal)
             && detail.Contains("America/Denver", StringComparison.Ordinal));
         Assert.Contains(projected.CityDetails, detail => detail.Contains("StatsCityToronto", StringComparison.Ordinal)
@@ -94,8 +89,6 @@ public sealed class StatsOverlayProjectionTests
             "StatsCoverageUnavailable" => "Unavailable",
             "StatsCoveragePending" => "Pending",
             "StatsReportedVehiclePartial" => "Observed; partial coverage ({0} of {1} city-hours)",
-            "StatsReportedVehicleRouteScope" => "All city feeds; independent of route selection",
-            "StatsReportedVehicleDefinition" => "Distinct vehicles reported by transit feeds",
             "StatsReportedVehicleMissingHour" => "Missing hours: {0}",
             "StatsReportedVehicleSourcePolicyChanged" => "Source policy changed: {0} hours",
             "StatsReportedVehicleCadenceGap" => "Feed cadence gap detected",

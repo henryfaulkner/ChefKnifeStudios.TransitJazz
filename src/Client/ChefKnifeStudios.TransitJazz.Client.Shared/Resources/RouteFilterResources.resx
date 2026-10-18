@@ -445,7 +445,7 @@
     <value>Distance today</value>
   </data>
   <data name="StatsDistanceLast24" xml:space="preserve">
-    <value>Last 24 completed hours</value>
+    <value>Distance over 24 hours</value>
   </data>
   <data name="StatsDistanceUnit" xml:space="preserve">
     <value>kilometers</value>
@@ -454,25 +454,13 @@
     <value>Vehicles reported today</value>
   </data>
   <data name="StatsReportedVehiclesLast24" xml:space="preserve">
-    <value>Vehicles reported over last 24 hours</value>
-  </data>
-  <data name="StatsReportedVehicleDefinition" xml:space="preserve">
-    <value>Distinct vehicles reported by transit feeds during completed hours, including vehicles that could not be placed on the map.</value>
+    <value>Vehicles reported over 24 hours</value>
   </data>
   <data name="StatsReportedVehicleComplete" xml:space="preserve">
     <value>Complete observed-identity coverage</value>
   </data>
   <data name="StatsReportedVehiclePartial" xml:space="preserve">
     <value>Observed; partial coverage ({0} of {1} city-hours)</value>
-  </data>
-  <data name="StatsReportedVehicleRouteScope" xml:space="preserve">
-    <value>All city feeds; independent of route selection</value>
-  </data>
-  <data name="StatsReportedVehicleAllScope" xml:space="preserve">
-    <value>Sum of city feed populations; independent of route selection. Each city uses its own local reporting window.</value>
-  </data>
-  <data name="StatsReportedVehicleCoverageDetails" xml:space="preserve">
-    <value>Per-city coverage and reporting windows</value>
   </data>
   <data name="StatsReportedVehicleMissingIdentity" xml:space="preserve">
     <value>Records without a usable vehicle ID: {0}</value>
