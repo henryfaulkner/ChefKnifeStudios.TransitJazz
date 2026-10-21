@@ -50,7 +50,7 @@ public sealed class StatsOverlayOptionsTests
     }
 
     [Fact]
-    public void SevenCanonicalPublicCitiesUseStableDisplayKeysAndRegistrationZones()
+    public void EightCanonicalPublicCitiesUseStableDisplayKeysAndRegistrationZones()
     {
         var options = new StatsOverlayOptions { Enabled = true };
         options.PopulateConfiguredCityPolicy(
@@ -61,14 +61,17 @@ public sealed class StatsOverlayOptionsTests
             new CityConfig { Name = "new-york-city", TimeZoneId = "America/New_York" },
             new CityConfig { Name = "toronto", TimeZoneId = "America/Toronto" },
             new CityConfig { Name = "philadelphia", TimeZoneId = "America/New_York" },
-            new CityConfig { Name = "denver", TimeZoneId = "America/Denver" }
+            new CityConfig { Name = "denver", TimeZoneId = "America/Denver" },
+            new CityConfig { Name = "seattle", TimeZoneId = "America/Los_Angeles" }
         ], new RouteHourHistoryOptions());
 
         options.Validate(requireCities: true);
-        Assert.Equal(7, options.Cities.Count);
-        Assert.Equal("StatsCityWashingtonDc", options.Cities[6].DisplayNameKey);
-        Assert.Equal("StatsCityToronto", options.Cities[5].DisplayNameKey);
+        Assert.Equal(8, options.Cities.Count);
+        Assert.Equal("StatsCityWashingtonDc", options.Cities[7].DisplayNameKey);
+        Assert.Equal("StatsCityToronto", options.Cities[6].DisplayNameKey);
+        Assert.Equal("StatsCitySeattle", options.Cities[5].DisplayNameKey);
         Assert.Equal("America/Denver", options.Cities[2].TimeZoneId);
+        Assert.Equal("America/Los_Angeles", options.Cities[5].TimeZoneId);
     }
 
     [Fact]

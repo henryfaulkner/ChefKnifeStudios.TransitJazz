@@ -33,6 +33,8 @@ builder.Logging.AddJsonConsole(options =>
 });
 
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient(SeattleCity.SoundTransitHttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHttpClient("GtfsStaticApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["services:apiservice:https:0"]
@@ -48,6 +50,7 @@ builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
 
 // Build city registry from Cities: config array
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
+CityConfig.ValidateUniqueCityNames(cityConfigs);
 var reportedVehicleConfiguration = ReportedVehicleCaptureConfiguration.FromConfiguration(
     builder.Configuration, cityConfigs, ReportedVehicleCaptureHost.StandaloneWorker);
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
@@ -138,6 +141,13 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
         else if (string.Equals(cfg.Name, CityNames.Nymta, StringComparison.OrdinalIgnoreCase))
         {
             cities.Add(sp.GetRequiredService<NymtaCity>());
+        }
+        else if (string.Equals(cfg.Name, CityNames.Seattle, StringComparison.OrdinalIgnoreCase))
+        {
+            cities.Add(new SeattleCity(cfg, httpFactory, builder.Configuration,
+                logFactory.CreateLogger<SeattleCity>(), sp.GetRequiredService<TimeProvider>(),
+                reportedVehicleConfiguration.Runtime.IsEnabledFor(cfg.Name),
+                sp.GetRequiredService<ReportedVehicleBufferBudget>(), reportedVehicleConfiguration.Options));
         }
         else
         {

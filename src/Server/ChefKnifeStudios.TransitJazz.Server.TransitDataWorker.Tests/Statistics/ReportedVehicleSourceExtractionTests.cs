@@ -3,7 +3,10 @@ using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.Cities;
+using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ProtoBuf;
@@ -128,6 +131,66 @@ public sealed class ReportedVehicleSourceExtractionTests
         Assert.Equal(CityFetchOutcome.Empty, combined.Outcome);
     }
 
+    [Fact]
+    public async Task SeattleCapturesEachRawAgencyPopulationBeforeDisplayFilters()
+    {
+        var kcm = SeattleTestFixtures.Feed(
+            SeattleTestFixtures.Vehicle("raw-512", "512", timestamp: Receipt),
+            SeattleTestFixtures.Vehicle("shared-without-position", "100451", timestamp: Receipt, omitPosition: true),
+            SeattleTestFixtures.Vehicle("stale-shared", "102767", timestamp: Receipt.AddSeconds(-121)),
+            SeattleTestFixtures.Vehicle(null, "100451", timestamp: Receipt),
+            new FeedEntity
+            {
+                Id = "route-less",
+                Vehicle = new VehiclePosition
+                {
+                    Vehicle = new VehicleDescriptor { Id = "route-less" }, Trip = null!, Position = null!,
+                    Timestamp = (ulong)Receipt.ToUnixTimeSeconds(),
+                },
+            },
+            SeattleTestFixtures.Vehicle("deleted", "100451", timestamp: Receipt, deleted: true),
+            new FeedEntity { Id = "trip-update", TripUpdate = new TripUpdate() });
+        var soundTransit = SeattleTestFixtures.Feed(
+            SeattleTestFixtures.Vehicle("shared-without-position", "556", timestamp: Receipt),
+            SeattleTestFixtures.Vehicle("stale-shared", "547", timestamp: Receipt));
+        var config = new CityConfig
+        {
+            Name = CityNames.Seattle,
+            GtfsRtUrls =
+            [
+                "https://s3.amazonaws.com/kcm-alerts-realtime-prod/vehiclepositions.pb",
+                "https://api.pugetsound.onebusaway.org/api/gtfs_realtime/vehicle-positions-for-agency/40.pb",
+            ],
+            SeattleSoundTransitApiKeyEnvVar = SeattleCity.SoundTransitApiKeySetting,
+            ReportedVehicleSources = [Source("kcm", "kcm-test"), Source("sound-transit", "st-test")],
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [SeattleCity.SoundTransitApiKeySetting] = SeattleTestFixtures.SoundTransitKeySentinel,
+        }).Build();
+        var city = new SeattleCity(config,
+            new SeattleTestFixtures.CapturingHttpClientFactory(_ => new SeattleTestFixtures.CapturingHandler((request, _) =>
+                Task.FromResult(SeattleTestFixtures.ProtobufResponse(request.RequestUri!.Host == "s3.amazonaws.com" ? kcm : soundTransit)))),
+            configuration, NullLogger<SeattleCity>.Instance, new SeattleTestFixtures.FixedTimeProvider(Receipt),
+            captureReportedVehicles: true);
+
+        var result = await city.FetchVehiclesAsync(CancellationToken.None);
+        var kcmObservation = Assert.Single(result.ReportedVehicleObservations, observation => observation.SourceKey == "kcm");
+        var stObservation = Assert.Single(result.ReportedVehicleObservations, observation => observation.SourceKey == "sound-transit");
+
+        Assert.Equal(5, kcmObservation.RawVehicleRecordCount);
+        Assert.Equal(1, kcmObservation.UnidentifiableRecordCount);
+        Assert.Equal(new[] { "raw-512", "route-less", "shared-without-position", "stale-shared" },
+            kcmObservation.Identities.Select(identity => identity.Value));
+        Assert.Equal(2, stObservation.RawVehicleRecordCount);
+        Assert.Equal(new[] { "shared-without-position", "stale-shared" },
+            stObservation.Identities.Select(identity => identity.Value));
+        Assert.Equal(Receipt.UtcDateTime, kcmObservation.ReceiptUtc);
+        Assert.Equal(Receipt.UtcDateTime, stObservation.ReceiptUtc);
+        Assert.DoesNotContain(result.Feed.Entities, entity => entity.Vehicle?.Trip?.RouteId == "512");
+        Assert.DoesNotContain(result.Feed.Entities, entity => entity.Vehicle?.Vehicle?.Id == "st:shared-without-position");
+    }
+
     static ReportedVehicleSourceConfig Source(string key, string identityNamespace) => new()
     {
         SourceKey = key, IdentityNamespace = identityNamespace, IdentityKind = "vehicle-descriptor-id",
@@ -138,9 +201,9 @@ public sealed class ReportedVehicleSourceExtractionTests
         Id = id ?? "missing-descriptor",
         Vehicle = new VehiclePosition
         {
-            Vehicle = new VehicleDescriptor { Id = id },
+            Vehicle = new VehicleDescriptor { Id = id! },
             Trip = route is null ? null! : new TripDescriptor { RouteId = route },
-            Position = position,
+            Position = position!,
         }
     };
 

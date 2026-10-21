@@ -94,6 +94,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         [CityNames.Ttc]   = (43.6532, -79.3832),
         [CityNames.Septa] = (39.9526, -75.1652),
         [CityNames.Rtd]   = (39.7539, -105.0009),
+        [CityNames.Seattle] = (47.6062, -122.3321),
     };
 
     CameraOptions DefaultCameraOptions

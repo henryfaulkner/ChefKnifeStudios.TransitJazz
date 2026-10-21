@@ -31,6 +31,7 @@ public class CityCopyResolutionTests
         var s when s == CityNames.Ttc => "TorontoAudioOverlay",
         var s when s == CityNames.Septa => "PhiladelphiaAudioOverlay",
         var s when s == CityNames.Rtd => "DenverAudioOverlay",
+        var s when s == CityNames.Seattle => "SeattleAudioOverlay",
         _ => "AudioOverlay",
     };
 
@@ -43,13 +44,14 @@ public class CityCopyResolutionTests
         var s when s == CityNames.Ttc => "TorontoOverlay",
         var s when s == CityNames.Septa => "PhiladelphiaOverlay",
         var s when s == CityNames.Rtd => "DenverOverlay",
+        var s when s == CityNames.Seattle => "SeattleOverlay",
         _ => "InfoOverlay",
     };
 
     static string[] AllSlugs => new[]
     {
         CityNames.Marta, CityNames.Wmata, CityNames.Mbta, CityNames.Nymta,
-        CityNames.Ttc, CityNames.Septa, CityNames.Rtd,
+        CityNames.Ttc, CityNames.Septa, CityNames.Rtd, CityNames.Seattle,
     };
 
     [Fact]
@@ -82,5 +84,24 @@ public class CityCopyResolutionTests
             Assert.False(string.IsNullOrWhiteSpace(value.Value), $"Resx key '{key}' for city '{slug}' resolved to empty.");
             Assert.NotEqual(key, value.Value);
         }
+    }
+
+    [Fact]
+    public void seattle_copy_covers_the_listening_instructions_sources_and_supported_map_scope()
+    {
+        var loc = BuildLocalizer();
+        var prefix = AudioOverlayPrefix(CityNames.Seattle);
+        var header = loc[prefix + "Header"].Value;
+        var paragraphs = Enumerable.Range(1, 3).Select(i => loc[$"{prefix}Paragraph{i}"].Value).ToArray();
+        var info = loc[InfoOverlayPrefix(CityNames.Seattle) + "Paragraph1"].Value;
+
+        Assert.StartsWith("KING COUNTY METRO + SOUND TRANSIT - Seattle", header, StringComparison.Ordinal);
+        Assert.StartsWith("<strong>This is an audio experience — turn your device's sound on.</strong>", paragraphs[1], StringComparison.Ordinal);
+        Assert.Contains("<strong>A note lands where the vehicle happens to be along its route</strong>", paragraphs[1], StringComparison.Ordinal);
+        Assert.EndsWith("What is playing right now has not played before.", paragraphs[1], StringComparison.Ordinal);
+        Assert.Contains("Sound Transit route 512 is omitted", paragraphs[2], StringComparison.Ordinal);
+        Assert.Contains("terms of use", paragraphs[2], StringComparison.Ordinal);
+        Assert.Contains("streetcar and water-taxi", paragraphs[2], StringComparison.Ordinal);
+        Assert.Contains("Sound Transit route 512", info, StringComparison.Ordinal);
     }
 }

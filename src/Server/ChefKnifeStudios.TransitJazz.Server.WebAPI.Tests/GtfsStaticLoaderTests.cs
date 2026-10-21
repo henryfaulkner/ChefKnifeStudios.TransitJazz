@@ -1,6 +1,16 @@
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.GtfsStatic;
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.Interfaces;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Logging;
+using ChefKnifeStudios.TransitJazz.Shared;
+using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
+using Ardalis.Result;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.IO.Compression;
+using System.Net;
+using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests;
@@ -289,6 +299,199 @@ public class GtfsStaticLoaderTests
 
         Assert.Single(features);
         Assert.True(features.ContainsKey("marta:41"));
+    }
+
+    [Fact]
+    public void SeattleDirectStaticUnionResolvesKnownAliasesAndKeepsGeometry()
+    {
+        var kcm = SeattleZip(
+            ("100451", "556"),
+            ("100479", "1 Line"));
+        var soundTransit = SeattleZip(
+            ("102767", "547"),
+            ("2LINE", "2 Line"));
+
+        var merged = GtfsStaticLoader.MergeSeattleShapeSets([kcm, soundTransit]);
+
+        Assert.Equal(new[] { "seattle:1 Line", "seattle:2 Line", "seattle:547", "seattle:556" },
+            merged.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("100451", JsonSerializer.Deserialize<RouteShapeFeature>(merged["seattle:556"], Shared.JsonOptions.Get())!.Properties.RouteId);
+        Assert.Equal("102767", JsonSerializer.Deserialize<RouteShapeFeature>(merged["seattle:547"], Shared.JsonOptions.Get())!.Properties.RouteId);
+    }
+
+    [Fact]
+    public async Task SeattleDirectStaticRequestsAreKeylessAndJoinTheirOwnZipGeometry()
+    {
+        const string kcmUrl = "https://www.soundtransit.org/GTFS-KCM/google_transit.zip";
+        const string stUrl = "https://www.soundtransit.org/GTFS-rail/40_gtfs.zip";
+        var handler = new CapturingStaticHandler(request => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(request.RequestUri!.AbsoluteUri == kcmUrl
+                ? SeattleStaticZip("100451", "556")
+                : SeattleStaticZip("102767", "547")),
+        }));
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Cities:0:Name"] = CityNames.Seattle,
+            ["Cities:0:StaticZipUrls:0"] = kcmUrl,
+            ["Cities:0:StaticZipUrls:1"] = stUrl,
+            ["Cities:0:SeattleSoundTransitApiKeyEnvVar"] = "SOUND_TRANSIT_OBA_API_KEY",
+        }).Build();
+        var repository = new StaticRouteRepository();
+        var shapes = new InMemoryRouteShapeSource();
+        var loader = new GtfsStaticLoader(new CapturingStaticClientFactory(handler), repository, configuration,
+            new RouteShapeResponseCache(), shapes, NullWorkerStructuredEventLogger.Instance,
+            NullLogger<GtfsStaticLoader>.Instance);
+
+        await loader.StartAsync(CancellationToken.None);
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var loaded = await shapes.GetAllShapesAsync(timeout.Token);
+
+            Assert.Equal(new[] { kcmUrl, stUrl }, handler.Requests.Select(request => request.RequestUri!.AbsoluteUri));
+            Assert.All(handler.Requests, request => Assert.Equal(string.Empty, request.RequestUri!.Query));
+            Assert.Equal(new[] { "100451", "102767" }, loaded.Select(shape => shape.Properties.RouteId).Order(StringComparer.Ordinal));
+            Assert.Equal(new[] { "seattle:547", "seattle:556" }, repository.Keys
+                .Where(key => key.StartsWith("seattle:", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+        }
+        finally
+        {
+            await loader.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public void SeattleUnionWithholdsDuplicateDisplayKeysAndRawAliasesRegardlessOfZipOrder()
+    {
+        var kcm = SeattleZip(
+            ("kcm-duplicate-display", "1"),
+            ("same-raw-id", "KCM route"),
+            ("kcm-unrelated", "KCM unrelated"),
+            ("route-512", "512"));
+        var soundTransit = SeattleZip(
+            ("st-duplicate-display", "1"),
+            ("same-raw-id", "ST route"),
+            ("st-unrelated", "ST unrelated"));
+
+        var forward = GtfsStaticLoader.MergeSeattleShapeSets([kcm, soundTransit]);
+        var reverse = GtfsStaticLoader.MergeSeattleShapeSets([soundTransit, kcm]);
+
+        Assert.Equal(forward.Keys.Order(StringComparer.Ordinal), reverse.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { "seattle:KCM unrelated", "seattle:ST unrelated" }, forward.Keys.Order(StringComparer.Ordinal));
+        Assert.DoesNotContain("seattle:512", forward.Keys);
+        Assert.DoesNotContain("seattle:1", forward.Keys);
+        Assert.DoesNotContain("seattle:KCM route", forward.Keys);
+        Assert.DoesNotContain("seattle:ST route", forward.Keys);
+    }
+
+    [Fact]
+    public void SeattleUnionWithholdsSameZipDisplayDuplicatesAndAliasesWithoutDroppingUnrelatedRoutes()
+    {
+        var oneZip = SeattleZip(
+            ("first-id", "duplicate-display"),
+            ("second-id", "duplicate-display"),
+            ("duplicate-display", "different-display"),
+            ("unrelated", "Unrelated"));
+
+        var merged = GtfsStaticLoader.MergeSeattleShapeSets([oneZip]);
+
+        Assert.Equal(new[] { "seattle:Unrelated" }, merged.Keys);
+        Assert.DoesNotContain("seattle:duplicate-display", merged.Keys);
+        Assert.DoesNotContain("seattle:different-display", merged.Keys);
+    }
+
+    [Fact]
+    public void SeattleStaticBuilderOmitsUnmatchedRoutesWithoutShapes()
+    {
+        var routes = new Dictionary<string, string> { ["100451"] = "known", ["unmatched"] = "missing" };
+        var shapes = new Dictionary<string, List<(double Lat, double Lon, int Seq)>>
+        {
+            ["known"] = [(47.60, -122.33, 1), (47.61, -122.32, 2)],
+        };
+        var metadata = new Dictionary<string, (string?, string?, string?, string, int)>
+        {
+            ["100451"] = ("556", null, null, "bus", 3),
+            ["unmatched"] = ("unmatched", null, null, "bus", 3),
+        };
+
+        var result = GtfsStaticLoader.BuildZipRouteFeatures(CityNames.Seattle, routes, shapes, metadata);
+
+        Assert.Equal("seattle:556", Assert.Single(result).Key);
+    }
+
+    static Dictionary<string, string> SeattleZip(params (string RouteId, string ShortName)[] routes)
+    {
+        var routeToShape = new Dictionary<string, string>(StringComparer.Ordinal);
+        var shapes = new Dictionary<string, List<(double Lat, double Lon, int Seq)>>(StringComparer.Ordinal);
+        var metadata = new Dictionary<string, (string? RouteShortName, string? RouteColor, string? TextColor, string Category, int RouteType)>(StringComparer.Ordinal);
+        for (var index = 0; index < routes.Length; index++)
+        {
+            var (routeId, shortName) = routes[index];
+            var shapeId = $"shape-{index}";
+            routeToShape[routeId] = shapeId;
+            shapes[shapeId] = [(47.60 + index * 0.001, -122.33, 1), (47.61 + index * 0.001, -122.32, 2)];
+            metadata[routeId] = (shortName, null, null, "bus", 3);
+        }
+        return GtfsStaticLoader.BuildZipRouteFeatures(CityNames.Seattle, routeToShape, shapes, metadata);
+    }
+
+    static byte[] SeattleStaticZip(string routeId, string shortName)
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            Write(archive, "routes.txt", $"route_id,route_short_name,route_type\n{routeId},{shortName},3\n");
+            Write(archive, "trips.txt", $"route_id,service_id,trip_id,shape_id\n{routeId},weekday,trip-{routeId},shape-{routeId}\n");
+            Write(archive, "shapes.txt", $"shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\nshape-{routeId},47.60,-122.33,1\nshape-{routeId},47.61,-122.32,2\n");
+        }
+        return stream.ToArray();
+    }
+
+    static void Write(ZipArchive archive, string name, string content)
+    {
+        using var writer = new StreamWriter(archive.CreateEntry(name).Open(), Encoding.UTF8);
+        writer.Write(content);
+    }
+
+    sealed class CapturingStaticHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> respond) : HttpMessageHandler
+    {
+        public List<HttpRequestMessage> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add(request);
+            return respond(request);
+        }
+    }
+
+    sealed class CapturingStaticClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+    }
+
+    sealed class StaticRouteRepository : IKeyValueRepository<string>
+    {
+        readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
+        public IEnumerable<string> Keys => _values.Keys;
+
+        public Task<Result<string>> GetAsync(string key, CancellationToken ct = default) =>
+            Task.FromResult(_values.TryGetValue(key, out var value) ? Result<string>.Success(value) : Result<string>.NotFound());
+
+        public Task<Result<Dictionary<string, string>>> GetAllAsync(CancellationToken ct = default) =>
+            Task.FromResult(Result<Dictionary<string, string>>.Success(new Dictionary<string, string>(_values, StringComparer.Ordinal)));
+
+        public Task<Result> SetAsync(string key, string value, CancellationToken ct = default)
+        {
+            _values[key] = value;
+            return Task.FromResult(Result.Success());
+        }
+
+        public Task<Result> DeleteAsync(string key, CancellationToken ct = default)
+        {
+            _values.Remove(key);
+            return Task.FromResult(Result.Success());
+        }
     }
 
     // ── ResolveNestedGtfsArchive — SEPTA zip-of-zips ─────────────────────────

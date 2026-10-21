@@ -1,4 +1,5 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
+using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -65,6 +66,35 @@ public sealed class ReportedVehicleConfigurationTests
             ReportedVehicleCaptureHost.WebApi);
         Assert.Empty(configuration.Catalog.Cities);
         Assert.False(configuration.Runtime.IsEnabledFor("unsupported"));
+    }
+
+    [Theory]
+    [InlineData("Disabled", ReportedVehicleCaptureHost.WebApi, 0)]
+    [InlineData("Disabled", ReportedVehicleCaptureHost.StandaloneWorker, 0)]
+    [InlineData("DryRun", ReportedVehicleCaptureHost.WebApi, 1)]
+    [InlineData("DryRun", ReportedVehicleCaptureHost.StandaloneWorker, 1)]
+    public void SeattleWithoutSourcePoliciesStaysUnsupportedInEachHostMode(
+        string mode, ReportedVehicleCaptureHost host, int expectedSupportedCities)
+    {
+        var seattle = new CityConfig
+        {
+            Name = CityNames.Seattle,
+            GtfsRtUrls =
+            [
+                "https://s3.amazonaws.com/kcm-alerts-realtime-prod/vehiclepositions.pb",
+                "https://api.pugetsound.onebusaway.org/api/gtfs_realtime/vehicle-positions-for-agency/40.pb",
+            ],
+            SeattleSoundTransitApiKeyEnvVar = SeattleCity.SoundTransitApiKeySetting,
+        };
+        Assert.Empty(seattle.ReportedVehicleSources);
+
+        var configuration = ReportedVehicleCaptureConfiguration.FromConfiguration(Configuration(mode),
+            [City("atlanta"), seattle], host);
+
+        Assert.Equal(expectedSupportedCities, configuration.Catalog.Cities.Count);
+        Assert.Equal(mode, configuration.Runtime.Mode.ToString());
+        Assert.False(configuration.Runtime.IsEnabledFor(CityNames.Seattle));
+        Assert.Equal(mode == "DryRun", configuration.Runtime.IsEnabledFor("atlanta"));
     }
 
     [Fact]

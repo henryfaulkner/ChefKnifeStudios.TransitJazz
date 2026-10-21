@@ -174,6 +174,7 @@ builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection
 builder.Services.AddSingleton<MartaCity>();
 
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
+CityConfig.ValidateUniqueCityNames(cityConfigs);
 var reportedVehicleConfiguration = ReportedVehicleCaptureConfiguration.FromConfiguration(
     builder.Configuration, cityConfigs, ReportedVehicleCaptureHost.WebApi);
 
@@ -317,6 +318,13 @@ builder.Services.AddSingleton<IEnumerable<ITransitCity>>(sp =>
         {
             cities.Add(sp.GetRequiredService<NymtaCity>());
         }
+        else if (string.Equals(cfg.Name, CityNames.Seattle, StringComparison.OrdinalIgnoreCase))
+        {
+            cities.Add(new SeattleCity(cfg, httpFactory, builder.Configuration,
+                logFactory.CreateLogger<SeattleCity>(), sp.GetRequiredService<TimeProvider>(),
+                reportedVehicleConfiguration.Runtime.IsEnabledFor(cfg.Name),
+                sp.GetRequiredService<ReportedVehicleBufferBudget>(), reportedVehicleConfiguration.Options));
+        }
         else
         {
             cities.Add(new GtfsRtCity(cfg, httpFactory, logFactory.CreateLogger<GtfsRtCity>(),
@@ -334,6 +342,8 @@ builder.Services.AddSingleton<IRouteShapeResponseCache, RouteShapeResponseCache>
 builder.Services.AddSingleton<InMemoryRouteShapeSource>();
 builder.Services.AddSingleton<IRouteShapeSource>(sp => sp.GetRequiredService<InMemoryRouteShapeSource>());
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient(SeattleCity.SoundTransitHttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHostedService<GtfsStaticLoader>();
 builder.Services.AddSingleton<IFeatureFlagService>(sp =>
 {

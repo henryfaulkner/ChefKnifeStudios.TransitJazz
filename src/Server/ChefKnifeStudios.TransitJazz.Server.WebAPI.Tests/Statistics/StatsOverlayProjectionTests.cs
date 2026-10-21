@@ -1,4 +1,6 @@
 using ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
 using Xunit;
@@ -135,6 +137,88 @@ public sealed class StatsOverlayProjectionTests
         Assert.Equal(0, bubble.ActiveClockHours);
         Assert.Equal(0m, bubble.MeanActiveVehicles);
         Assert.Equal("no_active_vehicles", bubble.OmissionReason);
+    }
+
+    [Fact]
+    public async Task SeattleWithoutReportedPolicyStaysUnavailableInAllAndAtlantaCountsIgnoreRouteFilter()
+    {
+        var catalog = SupportedAtlantaCatalog();
+        var allOptions = Options("atlanta", "seattle");
+        allOptions.ReportedVehiclesEnabled = true;
+        StatsOverlayQueryInput? allInput = null;
+        var allQuery = new ProjectionQuery(input =>
+        {
+            allInput = input;
+            var result = BuildAllResult(input);
+            AddReportedRows(result, input, "atlanta", 17);
+            return result;
+        });
+        var allService = new StatsOverlayService(allQuery, allOptions, new FixedTimeProvider(AsOf), catalog);
+        var all = await allService.ReadAsync(new StatsOverlayRequest
+        {
+            Scope = "all", RouteJoinKeys = []
+        }, CancellationToken.None);
+
+        Assert.Contains(allInput!.Hours, hour => hour.CitySlug == "seattle");
+        Assert.Equal(new[] { "atlanta" }, allInput.ReportedVehiclePolicies.Select(policy => policy.CitySlug));
+        var seattle = Assert.Single(all.TodayReportedVehicles.Cities, city => city.CitySlug == "seattle");
+        Assert.Null(seattle.Count);
+        Assert.Equal("unavailable", seattle.State);
+        Assert.Equal("partial", all.TodayReportedVehicles.State);
+        Assert.Equal(17L, Assert.Single(all.TodayReportedVehicles.Cities, city => city.CitySlug == "atlanta").Count);
+
+        var cityOptions = Options("atlanta");
+        cityOptions.ReportedVehiclesEnabled = true;
+        StatsOverlayQueryInput? filteredInput = null;
+        var cityQuery = new ProjectionQuery(input =>
+        {
+            filteredInput = input;
+            var result = BuildCityResult(input);
+            AddReportedRows(result, input, "atlanta", 17);
+            return result;
+        });
+        var cityService = new StatsOverlayService(cityQuery, cityOptions, new FixedTimeProvider(AsOf), catalog);
+        var filtered = await cityService.ReadAsync(new StatsOverlayRequest
+        {
+            Scope = "city", CitySlug = "atlanta", RouteJoinKeys = ["route-a"]
+        }, CancellationToken.None);
+
+        Assert.Equal(new[] { "route-a" }, filteredInput!.SelectedRouteKeys);
+        Assert.Equal(17L, Assert.Single(filtered.TodayReportedVehicles.Cities).Count);
+        Assert.Equal("complete", filtered.TodayReportedVehicles.State);
+    }
+
+    static ReportedVehicleSourceCatalog SupportedAtlantaCatalog()
+    {
+        var source = new ReportedVehicleSourceDefinition
+        {
+            SourceKey = "feed-a", IdentityNamespace = "atlanta-bus", IdentityKind = "descriptor",
+        };
+        return new ReportedVehicleSourceCatalog([new ReportedVehicleSourceCatalogEntry("atlanta", [source])]);
+    }
+
+    static void AddReportedRows(StatsOverlayQueryResult result, StatsOverlayQueryInput input, string city, long count)
+    {
+        foreach (var window in new[]
+                 {
+                     (Name: "today", Includes: (Func<StatsOverlayQueryHour, bool>)(hour => hour.IsToday)),
+                     (Name: "last24CompletedHours", Includes: (Func<StatsOverlayQueryHour, bool>)(hour => hour.IsLast24)),
+                 })
+        {
+            var hours = input.Hours.Where(hour => hour.CitySlug == city && window.Includes(hour)).ToArray();
+            if (hours.Length == 0) continue;
+            result.ReportedVehicleWindows.Add(new StatsOverlayReportedVehicleWindow
+            {
+                CitySlug = city,
+                Window = window.Name,
+                Count = count,
+                ExpectedHours = hours.Length,
+                ContributingHours = hours.Length,
+                FullyCoveredHours = hours.Length,
+                FirstContributingUtc = hours.Min(hour => hour.HourStartUtc),
+                LastContributingUtc = hours.Max(hour => hour.HourStartUtc),
+            });
+        }
     }
 
     static StatsOverlayOptions Options(params string[] citySlugs) => new()

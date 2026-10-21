@@ -13,7 +13,7 @@ public class CitySlugTests
     static string[] AllSlugs => new[]
     {
         CityNames.Marta, CityNames.Wmata, CityNames.Mbta, CityNames.Nymta,
-        CityNames.Ttc, CityNames.Septa, CityNames.Rtd,
+        CityNames.Ttc, CityNames.Septa, CityNames.Rtd, CityNames.Seattle,
     };
 
     static readonly string[] ForbiddenAgencyNames =
@@ -49,6 +49,13 @@ public class CitySlugTests
             var unescaped = Uri.UnescapeDataString(escaped).ToLowerInvariant();
             Assert.Equal(slug, unescaped);
         }
+    }
+
+    [Fact]
+    public void seattle_has_one_canonical_city_slug()
+    {
+        Assert.Equal("seattle", CityNames.Seattle);
+        Assert.Equal(1, AllSlugs.Count(slug => slug == CityNames.Seattle));
     }
 
     [Fact]

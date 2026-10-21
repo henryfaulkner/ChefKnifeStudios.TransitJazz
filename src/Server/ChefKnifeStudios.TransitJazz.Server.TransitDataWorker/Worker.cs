@@ -778,6 +778,13 @@ public class Worker(
                         continue;
                     }
 
+                    // Seattle's 512 is deliberately outside map, route-history and audio
+                    // eligibility, even if a future direct static refresh adds its geometry.
+                    if (string.Equals(city.Name, CityNames.Seattle, StringComparison.OrdinalIgnoreCase)
+                        && (string.Equals(routeJoinKey, "512", StringComparison.OrdinalIgnoreCase)
+                            || routePoints.Any(point => string.Equals(point.RouteJoinKey, "512", StringComparison.OrdinalIgnoreCase))))
+                        continue;
+
                     double lat = (double)entity.Vehicle.Position.Latitude;
                     double lon = (double)entity.Vehicle.Position.Longitude;
                     var category = ResolveCategory(modeMap, routeJoinKey);

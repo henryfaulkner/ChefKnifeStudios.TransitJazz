@@ -96,6 +96,40 @@ public sealed class ReportedVehicleCoverageQueryTests
         Assert.Contains("start_boundary_missing", today.Limitations);
     }
 
+    [ReportedVehiclePostgresFact]
+    public async Task MissingSeattlePolicyKeepsItsHoursInTheDenominatorAsUnavailable()
+    {
+        await using var database = await ReportedVehicleDatabaseFixture.CreateAsync();
+        var first = new DateTime(2026, 8, 21, 0, 0, 0, DateTimeKind.Utc);
+        var hours = new[] { "atlanta", "seattle" }.SelectMany(city => Enumerable.Range(0, 2).Select(offset =>
+            new StatsOverlayQueryHour
+            {
+                CitySlug = city,
+                HourStartUtc = first.AddHours(offset),
+                IsToday = true,
+                IsLast24 = true,
+                ExpectedCadenceSeconds = 30,
+            })).ToArray();
+        var input = new StatsOverlayQueryInput
+        {
+            Scope = "all",
+            Hours = hours,
+            ReportedVehiclesEnabled = true,
+            ReportedVehiclePolicies = [new StatsOverlayReportedVehiclePolicy(
+                "atlanta", new string('a', 64), new string('b', 64), [new("feed-a", 30)])],
+        };
+
+        var result = await new StatsOverlayQuery(database).ReadAsync(input,
+            TimeSpan.FromSeconds(5), CancellationToken.None);
+        var seattle = Assert.Single(result.ReportedVehicleWindows,
+            row => row.CitySlug == "seattle" && row.Window == "today");
+
+        Assert.Null(seattle.Count);
+        Assert.Equal(2, seattle.ExpectedHours);
+        Assert.Equal(0, seattle.ContributingHours);
+        Assert.Equal(2, Assert.Single(seattle.Exclusions, exclusion => exclusion.Code == "source_policy_mismatch").Hours);
+    }
+
     static CityReportedVehicleHour Header(DateTime hour,
         ReportedVehicleCollectionStatus status = ReportedVehicleCollectionStatus.Complete,
         string? definition = null, string? sourceFingerprint = null, string? cadenceFingerprint = null,

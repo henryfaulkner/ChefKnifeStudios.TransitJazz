@@ -91,6 +91,28 @@ public sealed class ReportedVehicleCoverageTests
                 ReportedVehicleCaptureFixture.Hour1, ReportedVehicleCaptureFixture.Hour1).Count());
     }
 
+    [Fact]
+    public void DistinctSeattleAgencyNamespacesDoNotCollapseEqualRawDescriptorText()
+    {
+        var kcm = Source("kcm", "kcm-descriptor-domain");
+        var soundTransit = Source("sound-transit", "st-descriptor-domain");
+        var city = new ReportedVehicleSourceCatalogEntry("seattle", [kcm, soundTransit]);
+        var catalog = new ReportedVehicleSourceCatalog([city]);
+        var options = new ReportedVehicleHistoryOptions();
+        var accumulator = new ReportedVehicleAccumulator("seattle", Guid.NewGuid(), city,
+            catalog.SourceSetFingerprint("seattle"), catalog.CadencePolicyFingerprint("seattle"), options,
+            new ReportedVehicleBufferBudget(options));
+
+        accumulator.Observe(ReportedVehicleSourceObservation.Successful(kcm, new DateTimeOffset(Hour), ["512-only", "shared"]));
+        accumulator.Observe(ReportedVehicleSourceObservation.Successful(soundTransit, new DateTimeOffset(Hour), ["shared"]));
+        var finalized = Assert.Single(accumulator.FlushPending());
+
+        Assert.Equal(3, finalized.Header.MembershipCount);
+        Assert.Equal(new[] { "kcm-descriptor-domain", "st-descriptor-domain" },
+            finalized.Memberships.Select(identity => identity.Namespace).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        Assert.Equal(2, finalized.Memberships.Count(identity => identity.Value == "shared"));
+    }
+
     static (ReportedVehicleAccumulator Accumulator, ReportedVehicleSourceDefinition Source) Create()
     {
         var source = new ReportedVehicleSourceDefinition
@@ -108,4 +130,9 @@ public sealed class ReportedVehicleCoverageTests
 
     static ReportedVehicleSourceObservation Observe(ReportedVehicleSourceDefinition source, DateTime at, string? id) =>
         ReportedVehicleSourceObservation.Successful(source, new DateTimeOffset(at), [id]);
+
+    static ReportedVehicleSourceDefinition Source(string sourceKey, string identityNamespace) => new()
+    {
+        SourceKey = sourceKey, IdentityNamespace = identityNamespace, IdentityKind = "descriptor",
+    };
 }

@@ -4,6 +4,16 @@ namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 
 public class CityConfig
 {
+    public static void ValidateUniqueCityNames(IEnumerable<CityConfig> cities)
+    {
+        ArgumentNullException.ThrowIfNull(cities);
+        var duplicate = cities.Where(city => !string.IsNullOrWhiteSpace(city.Name))
+            .GroupBy(city => city.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicate is not null)
+            throw new InvalidOperationException($"City configuration contains duplicate city name '{duplicate.Key}'.");
+    }
+
     public string Name { get; set; } = string.Empty;
     public string TimeZoneId { get; set; } = string.Empty;
     public string[] GtfsRtUrls { get; set; } = [];
@@ -20,6 +30,8 @@ public class CityConfig
     public Dictionary<string, string>? RailRouteIdMap { get; set; }
     public string? ApiKeyEnvVar { get; set; }
     public string ApiKeyQueryParam { get; set; } = "api_key";
+    /// <summary>Seattle's Sound Transit credential variable. It is used only for the second realtime source.</summary>
+    public string? SeattleSoundTransitApiKeyEnvVar { get; set; }
     public string[] RouteIdNormalization { get; set; } = [];
 
     public class RailRealtimeConfig
