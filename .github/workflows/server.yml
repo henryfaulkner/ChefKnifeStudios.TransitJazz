@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 060-add-seattle]
 
 env:
   REGISTRY: chefknife.azurecr.io
