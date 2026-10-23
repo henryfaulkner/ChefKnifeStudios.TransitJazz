@@ -101,7 +101,33 @@ jobs:
           inlineScript: |
             az containerapp update --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
 
-      - name: Promote deployed server image
+      - name: Verify ready server image
+        # Azure accepts the update before the new revision is ready. A concurrent
+        # configuration update can also restore the previous image.
+        run: |
+          set -euo pipefail
+          expected="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}"
+          for attempt in {1..60}; do
+            state=$(az containerapp show --name "${{ env.CONTAINER_APP_NAME }}" --resource-group "${{ env.RESOURCE_GROUP }}" \
+              --query '{image:properties.template.containers[0].image,latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName}' --output json)
+            if [ "$(jq -r '.image' <<< "$state")" != "$expected" ]; then
+              echo "::error::The Container App image changed during deployment. Check concurrent configuration updates."
+              exit 1
+            fi
+            ready=$(jq -r '.ready // empty' <<< "$state")
+            if [ -n "$ready" ] && [ "$ready" = "$(jq -r '.latest' <<< "$state")" ]; then
+              serving=$(az containerapp revision show --name "${{ env.CONTAINER_APP_NAME }}" --resource-group "${{ env.RESOURCE_GROUP }}" \
+                --revision "$ready" --query properties.template.containers[0].image --output tsv)
+              if [ "$serving" = "$expected" ]; then
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "::error::The requested server image did not become the ready revision within 10 minutes."
+          exit 1
+
+      - name: Promote verified server image
         run: |
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
           docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
