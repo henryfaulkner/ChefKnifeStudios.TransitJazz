@@ -97,6 +97,7 @@ Repository details were checked on **2026-10-18**. Re-read current code and work
    | Environment overrides | Inspect both hosts' `appsettings.Development.json`, other environment files and deployed environment overrides for indexed `Cities` entries |
    | History selection | Review explicit `HistoricalStatistics.Cities` lists and cadence overrides; include the city where collection is intended |
    | Stats display identity | `Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/Statistics/StatsOverlayOptions.cs`: extend `DisplayNameKeys`; add the corresponding `StatsCity…` resource |
+   | Stats city toggle | `Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/Stats/StatsOverlay.razor`: add the canonical slug to the `CurrentCityName` switch, pointing to the same `StatsCity…` resource; otherwise the toggle falls back to “Transit city” even when the API recognizes the city |
    | Visitor selection | `Client/ChefKnifeStudios.TransitJazz.Client.Shared/Components/FABs/CityFab.razor`: add the city button and hash/reload handler |
 
 2. Keep the two base `Cities` entries identical. Include `Name`, `TimeZoneId`, `GtfsRtUrls` and `StaticZipUrls`, plus only justified authentication, mapping or additional-source settings. Encode literal spaces in URLs. Preserve existing array order: current host code includes an index-based rail configuration reference, and environment configuration can override array indices.
@@ -107,7 +108,7 @@ Repository details were checked on **2026-10-18**. Re-read current code and work
 
 5. Review enabled statistics features and their current release contracts. Record unsupported reported-vehicle coverage explicitly. Do not enable global collection/read flags merely to add a city; if already enabled, validate the new city against their startup and persistence requirements. Check configured city/source/route limits and existing observability city filters.
 
-**Verification — pass before visitor content:** Build with `dotnet build src\ChefKnifeStudios.TransitJazz.sln`. Require zero errors and investigate newly introduced warnings. Confirm effective city entries agree, time zones resolve, the Stats display key exists, source-policy validation passes, and historical selection is intentional. A successful build alone does not prove startup configuration is valid.
+**Verification — pass before visitor content:** Build with `dotnet build src\ChefKnifeStudios.TransitJazz.sln`. Require zero errors and investigate newly introduced warnings. Confirm effective city entries agree, time zones resolve, both the server Stats display mapping and client `CurrentCityName` switch resolve to the same existing resource, source-policy validation passes, and historical selection is intentional. A successful build alone does not prove startup configuration is valid.
 
 ## 5. Worker adapter creation or reuse
 
@@ -225,7 +226,7 @@ Repository details were checked on **2026-10-18**. Re-read current code and work
 
 1. Open `https://transitjazz.com/#<city-slug>` in a fresh browser session. Verify the city picker, initial map center, route geometry, live vehicles, unlock copy and InfoFab. Unlock audio and listen; check several feed updates during service hours.
 
-2. Switch to existing cities and back. Verify route filtering and reconnection, and repeat a mobile-size and theme check. Confirm the production client is using the intended backend, not a local or stale endpoint.
+2. Switch to existing cities and back. Verify route filtering and reconnection, and repeat a mobile-size and theme check. Open Stats for the new city and confirm the city toggle shows its display name rather than “Transit city,” including before a snapshot has loaded or when a request fails. Confirm the production client is using the intended backend, not a local or stale endpoint.
 
 3. Check the new city's production telemetry across the agreed observation window. Include multiple source updates and, when claiming historical-statistics acceptance, the required completed-hour window. Use `transitjazz-db` for read-only history checks if needed. Record missing/partial history accurately; never backfill invented vehicle populations.
 
