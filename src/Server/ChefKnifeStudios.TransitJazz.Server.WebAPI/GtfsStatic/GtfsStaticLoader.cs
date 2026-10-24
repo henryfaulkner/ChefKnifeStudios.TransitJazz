@@ -221,6 +221,7 @@ public class GtfsStaticLoader(
         // Bus Company zip both mint their own route_id numbering). Processing each zip as
         // its own self-contained unit and deduping on the display key avoids that.
         var fresh = new Dictionary<string, string>();
+        var seattleZipFeatures = new List<Dictionary<string, string>>();
 
         foreach (var zipUrl in city.StaticZipUrls)
         {
@@ -242,8 +243,12 @@ public class GtfsStaticLoader(
                 var shapes = ParseShapes(archive);
                 var meta = ParseRouteMetadata(archive, city.RouteTypeCategories, city.Name, logger);
 
-                foreach (var (key, geoJson) in BuildZipRouteFeatures(city.Name, routeToShape, shapes, meta))
-                    fresh.TryAdd(key, geoJson);
+                var zipFeatures = BuildZipRouteFeatures(city.Name, routeToShape, shapes, meta);
+                if (string.Equals(city.Name, CityNames.Seattle, StringComparison.OrdinalIgnoreCase))
+                    seattleZipFeatures.Add(zipFeatures);
+                else
+                    foreach (var (key, geoJson) in zipFeatures)
+                        fresh.TryAdd(key, geoJson);
 
                 // FR-011/012/013 — only the subway zip (nymta now merges subway + bus zips
                 // under one city) derives the stop→shape-offset table; stop_times.txt is
@@ -256,6 +261,17 @@ public class GtfsStaticLoader(
                 logger.LogWarning("GtfsStaticLoader: failed to load zip for city {City} from {Endpoint}; exception type {ExceptionType}.",
                     city.Name, StructuredLogRedactor.SafeEndpointIdentity(zipUrl), StructuredLogRedactor.SafeExceptionType(ex));
             }
+        }
+
+        if (string.Equals(city.Name, CityNames.Seattle, StringComparison.OrdinalIgnoreCase))
+        {
+            var requestedCount = seattleZipFeatures.Sum(features => features.Count);
+            var merged = MergeSeattleShapeSets(seattleZipFeatures);
+            foreach (var (key, geoJson) in merged)
+                fresh[key] = geoJson;
+            if (merged.Count != requestedCount)
+                logger.LogWarning("GtfsStaticLoader: Seattle withheld {Count} unsupported or ambiguous direct-static route shapes.",
+                    requestedCount - merged.Count);
         }
 
         if (subwayOffsets.Count > 0)
@@ -300,13 +316,66 @@ public class GtfsStaticLoader(
 
             var displayKey = shortName ?? routeId;
             var key = $"{cityName}:{displayKey}";
-            if (result.ContainsKey(key)) continue;
+            if (result.ContainsKey(key) && !string.Equals(cityName, CityNames.Seattle, StringComparison.OrdinalIgnoreCase))
+                continue;
 
             var simplified = Simplify(points, SimplifyToleranceMeters);
-            result[key] = BuildLineStringFeature(routeId, shortName, simplified, color, textColor, category, routeType, cityName);
+            var feature = BuildLineStringFeature(routeId, shortName, simplified, color, textColor, category, routeType, cityName);
+            if (!result.TryAdd(key, feature))
+                result[$"{key}\u001f{routeId}"] = feature; // Internal Seattle collision candidate; the union withholds its duplicated JoinKey.
         }
 
         return result;
+    }
+
+    /// <summary>Combines Seattle's direct KCM/ST catalogs without order-dependent first-wins aliases.</summary>
+    internal static Dictionary<string, string> MergeSeattleShapeSets(
+        IEnumerable<IReadOnlyDictionary<string, string>> zipFeatureSets)
+    {
+        ArgumentNullException.ThrowIfNull(zipFeatureSets);
+        var candidates = zipFeatureSets.SelectMany(features => features)
+            .Select(pair => (pair.Key, pair.Value,
+                Feature: JsonSerializer.Deserialize<RouteShapeFeature>(pair.Value, Shared.JsonOptions.Get())))
+            .Where(item => item.Feature is not null)
+            .ToArray();
+        var excludedKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var item in candidates)
+        {
+            var properties = item.Feature!.Properties;
+            if (string.Equals(properties.JoinKey, "512", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(properties.RouteId, "512", StringComparison.OrdinalIgnoreCase))
+                excludedKeys.Add(item.Key);
+        }
+
+        foreach (var group in candidates.GroupBy(item => item.Feature!.Properties.JoinKey, StringComparer.Ordinal)
+                     .Where(group => group.Count() > 1))
+            foreach (var item in group)
+                excludedKeys.Add(item.Key);
+
+        foreach (var group in candidates.GroupBy(item => item.Key, StringComparer.Ordinal).Where(group => group.Count() > 1))
+            excludedKeys.Add(group.Key);
+
+        foreach (var group in candidates.GroupBy(item => item.Feature!.Properties.RouteId, StringComparer.Ordinal)
+                     .Where(group => group.Select(item => item.Key).Distinct(StringComparer.Ordinal).Count() > 1))
+            foreach (var item in group)
+                excludedKeys.Add(item.Key);
+
+        var canonicalKeys = candidates.GroupBy(item => item.Feature!.Properties.JoinKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Select(item => item.Key).Distinct(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+        foreach (var item in candidates)
+        {
+            if (!canonicalKeys.TryGetValue(item.Feature!.Properties.RouteId, out var conflictingKeys)) continue;
+            foreach (var key in conflictingKeys.Where(key => !string.Equals(key, item.Key, StringComparison.Ordinal)))
+            {
+                excludedKeys.Add(key);
+                excludedKeys.Add(item.Key);
+            }
+        }
+
+        return candidates.Where(item => !excludedKeys.Contains(item.Key))
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
     }
 
     // Detects a zip-of-zips (SEPTA's gtfs_public.zip: google_bus.zip + google_rail.zip nested

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ChefKnifeStudios.TransitJazz.Server.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
 
@@ -170,11 +171,16 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
         await context.Database.OpenConnectionAsync(cancellationToken);
         try
         {
+            // This bounded interactive read cannot amortize JIT compilation. Keep the
+            // setting local to this transaction so pooled connections retain their defaults.
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            await context.Database.ExecuteSqlRawAsync("SET LOCAL jit = off", cancellationToken);
             var remaining = timeout - elapsed.Elapsed;
             if (remaining <= TimeSpan.Zero)
                 throw new TimeoutException("Stats query deadline elapsed while acquiring a connection.");
 
             await using var command = context.Database.GetDbConnection().CreateCommand();
+            command.Transaction = transaction.GetDbTransaction();
             if (input.ReportedVehiclesEnabled) ValidateReportedPolicies(input);
             command.CommandText = BuildCommandText(input.ReportedVehiclesEnabled);
             command.CommandTimeout = Math.Max(1, (int)Math.Min(int.MaxValue, Math.Ceiling(remaining.TotalSeconds)));
@@ -277,7 +283,9 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
                    h.expected_cadence_seconds
             FROM public.city_route_hour_statistics AS s
             JOIN target_hours AS h
-              ON h.city_slug = s.city_slug COLLATE "C"
+              -- Match the index collation as well as enforcing ordinal city identity.
+              ON s.city_slug = h.city_slug COLLATE "default"
+             AND h.city_slug = s.city_slug COLLATE "C"
              AND h.hour_start_utc = s.hour_start_utc
         ),
         cohort_hours AS (
@@ -606,11 +614,13 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
             LEFT JOIN reported_policy AS p ON p.city_slug = t.city_slug COLLATE "C"
             LEFT JOIN public.city_reported_vehicle_hours AS h
               ON p.source_set_fingerprint IS NOT NULL
+                AND h.city_slug = t.city_slug COLLATE "default"
                 AND h.city_slug COLLATE "C" = t.city_slug COLLATE "C" AND h.hour_start_utc = t.hour_start_utc
             LEFT JOIN LATERAL (
                 SELECT count(*)::bigint AS actual_membership_count
                 FROM public.city_reported_vehicle_hour_memberships AS m
-                WHERE m.city_slug COLLATE "C" = t.city_slug COLLATE "C" AND m.hour_start_utc = t.hour_start_utc
+                WHERE m.city_slug = t.city_slug COLLATE "default"
+                  AND m.city_slug COLLATE "C" = t.city_slug COLLATE "C" AND m.hour_start_utc = t.hour_start_utc
             ) AS mc ON h.city_slug IS NOT NULL
         ),
         reported_diagnostics AS (
@@ -699,7 +709,8 @@ public sealed class StatsOverlayQuery(IDbContextFactory<AppDbContext> contextFac
                    m.identity_value COLLATE "C" AS identity_value
             FROM reported_window_hours AS h
             JOIN public.city_reported_vehicle_hour_memberships AS m
-              ON m.city_slug COLLATE "C" = h.city_slug COLLATE "C" AND m.hour_start_utc = h.hour_start_utc
+              ON m.city_slug = h.city_slug COLLATE "default"
+             AND m.city_slug COLLATE "C" = h.city_slug COLLATE "C" AND m.hour_start_utc = h.hour_start_utc
             WHERE h.contributes
         ),
         reported_population_counts AS (

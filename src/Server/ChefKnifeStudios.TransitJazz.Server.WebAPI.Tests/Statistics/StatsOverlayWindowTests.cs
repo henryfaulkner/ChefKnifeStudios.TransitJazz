@@ -89,6 +89,26 @@ public sealed class StatsOverlayWindowTests
         }
     }
 
+    [Theory]
+    [InlineData("2026-03-08T16:00:00Z", 23, 7)]
+    [InlineData("2026-11-01T16:00:00Z", 25, 8)]
+    public void SeattleLocalDayUsesLosAngelesMidnightAcrossDst(string asOf, int expectedDayHours, int expectedCompletedHours)
+    {
+        var options = Options(City("seattle", "America/Los_Angeles"));
+        var request = StatsOverlayPolicy.NormalizeRequest(new StatsOverlayRequest
+        {
+            Scope = "city", CitySlug = "seattle", RouteJoinKeys = []
+        }, options);
+
+        var window = Assert.Single(StatsOverlayPolicy.Resolve(request, options, DateTimeOffset.Parse(asOf)).Cities);
+
+        Assert.Equal(new DateOnly(DateTime.Parse(asOf).Year, DateTime.Parse(asOf).Month, DateTime.Parse(asOf).Day), window.LocalDate);
+        Assert.Equal(TimeSpan.FromHours(expectedDayHours), window.LocalDayEndUtc - window.LocalDayStartUtc);
+        Assert.Equal(expectedCompletedHours, window.TodayHoursUtc.Count);
+        var expectedStart = expectedDayHours == 23 ? "2026-03-08T08:00:00Z" : "2026-11-01T07:00:00Z";
+        Assert.Equal(DateTime.Parse(expectedStart).ToUniversalTime(), window.LocalDayStartUtc);
+    }
+
     [Fact]
     public void FractionalOffsetMidnightExcludesPartialUtcBoundaryHour()
     {

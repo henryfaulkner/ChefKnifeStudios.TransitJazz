@@ -20,7 +20,8 @@ public sealed class StatsAllProjectionTests
             City("new-york-city", "StatsCityNewYorkCity", new DateOnly(2026, 11, 1), "America/New_York", "complete", 24),
             City("toronto", "StatsCityToronto", new DateOnly(2026, 11, 1), "America/Toronto", "partial", 24),
             City("philadelphia", "StatsCityPhiladelphia", new DateOnly(2026, 11, 1), "America/New_York", "complete", 24),
-            City("denver", "StatsCityDenver", new DateOnly(2026, 10, 31), "America/Denver", "partial", 23)
+            City("denver", "StatsCityDenver", new DateOnly(2026, 10, 31), "America/Denver", "partial", 23),
+            City("seattle", "StatsCitySeattle", new DateOnly(2026, 10, 31), "America/Los_Angeles", "partial", 20)
         };
         var citySeries = cities.Select(city => MakeSeries(city)).ToArray();
         var response = new StatsOverlayResponse
@@ -33,16 +34,16 @@ public sealed class StatsAllProjectionTests
             TodayDistance = new StatsDistanceSummary
             {
                 Window = "today", Kilometers = 123m,
-                Coverage = Coverage("partial", 174, 28),
-                ContributingCityHours = 28, ExpectedCityHours = 174,
-                ContributingCityCount = 6, ExpectedCityCount = 7
+                Coverage = Coverage("partial", 197, 48),
+                ContributingCityHours = 48, ExpectedCityHours = 197,
+                ContributingCityCount = 7, ExpectedCityCount = 8
             },
             Last24Distance = new StatsDistanceSummary
             {
                 Window = "last24CompletedHours", Kilometers = 240m,
-                Coverage = Coverage("partial", 168, 144),
-                ContributingCityHours = 144, ExpectedCityHours = 168,
-                ContributingCityCount = 6, ExpectedCityCount = 7
+                Coverage = Coverage("partial", 192, 168),
+                ContributingCityHours = 168, ExpectedCityHours = 192,
+                ContributingCityCount = 7, ExpectedCityCount = 8
             },
             CategoryShares =
             [
@@ -67,11 +68,12 @@ public sealed class StatsAllProjectionTests
         Assert.Equal(2, view.CategoryPie.Rows.Count);
         Assert.True(view.Timeline.EnableSeriesVisibility);
         Assert.Equal(25, view.Timeline.NumericXValues!.Count);
-        Assert.Equal(7, view.Timeline.Series.Count);
+        Assert.Equal(8, view.Timeline.Series.Count);
 
         var denver = view.Timeline.Series.Single(series => series.Key == "city:denver");
         var toronto = view.Timeline.Series.Single(series => series.Key == "city:toronto");
         var boston = view.Timeline.Series.Single(series => series.Key == "city:boston");
+        var seattle = view.Timeline.Series.Single(series => series.Key == "city:seattle");
         Assert.Equal("localized:StatsCityDenver", denver.Label);
         Assert.Contains(new DateOnly(2026, 10, 31).ToString("d", CultureInfo.GetCultureInfo("en")), denver.PointEvidence![0]!.LocalLabel);
         Assert.Contains("01:00 -04:00", toronto.PointEvidence![0]!.LocalLabel);
@@ -83,6 +85,13 @@ public sealed class StatsAllProjectionTests
         Assert.Equal("localized:StatsReasonFuture", toronto.PointEvidence[24]!.TooltipLines.Last());
         Assert.All(boston.Values, value => Assert.Null(value));
         Assert.All(boston.PointEvidence!, point => Assert.Equal("history_disabled", point!.Reason));
+        Assert.Equal(25, seattle.Values.Count);
+        Assert.Null(seattle.Values[24]);
+        Assert.Contains(new DateOnly(2026, 10, 31).ToString("d", CultureInfo.GetCultureInfo("en")), seattle.PointEvidence![0]!.LocalLabel);
+        Assert.All(seattle.PointEvidence!.Take(24), point => Assert.Equal("-07:00", point!.UtcOffset));
+        Assert.Null(seattle.PointEvidence[24]);
+        Assert.Equal("localized:StatsCitySeattle", seattle.Label);
+        Assert.Equal("localized:StatsCitySeattle", view.Bubbles.Rows.Single(row => row.Key == "city:seattle").Label);
 
         Assert.Equal("localized:StatsCityAtlanta", view.Bubbles.Rows[0].Label);
         Assert.Equal("localized:StatsCityAtlanta", view.Bubbles.Rows[0].TooltipLines![0]);
@@ -91,15 +100,16 @@ public sealed class StatsAllProjectionTests
 
     static StatsTimelineSeries MakeSeries(StatsCityWindow city)
     {
-        var count = city.CitySlug == "denver" ? 24 : 25;
+        var count = city.CitySlug is "denver" or "seattle" ? 24 : 25;
         var buckets = Enumerable.Range(1, count).Select(hour =>
         {
             var unavailable = city.CitySlug == "boston";
             var future = city.CitySlug == "denver" ? hour > 23 : hour > 1;
-            var offset = city.CitySlug == "denver" ? "-06:00" : hour == 1 ? "-04:00" : "-05:00";
+            var offset = city.CitySlug == "denver" ? "-06:00" : city.CitySlug == "seattle" ? "-07:00" : hour == 1 ? "-04:00" : "-05:00";
             var endUtc = city.LocalDayStartUtc.AddHours(hour);
             var localEndHour = city.CitySlug == "denver"
                 ? hour == 24 ? 0 : hour
+                : city.CitySlug == "seattle" ? hour % 24
                 : hour <= 2 ? 1 : hour == 25 ? 0 : hour - 1;
             return new StatsTimelineBucket
             {
@@ -125,16 +135,19 @@ public sealed class StatsAllProjectionTests
         CitySlug = slug, DisplayNameKey = displayKey, TimeZone = zone, LocalDate = date,
         LocalDayStartUtc = slug == "denver"
             ? new DateTime(2026, 10, 31, 6, 0, 0, DateTimeKind.Utc)
+            : slug == "seattle" ? new DateTime(2026, 10, 31, 7, 0, 0, DateTimeKind.Utc)
             : new DateTime(2026, 11, 1, 4, 0, 0, DateTimeKind.Utc),
         LocalDayEndUtc = slug == "denver"
             ? new DateTime(2026, 11, 1, 6, 0, 0, DateTimeKind.Utc)
+            : slug == "seattle" ? new DateTime(2026, 11, 1, 7, 0, 0, DateTimeKind.Utc)
             : new DateTime(2026, 11, 2, 5, 0, 0, DateTimeKind.Utc),
         RequestedTodayStartUtc = slug == "denver"
             ? new DateTime(2026, 10, 31, 6, 0, 0, DateTimeKind.Utc)
+            : slug == "seattle" ? new DateTime(2026, 10, 31, 7, 0, 0, DateTimeKind.Utc)
             : new DateTime(2026, 11, 1, 4, 0, 0, DateTimeKind.Utc),
         RequestedTodayEndUtc = Cutoff,
         Last24StartUtc = Cutoff.AddHours(-24), Last24EndUtc = Cutoff,
-        TodayCoverage = Coverage(state, slug == "denver" ? 24 : 25, contributing),
+        TodayCoverage = Coverage(state, slug is "denver" or "seattle" ? 24 : 25, contributing),
         Last24Coverage = Coverage(state, 24, contributing)
     };
 

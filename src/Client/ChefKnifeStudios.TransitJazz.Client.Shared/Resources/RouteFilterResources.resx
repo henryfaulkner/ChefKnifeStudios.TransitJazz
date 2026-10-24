@@ -267,6 +267,21 @@
   <data name="DenverOverlayParagraph1" xml:space="preserve">
     <value>Every dot is a real RTD vehicle, pulled live and turned into sound. Buses, light rail, and commuter rail move through the Denver metro in real time, and the map plays what they're doing right now.</value>
   </data>
+  <data name="SeattleAudioOverlayHeader" xml:space="preserve">
+    <value>KING COUNTY METRO + SOUND TRANSIT - Seattle, WA, USA</value>
+  </data>
+  <data name="SeattleAudioOverlayParagraph1" xml:space="preserve">
+    <value>Every dot is a real King County Metro or Sound Transit vehicle, moving across a region split by water and hills. Routes 556 and 547 reach across Lake Washington while Sound Transit's 1 Line and 2 Line meet the city at its center.</value>
+  </data>
+  <data name="SeattleAudioOverlayParagraph2" xml:space="preserve">
+    <value>&lt;strong&gt;This is an audio experience — turn your device's sound on.&lt;/strong&gt; The harmony opens around the water. &lt;strong&gt;A note lands where the vehicle happens to be along its route&lt;/strong&gt; — on routes 556 and 547 as they cross Lake Washington, or where a train's reported position meets the map. When more vehicles report, the texture grows denser; when a feed falls quiet, the arrangement thins with it. What is playing right now has not played before.</value>
+  </data>
+  <data name="SeattleAudioOverlayParagraph3" xml:space="preserve">
+    <value>King County Metro and Sound Transit supply the direct vehicle feeds and route maps; Sound Transit's data remains subject to its terms of use. Sound Transit route 512 is omitted because its sampled positions do not join to published geometry, and streetcar and water-taxi categories follow the source data. This is the music inside that crossing.</value>
+  </data>
+  <data name="SeattleOverlayParagraph1" xml:space="preserve">
+    <value>The map joins direct King County Metro and Sound Transit feeds to their published route shapes. Sound Transit route 512 is left out when its vehicle records have no matching geometry; the streetcar and water-taxi labels follow the source's route categories. Sound Transit data remains subject to its terms of use.</value>
+  </data>
   <data name="AudioOverlayButton" xml:space="preserve">
     <value>Enter Experience</value>
   </data>
@@ -566,6 +581,9 @@
   </data>
   <data name="StatsCityDenver" xml:space="preserve">
     <value>Denver</value>
+  </data>
+  <data name="StatsCitySeattle" xml:space="preserve">
+    <value>Seattle</value>
   </data>
   <data name="StatsCityUnknown" xml:space="preserve">
     <value>Transit city</value>

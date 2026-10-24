@@ -17,7 +17,8 @@ public sealed class StatsOverlayOptions
         ["new-york-city"] = "StatsCityNewYorkCity",
         ["toronto"] = "StatsCityToronto",
         ["philadelphia"] = "StatsCityPhiladelphia",
-        ["denver"] = "StatsCityDenver"
+        ["denver"] = "StatsCityDenver",
+        ["seattle"] = "StatsCitySeattle"
     };
 
     public bool Enabled { get; set; }

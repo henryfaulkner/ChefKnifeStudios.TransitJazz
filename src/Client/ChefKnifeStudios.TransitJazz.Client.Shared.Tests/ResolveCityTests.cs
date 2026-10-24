@@ -17,6 +17,7 @@ public class ResolveCityTests
     [Theory]
     [InlineData("https://app.example.com/#atlanta", "atlanta")]
     [InlineData("https://app.example.com/#washington-dc", "washington-dc")]
+    [InlineData("https://app.example.com/#seattle", "seattle")]
     public void ResolveCity_ReturnsFragment_Lowercased(string uri, string expected)
     {
         Assert.Equal(expected, NavFor(uri).ResolveCity());

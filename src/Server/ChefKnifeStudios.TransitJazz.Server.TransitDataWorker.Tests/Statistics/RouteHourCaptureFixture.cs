@@ -17,8 +17,9 @@ public sealed class RouteHourCaptureFixture
     public readonly RecordingRouteHourSink Sink = new();
     public readonly Guid CaptureRunId = Guid.Parse("ed6150e0-b01d-4c16-8cf1-5c06826b1b1a");
 
-    public RouteHourCaptureRuntimeOptions Runtime(RouteHourCaptureMode mode = RouteHourCaptureMode.DryRun) => new(
-        mode, ImmutableHashSet.Create(StringComparer.OrdinalIgnoreCase, City), new RouteHourHistoryOptions());
+    public RouteHourCaptureRuntimeOptions Runtime(RouteHourCaptureMode mode = RouteHourCaptureMode.DryRun,
+        string? citySlug = null) => new(
+        mode, ImmutableHashSet.Create(StringComparer.OrdinalIgnoreCase, citySlug ?? City), new RouteHourHistoryOptions());
 
     public static RouteHourCatalogFixture Catalog() => new();
 
@@ -36,10 +37,12 @@ public sealed class RouteHourCaptureFixture
         },
     };
 
-    public static RouteShapeFeature Shape(string routeId = "static-1", string? shortName = "B1", string category = "bus") => new(
+    public static RouteShapeFeature Shape(string routeId = "static-1", string? shortName = "B1", string category = "bus",
+        string citySlug = City) => new(
         "Feature",
-        new RouteShapeGeometry("LineString", Enumerable.Range(0, 11).Select(i => new[] { -84.4 + i * 0.001, 33.7 }).ToArray()),
-        new RouteShapeProperties(routeId, shortName, "#000000", "#ffffff", Category: category, City: City));
+        new RouteShapeGeometry("LineString", Enumerable.Range(0, 11).Select(i => new[]
+            { (citySlug == "seattle" ? -122.33 : -84.4) + i * 0.001, citySlug == "seattle" ? 47.6 : 33.7 }).ToArray()),
+        new RouteShapeProperties(routeId, shortName, "#000000", "#ffffff", Category: category, City: citySlug));
 
     public static RouteHourStatisticRow Row(string key = "Route-A", DateTime? hour = null, Guid? run = null,
         RouteHourCoverageStatus status = RouteHourCoverageStatus.Partial, ImmutableArray<string>? reasons = null) =>
@@ -94,9 +97,9 @@ public sealed class RouteHourCaptureFixture
         }
     }
 
-    public sealed class UnusedFetchCity : ITransitCity
+    public sealed class UnusedFetchCity(string citySlug = City) : ITransitCity
     {
-        public string Name => City;
+        public string Name => citySlug;
         public Task<CityFetchResult> FetchVehiclesAsync(CancellationToken ct) =>
             throw new InvalidOperationException("Fetch is not part of the direct reconciliation fixture.");
     }

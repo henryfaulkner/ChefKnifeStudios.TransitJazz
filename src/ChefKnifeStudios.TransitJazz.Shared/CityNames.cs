@@ -9,6 +9,7 @@ public static class CityNames
     public const string Ttc = "toronto";
     public const string Septa = "philadelphia";
     public const string Rtd = "denver";
+    public const string Seattle = "seattle";
 }
 
 public static class HubMethods
