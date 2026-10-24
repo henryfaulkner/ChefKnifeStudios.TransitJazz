@@ -1,0 +1,16 @@
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<RouteFilterResources> Loc
+
+<footer class="overlay-footer @(IsDark ? "overlay-footer--dark" : "")">
+    <a href="https://ko-fi.com/chefknifestudios"
+       target="_blank"
+       rel="noopener noreferrer"
+       aria-label="@Loc["OverlaySupportAccessibleName"]">
+        @Loc["OverlaySupportLink"]
+    </a>
+</footer>
+
+@code {
+    [Parameter] public bool IsDark { get; set; }
+}

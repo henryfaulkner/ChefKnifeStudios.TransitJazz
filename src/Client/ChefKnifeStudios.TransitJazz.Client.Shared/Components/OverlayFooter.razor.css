@@ -1,0 +1,53 @@
+.overlay-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1;
+    padding: 0 1.5rem max(0.25rem, env(safe-area-inset-bottom));
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0.7));
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(20px) saturate(160%);
+    text-align: center;
+    font-family: monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: rgba(0, 0, 0, 0.6);
+}
+
+.overlay-footer a {
+    display: inline-block;
+    padding: 0.75rem;
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.overlay-footer a:hover {
+    color: rgba(0, 0, 0, 0.9);
+}
+
+.overlay-footer a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+    border-radius: 2px;
+}
+
+.overlay-footer--dark {
+    background: linear-gradient(135deg, rgba(26, 28, 30, 0.8), rgba(26, 28, 30, 0.6) 50%, rgba(26, 28, 30, 0.75));
+    color: rgba(226, 226, 230, 0.85);
+}
+
+.overlay-footer--dark a:hover {
+    color: rgba(255, 255, 255, 0.95);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .overlay-footer {
+        background: #fff;
+    }
+
+    .overlay-footer--dark {
+        background: #1A1C1E;
+    }
+}

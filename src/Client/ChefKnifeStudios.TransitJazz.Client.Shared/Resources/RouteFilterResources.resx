@@ -339,6 +339,12 @@
   <data name="InfoOverlayFooter" xml:space="preserve">
     <value>Henry Faulkner + Chef Knife Studios LLC - 2026</value>
   </data>
+  <data name="OverlaySupportLink" xml:space="preserve">
+    <value>Support on Kofi</value>
+  </data>
+  <data name="OverlaySupportAccessibleName" xml:space="preserve">
+    <value>Support Chef Knife Studios on Kofi</value>
+  </data>
   <data name="InfoOverlayButton" xml:space="preserve">
     <value>Return to experience</value>
   </data>
