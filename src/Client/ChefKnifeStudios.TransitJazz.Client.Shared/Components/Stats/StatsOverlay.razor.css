@@ -6,7 +6,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 4rem 1.5rem 7rem;
+    padding: 1.5rem 1.5rem 7rem;
     overflow-y: auto;
     color: rgba(0, 0, 0, 0.85);
     background: #fff;
@@ -17,8 +17,11 @@
 .stats-overlay * { box-sizing: border-box; }
 
 @media (min-width: 640px) {
-    .stats-overlay { padding: 6rem 1.5rem; }
+    .stats-overlay { padding-bottom: 6rem; }
 }
+
+/* Keep the first charts below the collapsed route filter when it is visible. */
+.stats-overlay:has(.stats-overlay__routes) { padding-top: 4rem; }
 
 .stats-overlay__content { width: min(100%, 72rem); margin-inline: auto; flex-shrink: 0; }
 .stats-overlay .stats-overlay__loader { position: fixed; inset: 0; height: 100%; background: transparent; pointer-events: none; }
