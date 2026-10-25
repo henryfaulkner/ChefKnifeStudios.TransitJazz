@@ -16,10 +16,19 @@ async function _getCheckpointTrail() {
 
 window.ChefMap = {
     maps: {},
+    _visibilityHandlers: {},
     _routesFeatureCollection: null,
 
-    createMap: async function (containerDivId, dotNetRef) {
+    createMap: async function (containerDivId, dotNetRef, generation) {
         let settings = await dotNetRef.invokeMethodAsync('getMapSettings');
+
+        // Keep unsupported WebGL distinct from a transient style/network initialization failure.
+        if (typeof maplibregl !== 'undefined'
+            && typeof maplibregl.supported === 'function'
+            && !maplibregl.supported()) {
+            await dotNetRef.invokeMethodAsync('notifyMapUnsupportedBrowserAsync', generation);
+            return;
+        }
 
         let map = new maplibregl.Map({
             container: containerDivId,
@@ -40,6 +49,16 @@ window.ChefMap = {
         map.addControl(new maplibregl.NavigationControl({ showCompass: false, showZoom: true, visualizePitch: false }), 'bottom-left');
 
         ChefMap.maps[containerDivId] = map;
+        map._chefMapGeneration = generation;
+
+        const visibilityHandler = function () {
+            dotNetRef.invokeMethodAsync(
+                'notifyMapVisibilityAsync', generation, document.visibilityState === 'visible')
+                .catch(error => console.debug('[ChefMap] visibility callback ended', error));
+        };
+        ChefMap._visibilityHandlers[containerDivId] = visibilityHandler;
+        document.addEventListener('visibilitychange', visibilityHandler);
+        visibilityHandler();
 
         // Ctrl+drag: pan instead of rotate (dragRotate is disabled above)
         let ctrlDragStart = null;
@@ -57,6 +76,7 @@ window.ChefMap = {
         map.getCanvas().addEventListener('mouseup', function () { ctrlDragStart = null; });
 
         map.on('load', function () {
+            try {
             // Vehicles GeoJSON source + circle layer — must exist before the animator calls getSource('vehicles')
             map.addSource('vehicles', {
                 type: 'geojson',
@@ -101,19 +121,42 @@ window.ChefMap = {
             });
 
             // Pre-create pulse layers so setCheckpointVisibility works before the first crossing.
-            _getCheckpointPulse().then(function (pulse) { pulse.ensureLayer(map); });
+            _getCheckpointPulse()
+                .then(function (pulse) { pulse.ensureLayer(map); })
+                .catch(error => console.debug('[ChefMap] optional pulse layer unavailable', error));
 
             // Pre-create the crossing-trail layer so the first crossing renders immediately.
-            _getCheckpointTrail().then(function (trail) { trail.ensureLayer(map); });
+            _getCheckpointTrail()
+                .then(function (trail) { trail.ensureLayer(map); })
+                .catch(error => console.debug('[ChefMap] optional crossing-trail layer unavailable', error));
 
             let containerDiv = document.getElementById(containerDivId);
-            if (containerDiv) {
-                console.debug('[ChefMap] map load complete, notifying Blazor (notifyMapReadyAsync) for ' + containerDivId);
-                dotNetRef.invokeMethodAsync('notifyMapReadyAsync');
-            } else {
-                console.warn('[ChefMap] map load complete but container div not found: ' + containerDivId);
+            const requiredContentAvailable = !!containerDiv
+                && !!map.getSource('vehicles')
+                && !!map.getLayer('vehicles-layer');
+            console.debug('[ChefMap] map load complete, checking required content for ' + containerDivId);
+            dotNetRef.invokeMethodAsync(
+                'notifyMapInitializationAsync', generation, requiredContentAvailable)
+                .catch(error => console.warn('[ChefMap] map readiness callback failed', error));
+            } catch (error) {
+                console.error('[ChefMap] required map initialization failed for ' + containerDivId, error);
+                dotNetRef.invokeMethodAsync('notifyMapInitializationAsync', generation, false)
+                    .catch(callbackError => console.warn('[ChefMap] map failure callback failed', callbackError));
             }
         });
+    },
+
+    removeMap: function (containerDivId) {
+        const visibilityHandler = ChefMap._visibilityHandlers[containerDivId];
+        if (visibilityHandler) {
+            document.removeEventListener('visibilitychange', visibilityHandler);
+            delete ChefMap._visibilityHandlers[containerDivId];
+        }
+        const map = ChefMap.maps[containerDivId];
+        if (map) {
+            map.remove();
+            delete ChefMap.maps[containerDivId];
+        }
     },
 
     setMapZoom: function (containerDivId, zoom) {
@@ -122,41 +165,69 @@ window.ChefMap = {
         map.setZoom(zoom);
     },
 
-    setMapStyle: function (containerDivId, styleUrl) {
-        let map = ChefMap.maps[containerDivId];
-        if (!map) return Promise.resolve();
+    setMapStyle: function (containerDivId, styleUrl, generation, operationGeneration) {
+        const map = ChefMap.maps[containerDivId];
+        const emptyResult = {
+            requestedStyleLoaded: false,
+            previousRequiredSourcesAndLayersRestored: false,
+            mapUsable: false,
+            terminalFailure: true,
+            checkpointVisible: null,
+            generation: -1,
+            operationGeneration: operationGeneration
+        };
+        if (!map || map._chefMapGeneration !== generation)
+            return Promise.resolve(emptyResult);
 
-        // Snapshot current vehicles data before the style wipes everything.
+        let previousStyle;
         let vehiclesData = { type: 'FeatureCollection', features: [] };
         try {
-            let vSrc = map.getSource('vehicles');
-            if (vSrc) vehiclesData = vSrc._data || vehiclesData;
-        } catch (e) { }
+            previousStyle = map.getStyle();
+            const vehicleSource = map.getSource('vehicles');
+            if (vehicleSource) vehiclesData = vehicleSource._data || vehiclesData;
+        } catch (error) {
+            console.warn('[ChefMap] setMapStyle could not snapshot the current map');
+            return Promise.resolve(emptyResult);
+        }
 
-        // diff:false forces a FULL style reload. With MapLibre's default diff:true,
-        // swapping between two schema-compatible MapTiler styles applies an incremental
-        // diff that wipes our custom sources/layers but never fires 'style.load' — so the
-        // restore handler below (and the awaited Promise) would never run, leaving routes,
-        // vehicles, and checkpoints stripped after the swap. Full reload guarantees the event.
-        map.setStyle(styleUrl, { diff: false });
-
-        // Return a Promise that resolves after style.load so the C# caller can await it,
-        // then re-render routes from its own cache (no re-fetch). A timed fallback guarantees
-        // the C# await never deadlocks even if 'style.load' fails to fire (e.g. bad style URL).
         return new Promise(function (resolve) {
-            let restored = false;
-            let fallbackTimer = null;
+            let completed = false;
+            let restoringPreviousStyle = false;
+            let requestTimer = null;
+            let restoreTimer = null;
 
-            function restore() {
-                if (restored) return;
-                restored = true;
-                if (fallbackTimer) clearTimeout(fallbackTimer);
+            function cleanup() {
+                if (requestTimer) clearTimeout(requestTimer);
+                if (restoreTimer) clearTimeout(restoreTimer);
+                map.off('style.load', onRequestedStyleLoaded);
+                map.off('style.load', onPreviousStyleLoaded);
+            }
 
-                // Re-add the vehicles source and layer (empty shell; animator will update it).
+            function requiredLayersAvailable() {
                 try {
-                    if (!map.getSource('vehicles')) {
+                    return map._chefMapGeneration === generation
+                        && map.isStyleLoaded()
+                        && !!map.getSource('vehicles')
+                        && !!map.getLayer('vehicles-layer')
+                        && (!ChefMap._routesFeatureCollection
+                            || (!!map.getSource('routes') && !!map.getLayer('routes-layer')));
+                } catch (error) {
+                    return false;
+                }
+            }
+
+            function checkpointVisibility() {
+                try { return map.getLayoutProperty('trigger-points-layer', 'visibility') || null; }
+                catch (error) { return null; }
+            }
+
+            function restoreRequiredContent() {
+                let restored = true;
+                try {
+                    if (!map.getSource('vehicles'))
                         map.addSource('vehicles', { type: 'geojson', data: vehiclesData });
-                    }
+                    else
+                        map.getSource('vehicles').setData(vehiclesData);
                     if (!map.getLayer('vehicles-layer')) {
                         map.addLayer({
                             id: 'vehicles-layer',
@@ -171,15 +242,45 @@ window.ChefMap = {
                             }
                         });
                     }
-                } catch (e) {
-                    console.warn('[ChefMap] setMapStyle: could not restore vehicles layer: ' + e);
+                } catch (error) {
+                    restored = false;
+                    console.warn('[ChefMap] setMapStyle could not restore required vehicle content');
                 }
 
-                // Re-add all-checkpoints dot layer (trigger-points-layer is wiped by setStyle).
+                try {
+                    if (ChefMap._routesFeatureCollection) {
+                        if (!map.getSource('routes'))
+                            map.addSource('routes', { type: 'geojson', data: ChefMap._routesFeatureCollection });
+                        else
+                            map.getSource('routes').setData(ChefMap._routesFeatureCollection);
+                        if (!map.getLayer('routes-layer')) {
+                            map.addLayer({
+                                id: 'routes-layer',
+                                type: 'line',
+                                source: 'routes',
+                                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                                paint: {
+                                    'line-color': '#6b7280',
+                                    'line-width': 2,
+                                    'line-opacity': 0.7
+                                }
+                            }, 'vehicles-layer');
+                        }
+                    }
+                } catch (error) {
+                    restored = false;
+                    console.warn('[ChefMap] setMapStyle could not restore required route content');
+                }
+
+                // Checkpoint and trail overlays are optional; their failures do not
+                // turn an otherwise usable transit map into a root capability failure.
                 try {
                     if (!map.getSource('trigger-points')) {
-                        let allFeatures = Object.values(ChefMap._triggerPointFeatures).flat();
-                        map.addSource('trigger-points', { type: 'geojson', data: { type: 'FeatureCollection', features: allFeatures } });
+                        const features = Object.values(ChefMap._triggerPointFeatures).flat();
+                        map.addSource('trigger-points', {
+                            type: 'geojson',
+                            data: { type: 'FeatureCollection', features: features }
+                        });
                     }
                     if (!map.getLayer('trigger-points-layer')) {
                         map.addLayer({
@@ -196,51 +297,121 @@ window.ChefMap = {
                             }
                         });
                     }
-                } catch (e) {
-                    console.warn('[ChefMap] setMapStyle: could not restore trigger-points layer: ' + e);
+                } catch (error) {
+                    console.debug('[ChefMap] optional checkpoint content remains unavailable');
                 }
-
-                // Re-add the consolidated routes source+layer from cached data.
-                try {
-                    if (ChefMap._routesFeatureCollection && !map.getSource('routes')) {
-                        map.addSource('routes', { type: 'geojson', data: ChefMap._routesFeatureCollection });
-                        map.addLayer({
-                            id: 'routes-layer',
-                            type: 'line',
-                            source: 'routes',
-                            layout: { 'line-join': 'round', 'line-cap': 'round' },
-                            paint: {
-                                'line-color': '#6b7280',
-                                'line-width': 2,
-                                'line-opacity': 0.7
-                            }
-                        }, 'vehicles-layer');
-                    }
-                } catch (e) {
-                    console.warn('[ChefMap] setMapStyle: could not restore routes layer: ' + e);
-                }
-
-                // Re-add pulse overlay and clear any in-flight pulses (FR-012).
                 _getCheckpointPulse().then(function (pulse) {
                     pulse.ensureLayer(map);
                     pulse.reset(map);
-                });
-
-                // Re-add the crossing-trail layer so the next crossing renders after a basemap swap
-                // (Principle VII). Active trails are sub-second and need not be preserved.
-                try { _getCheckpointTrail().then(function (trail) { trail.ensureLayer(map); }); }
-                catch (e) { console.warn('[ChefMap] setMapStyle: could not restore crossing-trail layer: ' + e); }
-
-                // Signal C# to re-render routes from cache (addAllRoutes will hit setData branch).
-                resolve({});
+                }).catch(function () { });
+                _getCheckpointTrail().then(function (trail) {
+                    trail.ensureLayer(map);
+                }).catch(function () { });
+                return restored && requiredLayersAvailable();
             }
 
-            map.once('style.load', restore);
-            // Safety net: if style.load never fires, restore anyway so routes still re-render.
-            fallbackTimer = setTimeout(restore, 4000);
+            function finish(requestedStyleLoaded, previousRestored, terminalFailure) {
+                if (completed) return;
+                completed = true;
+                cleanup();
+                const usable = requiredLayersAvailable();
+                resolve({
+                    requestedStyleLoaded: requestedStyleLoaded,
+                    previousRequiredSourcesAndLayersRestored: previousRestored && usable,
+                    mapUsable: usable,
+                    terminalFailure: terminalFailure || (!usable && !restoringPreviousStyle),
+                    checkpointVisible: checkpointVisibility(),
+                    generation: map._chefMapGeneration,
+                    operationGeneration: operationGeneration
+                });
+            }
+
+            function onRequestedStyleLoaded() {
+                if (completed || restoringPreviousStyle) return;
+                if (requestTimer) clearTimeout(requestTimer);
+                restoreRequiredContent();
+                finish(true, false, false);
+            }
+
+            function onPreviousStyleLoaded() {
+                if (completed || !restoringPreviousStyle) return;
+                if (restoreTimer) clearTimeout(restoreTimer);
+                const restored = restoreRequiredContent();
+                const usable = requiredLayersAvailable();
+                finish(false, restored && usable, !usable);
+            }
+
+            function beginPreviousStyleRestore() {
+                if (completed || restoringPreviousStyle) return;
+                restoringPreviousStyle = true;
+                if (requestTimer) clearTimeout(requestTimer);
+                map.off('style.load', onRequestedStyleLoaded);
+                map.once('style.load', onPreviousStyleLoaded);
+                restoreTimer = setTimeout(function () {
+                    // The timeout starts verification; without a style.load and required
+                    // content readback, restoration remains unverified and is not M4.
+                    finish(false, false, false);
+                }, 4000);
+                try {
+                    map.setStyle(previousStyle, { diff: false });
+                } catch (error) {
+                    finish(false, false, false);
+                }
+            }
+
+            map.once('style.load', onRequestedStyleLoaded);
+            requestTimer = setTimeout(beginPreviousStyleRestore, 4000);
+            try {
+                map.setStyle(styleUrl, { diff: false });
+            } catch (error) {
+                beginPreviousStyleRestore();
+            }
         });
     },
 
+    processNearestPointBatch: function (containerDivId, records, generation, operationGeneration) {
+        const map = ChefMap.maps[containerDivId];
+        function outcome(rendered, terminalFailure, actualGeneration) {
+            return {
+                rendered: rendered,
+                terminalFailure: terminalFailure,
+                generation: actualGeneration,
+                operationGeneration: operationGeneration
+            };
+        }
+
+        if (!map || map._chefMapGeneration !== generation)
+            return Promise.resolve(outcome(false, false, -1));
+        if (!map.isStyleLoaded())
+            return Promise.resolve(outcome(false, false, generation));
+        if (!map.getSource('vehicles') || !map.getLayer('vehicles-layer'))
+            return Promise.resolve(outcome(false, true, generation));
+
+        if (!window.ChefMapAnimator
+            || !window.ChefMapAnimator.processNearestPointBatch(containerDivId, records))
+            return Promise.resolve(outcome(false, !window.ChefMapAnimator, generation));
+
+        return new Promise(function (resolve) {
+            let completed = false;
+            let timer = null;
+            function finish(rendered, terminalFailure = false) {
+                if (completed) return;
+                completed = true;
+                if (timer) clearTimeout(timer);
+                map.off('render', onRendered);
+                const stillReady = !!rendered
+                    && map._chefMapGeneration === generation
+                    && map.isStyleLoaded()
+                    && !!map.getSource('vehicles')
+                    && !!map.getLayer('vehicles-layer');
+                resolve(outcome(stillReady, terminalFailure, generation));
+            }
+            function onRendered() { finish(true); }
+            map.once('render', onRendered);
+            timer = setTimeout(function () { finish(false); }, 2000);
+            map.triggerRepaint();
+        });
+    },
     centerVehiclePin: function (containerDivId, vehicleId) {
         let map = ChefMap.maps[containerDivId];
         if (!map) return;

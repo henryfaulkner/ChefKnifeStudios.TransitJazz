@@ -1,6 +1,7 @@
 using Blazored.LocalStorage;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Constants;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Models;
+using System;
 using System.Reflection;
 
 namespace ChefKnifeStudios.TransitJazz.Client.Shared.Services;
@@ -16,6 +17,7 @@ public interface ISettingsService
 public class SettingsService : ISettingsService
 {
     readonly ISyncLocalStorageService _localStorage;
+    Settings? _snapshot;
 
     public SettingsService(ISyncLocalStorageService localStorage)
     {
@@ -24,23 +26,39 @@ public class SettingsService : ISettingsService
 
     public Settings GetSettings()
     {
+        if (_snapshot is not null) return _snapshot;
+
         try
         {
             var settings = _localStorage.GetItem<Settings>(LocalStorageConstants.SettingsKey);
-            if (settings is not null && settings.Version == Settings.CurrentVersion) return settings;
+            if (settings is not null && settings.Version == Settings.CurrentVersion)
+            {
+                _snapshot = settings;
+                return settings;
+            }
         }
         catch
         {
             // corrupt/unparseable — fall through to seed defaults
         }
 
-        var defaults = new Settings();
-        _localStorage.SetItem(LocalStorageConstants.SettingsKey, defaults);
-        return defaults;
+        _snapshot = new Settings();
+        try
+        {
+            _localStorage.SetItem(LocalStorageConstants.SettingsKey, _snapshot);
+        }
+        catch
+        {
+            // Keep startup defaults in memory if browser storage is unavailable.
+        }
+
+        return _snapshot;
     }
 
     public void SaveSettings(Settings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+        _snapshot = settings;
         _localStorage.SetItem(LocalStorageConstants.SettingsKey, settings);
     }
 

@@ -1,9 +1,14 @@
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Models
+@using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop
+@using ChefKnifeStudios.TransitJazz.Client.Core.Services
 @using Microsoft.Extensions.Localization
+@implements IDisposable
+@inject IEventNotificationService EventNotificationService
 @inject ISettingsService SettingsService
+@inject SettingsChangeController SettingsChangeController
 @inject ITransitSynthJsInterop TransitSynth
 @inject IStringLocalizer<RouteFilterResources> L
 
@@ -27,15 +32,21 @@
         </MatList>
     </MatMenu>
 </div>
+@if (_lastChange is { } change && change.Status is not (SettingsChangeStatus.Applied or SettingsChangeStatus.Superseded))
+{
+    <p class="settings-change-status" role="status" aria-live="polite">@GetChangeStatusText(change)</p>
+}
 
 @code {
     BackfillTexture _current;
     MatFAB _button;
     BaseMatMenu _menu;
+    SettingsChangeOutcome? _lastChange;
 
     protected override void OnInitialized()
     {
         _current = SettingsService.GetSettings().BackfillTexture;
+        EventNotificationService.EventReceived += HandleEventReceived;
     }
 
     void OnClick(MouseEventArgs e)
@@ -45,8 +56,46 @@
 
     async Task Select(BackfillTexture mode)
     {
-        SettingsService.SetSettingValue(nameof(Settings.BackfillTexture), mode);
-        _current = mode;
-        await TransitSynth.SetBackfillTextureAsync(mode.ToString().ToLowerInvariant());
+        _lastChange = await SettingsChangeController.ChangeAsync(
+            nameof(Settings.BackfillTexture),
+            mode,
+            (requested, cancellationToken) => ApplyTextureAsync(requested),
+            (previous, cancellationToken) => ApplyTextureAsync(previous));
+        var applied = _lastChange.Status is SettingsChangeStatus.Applied or SettingsChangeStatus.AppliedSessionOnly;
+        var persisted = _lastChange.IsPersisted;
+        _current = SettingsService.GetSettings().BackfillTexture;
+        if (applied || _lastChange.Status == SettingsChangeStatus.Superseded)
+            _lastChange = null;
+        if (applied)
+            EventNotificationService.PostEvent(this, new SettingsCommittedEventArgs
+            {
+                PropertyName = nameof(Settings.BackfillTexture),
+                IsPersisted = persisted,
+                ChangeOutcome = _lastChange
+            });
+        StateHasChanged();
     }
+
+    async Task<SettingsEffectResult> ApplyTextureAsync(BackfillTexture texture) =>
+        await TransitSynth.SetBackfillTextureAsync(texture.ToString().ToLowerInvariant())
+            ? SettingsEffectResult.Success
+            : SettingsEffectResult.Failure;
+
+    string GetChangeStatusText(SettingsChangeOutcome outcome) => outcome.Status switch
+    {
+        SettingsChangeStatus.AppliedSessionOnly => L["ToastSettingsNotSaved"],
+        SettingsChangeStatus.MixedState => L["SettingsMixedEffectFailure"],
+        _ => L["ToastSettingsApplyFailure"]
+    };
+
+    void HandleEventReceived(object sender, IEventArgs e)
+    {
+        if (e is not SettingsCommittedEventArgs committed) return;
+        _current = SettingsService.GetSettings().BackfillTexture;
+        if (committed.PropertyName == nameof(Settings.BackfillTexture))
+            _lastChange = committed.ChangeOutcome ?? (committed.IsPersisted ? null : _lastChange);
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => EventNotificationService.EventReceived -= HandleEventReceived;
 }
