@@ -7,6 +7,67 @@ namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.Statistics;
 public sealed class StatsOverlayWindowTests
 {
     [Theory]
+    [InlineData("2026-04-02T04:00:00Z", 23)]
+    [InlineData("2026-04-02T04:02:00Z", 24)]
+    [InlineData("2026-04-02T05:01:59Z", 24)]
+    [InlineData("2026-04-02T05:02:00Z", 0)]
+    public void PreviousDayIsAvailableOnlyUntilTheFirstEligibleCityHour(string asOf, int expectedHours)
+    {
+        var options = Options(City("atlanta", "America/New_York"));
+        var request = new StatsOverlayRequest { Scope = "city", CitySlug = "atlanta", RouteJoinKeys = ["10"] };
+        var today = StatsOverlayPolicy.Resolve(request, options, DateTimeOffset.Parse(asOf));
+
+        var previous = StatsOverlayPolicy.ResolvePreviousDay(today);
+
+        if (expectedHours == 0)
+        {
+            Assert.Null(previous);
+            Assert.Single(today.Cities[0].TodayHoursUtc);
+            return;
+        }
+        Assert.NotNull(previous);
+        var city = Assert.Single(previous.Cities);
+        Assert.Equal(new DateOnly(2026, 4, 1), city.LocalDate);
+        Assert.Equal(expectedHours, city.TodayHoursUtc.Count);
+        Assert.Equal(today.Cities[0].LocalDayStartUtc, city.LocalDayEndUtc);
+        Assert.Equal(today.CutoffUtc, previous.CutoffUtc);
+        Assert.Equal(today.GeneratedAtUtc, previous.GeneratedAtUtc);
+        Assert.Equal(today.Selection, previous.Selection);
+        Assert.Equal(today.Cities[0].Last24HoursUtc, city.Last24HoursUtc);
+    }
+
+    [Theory]
+    [InlineData("2026-03-09T04:30:00Z", 23)]
+    [InlineData("2026-11-02T05:30:00Z", 25)]
+    public void PreviousDayFollowsCalendarBoundariesAcrossDaylightSaving(string asOf, int dayHours)
+    {
+        var options = Options(City("atlanta", "America/New_York"));
+        var plan = StatsOverlayPolicy.Resolve(new StatsOverlayRequest
+        {
+            Scope = "city", CitySlug = "atlanta", RouteJoinKeys = []
+        }, options, DateTimeOffset.Parse(asOf));
+
+        var previous = StatsOverlayPolicy.ResolvePreviousDay(plan);
+
+        Assert.NotNull(previous);
+        var city = Assert.Single(previous.Cities);
+        Assert.Equal(plan.Cities[0].LocalDate.AddDays(-1), city.LocalDate);
+        Assert.Equal(dayHours, city.TodayHoursUtc.Count);
+        Assert.Equal(TimeSpan.FromHours(dayHours), city.LocalDayEndUtc - city.LocalDayStartUtc);
+        Assert.Equal(24, city.Last24HoursUtc.Count);
+    }
+
+    [Fact]
+    public void AllCitiesKeepsItsExistingLocalDayWindows()
+    {
+        var options = Options(City("atlanta", "America/New_York"));
+        var plan = StatsOverlayPolicy.Resolve(new StatsOverlayRequest { Scope = "all", RouteJoinKeys = [] },
+            options, DateTimeOffset.Parse("2026-04-02T04:30:00Z"));
+
+        Assert.Null(StatsOverlayPolicy.ResolvePreviousDay(plan));
+    }
+
+    [Theory]
     [InlineData("2026-10-11T14:01:00+00:00", "2026-10-11T13:00:00Z")]
     [InlineData("2026-10-11T14:02:00+00:00", "2026-10-11T14:00:00Z")]
     public void CutoffUsesTwoMinuteGrace(string asOf, string expectedCutoff)

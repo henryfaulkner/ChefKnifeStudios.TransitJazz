@@ -2,13 +2,140 @@ using ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
+using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
+using System.Text.Json;
 using Xunit;
 
 namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.Statistics;
 
 public sealed class StatsOverlayProjectionTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EarlyCityViewIncludesYesterdayAndPreservesTodayAndRollingTotals(bool filtered)
+    {
+        var options = Options("atlanta");
+        options.ReportedVehiclesEnabled = true;
+        var reads = 0;
+        var keys = filtered ? new[] { "route-a" } : [];
+        var query = new ProjectionQuery(input =>
+        {
+            reads++;
+            Assert.Equal(keys, input.SelectedRouteKeys);
+            return BuildDailyAndRollingResult(input);
+        });
+        var service = new StatsOverlayService(query, options,
+            new FixedTimeProvider(DateTimeOffset.Parse("2026-01-02T00:30:00Z")), SupportedAtlantaCatalog());
+
+        var response = await service.ReadAsync(new StatsOverlayRequest
+        {
+            Scope = "city", CitySlug = "atlanta", RouteJoinKeys = keys
+        }, CancellationToken.None);
+
+        var previous = Assert.IsType<StatsPreviousDaySnapshot>(response.PreviousDay);
+        Assert.Equal(new DateOnly(2026, 1, 1), previous.City.LocalDate);
+        Assert.Equal(120m, previous.Distance.Kilometers);
+        Assert.Equal(17L, previous.ReportedVehicles.Count);
+        Assert.Equal(120m, Assert.Single(previous.CategoryShares).Kilometers);
+        Assert.Equal(120m, Assert.Single(previous.Bubbles).DistanceKilometers);
+        var series = Assert.Single(previous.Timeline.Series);
+        Assert.Equal(24, series.Buckets.Count);
+        Assert.Equal(120m, series.Buckets[^1].PlotCumulativeKilometers);
+        Assert.Equal("complete", previous.Distance.Coverage.State);
+        Assert.Equal("pending", response.TodayDistance.Coverage.State);
+        Assert.Null(response.TodayDistance.Kilometers);
+        Assert.Equal("pending", response.TodayReportedVehicles.State);
+        Assert.Null(response.TodayReportedVehicles.Count);
+        Assert.Equal(120m, response.Last24Distance.Kilometers);
+        Assert.Equal(29L, response.Last24ReportedVehicles.Count);
+        Assert.Equal(new DateOnly(2026, 1, 2), Assert.Single(response.Cities).LocalDate);
+        Assert.Equal(1, reads);
+
+        var transported = JsonSerializer.Deserialize<StatsOverlayResponse>(
+            JsonSerializer.Serialize(response, JsonSettings.DefaultOptions), JsonSettings.DefaultOptions)!;
+        Assert.Equal(previous.City.LocalDate, transported.PreviousDay!.City.LocalDate);
+        Assert.Equal(17L, transported.PreviousDay.ReportedVehicles.Count);
+        Assert.Equal(series.Buckets[^1].PlotCumulativeKilometers,
+            Assert.Single(transported.PreviousDay.Timeline.Series).Buckets[^1].PlotCumulativeKilometers);
+    }
+
+    [Fact]
+    public async Task RefreshSwitchesFromYesterdayToTodayAtFirstEligibleHour()
+    {
+        var clock = new AdjustableTimeProvider { Now = DateTimeOffset.Parse("2026-01-02T01:01:59Z") };
+        var reads = 0;
+        var query = new ProjectionQuery(input => { reads++; return BuildDailyAndRollingResult(input); });
+        var service = new StatsOverlayService(query, Options("atlanta"), clock);
+        var request = new StatsOverlayRequest { Scope = "city", CitySlug = "atlanta", RouteJoinKeys = [] };
+
+        var before = await service.ReadAsync(request, CancellationToken.None);
+        clock.Now = DateTimeOffset.Parse("2026-01-02T01:02:00Z");
+        var after = await service.ReadAsync(request, CancellationToken.None);
+
+        Assert.NotNull(before.PreviousDay);
+        Assert.Null(after.PreviousDay);
+        Assert.Equal(5m, after.TodayDistance.Kilometers);
+        Assert.Equal("complete", after.TodayDistance.Coverage.State);
+        Assert.Equal(120m, after.Last24Distance.Kilometers);
+        Assert.Equal(2, reads);
+    }
+
+    [Fact]
+    public async Task MissingEvidenceAfterFirstEligibleHourDoesNotKeepShowingYesterday()
+    {
+        var service = new StatsOverlayService(new ProjectionQuery(BuildNoDataResult), Options("atlanta"),
+            new FixedTimeProvider(DateTimeOffset.Parse("2026-01-02T01:02:00Z")));
+
+        var response = await service.ReadAsync(new StatsOverlayRequest
+        {
+            Scope = "city", CitySlug = "atlanta", RouteJoinKeys = []
+        }, CancellationToken.None);
+
+        Assert.Null(response.PreviousDay);
+        Assert.Equal("unavailable", response.TodayDistance.Coverage.State);
+    }
+
+    static StatsOverlayQueryResult BuildDailyAndRollingResult(StatsOverlayQueryInput input)
+    {
+        var result = new StatsOverlayQueryResult { Categories = ["bus"], RouteOptions = [Route("route-a", "bus")] };
+        foreach (var hour in input.Hours)
+        {
+            result.CohortHours.Add(new StatsOverlayCohortHour
+            {
+                CitySlug = hour.CitySlug, HourStartUtc = hour.HourStartUtc, IsToday = hour.IsToday,
+                IsLast24 = hour.IsLast24, IsEligible = true, RouteCount = 1, SelectedRouteCount = 1, SampleCount = 12
+            });
+            if (hour.IsToday)
+            {
+                AddCityHour(result, hour.HourStartUtc, 5m, 1, 1, 12, 12);
+                result.CategoryHours.Add(Category(hour.HourStartUtc, "bus", 5m));
+            }
+            if (hour.IsLast24)
+                AddCityHour(result, hour.HourStartUtc, 5m, 1, 1, 12, 12, window: "last24CompletedHours");
+        }
+        var dailyHours = input.Hours.Where(hour => hour.IsToday).ToArray();
+        result.RouteMeasures.Add(new StatsOverlayRouteMeasure
+        {
+            CitySlug = "atlanta", Window = "today", RouteJoinKey = "route-a", DistanceKilometers = dailyHours.Length * 5m,
+            RouteVehicleHours = dailyHours.Length, ActiveClockHours = dailyHours.Length,
+            ActivitySampleNumerator = dailyHours.Length * 12, SampleDenominator = dailyHours.Length * 12,
+            AvailableHours = dailyHours.Length, FirstHourStartUtc = dailyHours[0].HourStartUtc,
+            LastHourStartUtc = dailyHours[^1].HourStartUtc
+        });
+        result.CategoryTotals.Add(new StatsOverlayCategoryTotal { CategoryKey = "bus", Kilometers = dailyHours.Length * 5m });
+        AddReportedRows(result, input, "atlanta", 17);
+        result.ReportedVehicleWindows.Single(row => row.Window == "last24CompletedHours").Count = 29;
+        return result;
+    }
+
+    sealed class AdjustableTimeProvider : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; }
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     static readonly DateTimeOffset AsOf = new(2026, 1, 2, 5, 2, 0, TimeSpan.Zero);
 
     [Fact]

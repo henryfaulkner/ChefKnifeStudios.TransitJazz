@@ -465,6 +465,18 @@
   <data name="StatsDistanceToday" xml:space="preserve">
     <value>Distance today</value>
   </data>
+  <data name="StatsDistanceYesterday" xml:space="preserve">
+    <value>Distance yesterday</value>
+  </data>
+  <data name="StatsReportedVehiclesYesterday" xml:space="preserve">
+    <value>Vehicles reported yesterday</value>
+  </data>
+  <data name="StatsYesterdayDate" xml:space="preserve">
+    <value>Yesterday · {0}</value>
+  </data>
+  <data name="StatsShowingYesterday" xml:space="preserve">
+    <value>Showing yesterday until today's first completed hour is ready. This view will switch to today automatically.</value>
+  </data>
   <data name="StatsDistanceLast24" xml:space="preserve">
     <value>Distance over 24 hours</value>
   </data>

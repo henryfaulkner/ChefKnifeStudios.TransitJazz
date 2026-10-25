@@ -24,6 +24,10 @@
 .stats-overlay:has(.stats-overlay__routes) { padding-top: 4rem; }
 
 .stats-overlay__content { width: min(100%, 72rem); margin-inline: auto; flex-shrink: 0; }
+.stats-overlay__previous-day { margin-bottom: 1rem; padding: .9rem 1rem; border-inline-start: 3px solid #546e7a; }
+.stats-overlay--dark .stats-overlay__previous-day { border-inline-start-color: #b0bec5; }
+.stats-overlay__previous-day h1 { margin: 0; font-size: 1.25rem; }
+.stats-overlay__previous-day p { margin: .4rem 0 0; line-height: 1.5; }
 .stats-overlay .stats-overlay__loader { position: fixed; inset: 0; height: 100%; background: transparent; pointer-events: none; }
 .stats-overlay .app-loader__ring { border-right-color: currentColor; border-top-color: currentColor; }
 .stats-overlay .app-loader__label { color: inherit; }

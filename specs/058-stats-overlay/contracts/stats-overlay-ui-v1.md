@@ -17,6 +17,8 @@ This contract covers Stats presentation, local Stats open/close state and reusab
 
 Current-city mode always means the map's current city. All has no route selection/selector or city drill-down. Bubble/line inspection only shows data. Route selection filters all four panels/both distance cards and never changes map selection, route emphasis or music scope. Historical options remain unfiltered; selected absent keys remain explainable.
 
+When a city response contains `previousDay`, display its three daily charts, distance, reported-vehicle count, and route availability together. Show a prominent `Yesterday · {city-local date}` heading and explain that the view switches to today automatically after the first eligible completed hour. Daily card headings say `Distance yesterday` and `Vehicles reported yesterday`; rolling 24-hour totals keep their own labels and values. Preserve the original accepted response identity during projection. A successful refresh without `previousDay` replaces all daily content and labels together. All-city scope keeps its existing behavior.
+
 ## Session/request state machine
 
 ```mermaid

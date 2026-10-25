@@ -17,6 +17,8 @@ last24 = [H-24 hours,H)
 
 Eligible grid consists only of UTC intervals `[h,h+1h)` fully contained in the requested window. Boundary intersections are disclosed and never prorated. Today before the first full interval is pending; current unfinished/future intervals are separate from expected missing evidence. Use actual 23/25-hour boundaries and keep UTC/local date/offset identity. At 14:01Z H=13:00Z; at 14:02Z H=14:00Z. Local date uses T even when H is still yesterday. The two-minute default must be measured against finalizer/writer retention lag.
 
+For city scope only, when today's eligible grid is empty, use the preceding local calendar date for the query's daily slot and return its aggregates in the additive `previousDay` snapshot. The root today fields remain pending. The previous day's grid ends at `min(H, previousLocalDayEndUtc)`, preserving ingestion grace at midnight; last24 is unchanged. This replaces the empty daily query slot rather than adding a read. After the first eligible hour exists, restore the ordinary daily slot regardless of evidence availability. See the [API contract](stats-overlay-api-v1.md#early-morning-city-display).
+
 ## Query execution and memory
 
 Use a single parameterized PostgreSQL statement/CTE chain for related result groups. Bound every source read to validated cities and their union of today/last24 intervals. No unrestricted earliest-history scan, client SQL, per-chart/per-route/per-city execution or raw route/hour cube materialized in .NET. PostgreSQL performs cohort grouping, row contribution and summary/prefix arithmetic.

@@ -51,6 +51,13 @@ All properties listed below are binding. Nullable evidence properties are explic
 | bubbles | Route or city BubbleStatistic list, including omitted/unavailable table entries |
 | timeline | Category stacked or city unstacked Timeline |
 | warnings | Unique bounded stable code list; localized copy is client-owned |
+| previousDay | Optional city-only PreviousDaySnapshot while today has no eligible completed hours; absent/null otherwise |
+
+### Early-morning city display
+
+Before the first eligible completed hour of the city's current local date, `previousDay` supplies the preceding local calendar day's dashboard. It contains `city` (CityWindow), `distance` (DistanceSummary), `reportedVehicles` (StatsReportedVehicleSummary), `categoryShares`, `bubbles`, and `timeline`. The nested daily fields/window references named `today` describe that nested city's `localDate`, which is yesterday. The root today fields and root city windows retain their actual-today meaning; the rolling 24-hour fields retain their original cutoff and bounds.
+
+The server builds yesterday with the same cutoff, ingestion grace, route selection, coverage rules, and single bounded SQL read. Its day may have 23 or 25 hours. During the midnight ingestion grace, yesterday's final hour may still be pending. Once today's first hour is eligible, `previousDay` disappears even if current-day evidence is missing, so outages remain visible. All-city scope never supplies this fallback. Existing refresh/cache identity includes the actual local date and cutoff, so the transition does not reuse yesterday's snapshot.
 
 ### CityWindow
 

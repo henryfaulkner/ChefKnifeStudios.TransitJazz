@@ -39,6 +39,18 @@ public sealed record StatsOverlayResponse
     public required IReadOnlyList<StatsBubbleStatistic> Bubbles { get; init; }
     public required StatsTimeline Timeline { get; init; }
     public required IReadOnlyList<string> Warnings { get; init; }
+    public StatsPreviousDaySnapshot? PreviousDay { get; init; }
+}
+
+/// <summary>City-local calendar day shown while today has no eligible completed hours.</summary>
+public sealed record StatsPreviousDaySnapshot
+{
+    public required StatsCityWindow City { get; init; }
+    public required StatsDistanceSummary Distance { get; init; }
+    public required StatsReportedVehicleSummary ReportedVehicles { get; init; }
+    public required IReadOnlyList<StatsCategoryShare> CategoryShares { get; init; }
+    public required IReadOnlyList<StatsBubbleStatistic> Bubbles { get; init; }
+    public required StatsTimeline Timeline { get; init; }
 }
 
 public sealed record StatsSelection(

@@ -24,6 +24,19 @@ public static class StatsOverlayProjection
     {
         ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(localize);
+        var snapshot = response;
+        if (response.Selection.Scope == "city" && response.PreviousDay is { } previous)
+        {
+            response = response with
+            {
+                Cities = [previous.City],
+                TodayDistance = previous.Distance,
+                TodayReportedVehicles = previous.ReportedVehicles,
+                CategoryShares = previous.CategoryShares,
+                Bubbles = previous.Bubbles,
+                Timeline = previous.Timeline
+            };
+        }
         var culture = CultureInfo.GetCultureInfo("en");
 
         var pie = new PieChartModel(response.CategoryShares.Select(item => new PieChartRow(
@@ -74,8 +87,11 @@ public static class StatsOverlayProjection
         pie.Validate();
         bubbles.Validate();
         timeline.Validate();
-        return new StatsOverlayPresentation(response, pie, bubbles, timeline,
-            ProjectReportedVehicles(response.TodayReportedVehicles, response, localize, culture),
+        var dailyReported = ProjectReportedVehicles(response.TodayReportedVehicles, response, localize, culture);
+        if (snapshot.Selection.Scope == "city" && snapshot.PreviousDay is not null)
+            dailyReported = dailyReported with { HeadingKey = "StatsReportedVehiclesYesterday" };
+        return new StatsOverlayPresentation(snapshot, pie, bubbles, timeline,
+            dailyReported,
             ProjectReportedVehicles(response.Last24ReportedVehicles, response, localize, culture));
     }
 
@@ -353,7 +369,12 @@ public sealed record StatsOverlayPresentation(
     BubbleChartModel Bubbles,
     SeriesChartModel Timeline,
     StatsReportedVehiclePresentation TodayReportedVehicles,
-    StatsReportedVehiclePresentation Last24ReportedVehicles);
+    StatsReportedVehiclePresentation Last24ReportedVehicles)
+{
+    public bool IsPreviousDay => Snapshot.Selection.Scope == "city" && Snapshot.PreviousDay is not null;
+    public StatsDistanceSummary DailyDistance => IsPreviousDay ? Snapshot.PreviousDay!.Distance : Snapshot.TodayDistance;
+    public string DailyDistanceHeadingKey => IsPreviousDay ? "StatsDistanceYesterday" : "StatsDistanceToday";
+}
 
 public sealed record StatsReportedVehiclePresentation(
     string HeadingKey,

@@ -10,6 +10,7 @@
 @using ChefKnifeStudios.TransitJazz.Client.Core.Services.EndpointsServices
 @using ChefKnifeStudios.TransitJazz.Shared.Stats
 @using System.ComponentModel
+@using System.Globalization
 @using System.Net
 @using System.Threading
 @using System.Threading.Tasks
@@ -73,13 +74,20 @@
         }
             @if (_presentation is { } dashboard)
             {
+                @if (dashboard.IsPreviousDay)
+                {
+                    <div class="stats-overlay__previous-day" role="status">
+                        <h1>@T.Get("StatsYesterdayDate", dashboard.Snapshot.PreviousDay!.City.LocalDate.ToString("MMMM d, yyyy", CultureInfo.GetCultureInfo("en")))</h1>
+                        <p>@T.Get("StatsShowingYesterday")</p>
+                    </div>
+                }
                 <section class="stats-overlay__dashboard">
                     <SeriesChart Model="@dashboard.Timeline" Title="@T.Get("StatsCumulativeDistance")"
                                  State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
-                    <section class="stats-overlay__totals" aria-label="@T.Get("StatsDistanceToday")">
+                    <section class="stats-overlay__totals" aria-label="@T.Get(dashboard.DailyDistanceHeadingKey)">
                         <article>
-                            <h2>@T.Get("StatsDistanceToday")</h2>
-                            <p><strong>@T.Format(ToDouble(dashboard.Snapshot.TodayDistance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
+                            <h2>@T.Get(dashboard.DailyDistanceHeadingKey)</h2>
+                            <p><strong>@T.Format(ToDouble(dashboard.DailyDistance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
                         </article>
                         <article>
                             <h2>@T.Get("StatsDistanceLast24")</h2>
@@ -328,7 +336,7 @@
     }
 
     IReadOnlyList<StatsRouteOption> CurrentRouteOptions => _routeSelection.MergeOptions(
-        _routeOptions, _citySlug, _snapshot?.TodayDistance.Coverage.SelectedRouteCoverage);
+        _routeOptions, _citySlug, _presentation?.DailyDistance.Coverage.SelectedRouteCoverage);
 
     RouteFilterListModel RouteListModel => RouteFilterListProjection.FromStats(
         CurrentRouteOptions,

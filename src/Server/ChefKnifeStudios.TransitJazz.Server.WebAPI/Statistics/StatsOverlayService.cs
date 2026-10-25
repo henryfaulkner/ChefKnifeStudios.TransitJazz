@@ -192,7 +192,8 @@ public sealed class StatsOverlayService(
             if (query is null) throw new StatsOverlayRequestException("dependency_unavailable", 503);
             if (options.ReportedVehiclesEnabled && reportedVehicleCatalog is null)
                 throw new StatsOverlayRequestException("dependency_unavailable", 503);
-            var queryInput = BuildQueryInput(plan, options, reportedVehicleCatalog);
+            var previousDayPlan = StatsOverlayPolicy.ResolvePreviousDay(plan);
+            var queryInput = BuildQueryInput(previousDayPlan ?? plan, options, reportedVehicleCatalog);
             StatsOverlayQueryResult result;
             try
             {
@@ -224,48 +225,25 @@ public sealed class StatsOverlayService(
             deadline.Token.ThrowIfCancellationRequested();
             if (result.ScopeTooLarge) throw new StatsOverlayRequestException("scope_too_large", 422);
 
-            var indexes = new ProjectionIndexes(result);
-            var windows = plan.Cities.Select(city => BuildCityWindow(city, plan, normalized, options, result, indexes)).ToArray();
-            var todayCoverageByCity = windows.ToDictionary(window => window.CitySlug, window => window.TodayCoverage, StringComparer.Ordinal);
-            var last24CoverageByCity = windows.ToDictionary(window => window.CitySlug, window => window.Last24Coverage, StringComparer.Ordinal);
-            var todayDistance = BuildDistanceSummary("today", plan, result, todayCoverageByCity);
-            var last24Distance = BuildDistanceSummary("last24CompletedHours", plan, result, last24CoverageByCity);
-            var categoryShares = BuildCategoryShares(normalized, result);
-            var bubbles = BuildBubbles(plan, normalized, result, options, todayCoverageByCity, indexes);
-            var timeline = BuildTimeline(plan, normalized, result, options);
-            var warnings = BuildWarnings(plan, normalized, result, windows);
-
-            var response = new StatsOverlayResponse
+            var response = ProjectSnapshot(plan, normalized,
+                previousDayPlan is null ? result : WithoutDailyEvidence(result), options);
+            if (previousDayPlan is not null)
             {
-                GeneratedAtUtc = plan.GeneratedAtUtc,
-                CutoffUtc = plan.CutoffUtc,
-                Selection = new StatsSelection(normalized.Scope!, normalized.CitySlug, RouteKeys(normalized)),
-                Cities = windows,
-                RouteOptions = string.Equals(normalized.Scope, "city", StringComparison.Ordinal)
-                    ? result.RouteOptions.OrderBy(option => option.CitySlug, StringComparer.Ordinal)
-                        .ThenBy(option => option.RouteJoinKey, StringComparer.Ordinal)
-                        .Select(option => new StatsRouteOption
-                        {
-                            CitySlug = option.CitySlug,
-                            RouteJoinKey = option.RouteJoinKey,
-                            Label = option.Label,
-                            CategoryKey = option.CategoryKey,
-                            MetadataTimestampUtc = DateTime.SpecifyKind(option.MetadataTimestampUtc, DateTimeKind.Utc),
-                            CategoryChanged = option.CategoryChanged,
-                            AvailabilityReason = null
-                        }).ToArray()
-                    : [],
-                TodayDistance = todayDistance,
-                Last24Distance = last24Distance,
-                TodayReportedVehicles = BuildReportedVehicleSummary("today", plan, result, options),
-                Last24ReportedVehicles = BuildReportedVehicleSummary("last24CompletedHours", plan, result, options),
-                CategoryShares = categoryShares,
-                Bubbles = bubbles,
-                Timeline = timeline,
-                Warnings = warnings
-            };
+                var previous = ProjectSnapshot(previousDayPlan, normalized, result, options);
+                response = response with
+                {
+                    PreviousDay = new StatsPreviousDaySnapshot
+                    {
+                        City = previous.Cities.Single(),
+                        Distance = previous.TodayDistance,
+                        ReportedVehicles = previous.TodayReportedVehicles,
+                        CategoryShares = previous.CategoryShares,
+                        Bubbles = previous.Bubbles,
+                        Timeline = previous.Timeline
+                    }
+                };
+            }
 
-            EnsureSafeNumbers(response);
             deadline.Token.ThrowIfCancellationRequested();
             int responseBytes;
             try
@@ -304,6 +282,71 @@ public sealed class StatsOverlayService(
             }
         }
     }
+
+    static StatsOverlayResponse ProjectSnapshot(StatsSnapshotPlan plan, StatsOverlayRequest normalized,
+        StatsOverlayQueryResult result, StatsOverlayOptions options)
+    {
+        var indexes = new ProjectionIndexes(result);
+        var windows = plan.Cities.Select(city => BuildCityWindow(city, plan, normalized, options, result, indexes)).ToArray();
+        var todayCoverageByCity = windows.ToDictionary(window => window.CitySlug, window => window.TodayCoverage, StringComparer.Ordinal);
+        var last24CoverageByCity = windows.ToDictionary(window => window.CitySlug, window => window.Last24Coverage, StringComparer.Ordinal);
+        var todayDistance = BuildDistanceSummary("today", plan, result, todayCoverageByCity);
+        var last24Distance = BuildDistanceSummary("last24CompletedHours", plan, result, last24CoverageByCity);
+        var categoryShares = BuildCategoryShares(normalized, result);
+        var bubbles = BuildBubbles(plan, normalized, result, options, todayCoverageByCity, indexes);
+        var timeline = BuildTimeline(plan, normalized, result, options);
+        var warnings = BuildWarnings(plan, normalized, result, windows);
+
+        var response = new StatsOverlayResponse
+        {
+            GeneratedAtUtc = plan.GeneratedAtUtc,
+            CutoffUtc = plan.CutoffUtc,
+            Selection = new StatsSelection(normalized.Scope!, normalized.CitySlug, RouteKeys(normalized)),
+            Cities = windows,
+            RouteOptions = string.Equals(normalized.Scope, "city", StringComparison.Ordinal)
+                ? result.RouteOptions.OrderBy(option => option.CitySlug, StringComparer.Ordinal)
+                    .ThenBy(option => option.RouteJoinKey, StringComparer.Ordinal)
+                    .Select(option => new StatsRouteOption
+                    {
+                        CitySlug = option.CitySlug,
+                        RouteJoinKey = option.RouteJoinKey,
+                        Label = option.Label,
+                        CategoryKey = option.CategoryKey,
+                        MetadataTimestampUtc = DateTime.SpecifyKind(option.MetadataTimestampUtc, DateTimeKind.Utc),
+                        CategoryChanged = option.CategoryChanged,
+                        AvailabilityReason = null
+                    }).ToArray()
+                : [],
+            TodayDistance = todayDistance,
+            Last24Distance = last24Distance,
+            TodayReportedVehicles = BuildReportedVehicleSummary("today", plan, result, options),
+            Last24ReportedVehicles = BuildReportedVehicleSummary("last24CompletedHours", plan, result, options),
+            CategoryShares = categoryShares,
+            Bubbles = bubbles,
+            Timeline = timeline,
+            Warnings = warnings
+        };
+        EnsureSafeNumbers(response);
+        return response;
+    }
+
+    // The single read uses its daily slot for yesterday when today is still pending.
+    // Keep today's public fields pending and preserve the independent rolling window.
+    static StatsOverlayQueryResult WithoutDailyEvidence(StatsOverlayQueryResult result) => new()
+    {
+        RouteOptions = result.RouteOptions,
+        Categories = result.Categories,
+        CohortHours = result.CohortHours.Where(row => row.IsLast24).Select(row => new StatsOverlayCohortHour
+        {
+            CitySlug = row.CitySlug, HourStartUtc = row.HourStartUtc, IsLast24 = true,
+            RouteCount = row.RouteCount, SelectedRouteCount = row.SelectedRouteCount,
+            IsEligible = row.IsEligible, Reason = row.Reason, SampleCount = row.SampleCount
+        }).ToList(),
+        RouteMeasures = result.RouteMeasures.Where(row => row.Window == "last24CompletedHours").ToList(),
+        CityHours = result.CityHours.Where(row => row.Window == "last24CompletedHours").ToList(),
+        CategoryHours = result.CategoryHours.Where(row => row.Window == "last24CompletedHours").ToList(),
+        ReportedVehicleWindows = result.ReportedVehicleWindows.Where(row => row.Window == "last24CompletedHours").ToList()
+    };
 
     void CacheSnapshot(string scope, string identityKey, StatsOverlayResponse response, long estimatedBytes)
     {

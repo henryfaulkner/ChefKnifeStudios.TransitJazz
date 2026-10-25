@@ -10,6 +10,58 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.Tests;
 public sealed class StatsOverlayProjectionTests
 {
     [Fact]
+    public void PreviousDayProjectionUsesOneDailyPeriodForChartsCountsAndLabels()
+    {
+        var yesterdayCity = City("toronto", "StatsCityToronto", new DateOnly(2026, 4, 1), "America/Toronto") with
+        {
+            LocalDayStartUtc = new DateTime(2026, 4, 1, 4, 0, 0, DateTimeKind.Utc),
+            LocalDayEndUtc = new DateTime(2026, 4, 2, 4, 0, 0, DateTimeKind.Utc)
+        };
+        var daily = Response("city", [], [new StatsCategoryShare("bus", 20, 100, "today")],
+            [new StatsTimelineSeries
+            {
+                Key = "category:bus", CategoryKey = "bus", WindowReference = "today",
+                Buckets = [Bucket(1, 20, 20, 20, localDate: new DateOnly(2026, 4, 1))]
+            }],
+            [Bubble("route-a", "route", "toronto", "Bus", 20, 20, 1, 20, 1, 1, 12, 12, "bus")],
+            [yesterdayCity]) with
+        {
+            TodayDistance = new StatsDistanceSummary { Window = "today", Kilometers = 20, Coverage = Coverage("complete", 24, 24) }
+        };
+        var response = Response("city", [], [], [], []) with
+        {
+            TodayDistance = new StatsDistanceSummary { Window = "today", Kilometers = null, Coverage = Coverage("pending", 0, 0) },
+            Last24ReportedVehicles = new StatsReportedVehicleSummary { Window = "last24", Count = 29, State = "complete" },
+            PreviousDay = new StatsPreviousDaySnapshot
+            {
+                City = yesterdayCity, Distance = daily.TodayDistance,
+                ReportedVehicles = new StatsReportedVehicleSummary { Window = "today", Count = 17, State = "complete" },
+                CategoryShares = daily.CategoryShares, Bubbles = daily.Bubbles, Timeline = daily.Timeline
+            }
+        };
+
+        var projected = StatsOverlayProjection.Build(response, key => key);
+
+        Assert.Same(response, projected.Snapshot);
+        Assert.True(projected.IsPreviousDay);
+        Assert.Equal("StatsDistanceYesterday", projected.DailyDistanceHeadingKey);
+        Assert.Equal(20m, projected.DailyDistance.Kilometers);
+        Assert.Equal("StatsReportedVehiclesYesterday", projected.TodayReportedVehicles.HeadingKey);
+        Assert.Equal("17", projected.TodayReportedVehicles.CountText);
+        Assert.Equal("29", projected.Last24ReportedVehicles.CountText);
+        Assert.Equal(160m, projected.Snapshot.Last24Distance.Kilometers);
+        Assert.Equal(20d, Assert.Single(projected.CategoryPie.Rows).Kilometers);
+        Assert.Equal(20d, Assert.Single(projected.Bubbles.GetPlottedPoints()).DistanceKilometers);
+        Assert.Contains(20d, Assert.Single(projected.Timeline.Series).CanvasValues);
+
+        var today = StatsOverlayProjection.Build(response with { PreviousDay = null }, key => key);
+        Assert.False(today.IsPreviousDay);
+        Assert.Equal("StatsDistanceToday", today.DailyDistanceHeadingKey);
+        Assert.Null(today.DailyDistance.Kilometers);
+        Assert.Empty(today.CategoryPie.Rows);
+    }
+
+    [Fact]
     public void ReportedVehicleProjectionKeepsNullSeparateFromZeroAndFormatsIntegerCounts()
     {
         string Localize(string key) => key switch

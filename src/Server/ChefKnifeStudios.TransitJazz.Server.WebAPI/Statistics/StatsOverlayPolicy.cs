@@ -89,37 +89,56 @@ public static class StatsOverlayPolicy
         {
             var zone = TimeZoneInfo.FindSystemTimeZoneById(city.TimeZoneId);
             var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(generatedAt, zone));
-            var localStart = localDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
-            var nextLocalStart = localDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
-            var dayStart = LocalBoundaryToUtc(localStart, zone, isStart: true);
-            var dayEnd = LocalBoundaryToUtc(nextLocalStart, zone, isStart: false);
-            var requestedEnd = cutoff < dayStart ? dayStart : Min(cutoff, dayEnd);
-            var todayHours = FullUtcHours(dayStart, requestedEnd);
-            DateTime? eligibleStart = todayHours.Count == 0 ? null : todayHours[0];
-            DateTime? eligibleEnd = todayHours.Count == 0 ? null : todayHours[^1].AddHours(1);
-            var boundaryCount = requestedEnd <= dayStart
-                ? 0
-                : (IsUtcHourBoundary(dayStart) ? 0 : 1) + (IsUtcHourBoundary(requestedEnd) ? 0 : 1);
-            var last24Start = cutoff.AddHours(-24);
-            var last24Hours = FullUtcHours(last24Start, cutoff);
-
-            windows.Add(new StatsResolvedCityWindow(
-                city,
-                localDate,
-                dayStart,
-                dayEnd,
-                dayStart,
-                requestedEnd,
-                eligibleStart,
-                eligibleEnd,
-                todayHours,
-                last24Start,
-                cutoff,
-                last24Hours,
-                boundaryCount));
+            windows.Add(ResolveCityWindow(city, localDate, cutoff));
         }
 
         return new StatsSnapshotPlan(generatedAt, cutoff, normalizedRequest, windows);
+    }
+
+    // Only the city view falls back, and only before the first eligible hour.
+    // Missing evidence later in the day must remain visible as missing evidence.
+    public static StatsSnapshotPlan? ResolvePreviousDay(StatsSnapshotPlan plan)
+    {
+        if (plan.Selection.Scope != "city" || plan.Cities.Count != 1 || plan.Cities[0].TodayHoursUtc.Count != 0)
+            return null;
+        var city = plan.Cities[0];
+        return plan with
+        {
+            Cities = [ResolveCityWindow(city.City, city.LocalDate.AddDays(-1), plan.CutoffUtc)]
+        };
+    }
+
+    static StatsResolvedCityWindow ResolveCityWindow(StatsOverlayCityOptions city, DateOnly localDate, DateTime cutoff)
+    {
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(city.TimeZoneId);
+        var localStart = localDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        var nextLocalStart = localDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        var dayStart = LocalBoundaryToUtc(localStart, zone, isStart: true);
+        var dayEnd = LocalBoundaryToUtc(nextLocalStart, zone, isStart: false);
+        var requestedEnd = cutoff < dayStart ? dayStart : Min(cutoff, dayEnd);
+        var todayHours = FullUtcHours(dayStart, requestedEnd);
+        DateTime? eligibleStart = todayHours.Count == 0 ? null : todayHours[0];
+        DateTime? eligibleEnd = todayHours.Count == 0 ? null : todayHours[^1].AddHours(1);
+        var boundaryCount = requestedEnd <= dayStart
+            ? 0
+            : (IsUtcHourBoundary(dayStart) ? 0 : 1) + (IsUtcHourBoundary(requestedEnd) ? 0 : 1);
+        var last24Start = cutoff.AddHours(-24);
+        var last24Hours = FullUtcHours(last24Start, cutoff);
+
+        return new StatsResolvedCityWindow(
+            city,
+            localDate,
+            dayStart,
+            dayEnd,
+            dayStart,
+            requestedEnd,
+            eligibleStart,
+            eligibleEnd,
+            todayHours,
+            last24Start,
+            cutoff,
+            last24Hours,
+            boundaryCount);
     }
 
     public static DateTime FloorUtcHour(DateTime value)
