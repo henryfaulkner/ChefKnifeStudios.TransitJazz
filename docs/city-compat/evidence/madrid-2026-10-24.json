@@ -1,0 +1,1688 @@
+{
+  "evaluated_utc": "2026-10-24T11:37:53.740353+00:00",
+  "static": {
+    "emt": {
+      "file": "emt-static.zip",
+      "zip_bytes": 21206013,
+      "sha256": "cd69c0fd6e9653f490b506d0d55704e54ae4a33902b05efaaa3844a2bfd0f170",
+      "files": [
+        {
+          "name": "routes.txt",
+          "bytes": 27273
+        },
+        {
+          "name": "stops.txt",
+          "bytes": 697248
+        },
+        {
+          "name": "trips.txt",
+          "bytes": 4329873
+        },
+        {
+          "name": "frequencies.txt",
+          "bytes": 2957761
+        },
+        {
+          "name": "calendar_dates.txt",
+          "bytes": 292
+        },
+        {
+          "name": "calendar.txt",
+          "bytes": 267
+        },
+        {
+          "name": "agency.txt",
+          "bytes": 195
+        },
+        {
+          "name": "shapes.txt",
+          "bytes": 10468633
+        },
+        {
+          "name": "stop_times.txt",
+          "bytes": 100631253
+        }
+      ],
+      "route_count": 237,
+      "trips": 88516,
+      "stops": 4933,
+      "calendar_rows": 5,
+      "calendar_dates_rows": 17,
+      "shape_ids": 474,
+      "shape_points": 194812,
+      "routes_with_first_shape": 237,
+      "route_types": {
+        "3": 237
+      },
+      "service_date": "20261024",
+      "active_services": 2,
+      "active_trips": 26241,
+      "active_routes": 221,
+      "calendar_min": "20261023",
+      "calendar_max": "20261231",
+      "feed_info": [],
+      "display_collision_count": 0,
+      "display_collision_examples": {},
+      "route_samples": [
+        {
+          "route_id": "001",
+          "agency_id": "EMT",
+          "route_short_name": "1",
+          "route_long_name": "Plaza de Cristo Rey - Prosperidad",
+          "route_desc": "",
+          "route_type": "3",
+          "route_url": "https://www.emtmadrid.es/EMTBUS/Mi-linea?linea=1",
+          "route_color": "0178BC",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "002",
+          "agency_id": "EMT",
+          "route_short_name": "2",
+          "route_long_name": "Plaza de Manuel Becerra - Avenida Reina Victoria",
+          "route_desc": "",
+          "route_type": "3",
+          "route_url": "https://www.emtmadrid.es/EMTBUS/Mi-linea?linea=2",
+          "route_color": "0178BC",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "003",
+          "agency_id": "EMT",
+          "route_short_name": "3",
+          "route_long_name": "Puerta de Toledo - Plaza de San Amaro",
+          "route_desc": "",
+          "route_type": "3",
+          "route_url": "https://www.emtmadrid.es/EMTBUS/Mi-linea?linea=3",
+          "route_color": "0178BC",
+          "route_text_color": "FFFFFF"
+        }
+      ]
+    },
+    "renfe": {
+      "file": "renfe-static.zip",
+      "zip_bytes": 15546483,
+      "sha256": "9af1570c8ccf469274648a7e9100c13376fddd5a6251e9a025fa78a1ad03d607",
+      "files": [
+        {
+          "name": "agency.txt",
+          "bytes": 302
+        },
+        {
+          "name": "calendar.txt",
+          "bytes": 68101
+        },
+        {
+          "name": "routes.txt",
+          "bytes": 41471
+        },
+        {
+          "name": "shapes.txt",
+          "bytes": 4201535
+        },
+        {
+          "name": "stops.txt",
+          "bytes": 173684
+        },
+        {
+          "name": "transfers.txt",
+          "bytes": 3020
+        },
+        {
+          "name": "trips.txt",
+          "bytes": 19625772
+        },
+        {
+          "name": "stop_times.txt",
+          "bytes": 270596983
+        }
+      ],
+      "route_count": 273,
+      "trips": 129971,
+      "stops": 1147,
+      "calendar_rows": 450,
+      "calendar_dates_rows": 0,
+      "shape_ids": 144,
+      "shape_points": 123734,
+      "routes_with_first_shape": 261,
+      "route_types": {
+        "2": 223,
+        "3": 50
+      },
+      "service_date": "20261024",
+      "active_services": 15,
+      "active_trips": 3943,
+      "active_routes": 236,
+      "calendar_min": "20261024",
+      "calendar_max": "20261122",
+      "feed_info": [],
+      "display_collision_count": 37,
+      "display_collision_examples": {
+        "C1": [
+          "10T0001C1",
+          "10T0002C1",
+          "20T0001C1",
+          "20T0002C1",
+          "30T0001C1",
+          "30T0002C1",
+          "31T0001C1",
+          "31T0002C1",
+          "31T0007C1",
+          "31T0008C1",
+          "32T0001C1",
+          "32T0002C1",
+          "40T0001C1",
+          "40T0002C1",
+          "41T0001C1",
+          "41T0002C1",
+          "41T0013C1",
+          "41T0029C1",
+          "41T0030C1",
+          "41T0035C1",
+          "41T0036C1",
+          "45T0001C1",
+          "45T0002C1",
+          "46T0001C1",
+          "46T0002C1",
+          "47T0001C1",
+          "47T0002C1",
+          "60T0001C1",
+          "60T0002C1",
+          "61T0001C1",
+          "61T0002C1",
+          "61T0005C1",
+          "61T0006C1",
+          "61T0007C1",
+          "61T0008C1",
+          "61T0015C1",
+          "61T0016C1",
+          "61T0017C1",
+          "61T0027C1",
+          "61T0030C1",
+          "61T0031C1",
+          "62T0001C1",
+          "62T0002C1",
+          "70T0001C1",
+          "70T0002C1",
+          "70T0005C1",
+          "70T0006C1"
+        ],
+        "C10": [
+          "10T0003C10",
+          "10T0004C10",
+          "10T0064C10",
+          "10T0071C10",
+          "10T0075C10",
+          "10T0076C10"
+        ],
+        "C2": [
+          "10T0005C2",
+          "10T0006C2",
+          "20T0003C2",
+          "20T0004C2",
+          "30T0003C2",
+          "30T0004C2",
+          "32T0003C2",
+          "32T0004C2",
+          "32T0019C2",
+          "32T0020C2",
+          "40T0005C2",
+          "40T0006C2",
+          "40T0029C2",
+          "40T0030C2",
+          "40T0049C2",
+          "40T0050C2",
+          "40T0051C2",
+          "40T0052C2",
+          "41T0023C2",
+          "41T0025C2",
+          "41T0031C2",
+          "60T0003C2",
+          "60T0004C2",
+          "62T0003C2",
+          "62T0004C2"
+        ]
+      },
+      "route_samples": [
+        {
+          "route_id": "10T0001C1",
+          "route_short_name": "C1",
+          "route_long_name": "Principe Pio                            -Aeropuerto-T4",
+          "route_type": "2",
+          "route_color": "75B6E0",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0002C1",
+          "route_short_name": "C1",
+          "route_long_name": "Aeropuerto-T4                           -Principe Pio",
+          "route_type": "2",
+          "route_color": "75B6E0",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0003C10",
+          "route_short_name": "C10",
+          "route_long_name": "Villalba                                -Aeropuerto-T4",
+          "route_type": "2",
+          "route_color": "BCCF00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0004C10",
+          "route_short_name": "C10",
+          "route_long_name": "Aeropuerto-T4                           -Villalba",
+          "route_type": "2",
+          "route_color": "BCCF00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0005C2",
+          "route_short_name": "C2",
+          "route_long_name": "Guadalajara                             -Chamartín - Clara Campoamor",
+          "route_type": "2",
+          "route_color": "00943D",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0006C2",
+          "route_short_name": "C2",
+          "route_long_name": "Chamartín - Clara Campoamor             -Guadalajara",
+          "route_type": "2",
+          "route_color": "00943D",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0007C3",
+          "route_short_name": "C3",
+          "route_long_name": "Chamartín - Clara Campoamor             -Aranjuez",
+          "route_type": "2",
+          "route_color": "952585",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0008C3",
+          "route_short_name": "C3",
+          "route_long_name": "Aranjuez                                -Chamartín - Clara Campoamor",
+          "route_type": "2",
+          "route_color": "952585",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0011C4",
+          "route_short_name": "C4",
+          "route_long_name": "Chamartín - Clara Campoamor             -Parla",
+          "route_type": "2",
+          "route_color": "2C2A86",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0012C4",
+          "route_short_name": "C4",
+          "route_long_name": "Parla                                   -Chamartín - Clara Campoamor",
+          "route_type": "2",
+          "route_color": "2C2A86",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0013C4a",
+          "route_short_name": "C4a",
+          "route_long_name": "Alcobendas-S.Sebast. de los Reyes       -Parla",
+          "route_type": "2",
+          "route_color": "2C2A86",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0014C4a",
+          "route_short_name": "C4a",
+          "route_long_name": "Parla                                   -Alcobendas-S.Sebast. de los Reyes",
+          "route_type": "2",
+          "route_color": "2C2A86",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0015C4b",
+          "route_short_name": "C4b",
+          "route_long_name": "Colmenar Viejo                          -Parla",
+          "route_type": "2",
+          "route_color": "2C2A86",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0016C4b",
+          "route_short_name": "C4b",
+          "route_long_name": "Parla                                   -Colmenar Viejo",
+          "route_type": "2",
+          "route_color": "2C2A86",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0017C5",
+          "route_short_name": "C5",
+          "route_long_name": "Mostoles el Soto                        -Humanes",
+          "route_type": "2",
+          "route_color": "FECB00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0018C5",
+          "route_short_name": "C5",
+          "route_long_name": "Humanes                                 -Mostoles el Soto",
+          "route_type": "2",
+          "route_color": "FECB00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0025C9",
+          "route_short_name": "C9",
+          "route_long_name": "Cercedilla                              -Cotos",
+          "route_type": "2",
+          "route_color": "915419",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0026C9",
+          "route_short_name": "C9",
+          "route_long_name": "Cotos                                   -Cercedilla",
+          "route_type": "2",
+          "route_color": "915419",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0027C8a",
+          "route_short_name": "C8a",
+          "route_long_name": "Atocha                                  -El Escorial",
+          "route_type": "2",
+          "route_color": "868584",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0035C5",
+          "route_short_name": "C5",
+          "route_long_name": "-Fuenlabrada",
+          "route_type": "2",
+          "route_color": "FECB00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0047C5",
+          "route_short_name": "C5",
+          "route_long_name": "Atocha                                  -Fuenlabrada",
+          "route_type": "2",
+          "route_color": "FECB00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0048C5",
+          "route_short_name": "C5",
+          "route_long_name": "Fuenlabrada                             -Atocha",
+          "route_type": "2",
+          "route_color": "FECB00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0051C7",
+          "route_short_name": "C7",
+          "route_long_name": "Principe Pio                            -Chamartín - Clara Campoamor",
+          "route_type": "2",
+          "route_color": "E5202A",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0052C7",
+          "route_short_name": "C7",
+          "route_long_name": "Chamartín - Clara Campoamor             -Principe Pio",
+          "route_type": "2",
+          "route_color": "E5202A",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0053C7",
+          "route_short_name": "C7",
+          "route_long_name": "Principe Pio                            -Atocha",
+          "route_type": "2",
+          "route_color": "E5202A",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0054C7",
+          "route_short_name": "C7",
+          "route_long_name": "Atocha                                  -Principe Pio",
+          "route_type": "2",
+          "route_color": "E5202A",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0059C7",
+          "route_short_name": "C7",
+          "route_long_name": "Chamartín - Clara Campoamor             -Alcala de Henares",
+          "route_type": "2",
+          "route_color": "E5202A",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0061C8a",
+          "route_short_name": "C8a",
+          "route_long_name": "El Escorial                             -Chamartín - Clara Campoamor",
+          "route_type": "2",
+          "route_color": "868584",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0062C8a",
+          "route_short_name": "C8a",
+          "route_long_name": "Chamartín - Clara Campoamor             -El Escorial",
+          "route_type": "2",
+          "route_color": "868584",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0064C10",
+          "route_short_name": "C10",
+          "route_long_name": "Principe Pio                            -El Escorial",
+          "route_type": "2",
+          "route_color": "BCCF00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0071C10",
+          "route_short_name": "C10",
+          "route_long_name": "Pozuelo                                 -Pitis",
+          "route_type": "2",
+          "route_color": "BCCF00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0075C10",
+          "route_short_name": "C10",
+          "route_long_name": "Torrelodones                            -Chamartín - Clara Campoamor",
+          "route_type": "2",
+          "route_color": "BCCF00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0076C10",
+          "route_short_name": "C10",
+          "route_long_name": "Chamartín - Clara Campoamor             -Torrelodones",
+          "route_type": "2",
+          "route_color": "BCCF00",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0085C8a",
+          "route_short_name": "C8a",
+          "route_long_name": "-El Escorial",
+          "route_type": "2",
+          "route_color": "868584",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0087C8b",
+          "route_short_name": "C8b",
+          "route_long_name": "Chamartín - Clara Campoamor             -Cercedilla",
+          "route_type": "2",
+          "route_color": "868584",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0088C8b",
+          "route_short_name": "C8b",
+          "route_long_name": "Cercedilla                              -Chamartín - Clara Campoamor",
+          "route_type": "2",
+          "route_color": "868584",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0097C8b",
+          "route_short_name": "C8b",
+          "route_long_name": "-Cercedilla",
+          "route_type": "2",
+          "route_color": "868584",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0098C8b",
+          "route_short_name": "C8b",
+          "route_long_name": "Cercedilla                              -",
+          "route_type": "2",
+          "route_color": "868584",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0111C9",
+          "route_short_name": "C9",
+          "route_long_name": "Cercedilla                              -Cotos",
+          "route_type": "3",
+          "route_color": "915419",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "10T0112C9",
+          "route_short_name": "C9",
+          "route_long_name": "Cotos                                   -Cercedilla",
+          "route_type": "3",
+          "route_color": "915419",
+          "route_text_color": "FFFFFF"
+        }
+      ]
+    },
+    "metro": {
+      "file": "metro-static.zip",
+      "zip_bytes": 1503773,
+      "sha256": "16e8e53ce16ab6d73efc2896be7aaeeb351a1f48f661ac7faa0a9e5b38204fb7",
+      "files": [
+        {
+          "name": "agency.txt",
+          "bytes": 183
+        },
+        {
+          "name": "calendar.txt",
+          "bytes": 248
+        },
+        {
+          "name": "calendar_dates.txt",
+          "bytes": 1043
+        },
+        {
+          "name": "fare_attributes.txt",
+          "bytes": 75
+        },
+        {
+          "name": "fare_rules.txt",
+          "bytes": 58
+        },
+        {
+          "name": "feed_info.txt",
+          "bytes": 175
+        },
+        {
+          "name": "frequencies.txt",
+          "bytes": 43325
+        },
+        {
+          "name": "routes.txt",
+          "bytes": 1325
+        },
+        {
+          "name": "shapes.txt",
+          "bytes": 4467209
+        },
+        {
+          "name": "stops.txt",
+          "bytes": 117422
+        },
+        {
+          "name": "trips.txt",
+          "bytes": 13391
+        },
+        {
+          "name": "stop_times.txt",
+          "bytes": 146314
+        }
+      ],
+      "route_count": 13,
+      "trips": 120,
+      "stops": 1050,
+      "calendar_rows": 4,
+      "calendar_dates_rows": 56,
+      "shape_ids": 30,
+      "shape_points": 57474,
+      "routes_with_first_shape": 12,
+      "route_types": {
+        "1": 13
+      },
+      "service_date": "20261024",
+      "active_services": 0,
+      "active_trips": 0,
+      "active_routes": 0,
+      "calendar_min": "20250101",
+      "calendar_max": "20260527",
+      "feed_info": [
+        {
+          "feed_publisher_name": "Consorcio Regional de Transportes de Madrid",
+          "feed_publisher_url": "https://www.crtm.es",
+          "feed_lang": "es",
+          "feed_start_date": "",
+          "feed_end_date": "",
+          "feed_version": "20250527"
+        }
+      ],
+      "display_collision_count": 0,
+      "display_collision_examples": {},
+      "route_samples": [
+        {
+          "route_id": "4__1___",
+          "agency_id": "CRTM",
+          "route_short_name": "1",
+          "route_long_name": "Pinar de Chamartín-Valdecarros",
+          "route_desc": "",
+          "route_type": "1",
+          "route_url": "https://www.crtm.es/4__1___.aspx",
+          "route_color": "2DBEF0",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "4__2___",
+          "agency_id": "CRTM",
+          "route_short_name": "2",
+          "route_long_name": "Las Rosas-Cuatro Caminos",
+          "route_desc": "",
+          "route_type": "1",
+          "route_url": "https://www.crtm.es/4__2___.aspx",
+          "route_color": "ED1C24",
+          "route_text_color": "FFFFFF"
+        },
+        {
+          "route_id": "4__3___",
+          "agency_id": "CRTM",
+          "route_short_name": "3",
+          "route_long_name": "Villaverde Alto-Moncloa",
+          "route_desc": "",
+          "route_type": "1",
+          "route_url": "https://www.crtm.es/4__3___.aspx",
+          "route_color": "FFD000",
+          "route_text_color": "000000"
+        }
+      ]
+    }
+  },
+  "realtime": [
+    {
+      "file": "emt-alerts.pb",
+      "bytes": 91368,
+      "sha256": "26891680a2788cc65b515fec0d22176d3deff74fd937b416fbc6876184e056cd",
+      "header_version": "2.0",
+      "header_timestamp": 1792841651,
+      "entities": 158,
+      "alert_entities": 158,
+      "vehicle_entities": 0,
+      "with_route_id": 0,
+      "with_trip_id": 0,
+      "with_vehicle_id": 0,
+      "with_position": 0,
+      "with_timestamp": 0,
+      "with_speed": 0,
+      "with_bearing": 0,
+      "trip_id_matches": 0,
+      "samples": []
+    },
+    {
+      "file": "emt-alerts-2.pb",
+      "bytes": 91368,
+      "sha256": "7db7a21435f7f9d82c6c4dc77c80e0e0793eb97a7d886bbba99069e3cfa199b8",
+      "header_version": "2.0",
+      "header_timestamp": 1792841687,
+      "entities": 158,
+      "alert_entities": 158,
+      "vehicle_entities": 0,
+      "with_route_id": 0,
+      "with_trip_id": 0,
+      "with_vehicle_id": 0,
+      "with_position": 0,
+      "with_timestamp": 0,
+      "with_speed": 0,
+      "with_bearing": 0,
+      "trip_id_matches": 0,
+      "samples": []
+    },
+    {
+      "file": "renfe-positions-1.pb",
+      "bytes": 25911,
+      "sha256": "917f8b23d1ee4c17ccd28cca5b8d19a45ca22e5071ff8a066ee2c7fddcdbbaf2",
+      "header_version": "2.0",
+      "header_timestamp": 1792841647,
+      "entities": 301,
+      "alert_entities": 0,
+      "vehicle_entities": 301,
+      "with_route_id": 0,
+      "with_trip_id": 301,
+      "with_vehicle_id": 301,
+      "with_position": 300,
+      "with_timestamp": 301,
+      "with_speed": 0,
+      "with_bearing": 0,
+      "trip_id_matches": 301,
+      "samples": [
+        {
+          "entity_id": "VP_C2-23013",
+          "trip_id": "3095S35013C2",
+          "route_id": null,
+          "vehicle_id": "23013",
+          "label": "C2-23013",
+          "lat": 37.417423248291016,
+          "lon": -6.007466793060303,
+          "bearing": null,
+          "speed": null,
+          "timestamp": 1792841645,
+          "stop_id": "51051"
+        },
+        {
+          "entity_id": "VP_C2-23015",
+          "trip_id": "3095S23015C2",
+          "route_id": null,
+          "vehicle_id": "23015",
+          "label": "C2-23015-PLATF.(12)",
+          "lat": 37.392242431640625,
+          "lon": -5.974641799926758,
+          "bearing": null,
+          "speed": null,
+          "timestamp": 1792841645,
+          "stop_id": "51003"
+        },
+        {
+          "entity_id": "VP_C4-23631",
+          "trip_id": "3095S23631C4",
+          "route_id": null,
+          "vehicle_id": "23631",
+          "label": "C4-23631",
+          "lat": null,
+          "lon": null,
+          "bearing": null,
+          "speed": null,
+          "timestamp": 1792841645,
+          "stop_id": "00000"
+        }
+      ],
+      "unmatched_trip_samples": []
+    },
+    {
+      "file": "renfe-positions-2.pb",
+      "bytes": 25948,
+      "sha256": "376692fb91877ac4aec02f26dbd7afcca4c918cb454c256796c88cb62d4a6e61",
+      "header_version": "2.0",
+      "header_timestamp": 1792841670,
+      "entities": 301,
+      "alert_entities": 0,
+      "vehicle_entities": 301,
+      "with_route_id": 0,
+      "with_trip_id": 301,
+      "with_vehicle_id": 301,
+      "with_position": 300,
+      "with_timestamp": 301,
+      "with_speed": 0,
+      "with_bearing": 0,
+      "trip_id_matches": 301,
+      "samples": [
+        {
+          "entity_id": "VP_C2-23013",
+          "trip_id": "3095S35013C2",
+          "route_id": null,
+          "vehicle_id": "23013",
+          "label": "C2-23013",
+          "lat": 37.417423248291016,
+          "lon": -6.007466793060303,
+          "bearing": null,
+          "speed": null,
+          "timestamp": 1792841665,
+          "stop_id": "51051"
+        },
+        {
+          "entity_id": "VP_C2-23015",
+          "trip_id": "3095S23015C2",
+          "route_id": null,
+          "vehicle_id": "23015",
+          "label": "C2-23015-PLATF.(12)",
+          "lat": 37.392242431640625,
+          "lon": -5.974641799926758,
+          "bearing": null,
+          "speed": null,
+          "timestamp": 1792841665,
+          "stop_id": "51003"
+        },
+        {
+          "entity_id": "VP_C4-23631",
+          "trip_id": "3095S23631C4",
+          "route_id": null,
+          "vehicle_id": "23631",
+          "label": "C4-23631",
+          "lat": null,
+          "lon": null,
+          "bearing": null,
+          "speed": null,
+          "timestamp": 1792841665,
+          "stop_id": "00000"
+        }
+      ],
+      "unmatched_trip_samples": []
+    },
+    {
+      "file": "renfe-positions-3.pb",
+      "bytes": 26413,
+      "sha256": "79349b5e11918d952e17395b6e1853ddd0f460fe076c5e7f9b1737127cd053ac",
+      "header_version": "2.0",
+      "header_timestamp": 1792841810,
+      "entities": 307,
+      "alert_entities": 0,
+      "vehicle_entities": 307,
+      "with_route_id": 0,
+      "with_trip_id": 307,
+      "with_vehicle_id": 307,
+      "with_position": 306,
+      "with_timestamp": 307,
+      "with_speed": 0,
+      "with_bearing": 0,
+      "trip_id_matches": 307
+    }
+  ],
+  "fetches": [
+    {
+      "name": "emt-static.zip",
+      "url": "https://datos.emtmadrid.es/dataset/9b23259a-4491-494b-9695-36a7709b2c12/resource/3cba2058-9833-422c-a704-bf992d31d2ee/download/gtfs_emt.zip",
+      "utc": "2026-10-24T11:34:09.829036+00:00",
+      "status": 200,
+      "bytes": 21206013,
+      "type": "application/zip",
+      "last_modified": "Sat, 24 Oct 2026 04:01:09 GMT"
+    },
+    {
+      "name": "emt-alerts.pb",
+      "url": "https://openapi.emtmadrid.es/v1/bus/servicealerts/proto",
+      "utc": "2026-10-24T11:34:09.837410+00:00",
+      "status": 200,
+      "bytes": 91368,
+      "type": "application/octet-stream",
+      "last_modified": null
+    },
+    {
+      "name": "renfe-positions-1.pb",
+      "url": "https://gtfsrt.renfe.com/vehicle_positions.pb",
+      "utc": "2026-10-24T11:34:09.837410+00:00",
+      "status": 200,
+      "bytes": 25911,
+      "type": "application/octet-stream",
+      "last_modified": "Sat, 24 Oct 2026 11:34:07 GMT"
+    },
+    {
+      "name": "renfe-catalog.json",
+      "url": "https://data.renfe.com/api/3/action/package_search?q=gtfs&rows=50",
+      "utc": "2026-10-24T11:34:09.837410+00:00",
+      "status": 200,
+      "bytes": 11632,
+      "type": "application/json;charset=utf-8",
+      "last_modified": null
+    },
+    {
+      "name": "emt-catalog.json",
+      "url": "https://datos.emtmadrid.es/api/3/action/package_search?q=gtfs&rows=50",
+      "utc": "2026-10-24T11:34:09.837410+00:00",
+      "status": 200,
+      "bytes": 9615,
+      "type": "application/json;charset=utf-8",
+      "last_modified": null
+    },
+    {
+      "name": "emt-apidocs.html",
+      "url": "https://apidocs.emtmadrid.es/",
+      "utc": "2026-10-24T11:34:09.837410+00:00",
+      "status": 200,
+      "bytes": 27577,
+      "type": "text/html",
+      "last_modified": "Thu, 20 Jun 2024 05:41:26 GMT"
+    },
+    {
+      "file": "renfe-static-catalog.json",
+      "url": "https://data.renfe.com/api/3/action/package_search?q=horarios&rows=50",
+      "utc": "2026-10-24T11:34:46.796214+00:00",
+      "bytes": 15714,
+      "status": 200,
+      "last_modified": null
+    },
+    {
+      "file": "renfe-positions-2.pb",
+      "url": "https://gtfsrt.renfe.com/vehicle_positions.pb",
+      "utc": "2026-10-24T11:34:46.798389+00:00",
+      "bytes": 25948,
+      "status": 200,
+      "last_modified": "Sat, 24 Oct 2026 11:34:29 GMT"
+    },
+    {
+      "file": "renfe-positions-2.json",
+      "url": "https://gtfsrt.renfe.com/vehicle_positions.json",
+      "utc": "2026-10-24T11:34:46.798389+00:00",
+      "bytes": 115920,
+      "status": 200,
+      "last_modified": "Sat, 24 Oct 2026 11:34:29 GMT"
+    },
+    {
+      "file": "emt-alerts-2.pb",
+      "url": "https://openapi.emtmadrid.es/v1/bus/servicealerts/proto",
+      "utc": "2026-10-24T11:34:46.798389+00:00",
+      "bytes": 91368,
+      "status": 200,
+      "last_modified": null
+    },
+    {
+      "file": "crtm.html",
+      "url": "https://datos.crtm.es/",
+      "utc": "2026-10-24T11:34:46.808803+00:00",
+      "bytes": 125440,
+      "status": 200,
+      "last_modified": null
+    },
+    {
+      "file": "renfe-static.zip",
+      "url": "https://ssl.renfe.com/ftransit/Fichero_CER_FOMENTO/fomento_transit.zip",
+      "utc": "2026-10-24T11:35:00.482288+00:00",
+      "status": 200,
+      "bytes": 15546483,
+      "last_modified": "Sat, 24 Oct 2026 02:08:23 GMT"
+    },
+    {
+      "file": "emt-api-data.js",
+      "url": "https://apidocs.emtmadrid.es/api_data.js",
+      "utc": "2026-10-24T11:35:00.482288+00:00",
+      "status": 200,
+      "bytes": 350055,
+      "last_modified": "Thu, 20 Jun 2024 05:41:26 GMT"
+    },
+    {
+      "file": "emt-api-project.js",
+      "url": "https://apidocs.emtmadrid.es/api_project.js",
+      "utc": "2026-10-24T11:35:00.485742+00:00",
+      "status": 200,
+      "bytes": 2627,
+      "last_modified": "Thu, 20 Jun 2024 05:41:26 GMT"
+    },
+    {
+      "file": "renfe-positions-3.pb",
+      "url": "https://gtfsrt.renfe.com/vehicle_positions.pb",
+      "utc": "2026-10-24T11:37:03.759219+00:00",
+      "bytes": 26413,
+      "status": 200,
+      "type": "application/octet-stream",
+      "last_modified": "Sat, 24 Oct 2026 11:36:49 GMT"
+    },
+    {
+      "file": "metro-static.zip",
+      "url": "https://crtm.maps.arcgis.com/sharing/rest/content/items/5c7f2951962540d69ffe8f640d94c246/data",
+      "utc": "2026-10-24T11:37:03.760748+00:00",
+      "bytes": 1503773,
+      "status": 200,
+      "type": "application/zip",
+      "last_modified": null
+    },
+    {
+      "file": "metro-item.json",
+      "url": "https://crtm.maps.arcgis.com/sharing/rest/content/items/5c7f2951962540d69ffe8f640d94c246?f=json",
+      "utc": "2026-10-24T11:37:03.761267+00:00",
+      "bytes": 2099,
+      "status": 200,
+      "type": "application/json;charset=utf-8",
+      "last_modified": null
+    },
+    {
+      "file": "emt-quota-doc.html",
+      "url": "https://mobilitylabs.emtmadrid.es/doc/new-app",
+      "utc": "2026-10-24T11:37:03.780122+00:00",
+      "bytes": 21151,
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "last_modified": null
+    },
+    {
+      "file": "emt-catalog-position.json",
+      "url": "https://datos.emtmadrid.es/api/3/action/package_search?q=posicion&rows=50",
+      "utc": "2026-10-24T11:39:16.767017+00:00",
+      "status": 200,
+      "bytes": 218,
+      "count": 0
+    },
+    {
+      "file": "emt-catalog-vehicle.json",
+      "url": "https://datos.emtmadrid.es/api/3/action/package_search?q=vehiculos&rows=50",
+      "utc": "2026-10-24T11:39:16.768017+00:00",
+      "status": 200,
+      "bytes": 19661,
+      "count": 2
+    }
+  ],
+  "madrid": {
+    "route_count": 40,
+    "rail_route_rows": 38,
+    "replacement_bus_route_rows": [
+      {
+        "route_id": "10T0111C9",
+        "route_short_name": "C9",
+        "route_long_name": "Cercedilla                              -Cotos",
+        "route_type": "3",
+        "route_color": "915419",
+        "route_text_color": "FFFFFF"
+      },
+      {
+        "route_id": "10T0112C9",
+        "route_short_name": "C9",
+        "route_long_name": "Cotos                                   -Cercedilla",
+        "route_type": "3",
+        "route_color": "915419",
+        "route_text_color": "FFFFFF"
+      }
+    ],
+    "display_keys": [
+      "C1",
+      "C10",
+      "C2",
+      "C3",
+      "C4",
+      "C4a",
+      "C4b",
+      "C5",
+      "C7",
+      "C8a",
+      "C8b",
+      "C9"
+    ],
+    "rail_display_keys": [
+      "C1",
+      "C10",
+      "C2",
+      "C3",
+      "C4",
+      "C4a",
+      "C4b",
+      "C5",
+      "C7",
+      "C8a",
+      "C8b",
+      "C9"
+    ],
+    "rail_shape_ids": [
+      "10_C1",
+      "10_C10",
+      "10_C10_INV",
+      "10_C1_INV",
+      "10_C2",
+      "10_C2_INV",
+      "10_C3",
+      "10_C3_INV",
+      "10_C4",
+      "10_C4_INV",
+      "10_C4a",
+      "10_C4a_INV",
+      "10_C4b",
+      "10_C4b_INV",
+      "10_C5",
+      "10_C5_INV",
+      "10_C7",
+      "10_C7_INV",
+      "10_C8a",
+      "10_C8a_INV",
+      "10_C8b",
+      "10_C8b_INV",
+      "10_C9",
+      "10_C9_INV"
+    ],
+    "routes_with_first_shape": 40,
+    "shape_points": 12290,
+    "emt_display_collisions": [
+      "C1",
+      "C2"
+    ],
+    "snapshots": [
+      {
+        "file": "renfe-positions-1.pb",
+        "request_started_utc": "2026-10-24T11:34:09.837410+00:00",
+        "header_utc": "2026-10-24T11:34:07+00:00",
+        "nationwide_vehicles": 301,
+        "nationwide_position_count": 300,
+        "nationwide_trip_matches": 301,
+        "madrid_all_modes": 81,
+        "madrid_rail": 79,
+        "madrid_rail_with_positions": 79,
+        "madrid_replacement_bus": 2,
+        "madrid_rail_distinct_display_keys": [
+          "C1",
+          "C10",
+          "C2",
+          "C3",
+          "C4a",
+          "C4b",
+          "C5",
+          "C7",
+          "C8a",
+          "C8b"
+        ],
+        "madrid_rail_trip_shape_matches": 79,
+        "nationwide_duplicate_descriptor_ids": {
+          "71891": 2,
+          "26922": 2
+        },
+        "rail_age_seconds_at_request_start": {
+          "min": 2.84,
+          "median": 2.84,
+          "max": 2.84
+        },
+        "rail_coord_bounds": {
+          "lat_min": 40.03502655029297,
+          "lat_max": 40.737613677978516,
+          "lon_min": -4.066298484802246,
+          "lon_max": -3.182323694229126
+        },
+        "join_samples": [
+          {
+            "entity_id": "VP_C4b-27455",
+            "trip_id": "1095S27455C4b",
+            "route_id": null,
+            "vehicle_id": "27455",
+            "label": "C4b-27455-PLATF.(1)",
+            "lat": 40.3413200378418,
+            "lon": -3.7123663425445557,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841647,
+            "stop_id": "37001",
+            "static_route_id": "10T0016C4b",
+            "display_key": "C4b",
+            "shape_id": "10_C4b_INV"
+          },
+          {
+            "entity_id": "VP_C4b-27452",
+            "trip_id": "1095S27452C4b",
+            "route_id": null,
+            "vehicle_id": "27452",
+            "label": "C4b-27452-PLATF.(3)",
+            "lat": 40.64484405517578,
+            "lon": -3.7762608528137207,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841647,
+            "stop_id": "17005",
+            "static_route_id": "10T0015C4b",
+            "display_key": "C4b",
+            "shape_id": "10_C4b"
+          },
+          {
+            "entity_id": "VP_C4a-27254",
+            "trip_id": "1095S27254C4a",
+            "route_id": null,
+            "vehicle_id": "27254",
+            "label": "C4a-27254-PLATF.(2)",
+            "lat": 40.50164794921875,
+            "lon": -3.6821796894073486,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841647,
+            "stop_id": "17001",
+            "static_route_id": "10T0013C4a",
+            "display_key": "C4a",
+            "shape_id": "10_C4a"
+          },
+          {
+            "entity_id": "VP_C5-27937",
+            "trip_id": "1095S27937C5",
+            "route_id": null,
+            "vehicle_id": "27937",
+            "label": "C5-27937",
+            "lat": 40.3325080871582,
+            "lon": -3.87459135055542,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841647,
+            "stop_id": "35606",
+            "static_route_id": "10T0018C5",
+            "display_key": "C5",
+            "shape_id": "10_C5_INV"
+          },
+          {
+            "entity_id": "VP_C5-27938",
+            "trip_id": "1095S27938C5",
+            "route_id": null,
+            "vehicle_id": "27938",
+            "label": "C5-27938-PLATF.(10)",
+            "lat": 40.40632629394531,
+            "lon": -3.6896772384643555,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841647,
+            "stop_id": "18000",
+            "static_route_id": "10T0017C5",
+            "display_key": "C5",
+            "shape_id": "10_C5"
+          },
+          {
+            "entity_id": "VP_C4b-27453",
+            "trip_id": "1095S27453C4b",
+            "route_id": null,
+            "vehicle_id": "27453",
+            "label": "C4b-27453",
+            "lat": 40.44660186767578,
+            "lon": -3.6920876502990723,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841647,
+            "stop_id": "18002",
+            "static_route_id": "10T0016C4b",
+            "display_key": "C4b",
+            "shape_id": "10_C4b_INV"
+          }
+        ]
+      },
+      {
+        "file": "renfe-positions-2.pb",
+        "request_started_utc": "2026-10-24T11:34:46.798389+00:00",
+        "header_utc": "2026-10-24T11:34:30+00:00",
+        "nationwide_vehicles": 301,
+        "nationwide_position_count": 300,
+        "nationwide_trip_matches": 301,
+        "madrid_all_modes": 81,
+        "madrid_rail": 79,
+        "madrid_rail_with_positions": 79,
+        "madrid_replacement_bus": 2,
+        "madrid_rail_distinct_display_keys": [
+          "C1",
+          "C10",
+          "C2",
+          "C3",
+          "C4a",
+          "C4b",
+          "C5",
+          "C7",
+          "C8a",
+          "C8b"
+        ],
+        "madrid_rail_trip_shape_matches": 79,
+        "nationwide_duplicate_descriptor_ids": {
+          "71891": 2,
+          "26922": 2
+        },
+        "rail_age_seconds_at_request_start": {
+          "min": 17.8,
+          "median": 17.8,
+          "max": 17.8
+        },
+        "rail_coord_bounds": {
+          "lat_min": 40.03502655029297,
+          "lat_max": 40.737613677978516,
+          "lon_min": -4.066298484802246,
+          "lon_max": -3.182323694229126
+        },
+        "join_samples": [
+          {
+            "entity_id": "VP_C4b-27455",
+            "trip_id": "1095S27455C4b",
+            "route_id": null,
+            "vehicle_id": "27455",
+            "label": "C4b-27455-PLATF.(2)",
+            "lat": 40.35267639160156,
+            "lon": -3.684072971343994,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841669,
+            "stop_id": "60100",
+            "static_route_id": "10T0016C4b",
+            "display_key": "C4b",
+            "shape_id": "10_C4b_INV"
+          },
+          {
+            "entity_id": "VP_C4b-27452",
+            "trip_id": "1095S27452C4b",
+            "route_id": null,
+            "vehicle_id": "27452",
+            "label": "C4b-27452-PLATF.(3)",
+            "lat": 40.64484405517578,
+            "lon": -3.7762608528137207,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841669,
+            "stop_id": "17005",
+            "static_route_id": "10T0015C4b",
+            "display_key": "C4b",
+            "shape_id": "10_C4b"
+          },
+          {
+            "entity_id": "VP_C4a-27254",
+            "trip_id": "1095S27254C4a",
+            "route_id": null,
+            "vehicle_id": "27254",
+            "label": "C4a-27254-PLATF.(2)",
+            "lat": 40.50164794921875,
+            "lon": -3.6821796894073486,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841669,
+            "stop_id": "17001",
+            "static_route_id": "10T0013C4a",
+            "display_key": "C4a",
+            "shape_id": "10_C4a"
+          },
+          {
+            "entity_id": "VP_C5-27937",
+            "trip_id": "1095S27937C5",
+            "route_id": null,
+            "vehicle_id": "27937",
+            "label": "C5-27937",
+            "lat": 40.3325080871582,
+            "lon": -3.87459135055542,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841669,
+            "stop_id": "35606",
+            "static_route_id": "10T0018C5",
+            "display_key": "C5",
+            "shape_id": "10_C5_INV"
+          },
+          {
+            "entity_id": "VP_C5-27938",
+            "trip_id": "1095S27938C5",
+            "route_id": null,
+            "vehicle_id": "27938",
+            "label": "C5-27938-PLATF.(10)",
+            "lat": 40.40632629394531,
+            "lon": -3.6896772384643555,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841669,
+            "stop_id": "18000",
+            "static_route_id": "10T0017C5",
+            "display_key": "C5",
+            "shape_id": "10_C5"
+          },
+          {
+            "entity_id": "VP_C4b-27453",
+            "trip_id": "1095S27453C4b",
+            "route_id": null,
+            "vehicle_id": "27453",
+            "label": "C4b-27453",
+            "lat": 40.44660186767578,
+            "lon": -3.6920876502990723,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841669,
+            "stop_id": "18002",
+            "static_route_id": "10T0016C4b",
+            "display_key": "C4b",
+            "shape_id": "10_C4b_INV"
+          }
+        ],
+        "since_previous": {
+          "common_descriptor_ids": 79,
+          "moved_coords": 15,
+          "advanced_timestamp": 79
+        }
+      },
+      {
+        "file": "renfe-positions-3.pb",
+        "request_started_utc": "2026-10-24T11:37:03.759219+00:00",
+        "header_utc": "2026-10-24T11:36:50+00:00",
+        "nationwide_vehicles": 307,
+        "nationwide_position_count": 306,
+        "nationwide_trip_matches": 307,
+        "madrid_all_modes": 83,
+        "madrid_rail": 81,
+        "madrid_rail_with_positions": 81,
+        "madrid_replacement_bus": 2,
+        "madrid_rail_distinct_display_keys": [
+          "C1",
+          "C10",
+          "C2",
+          "C3",
+          "C4a",
+          "C4b",
+          "C5",
+          "C7",
+          "C8a",
+          "C8b"
+        ],
+        "madrid_rail_trip_shape_matches": 81,
+        "nationwide_duplicate_descriptor_ids": {
+          "71891": 2,
+          "26922": 2
+        },
+        "rail_age_seconds_at_request_start": {
+          "min": 14.76,
+          "median": 14.76,
+          "max": 14.76
+        },
+        "rail_coord_bounds": {
+          "lat_min": 40.03502655029297,
+          "lat_max": 40.72805404663086,
+          "lon_min": -4.046628475189209,
+          "lon_max": -3.182323694229126
+        },
+        "join_samples": [
+          {
+            "entity_id": "VP_C2-75616",
+            "trip_id": "1095S75616C2",
+            "route_id": null,
+            "vehicle_id": "75616",
+            "label": "C2-75616-PLATF.(2)",
+            "lat": 40.38706970214844,
+            "lon": -3.609081745147705,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841809,
+            "stop_id": "70109",
+            "static_route_id": "10T0006C2",
+            "display_key": "C2",
+            "shape_id": "10_C2_INV"
+          },
+          {
+            "entity_id": "VP_C8b-27618",
+            "trip_id": "1095S27618C8b",
+            "route_id": null,
+            "vehicle_id": "27618",
+            "label": "C8b-27618-PLATF.(2)",
+            "lat": 40.49546813964844,
+            "lon": -3.7261993885040283,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841809,
+            "stop_id": "97100",
+            "static_route_id": "10T0088C8b",
+            "display_key": "C8b",
+            "shape_id": "10_C8b_INV"
+          },
+          {
+            "entity_id": "VP_C5-27938",
+            "trip_id": "1095S27938C5",
+            "route_id": null,
+            "vehicle_id": "27938",
+            "label": "C5-27938-PLATF.(2)",
+            "lat": 40.39591979980469,
+            "lon": -3.677996873855591,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841809,
+            "stop_id": "18003",
+            "static_route_id": "10T0017C5",
+            "display_key": "C5",
+            "shape_id": "10_C5"
+          },
+          {
+            "entity_id": "VP_C8a-75016",
+            "trip_id": "1095S75016C8a",
+            "route_id": null,
+            "vehicle_id": "75016",
+            "label": "C8a-75016-PLATF.(2)",
+            "lat": 40.552284240722656,
+            "lon": -3.8969664573669434,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841809,
+            "stop_id": "10101",
+            "static_route_id": "10T0061C8a",
+            "display_key": "C8a",
+            "shape_id": "10_C8a"
+          },
+          {
+            "entity_id": "VP_C4b-27459",
+            "trip_id": "1095S27459C4b",
+            "route_id": null,
+            "vehicle_id": "27459",
+            "label": "C4b-27459-PLATF.(2)",
+            "lat": 40.24142837524414,
+            "lon": -3.7691590785980225,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841809,
+            "stop_id": "37012",
+            "static_route_id": "10T0016C4b",
+            "display_key": "C4b",
+            "shape_id": "10_C4b_INV"
+          },
+          {
+            "entity_id": "VP_C4a-27256",
+            "trip_id": "1095S27256C4a",
+            "route_id": null,
+            "vehicle_id": "27256",
+            "label": "C4a-27256",
+            "lat": 40.554161071777344,
+            "lon": -3.6821885108947754,
+            "bearing": null,
+            "speed": null,
+            "timestamp": 1792841809,
+            "stop_id": "19002",
+            "static_route_id": "10T0013C4a",
+            "display_key": "C4a",
+            "shape_id": "10_C4a"
+          }
+        ],
+        "since_previous": {
+          "common_descriptor_ids": 75,
+          "moved_coords": 37,
+          "advanced_timestamp": 75
+        }
+      }
+    ],
+    "sampled_rail_displays": [
+      "C1",
+      "C10",
+      "C2",
+      "C3",
+      "C4a",
+      "C4b",
+      "C5",
+      "C7",
+      "C8a",
+      "C8b"
+    ],
+    "trip_count": 36045,
+    "rail_trip_count": 35965,
+    "active_trips_20261024": 1114,
+    "active_rail_trips_20261024": 1104,
+    "active_route_rows_20261024": 35
+  },
+  "metro_item": {
+    "id": "5c7f2951962540d69ffe8f640d94c246",
+    "owner": "ConsorcioRegional",
+    "ownerId": "1ffe92e48faec7e7d6bcb0d3f46ffe4a",
+    "orgId": "UxADft6QPcvFyDU1",
+    "created": 1459841423000,
+    "modified": 1748606455000,
+    "guid": null,
+    "name": "google_transit_M4.zip",
+    "title": "GTFS Red de Metro",
+    "type": "CSV Collection",
+    "typeKeywords": [
+      "CSV Collection"
+    ],
+    "description": "<span style='color: rgb(33, 33, 33); font-size: 16px; line-height: 24px;'><font face='Arial'>Conjunto de datos con los horarios de transporte público y la información geográfica asociada a ellos para la red de Metro.</font></span><br /><div><span style='color: rgb(33, 33, 33); line-height: 24px;'><font face='Arial'><font size='2'>Detalle de la especificación:</font><span style='font-size: 16px;'> </span></font></span><a href='http://code.google.com/transit/spec/transit_feed_specification.html' style='color: rgb(119, 89, 174); text-decoration: none; font-family: arial, sans-serif; line-height: 20.02px; background-color: rgb(255, 255, 255);' rel='nofollow ugc'>General Transit Feed Specification</a></div>",
+    "tags": [
+      "GTFS",
+      "Metro",
+      "Consorcio Regional de Transportes de Madrid",
+      "Comunidad de Madrid",
+      "Transporte público"
+    ],
+    "snippet": "Red de Metro en formato GTFS (General Transit Feed Specification)",
+    "thumbnail": "thumbnail/gtfs_metro.png",
+    "documentation": null,
+    "extent": [
+      [
+        -4.393,
+        39.723
+      ],
+      [
+        -2.989,
+        41.127
+      ]
+    ],
+    "categories": [],
+    "spatialReference": null,
+    "accessInformation": "© CRTM",
+    "classification": null,
+    "licenseInfo": "<a href='https://www.crtm.es/licencia-de-uso' target='_blank' rel='nofollow ugc noopener noreferrer'>https://www.crtm.es/licencia-de-uso</a>",
+    "culture": "es-es",
+    "properties": null,
+    "advancedSettings": null,
+    "url": "",
+    "proxyFilter": null,
+    "access": "public",
+    "size": 1503773,
+    "subInfo": 0,
+    "appCategories": [],
+    "industries": [],
+    "languages": [],
+    "largeThumbnail": null,
+    "banner": null,
+    "screenshots": [],
+    "listed": false,
+    "commentsEnabled": false,
+    "numComments": 0,
+    "numRatings": 0,
+    "avgRating": 0,
+    "numViews": 275464,
+    "scoreCompleteness": 98,
+    "groupDesignations": null,
+    "apiToken1ExpirationDate": -1,
+    "apiToken2ExpirationDate": -1,
+    "contentOrigin": "self",
+    "lastViewed": 1792839600000
+  },
+  "method": {
+    "decoder": "Python standard library protobuf wire decoder; fields checked against current GtfsRtModels.cs; FeedHeader.timestamp=3, VehiclePosition.position=2, VehiclePosition.vehicle=8.",
+    "static": "ZIP CSV via csv.DictReader; headers and values trimmed, as in current loader. First trip shape checked for each route plus actual sampled trip shape references. Calendar evaluated for Saturday 2026-10-24.",
+    "freshness": "Ages measured at request start, not completed receipt; network latency excluded. No sustained cadence or long-term identity certification claimed.",
+    "scope": "Madrid determined by exact realtime trip_id join to static trips, then inspected Madrid route_id namespace 10. route_type=2 retained for rail-only candidate; route_type=3 excluded."
+  },
+  "catalogs": [
+    {
+      "name": "gtfs-de-emtmadrid",
+      "license_id": "odc-by",
+      "license_title": "Open Data Commons Attribution License",
+      "license_url": "http://www.opendefinition.org/licenses/odc-by",
+      "metadata_modified": "2026-10-24T04:01:09.163639"
+    },
+    {
+      "name": "tiempo-real-para-autobuses-de-emt",
+      "license_id": "odc-odbl",
+      "license_title": "Open Data Commons Open Database License (ODbL)",
+      "license_url": "http://www.opendefinition.org/licenses/odc-odbl",
+      "metadata_modified": "2025-07-08T06:17:35.900058"
+    },
+    {
+      "name": "ubicacion-vehiculos",
+      "license_id": "CC-BY-4.0",
+      "license_title": "Creative Commons Attribution 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "metadata_modified": "2026-10-23T22:01:29.450963"
+    },
+    {
+      "name": "horarios-cercanias",
+      "license_id": "CC-BY-4.0",
+      "license_title": "Creative Commons Attribution 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "metadata_modified": "2026-10-24T03:30:13.346480"
+    }
+  ],
+  "emt_authenticated_api": {
+    "live_authenticated_sample": "unverified; no credentials available to this spike",
+    "unauthenticated_probe": {
+      "url": "https://openapi.emtmadrid.es/v3/transport/busemtmad/stops/62/arrives/all/",
+      "method": "POST",
+      "http_status": 401,
+      "evaluated_date": "2026-10-24",
+      "exact_request_timestamp": "not retained; HTTP 401 observed in the probe command"
+    },
+    "official_schema_url": "https://apidocs.emtmadrid.es/api_data.js",
+    "documented_arrival_fields": [
+      "bus",
+      "line",
+      "geometry.coordinates",
+      "DistanceBus",
+      "estimateArrive"
+    ],
+    "documented_geometry_semantics": "bus position (documentation only, not a live measurement)",
+    "auth": "GET v2/mobilitylabs/user/login/ with X-ClientId/passKey headers; accessToken header for POST arrivals.",
+    "quota": "Current served documentation prose: basic up to 25k/day, advanced 250k/day. Embedded legacy example mentions 20k/150k. Actual granted account quota unverified."
+  }
+}
