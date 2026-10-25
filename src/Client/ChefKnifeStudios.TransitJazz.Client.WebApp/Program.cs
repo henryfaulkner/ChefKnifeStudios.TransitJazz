@@ -5,7 +5,9 @@ using ChefKnifeStudios.TransitJazz.Client.Core.Services;
 using ChefKnifeStudios.TransitJazz.Client.Core.Services.EndpointsServices;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Components;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Audio;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using ChefKnifeStudios.TransitJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.TransitJazz.Client.WebApp;
@@ -70,7 +72,7 @@ builder.Services.AddSingleton<IAudioPlayerJsInterop, AudioPlayerJsInterop>();
 builder.Services.AddScoped<ITriggerPointGenerator, TriggerPointGenerator>();
 builder.Services.AddSingleton<ITransitSynthJsInterop, TransitSynthJsInterop>();
 
-builder.Services.AddScoped<IToastService, ToastService>();
+builder.Services.AddNotificationPresentation();
 builder.Services.AddScoped<IRouteFilterViewModel, RouteFilterViewModel>();
 
 builder.Services.AddSingleton<IRouteBlurbStore, RouteBlurbStore>();
@@ -84,16 +86,22 @@ builder.Services.AddChartJs(options =>
 
 builder.Services.AddMatToaster(new MatToastConfiguration
 {
-    Position = MatToastPosition.BottomRight,
+    Position = MatToastPosition.TopCenter,
     PreventDuplicates = true,
+    MaxDisplayedToasts = 1,
     NewestOnTop = true,
-    ShowCloseButton = true,
-    ShowProgressBar = true
+    ShowTransitionDuration = 0,
+    HideTransitionDuration = 0,
+    ShowCloseButton = false,
+    ShowProgressBar = false
 });
 
 builder.Services.AddBlazoredLocalStorage();
 
-builder.Services.AddTransient<ISettingsService, SettingsService>();
+builder.Services.AddScoped<ISettingsService, SettingsService>();
+builder.Services.AddScoped<SettingsChangeController>();
+builder.Services.AddScoped<CityNavigationController>();
+builder.Services.AddSingleton<AudioSettingOutcomeController>();
 builder.Services.AddSingleton<IOutsideClickJsInterop, OutsideClickJsInterop>();
 builder.Services.AddSingleton<IViewportSizeJsInterop, ViewportSizeJsInterop>();
 builder.Services.AddSingleton<IPageVisibilityJsInterop, PageVisibilityJsInterop>();

@@ -5,4 +5,5 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs;
 public class GisSettingChangedEventArgs : IEventArgs
 {
     public required bool IsStreetMapEnabled { get; init; }
+    public bool? IsDarkModeEnabled { get; init; }
 }

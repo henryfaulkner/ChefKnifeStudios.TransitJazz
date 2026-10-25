@@ -1,97 +1,113 @@
 @using ChefKnifeStudios.TransitJazz.Client.Core.Services
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services
+@using ChefKnifeStudios.TransitJazz.Client.Shared.ViewModels
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications
 @using ChefKnifeStudios.TransitJazz.Shared
 @using Microsoft.JSInterop
+@using Microsoft.Extensions.Localization
+@implements IAsyncDisposable
 @inject NavigationManager NavigationManager
+@inject CityNavigationController CityNavigationController
+@inject IApplicationViewModel ApplicationViewModel
+@inject NotificationCoordinator NotificationCoordinator
 @inject IJSRuntime JS
+@inject IStringLocalizer<RouteFilterResources> Loc
 
 <div class="city-fab-container">
-    <MatFAB 
-        Icon="location_city"
-        Mini="true" 
-        OnClick="OnClick2" 
-        @ref="Button2"
-    />
+    <MatFAB Icon="location_city" Mini="true" OnClick="OnClick2" @ref="Button2" />
     <MatMenu @ref="Menu2" Class="city-fab-menu">
         <MatList>
-            <MatListItem>
-                <MatButton Label="Atlanta, GA" Mini="true" @onclick="HandleMartaClicked" Disabled="@(CurrentCity == CityNames.Marta)" />
-            </MatListItem>
-            <MatListItem>
-                <MatButton Label="Boston, MA" Mini="true" @onclick="HandleMbtaClicked" Disabled="@(CurrentCity == CityNames.Mbta)" />
-            </MatListItem>
-            <MatListItem>
-                <MatButton Label="Denver, CO" Mini="true" @onclick="HandleRtdClicked" Disabled="@(CurrentCity == CityNames.Rtd)" />
-            </MatListItem>
-            <MatListItem>
-                <MatButton Label="New York, NY" Mini="true" @onclick="HandleNymtaClicked" Disabled="@(CurrentCity == CityNames.Nymta)" />
-            </MatListItem>
-            <MatListItem>
-                <MatButton Label="Philadelphia, PA" Mini="true" @onclick="HandleSeptaClicked" Disabled="@(CurrentCity == CityNames.Septa)" />
-            </MatListItem>
-            <MatListItem>
-                <MatButton Label="Seattle, WA" Mini="true" @onclick="HandleSeattleClicked" Disabled="@(CurrentCity == CityNames.Seattle)" />
-            </MatListItem>
-            <MatListItem>
-                <MatButton Label="Toronto, ON" Mini="true" @onclick="HandleTtcClicked" Disabled="@(CurrentCity == CityNames.Ttc)" />
-            </MatListItem>
-            <MatListItem>
-                <MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked" Disabled="@(CurrentCity == CityNames.Wmata)" />
-            </MatListItem>
+            <MatListItem><MatButton Label="Atlanta, GA" Mini="true" @onclick="HandleMartaClicked" Disabled="@(CurrentCity == CityNames.Marta)" /></MatListItem>
+            <MatListItem><MatButton Label="Boston, MA" Mini="true" @onclick="HandleMbtaClicked" Disabled="@(CurrentCity == CityNames.Mbta)" /></MatListItem>
+            <MatListItem><MatButton Label="Denver, CO" Mini="true" @onclick="HandleRtdClicked" Disabled="@(CurrentCity == CityNames.Rtd)" /></MatListItem>
+            <MatListItem><MatButton Label="New York, NY" Mini="true" @onclick="HandleNymtaClicked" Disabled="@(CurrentCity == CityNames.Nymta)" /></MatListItem>
+            <MatListItem><MatButton Label="Philadelphia, PA" Mini="true" @onclick="HandleSeptaClicked" Disabled="@(CurrentCity == CityNames.Septa)" /></MatListItem>
+            <MatListItem><MatButton Label="Seattle, WA" Mini="true" @onclick="HandleSeattleClicked" Disabled="@(CurrentCity == CityNames.Seattle)" /></MatListItem>
+            <MatListItem><MatButton Label="Toronto, ON" Mini="true" @onclick="HandleTtcClicked" Disabled="@(CurrentCity == CityNames.Ttc)" /></MatListItem>
+            <MatListItem><MatButton Label="Washington DC" Mini="true" @onclick="HandleWmataClicked" Disabled="@(CurrentCity == CityNames.Wmata)" /></MatListItem>
         </MatList>
     </MatMenu>
 </div>
+@if (CityNavigationController.FailedCity is not null)
+{
+    <div class="city-navigation-status" role="alert">
+        <span>@Loc["ToastNavigationFailure"]</span>
+        <button type="button" @onclick="RetryFailedCityAsync">@Loc["ToastActionTryAgain"]</button>
+    </div>
+}
 
 @code {
     string CurrentCity => NavigationManager.ResolveCity();
 
-    async Task HandleMartaClicked()
+    Task HandleMartaClicked() => NavigateToCityAsync(CityNames.Marta);
+    Task HandleWmataClicked() => NavigateToCityAsync(CityNames.Wmata);
+    Task HandleMbtaClicked() => NavigateToCityAsync(CityNames.Mbta);
+    Task HandleNymtaClicked() => NavigateToCityAsync(CityNames.Nymta);
+    Task HandleTtcClicked() => NavigateToCityAsync(CityNames.Ttc);
+    Task HandleSeptaClicked() => NavigateToCityAsync(CityNames.Septa);
+    Task HandleSeattleClicked() => NavigateToCityAsync(CityNames.Seattle);
+    Task HandleRtdClicked() => NavigateToCityAsync(CityNames.Rtd);
+
+    async Task NavigateToCityAsync(string city)
     {
-        // Hash-only navigation is always in-page � no reload, WASM stays alive.
-        // Set the hash then force a reload so the app re-bootstraps with the new city.
-        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Marta}';location.reload()");
+        await CityNavigationController.NavigateToCityAsync(city, ApplicationViewModel.NotificationScope);
+        await InvokeAsync(StateHasChanged);
     }
 
-    async Task HandleWmataClicked()
-    {
-        // Hash-only navigation is always in-page � no reload, WASM stays alive.
-        // Set the hash then force a reload so the app re-bootstraps with the new city.
-        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Wmata}';location.reload()");
-    }
-
-    async Task HandleMbtaClicked()
-    {
-        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Mbta}';location.reload()");
-    }
-
-    async Task HandleNymtaClicked()
-    {
-        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Nymta}';location.reload()");
-    }
-
-    async Task HandleTtcClicked()
-    {
-        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Ttc}';location.reload()");
-    }
-
-    async Task HandleSeptaClicked()
-    {
-        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Septa}';location.reload()");
-    }
-
-    async Task HandleSeattleClicked()
-    {
-        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Seattle}';location.reload()");
-    }
-
-    async Task HandleRtdClicked()
-    {
-        await JS.InvokeVoidAsync("eval", $"location.hash='{CityNames.Rtd}';location.reload()");
-    }
+    Task RetryFailedCityAsync() => CityNavigationController.FailedCity is { } city
+        ? NavigateToCityAsync(city)
+        : Task.CompletedTask;
 
     MatFAB Button2;
     BaseMatMenu Menu2;
-    public void OnClick2(MouseEventArgs e)
+    IJSObjectReference? _menuModule;
+    IJSObjectReference? _menuObserver;
+    DotNetObjectReference<CityFab>? _dotNetReference;
+    bool _disposed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        this.Menu2.OpenAsync(Button2.Ref);
+        if (!firstRender) return;
+
+        _menuModule = await JS.InvokeAsync<IJSObjectReference>(
+            "import", $"./_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/city-menu-access.js?g={Guid.NewGuid():N}");
+        _dotNetReference = DotNetObjectReference.Create(this);
+        _menuObserver = await _menuModule.InvokeAsync<IJSObjectReference>("observeCityMenu", _dotNetReference);
+    }
+
+    public void OnClick2(MouseEventArgs e) => Menu2.OpenAsync(Button2.Ref);
+
+    [JSInvokable]
+    public Task HandleCityMenuVisibilityChanged(bool isOpen) => InvokeAsync(() =>
+    {
+        if (!_disposed)
+            NotificationCoordinator.SetBlockingOverlay(NotificationBlockingOverlay.CityMenu, isOpen);
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        NotificationCoordinator.SetBlockingOverlay(NotificationBlockingOverlay.CityMenu, false);
+
+        if (_menuModule is not null && _menuObserver is not null)
+        {
+            try { await _menuModule.InvokeVoidAsync("disconnectCityMenuObserver", _menuObserver); }
+            catch (JSDisconnectedException) { }
+            finally
+            {
+                try { await _menuObserver.DisposeAsync(); }
+                catch (JSDisconnectedException) { }
+            }
+        }
+
+        if (_menuModule is not null)
+        {
+            try { await _menuModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+
+        _dotNetReference?.Dispose();
     }
 }

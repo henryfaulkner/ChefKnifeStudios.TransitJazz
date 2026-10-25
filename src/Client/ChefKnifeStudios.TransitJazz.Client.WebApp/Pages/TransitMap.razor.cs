@@ -5,9 +5,11 @@ using ChefKnifeStudios.TransitJazz.Client.Shared.Constants;
 using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Audio;
 using ChefKnifeStudios.TransitJazz.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications;
 using ChefKnifeStudios.TransitJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
@@ -36,8 +38,11 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] ITransitSynthJsInterop TransitSynth { get; set; } = null!;
     [Inject] IRouteFilterViewModel RouteFilterViewModel { get; set; } = null!;
     [Inject] IApplicationViewModel ApplicationViewModel { get; set; } = null!;
+    [Inject] CoreCapabilityNotificationOwner CapabilityNotificationOwner { get; set; } = null!;
     [Inject] IEventNotificationService EventNotificationService { get; set; } = null!;
     [Inject] ISettingsService SettingsService { get; set; } = null!;
+    [Inject] SettingsChangeController SettingsChangeController { get; set; } = null!;
+    [Inject] AudioSettingOutcomeController AudioSettingOutcomes { get; set; } = null!;
     [Inject] IViewportSizeJsInterop ViewportSize { get; set; } = null!;
     [Inject] ITransitEndpointsService TransitEndpointsService { get; set; } = null!;
     [Inject] IOutsideClickJsInterop OutsideClickJsInterop { get; set; } = null!;
@@ -46,6 +51,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] IJSRuntime JS { get; set; } = null!;
 
     const float MinWidth = 1100;
+    const bool ConditionalAudioSettingsNotificationsEnabled = false;
 
     readonly string _accordionElementId = $"route-accordion-{Guid.NewGuid()}";
     bool _accordionExpanded;
@@ -63,7 +69,9 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     readonly List<IEnumerable<EventEnvelope>> _pendingBatches = new();
 
     bool _audioEnabled = true;
-    bool _audioUnlocked = false;
+    bool _audioPlaybackUnavailable;
+    SettingsChangeOutcome? _audioSettingOutcome;
+    readonly AudioUnlockAttemptState _audioUnlockState = new();
     bool _checkpointsVisible = false;
     bool _crossingTrailVisible = true;
 
@@ -78,6 +86,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     readonly Dictionary<string, RouteShapeFeature> _routeShapeCache = new(StringComparer.Ordinal);
     bool _routesLoaded;
     bool _routesRendered;
+
+    NotificationIssueCode? RouteIssueCode => ApplicationViewModel.RouteLoadOutcome.FailureKind switch
+    {
+        RouteLoadFailureKind.RequestFailed => NotificationIssueCode.RouteLoadFailed,
+        RouteLoadFailureKind.NoUsableCurrentCityData => NotificationIssueCode.RoutesUnavailable,
+        _ => null
+    };
 
     // routeJoinKey → consecutive batches with no live vehicle. A route's audio Sampler is
     // disposed once it's been absent this many batches in a row (~tolerates brief feed
@@ -126,7 +141,9 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _attentionGate = new AttentionGate((IDeliveryControl)NotificationService);
 
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
-        EventNotificationService.EventReceived += HandleSettingsEventReceived;
+        ApplicationViewModel.PropertyChanged += OnApplicationViewModelPropertyChanged;
+        EventNotificationService.EventReceivedAsync += HandleSettingsEventReceivedAsync;
+        TransitSynth.AudioCapabilityHealthChanged += OnAudioCapabilityHealthChanged;
 
         // Subscribe FIRST so the immediate initial fire reaches us, then register.
         _viewportSub = ViewportSize.AddViewportSizeChangeCallback(OnViewportChanged);
@@ -237,11 +254,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     // browser autoplay policies — Tone.start() is a no-op outside a gesture stack),
     // then dismisses the overlay. After this one tap, every later crossing plays
     // without further interaction.
-    async Task EnableAudioAsync()
+    async Task<bool> EnableAudioAsync()
     {
+        var attemptId = _audioUnlockState.BeginAttempt();
+        var outcome = AudioUnlockStatus.Failed;
         try
         {
-            await TransitSynth.UnlockAsync();
+            outcome = await TransitSynth.UnlockAsync();
         }
         catch (Exception ex)
         {
@@ -249,105 +268,228 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
         finally
         {
-            _audioUnlocked = true;
-            StateHasChanged();
+            _audioUnlockState.CompleteAttempt(attemptId, outcome);
         }
+
+        if (outcome == AudioUnlockStatus.Running && _audioEnabled)
+        {
+            var playbackSupported = await TransitSynth.IsPlaybackSupportedAsync();
+            var failed = await CapabilityNotificationOwner.ObserveAudioSupportAsync(
+                Task.FromResult(playbackSupported),
+                _audioUnlockState,
+                attemptId,
+                () => _audioEnabled,
+                ApplicationViewModel.NotificationScope);
+
+            if (_audioUnlockState.Current.AttemptId == attemptId
+                && _audioUnlockState.Current.Status == AudioUnlockStatus.Running)
+            {
+                _audioPlaybackUnavailable = failed;
+
+                if (playbackSupported && !failed)
+                    await TransitSynth.BeginAudioCapabilityHealthAsync(attemptId, audioRequested: true, audioUnlocked: true);
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+        return _audioUnlockState.Current.AttemptId == attemptId
+            && _audioUnlockState.Current.Status == AudioUnlockStatus.Running
+            && !_audioPlaybackUnavailable;
     }
 
-    void HandleSettingsEventReceived(object sender, IEventArgs e)
+    void OnAudioCapabilityHealthChanged(AudioCapabilityHealthTransition transition) =>
+        _ = InvokeAsync(() => ObserveAudioCapabilityHealthAsync(transition));
+
+    Task ObserveAudioCapabilityHealthAsync(AudioCapabilityHealthTransition transition)
+    {
+        var current = _audioUnlockState.Current;
+        var audioUnlocked = _audioEnabled && current.Status == AudioUnlockStatus.Running;
+        return CapabilityNotificationOwner.ObserveRequiredVoiceHealthAsync(
+            transition,
+            ApplicationViewModel.NotificationScope,
+            transition.RequestGeneration,
+            current.AttemptId,
+            audioRequested: _audioEnabled,
+            audioUnlocked,
+            ConditionalAudioSettingsNotificationsEnabled);
+    }
+
+    async Task ContinueWithoutAudioAsync()
+    {
+        var attemptId = _audioUnlockState.Current.AttemptId;
+        _audioSettingOutcome = await SettingsChangeController.ChangeAsync(
+            nameof(Settings.IsAudioEnabled),
+            false,
+            (requested, cancellationToken) => ApplyAudioSettingChangeAsync(requested));
+        if (_audioSettingOutcome.Status is not (SettingsChangeStatus.Applied or SettingsChangeStatus.AppliedSessionOnly))
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (!_audioUnlockState.ContinueWithoutAudio(attemptId)) return;
+        EventNotificationService.PostEvent(this, new SettingsCommittedEventArgs
+        {
+            PropertyName = nameof(Settings.IsAudioEnabled),
+            IsPersisted = _audioSettingOutcome.IsPersisted,
+            ChangeOutcome = _audioSettingOutcome
+        });
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task<SettingsEffectResult> ApplyAudioSettingChangeAsync(bool enabled) =>
+        await EventNotificationService.PostEventAsync(this,
+            new AudioSettingChangedEventArgs { IsAudioEnabled = enabled })
+            ? SettingsEffectResult.Success
+            : SettingsEffectResult.Failure;
+
+    async Task<bool> HandleSettingsEventReceivedAsync(object sender, IEventArgs e)
     {
         if (e is AudioSettingChangedEventArgs audio)
         {
-            _audioEnabled = audio.IsAudioEnabled;
-            _ = TransitSynth.SetAudioEnabledAsync(_audioEnabled);
-            // Also push the live flag to the crossing dispatcher so crossings already scheduled
-            // during a muted window sound the instant they fire once unmuted, rather than waiting
-            // out the ~10s scheduling horizon (the extended-mute bug).
-            InvokeAsync(async () =>
+            var previous = _audioEnabled;
+            var applied = false;
+            await InvokeAsync(async () =>
             {
-                if (_map is not null)
-                    await _map.SetCrossingAudioEnabledAsync(_audioEnabled);
+                EventNotificationService.PostEvent(this, new AudioStopOutcomeChangedEventArgs { Outcome = null });
+
+                if (audio.IsAudioEnabled)
+                {
+                    // Keep scheduled dispatch silent until a fresh native gesture has confirmed
+                    // AudioContext running. The synth gate and master output are enabled only
+                    // after that confirmation.
+                    _audioEnabled = true;
+                    if (await EnableAudioAsync())
+                    {
+                        var synthApplied = await TransitSynth.SetAudioEnabledAsync(true);
+                        var masterUnmuted = synthApplied && await TransitSynth.SetMasterMutedAsync(false);
+                        var dispatcherApplied = masterUnmuted
+                            && (_map is null || await _map.SetCrossingAudioEnabledAsync(true));
+                        applied = synthApplied && masterUnmuted && dispatcherApplied;
+                    }
+
+                    if (applied)
+                    {
+                        if (_attentionGate is not null)
+                            await _attentionGate.OnAudioChangedAsync(_pageHidden, true);
+                    }
+                    else
+                    {
+                        _audioEnabled = previous;
+                        await TransitSynth.SetAudioEnabledAsync(false);
+                        if (_map is not null)
+                            await _map.SetCrossingAudioEnabledAsync(false);
+                        await TransitSynth.SetMasterMutedAsync(true);
+                    }
+                }
+                else
+                {
+                    var outcome = await AudioSettingOutcomes.MuteAsync(
+                        disableScheduledNotes: () => _map is null
+                            ? Task.FromResult(true)
+                            : _map.SetCrossingAudioEnabledAsync(false),
+                        stopNormally: () => TransitSynth.SetAudioEnabledAsync(false),
+                        muteMaster: () => TransitSynth.SetMasterMutedAsync(true),
+                        verifyStopped: () => TransitSynth.VerifyAudioSilencedAsync());
+                    EventNotificationService.PostEvent(this, new AudioStopOutcomeChangedEventArgs { Outcome = outcome });
+                    applied = outcome.Status is AudioStopStatus.Stopped or AudioStopStatus.MasterMuted;
+
+                    if (applied)
+                    {
+                        _audioEnabled = false;
+                        await TransitSynth.StopAudioCapabilityHealthAsync();
+                        if (_attentionGate is not null)
+                            await _attentionGate.OnAudioChangedAsync(_pageHidden, false);
+                    }
+                    else
+                    {
+                        // Keep the confirmed preference/control state. The sound gates remain
+                        // disabled as a safety measure; do not re-enable a source after a failed
+                        // stop. Only StillPlaying is eligible for the tab-close instruction.
+                        _audioEnabled = previous;
+                    }
+                }
             });
-            // Hidden-tab pause (051 US3): mute/unmute while hidden flips desiredDelivery —
-            // ambient audio-on sessions never pause; muting a hidden tab pauses it.
-            if (_attentionGate is not null)
-                _ = _attentionGate.OnAudioChangedAsync(_pageHidden, _audioEnabled);
-            return;
+
+            return applied;
         }
 
         if (e is CheckpointVisibilityChangedEventArgs checkpoint)
         {
-            _checkpointsVisible = checkpoint.AreCheckpointsVisible;
-            InvokeAsync(async () =>
+            var applied = true;
+            await InvokeAsync(async () =>
             {
                 if (_map is not null)
-                    await _map.SetCheckpointVisibilityAsync(checkpoint.AreCheckpointsVisible);
+                    applied = await _map.SetCheckpointVisibilityAsync(checkpoint.AreCheckpointsVisible);
+                if (applied) _checkpointsVisible = checkpoint.AreCheckpointsVisible;
             });
-            return;
+            return applied;
         }
 
         if (e is CrossingTrailVisibilityChangedEventArgs trail)
         {
-            _crossingTrailVisible = trail.IsCrossingTrailVisible;
-            InvokeAsync(async () =>
+            var applied = true;
+            await InvokeAsync(async () =>
             {
                 if (_map is not null)
-                    // false → clears active trails immediately (FR-006).
-                    await _map.SetCrossingTrailVisibilityAsync(trail.IsCrossingTrailVisible);
+                    applied = await _map.SetCrossingTrailVisibilityAsync(trail.IsCrossingTrailVisible);
+                if (applied) _crossingTrailVisible = trail.IsCrossingTrailVisible;
             });
-            return;
+            return applied;
         }
 
         if (e is BusVisibilitySettingChangedEventArgs buses)
         {
-            InvokeAsync(async () =>
+            var applied = true;
+            await InvokeAsync(async () =>
             {
                 if (_map is not null)
-                    await _map.SetVehiclesVisibleAsync(buses.IsBusesVisible);
+                    applied = await _map.SetVehiclesVisibleAsync(buses.IsBusesVisible);
             });
-            return;
+            return applied;
         }
 
         if (e is AllCheckpointsVisibilityChangedEventArgs allCheckpoints)
         {
-            InvokeAsync(async () =>
+            var applied = true;
+            await InvokeAsync(async () =>
             {
                 if (_map is not null)
-                    await _map.SetAllCheckpointsVisibilityAsync(allCheckpoints.AreAllCheckpointsVisible);
+                    applied = await _map.SetAllCheckpointsVisibilityAsync(allCheckpoints.AreAllCheckpointsVisible);
             });
-            return;
+            return applied;
         }
 
         if (e is GisSettingChangedEventArgs gis)
         {
-            InvokeAsync(async () =>
+            var applied = true;
+            await InvokeAsync(async () =>
             {
                 if (_map is null) return;
                 var settings = SettingsService.GetSettings();
-                var shade = settings.IsDarkModeEnabled ? "Dark" : "Light";
-                var on    = gis.IsStreetMapEnabled ? "On" : "Off";
-                var key   = $"MapTiler:StyleUrls:{shade}{on}";
-                var url   = Configuration.GetValue<string>(key)
-                            ?? Configuration.GetValue<string>("MapTiler:StyleUrl")
-                            ?? string.Empty;
-                if (string.IsNullOrEmpty(url)) return;
+                var darkModeEnabled = gis.IsDarkModeEnabled ?? settings.IsDarkModeEnabled;
+                var shade = darkModeEnabled ? "Dark" : "Light";
+                var on = gis.IsStreetMapEnabled ? "On" : "Off";
+                var key = $"MapTiler:StyleUrls:{shade}{on}";
+                var url = Configuration.GetValue<string>(key)
+                    ?? Configuration.GetValue<string>("MapTiler:StyleUrl")
+                    ?? string.Empty;
+                if (string.IsNullOrEmpty(url)) { applied = false; return; }
 
-                // Await style.load completion, then re-render routes from cache (no re-fetch).
                 var result = await _map.SetBasemapStyleAsync(url);
-                await RenderRoutesAsync();
-
-                // Re-apply focus (hover preview or persistent selection) after the basemap swap resets all layers.
+                if (result is null || !result.RequestedStyleLoaded) { applied = false; return; }
+                await RenderRoutesAsync(darkModeEnabled);
                 ApplyMapFocus();
-
-                // Restore checkpoint visibility to match the current setting.
-                await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible);
-                await _map.SetCrossingTrailVisibilityAsync(settings.IsCrossingTrailVisible);
-                await _map.SetAllCheckpointsVisibilityAsync(settings.AreAllCheckpointsVisible);
-                await _map.SetVehiclesVisibleAsync(settings.IsBusesVisible);
+                applied = await _map.SetCheckpointVisibilityAsync(settings.AreCheckpointsVisible)
+                    && await _map.SetCrossingTrailVisibilityAsync(settings.IsCrossingTrailVisible)
+                    && await _map.SetAllCheckpointsVisibilityAsync(settings.AreAllCheckpointsVisible)
+                    && await _map.SetVehiclesVisibleAsync(settings.IsBusesVisible);
             });
+            return applied;
         }
-    }
 
+        return true;
+    }
     void OnViewportChanged(Vector2 size)
     {
         bool isMobile = size.X < MinWidth;
@@ -376,14 +518,30 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        await TransitSynth.StopAudioCapabilityHealthAsync();
+        TransitSynth.AudioCapabilityHealthChanged -= OnAudioCapabilityHealthChanged;
         RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
-        EventNotificationService.EventReceived -= HandleSettingsEventReceived;
+        ApplicationViewModel.PropertyChanged -= OnApplicationViewModelPropertyChanged;
+        EventNotificationService.EventReceivedAsync -= HandleSettingsEventReceivedAsync;
         if (_batchHandler != null)
             NotificationService.NotificationReceived -= _batchHandler;
         _viewportSub?.Dispose();
         await OutsideClickJsInterop.RemoveOutsideClickListenerAsync(_accordionElementId);
         await PageVisibility.RemoveVisibilityChangeListenerAsync();
     }
+
+    void OnApplicationViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(IApplicationViewModel.LiveDeliveryState)
+            or nameof(IApplicationViewModel.LiveIssueCode)
+            or nameof(IApplicationViewModel.RouteLoadOutcome)
+            or nameof(IApplicationViewModel.IsConnected))
+        {
+            _ = InvokeAsync(StateHasChanged);
+        }
+    }
+
+    void ReloadCurrentPage() => NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: true);
 
     void OnRouteFilterPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -446,7 +604,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
     }
 
-    async Task RenderRoutesAsync()
+    async Task RenderRoutesAsync(bool? darkModeOverride = null)
     {
         Logger.LogDebug("TransitMap.RenderRoutesAsync: pushing {Count} cached routes to map", _routeShapeCache.Count);
 
@@ -468,7 +626,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             .ToArray();
 
         if (_map is not null)
-            await _map.AddAllRoutesAsync(payload, SettingsService.GetSettings().IsDarkModeEnabled);
+            await _map.AddAllRoutesAsync(payload, darkModeOverride ?? SettingsService.GetSettings().IsDarkModeEnabled);
 
         Logger.LogDebug("TransitMap.RenderRoutesAsync: route geometry push complete");
     }

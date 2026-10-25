@@ -4,6 +4,7 @@ using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ChefKnifeStudios.TransitJazz.Client.Shared.Components;
@@ -12,14 +13,23 @@ public partial class Map : ComponentBase
 {
     async Task CreateMapAsync()
     {
+        _readinessGeneration = _readiness.BeginInstance();
+        _capabilityOutcome.BeginInstance();
+        ScheduleReadinessTimer();
+
         try
         {
+            _dotNetReference = DotNetObjectReference.Create(this);
             await JsRuntime.InvokeVoidAsync("ChefMap.createMap",
-                ElementId, DotNetObjectReference.Create(this));
+                ElementId, _dotNetReference, _readinessGeneration);
         }
         catch (Exception ex)
         {
+            _readiness.Observe(_readinessGeneration, MapReadinessSignal.InitializationFailed);
+            StopReadinessTimer();
             Logger.LogError(ex, "[Map] CreateMap failed");
+            ReportReadinessOutcome();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -81,10 +91,10 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Logger.LogError(ex, "[Map] FocusRoutes failed"); }
     }
 
-    public async Task SetCheckpointVisibilityAsync(bool visible)
+    public async Task<bool> SetCheckpointVisibilityAsync(bool visible)
     {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.setCheckpointVisibility", ElementId, visible); }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCheckpointVisibility failed"); }
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setCheckpointVisibility", ElementId, visible); return true; }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCheckpointVisibility failed"); return false; }
     }
 
     // NOTE: the former PulseCheckpointAsync / StartCrossingTrailAsync C# wrappers were removed —
@@ -116,7 +126,7 @@ public partial class Map : ComponentBase
     // (all routes pass). This is what makes a filter change take effect immediately instead of
     // after the ~10s scheduling horizon drains — crossings queued before the change are silenced
     // the instant their timer fires if their route is no longer selected.
-    public async Task SetCrossingFilterAsync(IEnumerable<string>? routeJoinKeys)
+    public async Task<bool> SetCrossingFilterAsync(IEnumerable<string>? routeJoinKeys)
     {
         try
         {
@@ -129,42 +139,42 @@ public partial class Map : ComponentBase
             // received the FIRST key as a bare string, which new Set(str) exploded into characters.
             // Wrapping in `new object[] { ... }` forces it to be treated as ONE argument.
             object?[] jsArgs = [routeJoinKeys?.ToArray()];
-            await _crossingDispatcherModule.InvokeVoidAsync("setActiveFilter", jsArgs);
+            return await _crossingDispatcherModule.InvokeAsync<bool>("setActiveFilter", jsArgs);
         }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingFilter failed"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingFilter failed"); return false; }
     }
 
     // Push the current mute/unmute setting to the dispatcher so its already-scheduled timers
     // re-check it at fire time (same live-flag pattern as SetCrossingFilterAsync). Without this,
     // crossings queued during a muted window stayed silent after unmute until the ~10s scheduling
     // horizon drained — the "extended mute" bug. See _audioEnabled in crossing-dispatcher.js.
-    public async Task SetCrossingAudioEnabledAsync(bool enabled)
+    public async Task<bool> SetCrossingAudioEnabledAsync(bool enabled)
     {
         try
         {
             _crossingDispatcherModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>(
                 "import", "./_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/crossing-dispatcher.js");
-            await _crossingDispatcherModule.InvokeVoidAsync("setAudioEnabled", enabled);
+            return await _crossingDispatcherModule.InvokeAsync<bool>("setAudioEnabled", enabled);
         }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingAudioEnabled failed"); }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingAudioEnabled failed"); return false; }
     }
 
-    public async Task SetCrossingTrailVisibilityAsync(bool visible)
+    public async Task<bool> SetCrossingTrailVisibilityAsync(bool visible)
     {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.setCrossingTrailVisibility", ElementId, visible); }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingTrailVisibility failed"); }
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setCrossingTrailVisibility", ElementId, visible); return true; }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetCrossingTrailVisibility failed"); return false; }
     }
 
-    public async Task SetAllCheckpointsVisibilityAsync(bool visible)
+    public async Task<bool> SetAllCheckpointsVisibilityAsync(bool visible)
     {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.setAllCheckpointsVisibility", ElementId, visible); }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] SetAllCheckpointsVisibility failed"); }
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setAllCheckpointsVisibility", ElementId, visible); return true; }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetAllCheckpointsVisibility failed"); return false; }
     }
 
-    public async Task SetVehiclesVisibleAsync(bool visible)
+    public async Task<bool> SetVehiclesVisibleAsync(bool visible)
     {
-        try { await JsRuntime.InvokeVoidAsync("ChefMap.setVehiclesVisible", ElementId, visible); }
-        catch (Exception ex) { Logger.LogError(ex, "[Map] SetVehiclesVisible failed"); }
+        try { await JsRuntime.InvokeVoidAsync("ChefMap.setVehiclesVisible", ElementId, visible); return true; }
+        catch (Exception ex) { Logger.LogError(ex, "[Map] SetVehiclesVisible failed"); return false; }
     }
 
     public async Task ClearRouteFocusAsync()
@@ -173,16 +183,48 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Logger.LogError(ex, "[Map] ClearRouteFocus failed"); }
     }
 
-    public async Task<string?> SetBasemapStyleAsync(string styleUrl)
+    public async Task<MapStyleChangeResult?> SetBasemapStyleAsync(string styleUrl)
     {
+        var operationGeneration = _capabilityOutcome.BeginStyleChange(_readinessGeneration);
+        if (operationGeneration == 0) return null;
+
         try
         {
-            var result = await JsRuntime.InvokeAsync<System.Text.Json.JsonElement>("ChefMap.setMapStyle", ElementId, styleUrl);
-            return result.TryGetProperty("checkpointVisible", out var v) ? v.GetString() : null;
+            var result = await JsRuntime.InvokeAsync<MapStyleChangeResult>(
+                "ChefMap.setMapStyle", ElementId, styleUrl, _readinessGeneration, operationGeneration);
+            if (result.Generation != _readinessGeneration
+                || result.OperationGeneration != operationGeneration)
+                return null;
+
+            var transition = _capabilityOutcome.CompleteStyleChange(
+                _readinessGeneration,
+                operationGeneration,
+                result.RequestedStyleLoaded,
+                result.PreviousRequiredSourcesAndLayersRestored,
+                result.MapUsable,
+                result.TerminalFailure);
+            await ObserveMapTransitionAsync(transition);
+
+            if (result.TerminalFailure)
+            {
+                _readiness.MarkUnavailable(_readinessGeneration, MapFailureReason.RequiredLayerUnavailable);
+                StopReadinessTimer();
+                ReportReadinessOutcome();
+                await InvokeAsync(StateHasChanged);
+            }
+
+            return result;
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "[Map] SetBasemapStyle failed");
+            await ObserveMapTransitionAsync(_capabilityOutcome.CompleteStyleChange(
+                _readinessGeneration,
+                operationGeneration,
+                requestedStyleLoaded: false,
+                previousRequiredSourcesAndLayersRestored: false,
+                mapUsable: false,
+                terminalFailure: false));
             return null;
         }
     }
@@ -193,16 +235,27 @@ public partial class Map : ComponentBase
         catch (Exception ex) { Logger.LogError(ex, "[Map] FlushTriggerPoints failed"); }
     }
 
-    public async Task ProcessNearestPointBatchAsync(IReadOnlyList<object> records)
+    public async Task<bool> ProcessNearestPointBatchAsync(IReadOnlyList<object> records)
     {
+        if (records.Count == 0) return false;
+        var operationGeneration = Interlocked.Increment(ref _renderOperationGeneration);
         try
         {
             Logger.LogDebug("[Map] ProcessNearestPointBatch: {Count} records → JS", records.Count);
-            await JsRuntime.InvokeVoidAsync("ChefMapAnimator.processNearestPointBatch", ElementId, records);
+            var outcome = await JsRuntime.InvokeAsync<MapRenderOperationOutcome>(
+                "ChefMap.processNearestPointBatch", ElementId, records, _readinessGeneration, operationGeneration);
+            await ObserveRenderResultAsync(outcome);
+            return outcome.Rendered;
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "[Map] ProcessNearestPointBatch failed");
+            await ObserveRenderResultAsync(new(
+                Rendered: false,
+                TerminalFailure: false,
+                Generation: _readinessGeneration,
+                OperationGeneration: operationGeneration));
+            return false;
         }
     }
 }

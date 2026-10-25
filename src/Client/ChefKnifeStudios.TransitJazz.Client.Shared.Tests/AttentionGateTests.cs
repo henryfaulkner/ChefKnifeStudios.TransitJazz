@@ -98,6 +98,21 @@ public class AttentionGateTests
         Assert.Equal(1, spy.ResumeCallCount);
     }
 
+    [Fact]
+    public async Task FailedResumeDoesNotBecomeConfirmedAndNextReconcileRetries()
+    {
+        var spy = new SpyDeliveryControl();
+        var gate = new AttentionGate(spy);
+        await gate.OnVisibilityChangedAsync(hidden: true, audioEnabled: false);
+        spy.FailNextResume = true;
+
+        await gate.OnVisibilityChangedAsync(hidden: false, audioEnabled: false);
+        await gate.OnVisibilityChangedAsync(hidden: false, audioEnabled: false);
+
+        Assert.Equal(2, spy.ResumeCallCount);
+        Assert.True(spy.LastAppliedDelivery);
+    }
+
     // P2-U5: a burst of rapid hidden/visible flips while the first call is in flight — the test
     // holds the first PauseAsync open via a TaskCompletionSource it releases itself (event-based
     // sync per reliability.md, zero sleeps). Final state must equal the last-computed desired
@@ -135,8 +150,10 @@ public class AttentionGateTests
         public int PauseCallCount { get; private set; }
         public int ResumeCallCount { get; private set; }
         public bool DesiredDeliveryLastPushed { get; private set; }
-        public bool LastAppliedDelivery { get; private set; }
+        public bool IsJoined => LastAppliedDelivery;
+        public bool LastAppliedDelivery { get; private set; } = true;
         public bool HoldFirstCall { get; set; }
+        public bool FailNextResume { get; set; }
         public bool MaxConcurrentInFlightExceededOne { get; private set; }
 
         int _inFlight;
@@ -158,6 +175,11 @@ public class AttentionGateTests
         {
             await GuardedCallAsync();
             ResumeCallCount++;
+            if (FailNextResume)
+            {
+                FailNextResume = false;
+                return;
+            }
             LastAppliedDelivery = true;
         }
 

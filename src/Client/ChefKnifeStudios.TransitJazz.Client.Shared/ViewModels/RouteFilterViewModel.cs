@@ -41,6 +41,8 @@ public interface IRouteFilterViewModel : IViewModel, IDisposable
     public IReadOnlyCollection<string> HoveredRouteJoinKeys { get; }
     public IReadOnlyList<string> CategoryOrder { get; }
     public IReadOnlyDictionary<string, int> ActiveCountsByCategory { get; }
+    bool HasSelectedUnavailableRoute { get; }
+    int SelectedUnavailableRouteCount { get; }
 }
 
 public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
@@ -95,6 +97,12 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
     // gaps. Mirrors the absence-tracking pattern in TransitMap.EvictInactiveRouteAudioAsync.
     readonly Dictionary<string, int> _vehicleAbsenceBatches = new(StringComparer.Ordinal);
     const int VehicleEvictAfterBatches = 6;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedUnavailableRoute))]
+    int _selectedUnavailableRouteCount;
+
+    public bool HasSelectedUnavailableRoute => SelectedUnavailableRouteCount > 0;
 
     public RouteFilterViewModel(
         ILogger<RouteFilterViewModel> logger,
@@ -293,6 +301,14 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
             .Where(x => !string.IsNullOrEmpty(x.Properties.RouteShortName) || !string.IsNullOrEmpty(x.Properties.RouteId))
             .ToList();
 
+        // Preserve an explicit selection's loss as local feedback when a later usable
+        // catalog no longer contains that route. A failed/empty route load remains owned
+        // by the application-level R1/R2 status and must not become a second R3 report.
+        SelectedUnavailableRouteCount = _applicationViewModel.RouteLoadOutcome.IsUsable
+            ? previouslySelected.Count(key => shapes.All(shape =>
+                !string.Equals(shape.Properties.JoinKey, key, StringComparison.Ordinal)))
+            : 0;
+
         RouteItems = shapes
             .Select(x => new RouteItem
             {
@@ -336,6 +352,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 
     public void SelectRoute(RouteItem routeItem)
     {
+        SelectedUnavailableRouteCount = 0;
         // Assign through the generated RouteItems property — mutating items
         // in place bypasses the setter, so PropertyChanged never fires.
         RouteItems = RouteItems
@@ -354,6 +371,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 
     public void SelectAll(string category)
     {
+        SelectedUnavailableRouteCount = 0;
         RouteItems = RouteItems
             .Select(x => new RouteItem { RouteJoinKey = x.RouteJoinKey, Label = x.Label, Color = x.Color, IsSelected = x.Category == category ? true : x.IsSelected, Category = x.Category, RouteType = x.RouteType, })
             .ToList();
@@ -362,6 +380,7 @@ public partial class RouteFilterViewModel : BaseViewModel, IRouteFilterViewModel
 
     public void ClearSelection(string category)
     {
+        SelectedUnavailableRouteCount = 0;
         RouteItems = RouteItems
             .Select(x => new RouteItem { RouteJoinKey = x.RouteJoinKey, Label = x.Label, Color = x.Color, IsSelected = x.Category == category ? false : x.IsSelected, Category = x.Category, RouteType = x.RouteType, })
             .ToList();

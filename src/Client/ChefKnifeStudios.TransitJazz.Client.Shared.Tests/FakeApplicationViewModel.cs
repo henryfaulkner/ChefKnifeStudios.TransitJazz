@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using ChefKnifeStudios.TransitJazz.Client.Core.Services;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications;
 using ChefKnifeStudios.TransitJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
@@ -17,7 +18,7 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.Tests;
 /// </summary>
 public sealed class FakeApplicationViewModel : IApplicationViewModel
 {
-    readonly Dictionary<string, RouteShapeFeature> _shapes;
+    Dictionary<string, RouteShapeFeature> _shapes;
 
     public FakeApplicationViewModel(IEnumerable<RouteShapeFeature> shapes, bool routesLoaded = true)
     {
@@ -33,7 +34,14 @@ public sealed class FakeApplicationViewModel : IApplicationViewModel
     public IReadOnlyDictionary<string, RouteShapeFeature> RouteShapes =>
         RoutesLoaded ? _shapes : new Dictionary<string, RouteShapeFeature>(StringComparer.Ordinal);
     public bool IsConnected => true;
+    public LiveDeliveryState LiveDeliveryState => new(true, true, true, "testcity", 1, null);
+    public NotificationScope NotificationScope => new(1, "testcity");
+    public NotificationIssueCode? LiveIssueCode => null;
+    public NotificationIssueCode? LiveProcessingIssueCode => null;
     public bool RoutesLoaded { get; private set; }
+    public RouteLoadOutcome RouteLoadOutcome => RoutesLoaded
+        ? new(RouteLoadStatus.Usable, _shapes.Count)
+        : new(RouteLoadStatus.Pending, 0);
     public Task<bool> RoutesLoadedTask => Task.FromResult(RoutesLoaded);
 
     public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
@@ -51,6 +59,13 @@ public sealed class FakeApplicationViewModel : IApplicationViewModel
     /// </summary>
     public void RaiseRoutesLoaded()
     {
+        RoutesLoaded = true;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IApplicationViewModel.RoutesLoaded)));
+    }
+
+    public void ReplaceRouteShapes(IEnumerable<RouteShapeFeature> shapes)
+    {
+        _shapes = shapes.ToDictionary(s => s.Properties.JoinKey, StringComparer.Ordinal);
         RoutesLoaded = true;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IApplicationViewModel.RoutesLoaded)));
     }

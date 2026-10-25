@@ -1,0 +1,49 @@
+.notification-host {
+    position: fixed;
+    inset: 0;
+    z-index: 1300;
+    pointer-events: none;
+}
+
+.notification-host__close {
+    position: fixed;
+    top: max(1rem, calc(env(safe-area-inset-top) + 0.5rem));
+    right: max(calc((100vw - 28rem) / 2 + 1rem), calc(env(safe-area-inset-right) + 1rem));
+    z-index: 1302;
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    background: var(--mdc-theme-surface, #fff);
+    color: var(--mdc-theme-on-surface, #1a1c1e);
+    font: inherit;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.notification-host__close:focus-visible {
+    outline: 3px solid #005fcc;
+    outline-offset: 2px;
+}
+
+.notification-host__announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.mj-dark .notification-host__close {
+    background: #1a1c1e;
+    color: #e2e2e6;
+}

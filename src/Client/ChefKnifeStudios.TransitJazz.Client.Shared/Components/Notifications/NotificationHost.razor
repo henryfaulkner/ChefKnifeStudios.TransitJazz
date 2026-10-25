@@ -1,0 +1,267 @@
+@using System
+@using System.Threading
+@using System.Threading.Tasks
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using MatBlazor
+@using Microsoft.Extensions.Localization
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject NotificationCoordinator Coordinator
+@inject ToastService ToastPresenter
+@inject IPageVisibilityJsInterop PageVisibility
+@inject IStringLocalizer<RouteFilterResources> Localizer
+@inject TimeProvider TimeProvider
+@inject IJSRuntime JS
+
+<div class="notification-host"
+     @ref="_hostElement"
+     @onmouseenter="HandleMouseEnter"
+     @onmouseleave="HandleMouseLeave"
+     @onfocusin="HandleFocusIn"
+     @onfocusout="HandleFocusOut">
+    <MatToastContainer />
+    @if (_summary is not null && _presentationId is long presentationId)
+    {
+        <button class="notification-host__close"
+                type="button"
+                aria-label="@Localizer[_summary.CloseKey].Value"
+                @onclick="() => CloseAsync(presentationId)">
+            <span aria-hidden="true">×</span>
+        </button>
+    }
+    <div class="notification-host__announcement" role="status" aria-live="polite" aria-atomic="true">
+        <span @key="_announcementPresentationId">@_announcement</span>
+    </div>
+</div>
+
+@code {
+    NotificationReadingTime _readingTime = null!;
+    ElementReference _hostElement;
+    DotNetObjectReference<NotificationHost>? _dotNetReference;
+    IJSObjectReference? _module;
+    DispatcherPresenter? _dispatcherPresenter;
+    NotificationSummary? _summary;
+    long? _presentationId;
+    long _announcementPresentationId;
+    string _announcement = string.Empty;
+    int? _visibilityListenerId;
+    bool _hidden;
+    bool _hovered;
+    bool _focused;
+    bool _registered;
+    bool _disposing;
+
+    protected override void OnInitialized()
+    {
+        _readingTime = new NotificationReadingTime(TimeProvider);
+        _readingTime.Expired += HandleReadingExpired;
+        Coordinator.PresentationCommitted += HandlePresentationCommitted;
+        Coordinator.PresentationRemoved += HandlePresentationRemoved;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var modulePath = $"./_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/notification-host.js?g={Guid.NewGuid():N}";
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", modulePath);
+        await _module.InvokeVoidAsync("attachFocusReturn", _hostElement);
+        _dotNetReference = DotNetObjectReference.Create(this);
+        _visibilityListenerId = await _module.InvokeAsync<int>("addVisibilityChangeListener", _dotNetReference);
+
+        _hidden = await PageVisibility.GetHiddenAsync();
+        Coordinator.SetVisible(!_hidden);
+        _readingTime.SetPaused(_presentationId ?? 0, NotificationReadingPauseReason.Hidden, _hidden);
+        _dispatcherPresenter = new DispatcherPresenter(this, ToastPresenter);
+        _registered = true;
+        Coordinator.SetPresenter(_dispatcherPresenter);
+        await Coordinator.EvaluateAsync();
+    }
+
+    [JSInvokable]
+    public Task HandleHostVisibilityChanged(bool hidden) => InvokeAsync(() =>
+    {
+        if (_disposing || _hidden == hidden)
+        {
+            return;
+        }
+
+        _hidden = hidden;
+        Coordinator.SetVisible(!hidden);
+        if (_presentationId is long id)
+        {
+            _readingTime.SetPaused(id, NotificationReadingPauseReason.Hidden, hidden);
+        }
+
+        StateHasChanged();
+    });
+
+    void HandleMouseEnter(MouseEventArgs args)
+    {
+        _hovered = true;
+        SetPause(NotificationReadingPauseReason.Hover, true);
+    }
+
+    void HandleMouseLeave(MouseEventArgs args)
+    {
+        _hovered = false;
+        SetPause(NotificationReadingPauseReason.Hover, false);
+    }
+
+    void HandleFocusIn(FocusEventArgs args)
+    {
+        _focused = true;
+        SetPause(NotificationReadingPauseReason.Focus, true);
+    }
+
+    void HandleFocusOut(FocusEventArgs args)
+    {
+        _focused = false;
+        SetPause(NotificationReadingPauseReason.Focus, false);
+    }
+
+    void SetPause(NotificationReadingPauseReason reason, bool paused)
+    {
+        if (_presentationId is long id)
+        {
+            _readingTime.SetPaused(id, reason, paused);
+        }
+    }
+
+    void HandlePresentationCommitted(long presentationId, NotificationSummary summary)
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (_disposing)
+            {
+                return;
+            }
+
+            _presentationId = presentationId;
+            _summary = summary;
+            _announcementPresentationId = presentationId;
+            _announcement = ToastPresenter.FormatAnnouncement(summary);
+            _readingTime.Start(presentationId, summary.Severity);
+            _readingTime.SetPaused(presentationId, NotificationReadingPauseReason.Hidden, _hidden);
+            _readingTime.SetPaused(presentationId, NotificationReadingPauseReason.Hover, _hovered);
+            _readingTime.SetPaused(presentationId, NotificationReadingPauseReason.Focus, _focused);
+            StateHasChanged();
+        });
+    }
+
+    void HandlePresentationRemoved(long presentationId)
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (_presentationId != presentationId)
+            {
+                return;
+            }
+
+            _readingTime.Cancel(presentationId);
+            _presentationId = null;
+            _summary = null;
+            StateHasChanged();
+        });
+    }
+
+    void HandleReadingExpired(long presentationId)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (_disposing || _presentationId != presentationId)
+            {
+                return;
+            }
+
+            await Coordinator.TimeoutAsync();
+        });
+    }
+
+    async Task CloseAsync(long presentationId)
+    {
+        if (_presentationId != presentationId)
+        {
+            return;
+        }
+
+        _readingTime.Cancel(presentationId);
+        var focusWasInside = _module is not null && await _module.InvokeAsync<bool>("focusIsInside", _hostElement);
+        await Coordinator.DismissAsync();
+        if (focusWasInside && _module is not null)
+        {
+            await _module.InvokeVoidAsync("restorePreviousFocus", _hostElement);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposing)
+        {
+            return;
+        }
+
+        _disposing = true;
+        Coordinator.PresentationCommitted -= HandlePresentationCommitted;
+        Coordinator.PresentationRemoved -= HandlePresentationRemoved;
+        _readingTime.Expired -= HandleReadingExpired;
+        _readingTime.Dispose();
+
+        if (_registered)
+        {
+            Coordinator.SetPresenter(null);
+            if (_presentationId is long presentationId)
+            {
+                await ToastPresenter.RemoveAsync(presentationId, CancellationToken.None);
+            }
+        }
+
+        if (_module is not null && _visibilityListenerId is int listenerId)
+        {
+            await _module.InvokeVoidAsync("removeVisibilityChangeListener", listenerId);
+        }
+
+        if (_module is not null)
+        {
+            await _module.InvokeVoidAsync("detachFocusReturn", _hostElement);
+            await _module.DisposeAsync();
+        }
+
+        _dotNetReference?.Dispose();
+    }
+
+    sealed class DispatcherPresenter(NotificationHost host, INotificationPresenter inner) : INotificationPresenter
+    {
+        public async ValueTask<bool> PresentAsync(long presentationId, NotificationSummary summary, CancellationToken cancellationToken)
+        {
+            if (host._disposing)
+            {
+                return false;
+            }
+
+            var presented = false;
+            await host.InvokeAsync(async () =>
+            {
+                presented = await inner.PresentAsync(presentationId, summary, cancellationToken);
+            });
+            return presented;
+        }
+
+        public async ValueTask RemoveAsync(long presentationId, CancellationToken cancellationToken)
+        {
+            if (host._disposing)
+            {
+                await inner.RemoveAsync(presentationId, cancellationToken);
+                return;
+            }
+
+            await host.InvokeAsync(async () => await inner.RemoveAsync(presentationId, cancellationToken));
+        }
+    }
+}
