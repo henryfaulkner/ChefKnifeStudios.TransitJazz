@@ -62,6 +62,31 @@ public sealed class LiveInterruptionNotificationTests
     }
 
     [Fact]
+    public async Task LiveInterruptionUsesOfflineQualifierWhenBrowserIsOffline()
+    {
+        var clock = new NotificationTestTimeProvider();
+        await using var coordinator = new NotificationCoordinator(clock);
+        var presenter = new RecordingPresenter();
+        coordinator.SetPresenter(presenter);
+        var live = new MutableLiveService(Ready());
+        var application = CreateApplication(live, coordinator);
+        await application.InitializeAsync();
+
+        coordinator.SetBrowserOnline(false);
+        live.Publish(new LiveDeliveryState(false, true, false, "atlanta", 1, null));
+        clock.Advance(TimeSpan.FromSeconds(5));
+        await coordinator.EvaluateAsync();
+        clock.Advance(TimeSpan.FromSeconds(5));
+        await coordinator.EvaluateAsync();
+        clock.Advance(TimeSpan.FromSeconds(2));
+        await coordinator.EvaluateAsync();
+
+        var warning = Assert.Single(presenter.Added);
+        Assert.True(warning.IsOfflineQualified);
+        Assert.Equal("ToastOfflineQualifier", warning.OfflineQualifierKey);
+    }
+
+    [Fact]
     public async Task RecoveryInsideGraceStaysSilent()
     {
         var clock = new NotificationTestTimeProvider();

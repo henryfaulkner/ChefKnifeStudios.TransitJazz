@@ -266,6 +266,10 @@ public sealed class NotificationPolicy
         ? definition.Severity
         : throw new ArgumentOutOfRangeException(nameof(code));
 
+    public static string GetSeverityResourceKey(NotificationIssueCode code) => GetSeverity(code) == NotificationSeverity.Warning
+        ? RouteFilterResources.ToastSeverityWarning
+        : RouteFilterResources.ToastSeverityError;
+
     public static string GetImpactResourceKey(NotificationIssueCode code) => Definitions.TryGetValue(code, out var definition)
         ? definition.ImpactKey
         : throw new ArgumentOutOfRangeException(nameof(code));

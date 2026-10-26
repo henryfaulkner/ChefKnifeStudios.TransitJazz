@@ -11,7 +11,7 @@
         @if (ApplicationViewModel.LiveIssueCode is NotificationIssueCode liveIssueCode)
         {
             <div class="transit-map__persistent-status" role="note">
-                <strong>@Loc["ToastSeverityError"]</strong>
+                <strong>@Loc[NotificationPolicy.GetSeverityResourceKey(liveIssueCode)]</strong>
                 <p>@Loc[NotificationPolicy.GetImpactResourceKey(liveIssueCode)]</p>
                 <p>@Loc[NotificationPolicy.GetActionResourceKey(liveIssueCode)]</p>
                 <button type="button" @onclick="ReloadCurrentPage">@Loc["MapReload"]</button>

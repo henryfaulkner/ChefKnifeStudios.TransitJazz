@@ -230,7 +230,8 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
         _notificationCoordinator.Report(new NotificationIssue(
             issueCode,
             _notificationScope,
-            state.ConnectionGeneration));
+            state.ConnectionGeneration,
+            IsObservedNetworkFailure: issueCode == NotificationIssueCode.LiveInterrupted));
     }
 
     static NotificationIssueCode? MapInitialLiveFailure(LiveDeliveryFailureReason reason) => reason switch

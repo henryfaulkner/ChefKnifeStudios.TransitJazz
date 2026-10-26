@@ -48,6 +48,7 @@
     long _announcementPresentationId;
     string _announcement = string.Empty;
     int? _visibilityListenerId;
+    int? _onlineListenerId;
     bool _hidden;
     bool _hovered;
     bool _focused;
@@ -74,6 +75,8 @@
         await _module.InvokeVoidAsync("attachFocusReturn", _hostElement);
         _dotNetReference = DotNetObjectReference.Create(this);
         _visibilityListenerId = await _module.InvokeAsync<int>("addVisibilityChangeListener", _dotNetReference);
+        _onlineListenerId = await _module.InvokeAsync<int>("addOnlineChangeListener", _dotNetReference);
+        Coordinator.SetBrowserOnline(await _module.InvokeAsync<bool>("getOnline"));
 
         _hidden = await PageVisibility.GetHiddenAsync();
         Coordinator.SetVisible(!_hidden);
@@ -100,6 +103,17 @@
         }
 
         StateHasChanged();
+    });
+
+    [JSInvokable]
+    public Task HandleBrowserOnlineChanged(bool online) => InvokeAsync(() =>
+    {
+        if (_disposing)
+        {
+            return;
+        }
+
+        Coordinator.SetBrowserOnline(online);
     });
 
     void HandleMouseEnter(MouseEventArgs args)
@@ -225,6 +239,11 @@
         if (_module is not null && _visibilityListenerId is int listenerId)
         {
             await _module.InvokeVoidAsync("removeVisibilityChangeListener", listenerId);
+        }
+
+        if (_module is not null && _onlineListenerId is int onlineListenerId)
+        {
+            await _module.InvokeVoidAsync("removeOnlineChangeListener", onlineListenerId);
         }
 
         if (_module is not null)

@@ -72,7 +72,9 @@ public sealed class NotificationAggregationTests
     public async Task ConfirmedMapParentExplainsChildWithoutInventingSharedCause()
     {
         var clock = new NotificationTestTimeProvider();
-        await using var coordinator = new NotificationCoordinator(clock);
+        await using var coordinator = new NotificationCoordinator(
+            clock,
+            conditionalDeliveryMappingsEnabled: true);
         var presenter = new RecordingPresenter();
         coordinator.SetPresenter(presenter);
         var scope = new NotificationScope(1, "atlanta");

@@ -139,6 +139,13 @@ public sealed class NotificationPolicyTests
     }
 
     [Fact]
+    public void SeverityResourceKeyMatchesTheIssueSeverity()
+    {
+        Assert.Equal("ToastSeverityWarning", NotificationPolicy.GetSeverityResourceKey(NotificationIssueCode.LiveInterrupted));
+        Assert.Equal("ToastSeverityError", NotificationPolicy.GetSeverityResourceKey(NotificationIssueCode.MapUnavailable));
+    }
+
+    [Fact]
     public void ChangingOwnerGenerationsDoNotGrowIncidentStorage()
     {
         var (_, policy) = CreatePolicy();

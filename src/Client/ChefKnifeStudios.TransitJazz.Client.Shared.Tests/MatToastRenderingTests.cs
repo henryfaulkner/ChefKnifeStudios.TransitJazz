@@ -63,7 +63,7 @@ public sealed class MatToastRenderingTests
         public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures) => [];
     }
 
-    public sealed class NoOpJsRuntime : DispatchProxy
+    public class NoOpJsRuntime : DispatchProxy
     {
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
             targetMethod?.ReturnType == typeof(ValueTask)
