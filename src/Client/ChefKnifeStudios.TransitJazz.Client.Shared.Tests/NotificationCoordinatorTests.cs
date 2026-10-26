@@ -289,7 +289,8 @@ public sealed class NotificationCoordinatorTests
         return new Harness(clock, presenter, new NotificationCoordinator(
             clock,
             presenter,
-            conditionalAudioSettingsMappingsEnabled: true));
+            conditionalAudioSettingsMappingsEnabled: true,
+            conditionalDeliveryMappingsEnabled: true));
     }
 
     sealed record Harness(

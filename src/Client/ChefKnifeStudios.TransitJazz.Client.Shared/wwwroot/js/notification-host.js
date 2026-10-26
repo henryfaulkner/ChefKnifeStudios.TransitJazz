@@ -20,6 +20,34 @@ export function removeVisibilityChangeListener(id) {
     }
 }
 
+const onlineListeners = new Map();
+let nextOnlineListenerId = 0;
+
+export function getOnline() {
+    return navigator.onLine;
+}
+
+export function addOnlineChangeListener(dotNetReference) {
+    const id = ++nextOnlineListenerId;
+    const listener = () => {
+        void dotNetReference.invokeMethodAsync("HandleBrowserOnlineChanged", navigator.onLine).catch(() => { });
+    };
+
+    onlineListeners.set(id, listener);
+    window.addEventListener("online", listener);
+    window.addEventListener("offline", listener);
+    return id;
+}
+
+export function removeOnlineChangeListener(id) {
+    const listener = onlineListeners.get(id);
+    if (listener) {
+        window.removeEventListener("online", listener);
+        window.removeEventListener("offline", listener);
+        onlineListeners.delete(id);
+    }
+}
+
 const focusReturns = new WeakMap();
 
 export function attachFocusReturn(host) {
