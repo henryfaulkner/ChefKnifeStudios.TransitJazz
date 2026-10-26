@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 061-enrich-failure-notifications]
 
 env:
   REGISTRY: chefknife.azurecr.io
