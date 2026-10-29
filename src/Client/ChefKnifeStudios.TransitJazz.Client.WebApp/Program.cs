@@ -86,7 +86,7 @@ builder.Services.AddChartJs(options =>
 
 builder.Services.AddMatToaster(new MatToastConfiguration
 {
-    Position = MatToastPosition.TopCenter,
+    Position = MatToastPosition.BottomLeft,
     PreventDuplicates = true,
     MaxDisplayedToasts = 1,
     NewestOnTop = true,

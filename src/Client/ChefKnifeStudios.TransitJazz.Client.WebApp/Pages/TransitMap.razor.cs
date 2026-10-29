@@ -87,13 +87,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _routesLoaded;
     bool _routesRendered;
 
-    NotificationIssueCode? RouteIssueCode => ApplicationViewModel.RouteLoadOutcome.FailureKind switch
-    {
-        RouteLoadFailureKind.RequestFailed => NotificationIssueCode.RouteLoadFailed,
-        RouteLoadFailureKind.NoUsableCurrentCityData => NotificationIssueCode.RoutesUnavailable,
-        _ => null
-    };
-
     // routeJoinKey → consecutive batches with no live vehicle. A route's audio Sampler is
     // disposed once it's been absent this many batches in a row (~tolerates brief feed
     // gaps so we don't re-fetch+decode a route that flickers out for one cycle).
@@ -141,7 +134,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _attentionGate = new AttentionGate((IDeliveryControl)NotificationService);
 
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
-        ApplicationViewModel.PropertyChanged += OnApplicationViewModelPropertyChanged;
         EventNotificationService.EventReceivedAsync += HandleSettingsEventReceivedAsync;
         TransitSynth.AudioCapabilityHealthChanged += OnAudioCapabilityHealthChanged;
 
@@ -521,7 +513,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         await TransitSynth.StopAudioCapabilityHealthAsync();
         TransitSynth.AudioCapabilityHealthChanged -= OnAudioCapabilityHealthChanged;
         RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
-        ApplicationViewModel.PropertyChanged -= OnApplicationViewModelPropertyChanged;
         EventNotificationService.EventReceivedAsync -= HandleSettingsEventReceivedAsync;
         if (_batchHandler != null)
             NotificationService.NotificationReceived -= _batchHandler;
@@ -529,19 +520,6 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         await OutsideClickJsInterop.RemoveOutsideClickListenerAsync(_accordionElementId);
         await PageVisibility.RemoveVisibilityChangeListenerAsync();
     }
-
-    void OnApplicationViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(IApplicationViewModel.LiveDeliveryState)
-            or nameof(IApplicationViewModel.LiveIssueCode)
-            or nameof(IApplicationViewModel.RouteLoadOutcome)
-            or nameof(IApplicationViewModel.IsConnected))
-        {
-            _ = InvokeAsync(StateHasChanged);
-        }
-    }
-
-    void ReloadCurrentPage() => NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: true);
 
     void OnRouteFilterPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {

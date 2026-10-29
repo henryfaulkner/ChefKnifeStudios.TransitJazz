@@ -2,43 +2,10 @@
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Audio
-@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications
 @using Microsoft.Extensions.Localization
 @inject IStringLocalizer<RouteFilterResources> Loc
 
 <div class="transit-map-container">
-    <div class="transit-map__persistent-statuses">
-        @if (ApplicationViewModel.LiveIssueCode is NotificationIssueCode liveIssueCode)
-        {
-            <div class="transit-map__persistent-status" role="note">
-                <strong>@Loc[NotificationPolicy.GetSeverityResourceKey(liveIssueCode)]</strong>
-                <p>@Loc[NotificationPolicy.GetImpactResourceKey(liveIssueCode)]</p>
-                <p>@Loc[NotificationPolicy.GetActionResourceKey(liveIssueCode)]</p>
-                <button type="button" @onclick="ReloadCurrentPage">@Loc["MapReload"]</button>
-            </div>
-        }
-        @if (RouteIssueCode is NotificationIssueCode routeIssueCode)
-        {
-            <div class="transit-map__persistent-status" role="note">
-                <strong>@Loc["ToastSeverityError"]</strong>
-                <p>@Loc[NotificationPolicy.GetImpactResourceKey(routeIssueCode)]</p>
-                <p>@Loc[NotificationPolicy.GetActionResourceKey(routeIssueCode)]</p>
-                @if (routeIssueCode == NotificationIssueCode.RouteLoadFailed)
-                {
-                    <button type="button" @onclick="ReloadCurrentPage">@Loc["MapReload"]</button>
-                }
-            </div>
-        }
-        @if (_audioPlaybackUnavailable)
-        {
-            <div class="transit-map__persistent-status" role="note">
-                <strong>@Loc["ToastSeverityError"]</strong>
-                <p>@Loc[NotificationPolicy.GetImpactResourceKey(NotificationIssueCode.AudioUnavailable)]</p>
-                <p>@Loc[NotificationPolicy.GetActionResourceKey(NotificationIssueCode.AudioUnavailable)]</p>
-                <button type="button" @onclick="ReloadCurrentPage">@Loc["MapReload"]</button>
-            </div>
-        }
-    </div>
     @if (!_audioUnlockState.Current.IsUnlocked && _audioUnlockState.Current.Status != AudioUnlockStatus.Muted)
     {
         <AudioUnlockOverlay OnEnable="EnableAudioAsync"
