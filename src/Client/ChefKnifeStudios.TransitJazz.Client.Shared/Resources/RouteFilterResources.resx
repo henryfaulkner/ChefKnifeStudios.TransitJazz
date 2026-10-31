@@ -369,9 +369,6 @@
   <data name="StatsLoading" xml:space="preserve">
     <value>Loading retained history…</value>
   </data>
-  <data name="StatsRefreshing" xml:space="preserve">
-    <value>Refreshing this snapshot…</value>
-  </data>
   <data name="StatsStale" xml:space="preserve">
     <value>Showing the last successful snapshot</value>
   </data>
@@ -404,9 +401,6 @@
   </data>
   <data name="StatsScope" xml:space="preserve">
     <value>Scope</value>
-  </data>
-  <data name="StatsSelectionUpdating" xml:space="preserve">
-    <value>Updating route selection…</value>
   </data>
   <data name="StatsBubbleX" xml:space="preserve">
     <value>Average vehicle speed</value>

@@ -64,51 +64,43 @@
     }
 
     <main class="stats-overlay__content">
-        @if (_selectionPending)
+        @if (_presentation is { } dashboard)
         {
-            <p class="stats-overlay__status" role="status">@T.Get("StatsSelectionUpdating")</p>
-        }
-        @if (_isRefreshing)
-        {
-            <p class="stats-overlay__status" role="status">@T.Get("StatsRefreshing")</p>
-        }
-            @if (_presentation is { } dashboard)
+            @if (dashboard.IsPreviousDay)
             {
-                @if (dashboard.IsPreviousDay)
-                {
-                    <div class="stats-overlay__previous-day" role="status">
-                        <h1>@T.Get("StatsYesterdayDate", dashboard.Snapshot.PreviousDay!.City.LocalDate.ToString("MMMM d, yyyy", CultureInfo.GetCultureInfo("en")))</h1>
-                        <p>@T.Get("StatsShowingYesterday")</p>
-                    </div>
-                }
-                <section class="stats-overlay__dashboard">
-                    <SeriesChart Model="@dashboard.Timeline" Title="@T.Get("StatsCumulativeDistance")"
-                                 State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
-                    <section class="stats-overlay__totals" aria-label="@T.Get(dashboard.DailyDistanceHeadingKey)">
-                        <article>
-                            <h2>@T.Get(dashboard.DailyDistanceHeadingKey)</h2>
-                            <p><strong>@T.Format(ToDouble(dashboard.DailyDistance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
-                        </article>
-                        <article>
-                            <h2>@T.Get("StatsDistanceLast24")</h2>
-                            <p><strong>@T.Format(ToDouble(dashboard.Snapshot.Last24Distance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
-                        </article>
-                        <article class="stats-overlay__reported" aria-labelledby="stats-reported-today-heading">
-                            <h2 id="stats-reported-today-heading">@T.Get(dashboard.TodayReportedVehicles.HeadingKey)</h2>
-                            <p class="stats-overlay__reported-count"><strong>@dashboard.TodayReportedVehicles.CountText</strong></p>
-                        </article>
-                        <article class="stats-overlay__reported" aria-labelledby="stats-reported-last24-heading">
-                            <h2 id="stats-reported-last24-heading">@T.Get(dashboard.Last24ReportedVehicles.HeadingKey)</h2>
-                            <p class="stats-overlay__reported-count"><strong>@dashboard.Last24ReportedVehicles.CountText</strong></p>
-                        </article>
-                    </section>
-                    <BubbleChart Model="@dashboard.Bubbles" Title="@T.Get(dashboard.Snapshot.Selection.Scope == "city" ? "StatsRouteActivity" : "StatsCityActivity")"
-                                 XAxisTitle="@T.Get("StatsBubbleX")" YAxisTitle="@T.Get("StatsBubbleY")"
-                                 State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
-                    <PieChart Model="@dashboard.CategoryPie" Title="@T.Get("StatsCategoryShares")"
-                              State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
-                </section>
+                <div class="stats-overlay__previous-day" role="status">
+                    <h1>@T.Get("StatsYesterdayDate", dashboard.Snapshot.PreviousDay!.City.LocalDate.ToString("MMMM d, yyyy", CultureInfo.GetCultureInfo("en")))</h1>
+                    <p>@T.Get("StatsShowingYesterday")</p>
+                </div>
             }
+            <section class="stats-overlay__dashboard">
+                <SeriesChart Model="@dashboard.Timeline" Title="@T.Get("StatsCumulativeDistance")"
+                                State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
+                <section class="stats-overlay__totals" aria-label="@T.Get(dashboard.DailyDistanceHeadingKey)">
+                    <article>
+                        <h2>@T.Get(dashboard.DailyDistanceHeadingKey)</h2>
+                        <p><strong>@T.Format(ToDouble(dashboard.DailyDistance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
+                    </article>
+                    <article>
+                        <h2>@T.Get("StatsDistanceLast24")</h2>
+                        <p><strong>@T.Format(ToDouble(dashboard.Snapshot.Last24Distance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
+                    </article>
+                    <article class="stats-overlay__reported" aria-labelledby="stats-reported-today-heading">
+                        <h2 id="stats-reported-today-heading">@T.Get(dashboard.TodayReportedVehicles.HeadingKey)</h2>
+                        <p class="stats-overlay__reported-count"><strong>@dashboard.TodayReportedVehicles.CountText</strong></p>
+                    </article>
+                    <article class="stats-overlay__reported" aria-labelledby="stats-reported-last24-heading">
+                        <h2 id="stats-reported-last24-heading">@T.Get(dashboard.Last24ReportedVehicles.HeadingKey)</h2>
+                        <p class="stats-overlay__reported-count"><strong>@dashboard.Last24ReportedVehicles.CountText</strong></p>
+                    </article>
+                </section>
+                <BubbleChart Model="@dashboard.Bubbles" Title="@T.Get(dashboard.Snapshot.Selection.Scope == "city" ? "StatsRouteActivity" : "StatsCityActivity")"
+                                XAxisTitle="@T.Get("StatsBubbleX")" YAxisTitle="@T.Get("StatsBubbleY")"
+                                State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
+                <PieChart Model="@dashboard.CategoryPie" Title="@T.Get("StatsCategoryShares")"
+                            State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
+            </section>
+        }
         @if (_presentation is not null)
         {
             @if (_isStale && _errorCode is not null)
