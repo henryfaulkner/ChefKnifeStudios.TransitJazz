@@ -30,6 +30,58 @@ public class GtfsEndpointsService : IGtfsEndpointsService
         _navigationManager = navigationManager;
     }
 
+    public static bool IsUsableRouteShape(RouteShapeFeature? feature, string expectedCity)
+    {
+        var properties = feature?.Properties;
+        var geometry = feature?.Geometry;
+        if (properties is null || geometry is null
+            || string.IsNullOrWhiteSpace(properties.JoinKey)
+            || !string.Equals(feature!.Type, "Feature", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(geometry.Type, "LineString", StringComparison.OrdinalIgnoreCase)
+            || (properties.City is { Length: > 0 } city
+                && !string.Equals(city, expectedCity, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var coordinates = geometry.Coordinates;
+        if (coordinates is null || coordinates.Length < 2)
+        {
+            return false;
+        }
+
+        (double Longitude, double Latitude)? firstPoint = null;
+        var distinctPointFound = false;
+        foreach (var point in coordinates)
+        {
+            if (point is null || point.Length < 2)
+            {
+                return false;
+            }
+
+            var longitude = point[0];
+            var latitude = point[1];
+            if (!double.IsFinite(longitude) || !double.IsFinite(latitude)
+                || longitude is < -180 or > 180
+                || latitude is < -90 or > 90)
+            {
+                return false;
+            }
+
+            var coordinate = (longitude, latitude);
+            if (firstPoint is null)
+            {
+                firstPoint = coordinate;
+            }
+            else if (coordinate != firstPoint.Value)
+            {
+                distinctPointFound = true;
+            }
+        }
+
+        return distinctPointFound;
+    }
+
     public async Task<Result<RouteShapeFeature>> GetRouteShape(string routeId, CancellationToken cancellationToken = default)
     {
         try
@@ -39,10 +91,14 @@ public class GtfsEndpointsService : IGtfsEndpointsService
             var result = await _httpService.GetAsync<RouteShapeFeature>(url, cancellationToken);
             return result;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in GetRouteShape. TraceIdentifier: {TraceId}", Guid.NewGuid());
-            return Result.Error("An unexpected error occurred.");
+            return Result.Error("request_failed");
         }
     }
 
@@ -62,16 +118,20 @@ public class GtfsEndpointsService : IGtfsEndpointsService
             }
             else
             {
-                _logger.LogWarning("GtfsEndpointsService.GetAllRouteShapes: non-success result — Status={Status} Errors={Errors}",
-                    result.Status, string.Join("; ", result.Errors));
+                _logger.LogWarning("GtfsEndpointsService.GetAllRouteShapes: non-success result — Status={Status}",
+                    result.Status);
             }
 
             return result;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception in GetAllRouteShapes. TraceIdentifier: {TraceId}", Guid.NewGuid());
-            return Result.Error("An unexpected error occurred.");
+            return Result.Error("request_failed");
         }
     }
 }

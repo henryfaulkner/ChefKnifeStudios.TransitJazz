@@ -435,13 +435,13 @@ window.ChefMapAnimator = {
         var map = ChefMap.maps[containerDivId];
         if (!map) {
             this._log('warn', 'processNearestPointBatch: map not found for containerDivId=' + containerDivId);
-            return;
+            return false;
         }
 
         var source = map.getSource('vehicles');
         if (!source) {
             this._log('warn', 'processNearestPointBatch: vehicles source not found');
-            return;
+            return false;
         }
 
         this._source = source;
@@ -667,5 +667,6 @@ window.ChefMapAnimator = {
             unchangedMoving: unchangedMovingVehicles,
             fallbackLerp: fallbackLerpVehicles
         });
+        return true;
     }
 };

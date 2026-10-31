@@ -69,6 +69,13 @@
 
 let _tone = null;
 let _unlocked = false;
+let _unlockGeneration = 0;
+let _unlockPromise = null;
+let _lastGestureAttemptPromise = null;
+const _unlockGestureHandlers = new WeakMap();
+const _audioFabGestureHandlers = new WeakMap();
+let _lastAudioFabGestureAttemptPromise = null;
+let _lastAudioFabGestureWasRunning = false;
 
 // [TTFN] probe — window.TtfnProbe, mirrors the window.MemoryProbe idiom. Read-only
 // instrumentation for feature 045 (time-to-first-note); see specs/045-time-to-first-note/
@@ -127,6 +134,16 @@ let _enabledSlots = null; // populated lazily from PROD_INSTRUMENTS below, once 
 // convolution impulse-response buffer) per ROUTE, which is what drove RAM past even the
 // original ~1.2GB regression on a system with dozens of concurrent routes.
 const _instrumentCache = new Map();
+const _activeNoteEndsAt = [];
+let _masterMuted = false;
+let _audioCapabilityHealthReceiver = null;
+let _audioCapabilityGeneration = 0;
+let _audioCapabilityRequested = false;
+let _audioCapabilityUnlocked = false;
+const _audioCapabilityRequiredAt = new Map();
+const _audioCapabilityReadySlots = new Set();
+const _audioCapabilityFailedSlots = new Set();
+let _audioCapabilityHealthTimer = null;
 
 const SOUNDFONT_BASE = 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM';
 
@@ -191,6 +208,7 @@ const DURATION_SECONDS = {
 const REVERB_DECAY = 1.4;
 const REVERB_PRE_DELAY = 0.02;
 const REVERB_WET = 0.35;
+const VOICE_LOAD_TIMEOUT_MS = 10_000;
 
 // Per-voice lowpass cutoff — darkened from the original 3500Hz (barely filtered) toward the
 // lofi reference range (1000-2400Hz) for the "muffled"/soft character. Kept above the bowed
@@ -292,14 +310,15 @@ function getMasterBus(T) {
     if (_masterBus) return _masterBus;
     const compressor = new T.Compressor(MASTER_COMPRESSOR);
     const filter = new T.Filter(MASTER_FILTER_HZ, 'lowpass');
-    compressor.chain(filter, T.Destination);
+    const output = new T.Gain(_masterMuted ? 0 : 1);
+    compressor.chain(filter, output, T.Destination);
 
     const noise = new T.Noise('pink');
     const noiseFilter = new T.Filter(NOISE_FILTER_HZ, 'lowshelf');
     const noiseVolume = new T.Volume(NOISE_VOLUME_DB);
     noise.chain(noiseFilter, noiseVolume, compressor);
 
-    _masterBus = { input: compressor, noise };
+    _masterBus = { input: compressor, noise, output };
     _applyBackfillLayer();
     return _masterBus;
 }
@@ -386,31 +405,201 @@ function _applyBackfillLayer() {
     }
 }
 
+function _pruneActiveNotes() {
+    const now = performance.now();
+    for (let i = _activeNoteEndsAt.length - 1; i >= 0; i--) {
+        if (_activeNoteEndsAt[i] <= now) _activeNoteEndsAt.splice(i, 1);
+    }
+}
+
+function _releaseActiveVoices() {
+    let succeeded = true;
+    for (const entry of _instrumentCache.values()) {
+        if (!entry?.sampler) continue; // unresolved warm/load promises cannot be sounding
+        try { entry.sampler.releaseAll(); }
+        catch (_) { succeeded = false; }
+    }
+    if (_percussion) {
+        try { _percussion.kick.releaseAll(); }
+        catch (_) { succeeded = false; }
+        try { _percussion.rim.releaseAll(); }
+        catch (_) { succeeded = false; }
+    }
+    _pruneActiveNotes();
+    return succeeded;
+}
+
 // Mirrors the app's mute/unmute setting into the JS module. Called from C# on init (with the
 // persisted setting) and whenever AudioSettingChangedEventArgs fires. Updates _audioEnabled —
 // the live gate triggerNote re-reads at fire time — and starts/stops the continuous noise bed
 // immediately. If the master bus hasn't been built yet (no instrument loaded so far), the flag
 // is still recorded so both getMasterBus (noise bed) and triggerNote honor it once audio runs.
 //
-// RESUME ON UNMUTE (defensive): muting stops the pink-noise bed, the only continuously-running
-// source. With nothing scheduled, a browser can in principle drop the AudioContext back to
-// 'suspended' (or 'interrupted' on iOS) after a long idle. A suspended context has a frozen clock,
-// so a later triggerAttackRelease would never sound. Re-enabling resumes the context BEFORE
-// restarting the noise bed; resume() works because the context was already unlocked by the original
-// user gesture. NOTE: this is NOT what caused the "extended mute → no checkpoint tones" bug — that
-// was the crossing dispatcher gating on a per-batch-captured audioEnabled flag; it now re-checks a
-// live flag at fire time (see crossing-dispatcher.js setAudioEnabled). This resume is kept as a
-// belt-and-suspenders guard for genuine long-idle suspension.
+// Return true only when normal stop leaves no tracked source active. The caller attempts the
+// output-bus mute and verifies it if an already-triggered note or percussion hit can still ring.
 export function setAudioEnabled(enabled) {
+    const previous = _audioEnabled;
+    const percussionWasRunning = !enabled && _percussion?.loop.state === 'started';
     _audioEnabled = !!enabled;
-    if (!_masterBus) return;
-    if (_audioEnabled && _tone) {
-        const ctx = _tone.getContext().rawContext;
-        if (ctx && ctx.state !== 'running' && typeof ctx.resume === 'function') {
-            ctx.resume().catch(() => { });
-        }
+    try {
+        _applyBackfillLayer();
+        if (_audioEnabled) return true;
+
+        const released = _releaseActiveVoices();
+        const noiseStopped = _masterBus?.noise.state !== 'started';
+        const percussionStopped = _percussion?.loop.state !== 'started';
+        return released
+            && !percussionWasRunning
+            && noiseStopped
+            && percussionStopped
+            && _activeNoteEndsAt.length === 0;
+    } catch (error) {
+        _audioEnabled = previous;
+        console.warn('[TransitSynth] audio setting effect failed', error);
+        return false;
     }
-    _applyBackfillLayer();
+}
+
+export function setMasterMuted(muted) {
+    const next = !!muted;
+    try {
+        if (_masterBus) {
+            _masterBus.output.gain.value = next ? 0 : 1;
+            if (_masterBus.output.gain.value !== (next ? 0 : 1)) return false;
+        }
+        _masterMuted = next;
+        return true;
+    } catch (error) {
+        console.warn('[TransitSynth] master mute effect failed', error);
+        return false;
+    }
+}
+
+// The .NET owner receives only fixed palette masks, never note/sample/URL details.
+export function setAudioCapabilityHealthReceiver(receiver) {
+    _audioCapabilityHealthReceiver = receiver || null;
+}
+
+export function beginAudioCapabilityHealth(generation, audioRequested, audioUnlocked) {
+    _clearAudioCapabilityHealthTimer();
+    _audioCapabilityGeneration = Number.isSafeInteger(generation) ? generation : _audioCapabilityGeneration + 1;
+    _audioCapabilityRequested = !!audioRequested;
+    _audioCapabilityUnlocked = !!audioUnlocked && isUnlocked();
+    _audioCapabilityRequiredAt.clear();
+    _audioCapabilityReadySlots.clear();
+    _audioCapabilityFailedSlots.clear();
+}
+
+export function stopAudioCapabilityHealth() {
+    _audioCapabilityRequested = false;
+    _audioCapabilityUnlocked = false;
+    _audioCapabilityRequiredAt.clear();
+    _audioCapabilityReadySlots.clear();
+    _audioCapabilityFailedSlots.clear();
+    _clearAudioCapabilityHealthTimer();
+}
+
+function _audioCapabilityMasks() {
+    let requiredSlotMask = 0;
+    let readySlotMask = 0;
+    let failedSlotMask = 0;
+    for (const [slotIndex] of _audioCapabilityRequiredAt) requiredSlotMask |= 1 << slotIndex;
+    for (const slotIndex of _audioCapabilityReadySlots) readySlotMask |= 1 << slotIndex;
+    for (const slotIndex of _audioCapabilityFailedSlots) failedSlotMask |= 1 << slotIndex;
+    return { requiredSlotMask, readySlotMask, failedSlotMask };
+}
+
+function _reportAudioCapabilityHealth(terminalFailure = false) {
+    const receiver = _audioCapabilityHealthReceiver;
+    if (!receiver || !_audioCapabilityRequested || !_audioCapabilityUnlocked) return;
+    const masks = _audioCapabilityMasks();
+    if (masks.requiredSlotMask === 0) return;
+    receiver.invokeMethodAsync(
+        'OnAudioCapabilityHealthChanged',
+        _audioCapabilityGeneration,
+        masks.requiredSlotMask,
+        masks.readySlotMask,
+        masks.failedSlotMask,
+        !!terminalFailure,
+        isUnlocked()
+    ).catch(error => console.warn('[TransitSynth] palette health report failed', error));
+}
+
+function _clearAudioCapabilityHealthTimer() {
+    if (_audioCapabilityHealthTimer !== null) {
+        clearTimeout(_audioCapabilityHealthTimer);
+        _audioCapabilityHealthTimer = null;
+    }
+}
+
+function _scheduleAudioCapabilityEvaluation() {
+    _clearAudioCapabilityHealthTimer();
+    if (!_audioCapabilityHealthReceiver || !_audioCapabilityRequested || !_audioCapabilityUnlocked) return;
+
+    const unresolvedSince = [..._audioCapabilityRequiredAt.entries()]
+        .filter(([slotIndex]) => !_audioCapabilityReadySlots.has(slotIndex) && !_audioCapabilityFailedSlots.has(slotIndex))
+        .map(([, since]) => since);
+    if (unresolvedSince.length === 0) return;
+
+    const nextAt = Math.min(...unresolvedSince) + 10_000;
+    const delay = Math.max(0, nextAt - performance.now());
+    const generation = _audioCapabilityGeneration;
+    _audioCapabilityHealthTimer = setTimeout(() => {
+        _audioCapabilityHealthTimer = null;
+        const receiver = _audioCapabilityHealthReceiver;
+        if (!receiver || generation !== _audioCapabilityGeneration) return;
+        receiver.invokeMethodAsync('EvaluateAudioCapabilityHealth', generation, isUnlocked())
+            .catch(error => console.warn('[TransitSynth] palette health evaluation failed', error))
+            .finally(_scheduleAudioCapabilityEvaluation);
+    }, delay);
+}
+
+function _requireAudioCapabilitySlot(slotIndex) {
+    if (!_audioCapabilityRequested || !_audioCapabilityUnlocked) return;
+
+    if (!_audioCapabilityRequiredAt.has(slotIndex)) {
+        _audioCapabilityRequiredAt.set(slotIndex, performance.now());
+        const cached = _instrumentCache.get(slotIndex);
+        if (cached && !(cached instanceof Promise))
+            _audioCapabilityReadySlots.add(slotIndex);
+        else
+            _audioCapabilityFailedSlots.delete(slotIndex);
+        _reportAudioCapabilityHealth();
+    }
+    _scheduleAudioCapabilityEvaluation();
+}
+
+function _markAudioCapabilitySlotReady(slotIndex) {
+    if (!_audioCapabilityRequiredAt.has(slotIndex)) return;
+    _audioCapabilityReadySlots.add(slotIndex);
+    _audioCapabilityFailedSlots.delete(slotIndex);
+    _reportAudioCapabilityHealth();
+    _scheduleAudioCapabilityEvaluation();
+}
+
+function _markAudioCapabilitySlotFailed(slotIndex) {
+    if (!_audioCapabilityRequiredAt.has(slotIndex)) return;
+    _audioCapabilityFailedSlots.add(slotIndex);
+    _audioCapabilityReadySlots.delete(slotIndex);
+    _reportAudioCapabilityHealth(true);
+    _scheduleAudioCapabilityEvaluation();
+}
+
+export function verifyAudioSilenced() {
+    try {
+        if (_masterBus?.output?.gain?.value === 0) return 'stopped';
+        const context = _tone?.getContext().rawContext;
+        _pruneActiveNotes();
+        const noiseRunning = _masterBus?.noise?.state === 'started';
+        const percussionRunning = _percussion?.loop.state === 'started';
+        const hasActiveSources = noiseRunning || percussionRunning || _activeNoteEndsAt.length > 0;
+        if (!hasActiveSources) return 'stopped';
+        if (context?.state === 'running') return 'still-playing';
+        return 'unknown';
+    } catch (error) {
+        console.warn('[TransitSynth] audio stop verification failed', error);
+        return 'unknown';
+    }
 }
 
 // Selects which continuous background "backfill" texture plays under the note triggers
@@ -418,15 +607,24 @@ export function setAudioEnabled(enabled) {
 // call before the master bus exists — the mode is recorded and honored once getMasterBus
 // builds it (contracts/synth-engine.md INV-4).
 export function setBackfillTexture(mode) {
+    const previous = _backfillMode;
     _backfillMode = (mode === 'percussion') ? 'percussion' : 'noise';
-    if (!_masterBus) return;
-    if (_tone) {
-        const ctx = _tone.getContext().rawContext;
-        if (ctx && ctx.state !== 'running' && typeof ctx.resume === 'function') {
-            ctx.resume().catch(() => { });
+    if (!_masterBus) return true;
+    try {
+        if (_tone) {
+            const ctx = _tone.getContext().rawContext;
+            if (ctx && ctx.state !== 'running' && typeof ctx.resume === 'function') {
+                ctx.resume().catch(() => { });
+            }
         }
+        _applyBackfillLayer();
+        return true;
+    } catch (error) {
+        _backfillMode = previous;
+        try { _applyBackfillLayer(); } catch (_) { /* retain the prior mode; caller shows local failure */ }
+        console.warn('[TransitSynth] backfill texture change failed', error);
+        return false;
     }
-    _applyBackfillLayer();
 }
 
 // Kicks off instrumentForSlot for exactly the PROD_INSTRUMENTS slots (never the full
@@ -444,7 +642,9 @@ export function setBackfillTexture(mode) {
 export function warmProdSamplers() {
     const prodSlots = _slotIndicesForNames(PROD_INSTRUMENTS);
     for (const slotIndex of prodSlots) {
-        instrumentForSlot(slotIndex);
+        // Optional prewarming is best-effort. A required crossing retries through its own
+        // awaited path and reports only that current palette slot's coarse outcome.
+        instrumentForSlot(slotIndex).catch(() => { });
     }
 }
 
@@ -480,33 +680,64 @@ function instrumentForSlot(slotIndex) {
 
     const slot = PALETTE[slotIndex];
 
-    const loading = getTone().then(T => new Promise((resolve, reject) => {
+    let loading;
+    loading = getTone().then(T => new Promise((resolve, reject) => {
         const bus = getMasterBus(T);
         const filter = new T.Filter(FILTER_CUTOFF_HZ, 'lowpass');
         const widener = new T.StereoWidener(STEREO_WIDTH);
         const reverb = new T.Reverb({ decay: REVERB_DECAY, preDelay: REVERB_PRE_DELAY, wet: REVERB_WET });
         const volume = new T.Volume(slot.volumeDb ?? 0);
-        const sampler = new T.Sampler(
-            buildSampleUrls(slot.instrument, slot.anchors),
-            {
-                attack: slot.attack ?? 0,
-                release: slot.release ?? 1.2,
-                onload: () => {
-                    reverb.generate().then(() => {
-                        sampler.chain(filter, widener, volume, reverb, bus.input);
-                        const entry = { sampler, scale: slot.scale, durations: slot.durations };
-                        _instrumentCache.set(slotIndex, entry); // replace the pending Promise with the resolved entry
-                        resolve(entry);
-                    });
-                },
-                onerror: (err) => {
-                    console.error('[TransitSynth] sampler load failed for slot=' + slotIndex + ' instrument=' + slot.instrument, err);
-                    _instrumentCache.delete(slotIndex); // allow a later retry
-                    reject(err);
-                },
+        let settled = false;
+        let timeoutId = null;
+        let sampler = null;
+        const cleanup = () => {
+            for (const node of [sampler, filter, widener, volume, reverb]) {
+                try { node?.dispose(); } catch (_) { /* ignore */ }
             }
-        );
-    }));
+        };
+        const fail = error => {
+            if (settled) return;
+            settled = true;
+            if (timeoutId !== null) clearTimeout(timeoutId);
+            cleanup();
+            reject(error);
+        };
+        try {
+            sampler = new T.Sampler(
+                buildSampleUrls(slot.instrument, slot.anchors),
+                {
+                    attack: slot.attack ?? 0,
+                    release: slot.release ?? 1.2,
+                    onload: () => {
+                        if (settled) return;
+                        Promise.resolve().then(() => reverb.generate()).then(() => {
+                            if (settled) return;
+                            settled = true;
+                            if (timeoutId !== null) clearTimeout(timeoutId);
+                            sampler.chain(filter, widener, volume, reverb, bus.input);
+                            const entry = { sampler, scale: slot.scale, durations: slot.durations };
+                            _instrumentCache.set(slotIndex, entry); // replace the pending Promise with the resolved entry
+                            _markAudioCapabilitySlotReady(slotIndex);
+                            resolve(entry);
+                        }, fail);
+                    },
+                    onerror: (err) => {
+                        if (settled) return;
+                        console.error('[TransitSynth] sampler load failed for slot=' + slotIndex + ' instrument=' + slot.instrument, err);
+                        fail(err);
+                    },
+                }
+            );
+            timeoutId = setTimeout(() => fail(new Error('audio voice load timed out')), VOICE_LOAD_TIMEOUT_MS);
+        } catch (error) {
+            fail(error);
+        }
+    })).catch(error => {
+        if (_instrumentCache.get(slotIndex) === loading)
+            _instrumentCache.delete(slotIndex); // failed loads are retryable and cannot stay pending
+        _markAudioCapabilitySlotFailed(slotIndex);
+        throw error;
+    });
 
     _instrumentCache.set(slotIndex, loading);
     return loading;
@@ -541,37 +772,106 @@ export async function preload(routeIds) {
 // permanent-silence bug this fixes — see discovery §2.5).
 export async function attachUnlockGesture(elementId) {
     const el = document.getElementById(elementId);
-    if (!el) return;
+    if (!el || _unlockGestureHandlers.has(el)) return;
     function handler() {
         el.removeEventListener('click', handler);
-        let toneModule;
-        getTone()
-            .then(T => { toneModule = T; return T.start(); })
-            .then(() => {
-                _unlocked = true;
-                _ttfnMarkUnlock();
-                _warmAtUnlock(toneModule);
-                console.log('[TransitSynth] unlocked via gesture');
-            });
+        _unlockGestureHandlers.delete(el);
+        _lastGestureAttemptPromise = startUnlockAttempt();
     }
+    _unlockGestureHandlers.set(el, handler);
     el.addEventListener('click', handler);
     // Warm the Tone.js import itself during overlay display so the handler's getTone()
     // call above usually resolves instantly; harmless if the click races ahead of this.
-    getTone();
+    getTone().catch(() => { /* the gesture attempt reports the bounded failure */ });
 }
 
-export async function unlock() {
-    if (_unlocked) return;
-    const T = await getTone();
-    await T.start();
-    _unlocked = true;
-    _ttfnMarkUnlock();
-    _warmAtUnlock(T);
-    console.log('[TransitSynth] unlocked');
+// The audio FAB doubles as a resume action after a previously-running context is
+// suspended. Capture context state synchronously in the native event before the
+// Blazor callback crosses the JS interop boundary.
+export async function attachAudioFabGesture(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el || _audioFabGestureHandlers.has(el)) return;
+    function handler() {
+        el.removeEventListener('click', handler);
+        _audioFabGestureHandlers.delete(el);
+        const rawContext = _tone?.getContext().rawContext;
+        _lastAudioFabGestureWasRunning = !!rawContext && rawContext.state === 'running';
+        _lastAudioFabGestureAttemptPromise = startUnlockAttempt();
+        _lastGestureAttemptPromise = _lastAudioFabGestureAttemptPromise;
+    }
+    _audioFabGestureHandlers.set(el, handler);
+    el.addEventListener('click', handler);
+    getTone().catch(() => { /* a native click reports the bounded failure */ });
+}
+
+export async function consumeAudioFabGesture() {
+    const attempt = _lastAudioFabGestureAttemptPromise;
+    if (!attempt) return null;
+    const wasRunning = _lastAudioFabGestureWasRunning;
+    _lastAudioFabGestureAttemptPromise = null;
+    _lastAudioFabGestureWasRunning = false;
+    if (_lastGestureAttemptPromise === attempt) _lastGestureAttemptPromise = null;
+    return { wasRunning, status: await attempt };
+}
+
+function startUnlockAttempt() {
+    if (_unlockPromise) return _unlockPromise;
+    if (_unlocked && _tone?.getContext().state === 'running') return Promise.resolve('running');
+
+    const generation = _unlockGeneration;
+    const attempt = (async () => {
+        try {
+            const T = await getTone();
+            await T.start();
+            if (generation !== _unlockGeneration) return 'failed';
+            if (T.getContext().state !== 'running') {
+                _unlocked = false;
+                return 'suspended';
+            }
+
+            _warmAtUnlock(T);
+            if (generation !== _unlockGeneration) return 'failed';
+            _unlocked = true;
+            _ttfnMarkUnlock();
+            console.log('[TransitSynth] unlocked');
+            return 'running';
+        } catch (error) {
+            if (generation === _unlockGeneration) _unlocked = false;
+            console.warn('[TransitSynth] audio unlock attempt failed', error);
+            return 'failed';
+        }
+    })();
+
+    let tracked;
+    tracked = attempt.finally(() => {
+        if (_unlockPromise === tracked) _unlockPromise = null;
+    });
+    _unlockPromise = tracked;
+    return tracked;
+}
+
+export function unlock() {
+    if (_lastGestureAttemptPromise) {
+        const attempt = _lastGestureAttemptPromise;
+        _lastGestureAttemptPromise = null;
+        return attempt;
+    }
+    return startUnlockAttempt();
 }
 
 export function isUnlocked() {
-    return _unlocked;
+    return _unlocked && _tone?.getContext().state === 'running';
+}
+
+// Required browser playback capability after the visitor explicitly requests audio.
+export function isPlaybackSupported() {
+    if (!isUnlocked() || typeof _tone.now !== 'function') return false;
+    const context = _tone.getContext();
+    const rawContext = context.rawContext;
+    return !!rawContext
+        && rawContext.state === 'running'
+        && !!rawContext.destination
+        && typeof rawContext.resume === 'function';
 }
 
 // triggerIndex and totalTriggers come from checkpoint-tracker; both default to
@@ -598,14 +898,26 @@ export async function triggerNote(routeId, vehicleId, triggerIndex = 0, totalTri
         try { await ctx.resume(); } catch (_) { }
     }
     try {
-        const { sampler, scale, durations } = await instrumentForSlot(_slotIndexForRoute(routeId));
+        const slotIndex = _slotIndexForRoute(routeId);
+        _requireAudioCapabilitySlot(slotIndex);
+        const { sampler, scale, durations } = await instrumentForSlot(slotIndex);
+        // The sample/reverb load is asynchronous. A mute may have landed while it was loading;
+        // honor the current gate again immediately before scheduling the actual note.
+        if (!_audioEnabled || !_unlocked) return;
         const note = noteForPosition(scale, triggerIndex, totalTriggers);
         const duration = durations[djb2(String(vehicleId)) % durations.length];
         // Humanize velocity + start time only — note/duration stay hash-deterministic so
         // durationSecondsFor (trail length) always agrees with what's actually played.
         const velocity = HUMANIZE_VELOCITY_MIN + Math.random() * (HUMANIZE_VELOCITY_MAX - HUMANIZE_VELOCITY_MIN);
-        const startTime = _tone.now() + (Math.random() * 2 - 1) * HUMANIZE_TIME_JITTER_SEC;
+        const now = _tone.now();
+        const startTime = now + (Math.random() * 2 - 1) * HUMANIZE_TIME_JITTER_SEC;
         sampler.triggerAttackRelease(note, duration, startTime, velocity);
+        const durationSec = DURATION_SECONDS[duration] ?? 0.25;
+        const releaseSec = PALETTE[slotIndex].release;
+        _activeNoteEndsAt.push(performance.now()
+            + Math.max(0, (startTime - now) * 1000)
+            + (durationSec + releaseSec) * 1000
+            + 50);
         // [TTFN] probe: fires once, on the first audible note of the session.
         if (_ttfn.firstAudibleAt === null && _ttfn.unlockAt !== null) {
             _ttfn.firstAudibleAt = performance.now();
@@ -674,6 +986,13 @@ export function disposeInactiveRoutes(activeRouteIds) {
 }
 
 export async function dispose() {
+    stopAudioCapabilityHealth();
+    _audioCapabilityHealthReceiver = null;
+    _unlockGeneration++;
+    _unlockPromise = null;
+    _lastGestureAttemptPromise = null;
+    _lastAudioFabGestureAttemptPromise = null;
+    _lastAudioFabGestureWasRunning = false;
     for (const entry of _instrumentCache.values()) {
         if (entry && entry.sampler) {
             try { entry.sampler.dispose(); } catch (_) { /* ignore */ }
@@ -690,8 +1009,10 @@ export async function dispose() {
         _percussion = null;
     }
     _masterBus = null;
+    _masterMuted = false;
+    _activeNoteEndsAt.length = 0;
     _unlocked = false;
     _tone = null;
 }
 
-window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes, getInstrumentNames, setEnabledInstruments, setAudioEnabled, setBackfillTexture };
+window.TransitSynth = { unlock, isUnlocked, preload, triggerNote, dispose, durationSecondsFor, disposeInactiveRoutes, getInstrumentNames, setEnabledInstruments, setAudioEnabled, setMasterMuted, verifyAudioSilenced, setBackfillTexture, setAudioCapabilityHealthReceiver, beginAudioCapabilityHealth, stopAudioCapabilityHealth };

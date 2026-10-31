@@ -1,34 +1,139 @@
 @using ChefKnifeStudios.TransitJazz.Client.Core.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Models
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Audio
+@using Microsoft.Extensions.Localization
 @implements IDisposable
 @inject IEventNotificationService EventNotificationService
 @inject ISettingsService SettingsService
+@inject SettingsChangeController SettingsChangeController
+@inject ITransitSynthJsInterop TransitSynth
+@inject IStringLocalizer<RouteFilterResources> Loc
 
-<div class="audio-fab-container">
+<div id="@_audioEnableGestureId" class="audio-fab-container">
     <MatFAB Icon="@GetIcon()"
             Mini="true"
             @onclick="HandleToggleAudio" />
 </div>
+@if (_resumeFailed)
+{
+    <p class="audio-fab-resume-status" role="status" aria-live="polite">@Loc["AudioResumeInlineFailure"]</p>
+}
+else if (_audioStopOutcome?.Status == AudioStopStatus.StillPlaying)
+{
+    <p class="audio-fab-resume-status" role="alert" aria-live="assertive">
+        @Loc["ToastAudioStopFailure"] @Loc["ToastActionCloseTab"]
+    </p>
+}
+else if (_lastChange is { } change && change.Status is not (SettingsChangeStatus.Applied or SettingsChangeStatus.Superseded))
+{
+    <p class="audio-fab-resume-status" role="status" aria-live="polite">@GetChangeStatusText(change)</p>
+}
 
 @code {
     Settings _settings = new();
+    bool _resumeFailed;
+    SettingsChangeOutcome? _lastChange;
+    AudioStopOutcome? _audioStopOutcome;
+    readonly string _audioEnableGestureId = $"audio-fab-enable-{Guid.NewGuid():N}";
 
     protected override void OnInitialized()
     {
         _settings = SettingsService.GetSettings();
+        EventNotificationService.EventReceived += HandleEventReceived;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await TransitSynth.AttachAudioFabGestureAsync(_audioEnableGestureId);
     }
 
     string GetIcon() => _settings.IsAudioEnabled ? "volume_up" : "volume_off";
 
-    void HandleToggleAudio()
+    async Task HandleToggleAudio()
     {
+        if (_settings.IsAudioEnabled)
+        {
+            var gesture = await TransitSynth.ConsumeAudioFabGestureAsync();
+            if (gesture is { WasRunning: false })
+            {
+                _resumeFailed = gesture.Status != "running";
+                _lastChange = null;
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+        }
+
+        _resumeFailed = false;
         var newValue = !_settings.IsAudioEnabled;
-        SettingsService.SetSettingValue(nameof(Settings.IsAudioEnabled), newValue);
+        _lastChange = await SettingsChangeController.ChangeAsync(
+            nameof(Settings.IsAudioEnabled),
+            newValue,
+            (requested, cancellationToken) => ApplyAudioSettingAsync(requested),
+            (previous, cancellationToken) => ApplyAudioSettingAsync(previous));
+        var applied = _lastChange.Status is SettingsChangeStatus.Applied or SettingsChangeStatus.AppliedSessionOnly;
+        var persisted = _lastChange.IsPersisted;
         _settings = SettingsService.GetSettings();
-        EventNotificationService.PostEvent(this, new AudioSettingChangedEventArgs { IsAudioEnabled = _settings.IsAudioEnabled });
+        if (applied || _lastChange.Status == SettingsChangeStatus.Superseded)
+            _lastChange = null;
+        if (applied)
+            EventNotificationService.PostEvent(this, new SettingsCommittedEventArgs
+            {
+                PropertyName = nameof(Settings.IsAudioEnabled),
+                IsPersisted = persisted,
+                ChangeOutcome = _lastChange
+            });
+        await InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose() { }
+    async Task<SettingsEffectResult> ApplyAudioSettingAsync(bool enabled)
+    {
+        var succeeded = await EventNotificationService.PostEventAsync(this,
+            new AudioSettingChangedEventArgs { IsAudioEnabled = enabled });
+        return succeeded ? SettingsEffectResult.Success : SettingsEffectResult.Failure;
+    }
+
+    string GetChangeStatusText(SettingsChangeOutcome outcome) => outcome.Status switch
+    {
+        SettingsChangeStatus.AppliedSessionOnly => Loc["ToastSettingsNotSaved"],
+        SettingsChangeStatus.MixedState => Loc["SettingsMixedEffectFailure"],
+        _ => Loc["ToastSettingsApplyFailure"]
+    };
+
+    void HandleEventReceived(object sender, IEventArgs e)
+    {
+        if (e is SettingsCommittedEventArgs)
+        {
+            var committed = (SettingsCommittedEventArgs)e;
+            _settings = SettingsService.GetSettings();
+            if (committed.PropertyName == nameof(Settings.IsAudioEnabled))
+            {
+                _audioStopOutcome = null;
+                _resumeFailed = false;
+                _lastChange = committed.ChangeOutcome is { Status: not SettingsChangeStatus.Applied } outcome
+                    ? outcome
+                    : committed.IsPersisted ? null : _lastChange;
+            }
+            InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (e is AudioStopOutcomeChangedEventArgs stop)
+        {
+            _audioStopOutcome = stop.Outcome?.Status == AudioStopStatus.StillPlaying ? stop.Outcome : null;
+            InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (e is not AudioSettingChangedEventArgs audio) return;
+        _audioStopOutcome = null;
+        _resumeFailed = false;
+        _settings = SettingsService.GetSettings();
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => EventNotificationService.EventReceived -= HandleEventReceived;
 }

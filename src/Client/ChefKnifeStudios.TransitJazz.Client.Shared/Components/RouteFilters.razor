@@ -10,6 +10,10 @@
                  OnToggle="HandleSelect" OnSelectCategory="HandleSelectAll"
                  OnClearCategory="HandleClearSelections" OnHoverRoute="HandleHoverRoute"
                  OnHoverCategory="HandleHoverCategory" />
+@if (RouteFilterViewModel.HasSelectedUnavailableRoute)
+{
+    <p class="route-selection-status" role="status">@Loc["ToastSelectedRouteUnavailable"]</p>
+}
 
 @code {
     bool _isDark;

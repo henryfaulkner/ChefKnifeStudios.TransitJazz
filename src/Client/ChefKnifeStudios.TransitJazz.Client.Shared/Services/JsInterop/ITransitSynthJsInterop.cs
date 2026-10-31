@@ -1,15 +1,23 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Audio;
 
 namespace ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop;
 
 public interface ITransitSynthJsInterop : IAsyncDisposable
 {
+    event Action<AudioCapabilityHealthTransition>? AudioCapabilityHealthChanged;
+
     Task PreloadAsync(IEnumerable<string> routeIds);
     Task AttachUnlockGestureAsync(string elementId);
-    Task UnlockAsync();
+    Task AttachAudioFabGestureAsync(string elementId);
+    Task<AudioFabGestureOutcome?> ConsumeAudioFabGestureAsync();
+    Task<AudioUnlockStatus> UnlockAsync();
+    Task BeginAudioCapabilityHealthAsync(long generation, bool audioRequested, bool audioUnlocked);
+    Task StopAudioCapabilityHealthAsync();
     Task<bool> IsUnlockedAsync();
+    Task<bool> IsPlaybackSupportedAsync();
     Task TriggerNoteAsync(string routeId, string vehicleId, int triggerIndex = 0, int totalTriggers = 1);
     Task<double> DurationSecondsForAsync(string vehicleId, string? routeId = null);
 
@@ -19,14 +27,20 @@ public interface ITransitSynthJsInterop : IAsyncDisposable
     /// side already gates <see cref="TriggerNoteAsync"/> on this same setting, but that alone
     /// doesn't stop the always-on noise bed running underneath it.
     /// </summary>
-    Task SetAudioEnabledAsync(bool enabled);
+    Task<bool> SetAudioEnabledAsync(bool enabled);
+
+    /// <summary>Applies a confirmed gain mute to the synth's complete output bus.</summary>
+    Task<bool> SetMasterMutedAsync(bool muted);
+
+    /// <summary>Reports whether this synth currently has audible output or active sources.</summary>
+    Task<AudioMuteVerification> VerifyAudioSilencedAsync();
 
     /// <summary>
     /// Selects which continuous background "backfill" texture plays under the note triggers
     /// ('noise' | 'percussion'). Mirrors the persisted BackfillTexture into the JS engine.
     /// Safe to call before the master bus exists — the mode is recorded and honored on build.
     /// </summary>
-    Task SetBackfillTextureAsync(string mode);
+    Task<bool> SetBackfillTextureAsync(string mode);
 
     /// <summary>
     /// Frees Samplers cached for routes not in <paramref name="activeRouteIds"/> so decoded

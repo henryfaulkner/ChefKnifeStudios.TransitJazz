@@ -4,6 +4,7 @@
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications
 @using ChefKnifeStudios.TransitJazz.Client.Shared.ViewModels
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Charts
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components
@@ -23,6 +24,7 @@
 @inject StatsChartText T
 @inject IStatsEndpointsService StatsEndpoints
 @inject IPageVisibilityJsInterop PageVisibility
+@inject NotificationCoordinator NotificationCoordinator
 @inject NavigationManager NavigationManager
 
 @if (_isOpen)
@@ -190,6 +192,7 @@
     {
         if (_isOpen == IsOpen) return;
         _isOpen = IsOpen;
+        NotificationCoordinator.SetBlockingOverlay(NotificationBlockingOverlay.Stats, _isOpen);
         _focusOnRender = _isOpen;
         if (_isOpen) _ = InvokeAsync(StartNewSessionAsync);
         else CloseSession();
@@ -613,6 +616,7 @@
     {
         if (_disposed) return;
         _disposed = true;
+        NotificationCoordinator.SetBlockingOverlay(NotificationBlockingOverlay.Stats, false);
         ApplicationViewModel.PropertyChanged -= HandleRouteMetadataChanged;
         CloseSession();
         EventNotificationService.EventReceived -= HandleEvent;

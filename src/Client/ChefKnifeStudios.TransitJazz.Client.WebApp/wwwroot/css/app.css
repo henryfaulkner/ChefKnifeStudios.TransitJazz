@@ -66,3 +66,88 @@ body {
 [data-theme="dark"] .app-loader__label {
   color: #E2E2E6;
 }
+
+/* MatBlazor 2.10.0 toast positioning and colors are overridden at the app boundary. */
+.notification-host .mat-toast-container {
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+  max-width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  z-index: 1301 !important;
+  pointer-events: none;
+}
+
+.notification-host .mat-toast-container > div {
+  width: 100% !important;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto;
+  border-radius: 0.75rem;
+  border: 1px solid #71787d;
+  border-inline-start: 5px solid #41484d;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 24%);
+  opacity: 1;
+  filter: none;
+  pointer-events: auto;
+}
+
+.notification-host .mat-toast-container > div:hover {
+  cursor: default;
+  opacity: 1;
+  filter: none;
+}
+
+.notification-host .mat-toast-container .mat-toast {
+  box-sizing: border-box;
+  padding: 14px 3.5rem 14px 16px;
+}
+
+.notification-host .mat-toast-container .mat-toast-warning {
+  background-color: #fff4d6;
+  color: #1a1c1e;
+  border-color: #755400;
+}
+
+.notification-host .mat-toast-container .mat-toast-danger {
+  background-color: #ffdad6;
+  color: #410002;
+  border-color: #ba1a1a;
+}
+
+.mj-dark .notification-host .mat-toast-container .mat-toast-warning {
+  background-color: #4b3900;
+  color: #fff4d6;
+  border-color: #e6c15a;
+}
+
+.mj-dark .notification-host .mat-toast-container .mat-toast-danger {
+  background-color: #3b0a08;
+  color: #ffdad6;
+  border-color: #ffb4ab;
+}
+
+.notification-host .mat-toast-container .mat-toast-message,
+.notification-host .mat-toast-container .mat-toast-title {
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-host .mat-toast-container *,
+  .notification-host__close {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+.settings-change-status,
+.audio-fab-resume-status {
+    max-width: 24rem;
+    margin: 0.5rem 0;
+    padding: 0.5rem 0.75rem;
+    color: var(--mdc-theme-error, #8b1a1a);
+    background: var(--mdc-theme-surface, #fff);
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}

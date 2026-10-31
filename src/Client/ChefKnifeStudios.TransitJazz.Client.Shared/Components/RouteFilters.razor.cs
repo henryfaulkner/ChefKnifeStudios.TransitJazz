@@ -26,6 +26,7 @@ public partial class RouteFilters : ComponentBase, IDisposable
     void RouteFilterViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(IRouteFilterViewModel.RouteItems) or nameof(IRouteFilterViewModel.HasSelection)
+            or nameof(IRouteFilterViewModel.HasSelectedUnavailableRoute)
             or nameof(IRouteFilterViewModel.ActiveCountsByCategory) or nameof(IRouteFilterViewModel.HoveredRouteJoinKey)
             or nameof(IRouteFilterViewModel.HoveredCategory))
             _ = InvokeAsync(StateHasChanged);

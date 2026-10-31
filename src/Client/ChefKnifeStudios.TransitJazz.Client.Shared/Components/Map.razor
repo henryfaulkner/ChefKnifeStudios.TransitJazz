@@ -1,3 +1,27 @@
-<div>
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<RouteFilterResources> Loc
+
+<div class="map-root">
     <div class="map" id="@ElementId"></div>
+    @if (Readiness.Status == MapReadinessStatus.Unavailable)
+    {
+        <div class="map-readiness map-readiness--failed" role="alert">
+            @if (Readiness.FailureReason == MapFailureReason.UnsupportedBrowser)
+            {
+                <p>@Loc["MapUnsupportedBrowser"]</p>
+            }
+            else
+            {
+                <p>@Loc["MapUnavailable"]</p>
+                <button type="button" @onclick="ReloadMap">@Loc["MapReload"]</button>
+            }
+        </div>
+    }
+    else if (ShowDelayedLoading)
+    {
+        <div class="map-readiness map-readiness--delayed" role="status" aria-live="polite">
+            @Loc["MapLoadingDelayed"]
+        </div>
+    }
 </div>

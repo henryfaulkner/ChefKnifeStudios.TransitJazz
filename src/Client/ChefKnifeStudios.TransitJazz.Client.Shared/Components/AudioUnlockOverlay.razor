@@ -1,8 +1,10 @@
 @using ChefKnifeStudios.TransitJazz.Client.Core.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Audio
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications
 @using ChefKnifeStudios.TransitJazz.Shared
 @using Microsoft.AspNetCore.Components
 @using Microsoft.Extensions.Localization
@@ -12,6 +14,7 @@
 @inject IStringLocalizer<RouteFilterResources> Loc
 @inject ITransitSynthJsInterop TransitSynth
 @inject NavigationManager NavigationManager
+@inject NotificationCoordinator NotificationCoordinator
 
 <div class="audio-unlock-overlay @(_isDark ? "audio-unlock-overlay--dark" : "")">
     <div class="audio-unlock-overlay__badge">
@@ -34,9 +37,24 @@
             <p>@((MarkupString)Loc[_prefix + "Paragraph2"].Value)</p>
             <p>@((MarkupString)Loc[_prefix + "Paragraph3"].Value)</p>
         </div>
-        <button type="button" id="@_buttonId" class="audio-unlock-overlay__button" @onclick="OnEnable">
-            @Loc["AudioOverlayButton"]
+        <button type="button" id="@_buttonId" class="audio-unlock-overlay__button"
+                aria-busy="@(UnlockStatus == AudioUnlockStatus.Enabling ? "true" : "false")"
+                @onclick="OnEnable">
+            @Loc[_canRetry ? "AudioUnlockRetry" : "AudioOverlayButton"]
         </button>
+        @if (_canRetry)
+        {
+            <div class="audio-unlock-overlay__failure" role="status" aria-live="polite">
+                <p>@Loc["AudioUnlockFailure"]</p>
+                <button type="button" class="audio-unlock-overlay__continue" @onclick="OnContinueWithoutAudio">
+                    @Loc["AudioContinueMuted"]
+                </button>
+            </div>
+        }
+        @if (SettingOutcome is { Status: not (SettingsChangeStatus.Applied or SettingsChangeStatus.Superseded) } settingOutcome)
+        {
+            <p class="settings-change-status" role="status" aria-live="polite">@GetSettingOutcomeText(settingOutcome)</p>
+        }
     </div>
     <OverlayFooter IsDark="@_isDark" />
 </div>
@@ -221,12 +239,41 @@
         background: rgba(0, 0, 0, 0.05);
     }
 
+    .audio-unlock-overlay__failure {
+        width: 100%;
+        max-width: 34rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        color: #7f1d1d;
+        font-family: monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        text-align: center;
+    }
+    .audio-unlock-overlay__failure p { margin: 0; }
+    .audio-unlock-overlay__continue {
+        cursor: pointer;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        border-radius: 9999px;
+        padding: 0.65rem 1.5rem;
+        background: transparent;
+        font-family: Roboto, sans-serif;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: inherit;
+    }
+    .audio-unlock-overlay__continue:hover { background: rgba(0, 0, 0, 0.05); }
+
     .audio-unlock-overlay--dark {
         background: #1A1C1E;
     }
     .audio-unlock-overlay--dark .audio-unlock-overlay__header,
     .audio-unlock-overlay--dark .audio-unlock-overlay__body p,
-    .audio-unlock-overlay--dark .audio-unlock-overlay__badge-text {
+    .audio-unlock-overlay--dark .audio-unlock-overlay__badge-text,
+    .audio-unlock-overlay--dark .audio-unlock-overlay__failure {
         color: rgba(226, 226, 230, 0.9);
     }
     .audio-unlock-overlay--dark .audio-unlock-overlay__icon {
@@ -252,13 +299,25 @@
 
 @code {
     [Parameter, EditorRequired] public EventCallback OnEnable { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnContinueWithoutAudio { get; set; }
+    [Parameter] public AudioUnlockStatus UnlockStatus { get; set; } = AudioUnlockStatus.Locked;
+    [Parameter] public SettingsChangeOutcome? SettingOutcome { get; set; }
 
     readonly string _buttonId = $"audio-unlock-btn-{Guid.NewGuid():N}";
     string _prefix = "AudioOverlay";
     bool _isDark;
+    bool _canRetry => UnlockStatus is AudioUnlockStatus.Suspended or AudioUnlockStatus.Failed;
+
+    string GetSettingOutcomeText(SettingsChangeOutcome outcome) => outcome.Status switch
+    {
+        SettingsChangeStatus.AppliedSessionOnly => Loc["ToastSettingsNotSaved"],
+        SettingsChangeStatus.MixedState => Loc["SettingsMixedEffectFailure"],
+        _ => Loc["ToastSettingsApplyFailure"]
+    };
 
     protected override void OnInitialized()
     {
+        NotificationCoordinator.SetBlockingOverlay(NotificationBlockingOverlay.AudioUnlock, true);
         _prefix = NavigationManager.ResolveCity() switch
         {
             CityNames.Wmata => "WashingtonDcAudioOverlay",
@@ -283,11 +342,16 @@
         }
     }
 
-    public void Dispose() => EventNotificationService.EventReceived -= HandleEvent;
+    public void Dispose()
+    {
+        EventNotificationService.EventReceived -= HandleEvent;
+        NotificationCoordinator.SetBlockingOverlay(NotificationBlockingOverlay.AudioUnlock, false);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
-            await TransitSynth.AttachUnlockGestureAsync(_buttonId);
+        // A failed attempt consumes the one-shot native listener. Reattach after the
+        // parent keeps this overlay rendered so the next click is a fresh gesture.
+        await TransitSynth.AttachUnlockGestureAsync(_buttonId);
     }
 }

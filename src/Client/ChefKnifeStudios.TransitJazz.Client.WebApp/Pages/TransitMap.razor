@@ -1,13 +1,17 @@
 @page "/"
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Audio
 @using Microsoft.Extensions.Localization
 @inject IStringLocalizer<RouteFilterResources> Loc
 
 <div class="transit-map-container">
-    @if (!_audioUnlocked)
+    @if (!_audioUnlockState.Current.IsUnlocked && _audioUnlockState.Current.Status != AudioUnlockStatus.Muted)
     {
-        <AudioUnlockOverlay OnEnable="EnableAudioAsync" />
+        <AudioUnlockOverlay OnEnable="EnableAudioAsync"
+                            OnContinueWithoutAudio="ContinueWithoutAudioAsync"
+                            UnlockStatus="@_audioUnlockState.Current.Status"
+                            SettingOutcome="@_audioSettingOutcome" />
     }
 
     <div id="@_accordionElementId" class="transit-map__accordion @(_isMobile ? "transit-map__accordion-mobile" : "")">
