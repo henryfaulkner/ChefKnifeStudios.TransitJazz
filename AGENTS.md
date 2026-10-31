@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/059-reported-vehicles/plan.md
+at specs/062-stats-unit-toggle/plan.md
 <!-- SPECKIT END -->
 
 ## Git commits
