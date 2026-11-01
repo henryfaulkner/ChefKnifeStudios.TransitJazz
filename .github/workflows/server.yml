@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 062-stats-retrieval-optimization]
 
 env:
   REGISTRY: chefknife.azurecr.io
