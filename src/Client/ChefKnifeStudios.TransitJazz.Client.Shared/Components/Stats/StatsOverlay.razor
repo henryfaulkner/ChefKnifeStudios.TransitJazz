@@ -60,7 +60,9 @@
         </div>
     }
 
-    <main class="stats-overlay__content">
+    <main class="stats-overlay__content" aria-busy="@(_isTransitioning || _isLoading ? "true" : "false")">
+        <div class="stats-overlay__view @(_isTransitioning ? "stats-overlay__view--preparing" : "")"
+             inert="@_isTransitioning" aria-hidden="@(_isTransitioning ? "true" : "false")">
         @if (_presentation is { } dashboard)
         {
             @if (dashboard.IsPreviousDay)
@@ -115,7 +117,6 @@
                 <PieChart Model="@dashboard.CategoryPie" Title="@T.Get("StatsCategoryShares")"
                             State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
             </section>
-            <p class="stats-overlay__snapshot-updated">@T.Get("StatsSnapshotUpdatedAt", SnapshotUpdatedAtText)</p>
         }
         @if (_recoveryNotice)
         {
@@ -141,25 +142,26 @@
                 </div>
             }
         }
-        else if (_isLoading)
-        {
-            <div class="app-loader stats-overlay__loader" role="status" aria-live="polite">
-                <div class="app-loader__ring" aria-hidden="true"></div>
-                <span class="app-loader__label">loading...</span>
-            </div>
-        }
-        else if (_errorCode is not null)
+        else if (!_isLoading && _errorCode is not null)
         {
             <div class="stats-overlay__error" role="status" aria-live="polite">
                 <p>@T.Get(StatsOverlayErrorResources.ResourceKey(_errorCode))</p>
                 <button type="button" @onclick="RetryAsync">@T.Get("StatsRetry")</button>
             </div>
         }
-        else
+        else if (!_isLoading)
         {
             <div class="stats-overlay__unavailable" role="status">
                 <p>@T.Get("StatsNoMatchingSnapshot")</p>
                 <button type="button" @onclick="RetryAsync">@T.Get("StatsRetry")</button>
+            </div>
+        }
+        </div>
+        @if (_isTransitioning || (_presentation is null && _isLoading))
+        {
+            <div class="app-loader stats-overlay__loader" role="status" aria-live="polite">
+                <div class="app-loader__ring" aria-hidden="true"></div>
+                <span class="app-loader__label">@T.Get("StatsChartLoading")</span>
             </div>
         }
     </main>
@@ -207,6 +209,9 @@
     long _generation;
     bool _isLoading;
     bool _hasAcceptedCityOptions;
+    bool _isTransitioning;
+    bool _transitionRevealScheduled;
+    CancellationTokenSource? _transitionCancellation;
 
     protected override void OnInitialized()
     {
@@ -256,6 +261,13 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_disposed) return;
+        if (_isOpen && _isTransitioning && !_transitionRevealScheduled
+            && (_presentation is not null || !_isLoading)
+            && _transitionCancellation is { } transition)
+        {
+            _transitionRevealScheduled = true;
+            _ = RevealViewAsync(transition, transition.Token);
+        }
         if (_focusOnRender && _isOpen && !_disposed)
         {
             _focusOnRender = false;
@@ -287,8 +299,9 @@
         _errorCode = null;
         _recoveryNotice = false;
         _freshness = new(false, false, false, false);
-        _isLoading = false;
-        _generation++;
+        _isLoading = true;
+        var generation = ++_generation;
+        if (!await BeginViewTransitionAsync() || generation != _generation) return;
         var selection = CurrentSelection;
         SnapshotStore.SetOverlaySelection(selection);
         SubscribeToSelection(selection);
@@ -299,12 +312,13 @@
         _isLoading = decision.ShowInitialLoader && evidence?.ProblemCode is null;
         await InvokeAsync(StateHasChanged);
         if (decision.ShouldRequest)
-            await EnsureSelectionAsync(selection, _generation, retainSnapshot: _snapshot is not null);
+            await EnsureSelectionAsync(selection, generation, retainSnapshot: _snapshot is not null);
     }
 
     void CloseSession()
     {
         _generation++;
+        CancelViewTransition();
         UnsubscribeFromSelection();
         SnapshotStore.SetOverlaySelection(null);
         CancelSelectionDebounce();
@@ -334,11 +348,13 @@
         _acceptedSnapshot.Clear();
         _errorCode = null;
         _recoveryNotice = false;
+        _isLoading = true;
+        var generation = ++_generation;
+        if (!await BeginViewTransitionAsync() || generation != _generation) return;
         ApplyStoreState(selection, SnapshotStore.TryGet(selection), rebuildPresentation: true);
         var decision = StatsOverlayOpenPolicy.Evaluate(SnapshotStore.TryGet(selection));
         _isLoading = decision.ShowInitialLoader && _errorCode is null;
         if (_isLoading) SnapshotStore.RecordLoader();
-        var generation = ++_generation;
         await InvokeAsync(StateHasChanged);
         if (decision.ShouldRequest)
             await EnsureSelectionAsync(selection, generation, retainSnapshot: _snapshot is not null);
@@ -388,6 +404,7 @@
 
     async Task ScheduleSelectionRequestAsync()
     {
+        CancelViewTransition();
         CancelSelectionDebounce();
         var sessionToken = _sessionCancellation?.Token ?? CancellationToken.None;
         if (sessionToken.IsCancellationRequested) return;
@@ -423,6 +440,52 @@
         var debounce = _selectionDebounceCancellation;
         _selectionDebounceCancellation = null;
         debounce?.Cancel();
+    }
+
+    async Task<bool> BeginViewTransitionAsync()
+    {
+        CancelViewTransition();
+        var transition = CancellationTokenSource.CreateLinkedTokenSource(
+            _sessionCancellation?.Token ?? CancellationToken.None);
+        _transitionCancellation = transition;
+        var token = transition.Token;
+        _isTransitioning = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            // Let the browser paint the loading state before projection and chart setup.
+            await Task.Delay(TimeSpan.FromMilliseconds(37.5), token);
+            return !_disposed && _isOpen && ReferenceEquals(_transitionCancellation, transition);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { return false; }
+    }
+
+    async Task RevealViewAsync(CancellationTokenSource transition, CancellationToken token)
+    {
+        try
+        {
+            // Opacity preserves canvas dimensions while Chart.js lays out the new view.
+            await Task.Delay(100, token);
+            await InvokeAsync(() =>
+            {
+                if (_disposed || !_isOpen || !ReferenceEquals(_transitionCancellation, transition)) return;
+                _isTransitioning = false;
+                _transitionCancellation = null;
+                transition.Dispose();
+                StateHasChanged();
+            });
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+    }
+
+    void CancelViewTransition()
+    {
+        var transition = _transitionCancellation;
+        _transitionCancellation = null;
+        _isTransitioning = false;
+        _transitionRevealScheduled = false;
+        transition?.Cancel();
+        transition?.Dispose();
     }
 
     async Task EnsureSelectionAsync(
