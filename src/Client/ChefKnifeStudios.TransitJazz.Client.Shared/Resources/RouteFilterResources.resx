@@ -372,6 +372,15 @@
   <data name="StatsStale" xml:space="preserve">
     <value>Showing the last successful snapshot</value>
   </data>
+  <data name="StatsSnapshotUpdatedAt" xml:space="preserve"><value>Snapshot updated {0}</value></data>
+  <data name="StatsOverdueNotice" xml:space="preserve"><value>No newer snapshot was received after the refresh boundary.</value></data>
+  <data name="StatsHistoricalSnapshotDate" xml:space="preserve"><value>Historical daily evidence from {0}</value></data>
+  <data name="StatsHistoricalSnapshotExplanation" xml:space="preserve"><value>Today's values are not available in this older snapshot.</value></data>
+  <data name="StatsHistoricalAllSnapshotExplanation" xml:space="preserve"><value>Some city-local daily windows are historical; each city keeps its snapshot date.</value></data>
+  <data name="StatsDistanceOnDate" xml:space="preserve"><value>Distance on {0}</value></data>
+  <data name="StatsReportedVehiclesOnDate" xml:space="preserve"><value>Vehicles reported on {0}</value></data>
+  <data name="StatsRefreshRecovered" xml:space="preserve"><value>Statistics refreshed successfully.</value></data>
+  <data name="StatsNoMatchingSnapshot" xml:space="preserve"><value>No snapshot is available for this selection.</value></data>
   <data name="StatsRetry" xml:space="preserve">
     <value>Retry</value>
   </data>
@@ -778,7 +787,7 @@
     <value>One or more selected route keys are invalid.</value>
   </data>
   <data name="StatsChartLoading" xml:space="preserve">
-    <value>Loading chart…</value>
+    <value>Loading charts…</value>
   </data>
   <data name="StatsChartFailure" xml:space="preserve">
     <value>The chart could not be drawn. The values and table remain available.</value>

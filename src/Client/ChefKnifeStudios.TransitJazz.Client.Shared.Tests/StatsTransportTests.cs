@@ -23,6 +23,45 @@ public sealed class StatsTransportTests
         Assert.Null(response.ProblemCode);
         Assert.Null(response.Result.Value.Selection.CitySlug);
         Assert.Null(response.Result.Value.TodayDistance.Kilometers);
+        Assert.False(response.Result.Value.RefreshIntervalMinutesPresent);
+        Assert.False(response.Result.Value.RefreshWindowStartUtcPresent);
+        Assert.False(response.Result.Value.NextRefreshAtUtcPresent);
+        Assert.True(content.Disposed);
+    }
+
+    [Fact]
+    public async Task TypedStatsResponsePreservesAdditiveRefreshScheduleMetadata()
+    {
+        const string window = "2026-01-02T12:00:00Z";
+        const string next = "2026-01-02T12:15:00Z";
+        var json = MinimalStatsResponse.Replace("\"selection\":", $"\"refreshIntervalMinutes\":15,\"refreshWindowStartUtc\":\"{window}\",\"nextRefreshAtUtc\":\"{next}\",\"selection\":", StringComparison.Ordinal);
+        var content = new TrackingContent(json);
+        var service = CreateService(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+
+        var response = await service.PostWithMetadataAsync<object, StatsOverlayResponse>("/stats", new { scope = "all" });
+
+        Assert.True(response.Result.IsSuccess);
+        Assert.True(response.Result.Value.RefreshIntervalMinutesPresent);
+        Assert.True(response.Result.Value.RefreshWindowStartUtcPresent);
+        Assert.True(response.Result.Value.NextRefreshAtUtcPresent);
+        Assert.Equal(15, response.Result.Value.RefreshIntervalMinutes);
+        Assert.Equal(DateTime.Parse(window, null, System.Globalization.DateTimeStyles.AdjustToUniversal), response.Result.Value.RefreshWindowStartUtc);
+        Assert.Equal(DateTime.Parse(next, null, System.Globalization.DateTimeStyles.AdjustToUniversal), response.Result.Value.NextRefreshAtUtc);
+        Assert.True(content.Disposed);
+    }
+
+    [Fact]
+    public async Task FractionalRefreshScheduleJsonBecomesSafeInvalidResponseAndIsDisposed()
+    {
+        var json = MinimalStatsResponse.Replace("\"selection\":", "\"refreshIntervalMinutes\":7.5,\"selection\":", StringComparison.Ordinal);
+        var content = new TrackingContent(json);
+        var service = CreateService(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+
+        var response = await service.PostWithMetadataAsync<object, StatsOverlayResponse>("/stats", new { scope = "all" });
+
+        Assert.False(response.Result.IsSuccess);
+        Assert.Equal("invalid_response", response.ProblemCode);
+        Assert.DoesNotContain("7.5", string.Join(";", response.Result.Errors), StringComparison.Ordinal);
         Assert.True(content.Disposed);
     }
 

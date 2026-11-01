@@ -8,7 +8,7 @@ This contract covers Stats presentation, local Stats open/close state and reusab
 | --- | --- | --- |
 | TransitMap | Current canonical city, audio lock, page visibility, shared launcher flag | Mounts welcome/map controls; keeps map/SignalR/audio instance alive; forwards visibility |
 | MainLayout/InfoFab/settings | Existing content/theme/settings owner | Keeps existing independent Info controls and settings behavior |
-| StatsOverlay | Current city, parent hidden flag, open/close callbacks | Local session/mode/selection/request generation, refresh/cooldown, accepted snapshot, atomic presentation and cleanup |
+| StatsOverlay | Current city, parent hidden flag, open/close callbacks | Local open/mode/selection and presentation; reads exact evidence from the app-owned snapshot store and subscribes only while open; owns no transport or refresh timer |
 | StatsEndpointsService | Valid typed request/cancellation | Transport success/status/retry/safe-code only |
 | StatsOverlayProjection | DTO + current culture/theme | Aligns server values, formats labels/help/tables and finite chart inputs; performs no metric aggregation |
 | RouteFilterList | Immutable list items, ordinal selected keys, category order, theme, toggle/select/clear/hover callbacks | Shared MatBlazor pills, category labels/select/clear controls and bulk actions matching map RouteFilters; keyboard/accessibility and visible historical notes; no live-view-model injection/subscription |
@@ -27,10 +27,10 @@ stateDiagram-v2
     Closed --> Loading: Open (fresh defaults)
     Loading --> Ready: Current-generation success
     Loading --> InitialError: Current-generation failure
-    Ready --> Refreshing: Visible 60-second refresh
+    Ready --> Refreshing: Store reports current-selection work
     Refreshing --> Ready: Success
     Refreshing --> Stale: Failure
-    Stale --> Refreshing: Retry / scheduled retry after cooldown
+    Stale --> Refreshing: Admitted retry / scheduled refresh
     Ready --> Loading: Selection / mode / window reset
     Stale --> Loading: Selection / mode reset
     InitialError --> Loading: Retry after cooldown
@@ -40,11 +40,13 @@ stateDiagram-v2
     Stale --> Closed: Close / navigation / disposal
 ```
 
-Loading/error states carry current normalized scope and finite safe message codes. Same-scope refresh retains Ready chart/table evidence with a separate refreshing status; stale copy retains actual generatedAtUtc. Scope changes discard old-scope display so it cannot appear beneath new labels. A response can publish only when session/generation/normalized request match and the overlay is alive; cancellation alone is insufficient. Models, date/windows, metrics, coverage and status commit together.
+Loading/error states carry the current normalized scope and finite safe message codes. Same-scope refresh retains Ready chart/table evidence with separate progress; stale copy retains actual `generatedAtUtc`. Scope changes discard old-scope presentation so it cannot appear beneath new labels. The app-owned store validates and atomically accepts exact-selection snapshots; the overlay presents only the current selection and never owns the shared request generation or cached DTO. Models, dates/windows, metrics, coverage and status commit together.
 
-Fetch on open, then every 60 seconds while open/visible; at most one active request/session. Selection debounce 200 ms. Hidden cancels/suspends; visible refreshes promptly subject to cooldown and resumes one schedule. Close/dispose invalidates generation, cancels request/timer, unsubscribes and prevents any further writes. Parent visibility is reused rather than overwriting the single-callback JS singleton. Theme reproject locally without reads.
+Opening performs an exact synchronous store lookup before asking the store to ensure the selection; matching fresh evidence opens without a request, and a cold open joins an existing fill. The app-owned scheduler follows returned refresh boundaries, local-day transitions, stale notices and hard expiry, with one bounded per-selection/window jitter and a 200 ms latest-route debounce. It serves due displayed evidence and city/All baselines fairly. Hidden state pauses/cancels the browser's transport wait; resume reconciles elapsed deadlines and refreshes each needed selection once. Closing unsubscribes and releases presentation references but does not cancel app-owned fills or erase retained evidence. Parent visibility is reused rather than overwriting the single-callback JS singleton. Theme changes reproject locally without reads; no separate units control or request identity is introduced.
 
-Cooldown starts 60 seconds after 429/503/failure, grows to at most five minutes during continued failure and honors longer server Retry-After; success resets it. Explicit retry, newer selections and visibility restoration respect it. Initial failure is error; retained same-scope evidence is stale. A safe response with pending/unavailable history is data state, not transport failure.
+The store owns per-selection monotonic retry cooldowns starting at 60 seconds, growing to 120/240/300 seconds and honoring longer `Retry-After`; 429 also sets endpoint-wide admission cooldown. Explicit retry, other selections and visibility restoration respect applicable cooldowns. Initial failure is error; retained same-scope evidence is stale. A safe response with pending/unavailable history is data state, not transport failure.
+
+Detailed acceptance, retention, legacy freshness, clock validation, lifecycle races and scheduler rules are in the [app-owned snapshot-store contract](../../061-stats-retrieval-optimization/contracts/stats-snapshot-store-v1.md). This extends ownership and transport behavior while preserving the statistical projection and audio/map contracts below.
 
 ## Silent access and unchanged audio
 
@@ -56,7 +58,7 @@ Preserve the common transit-synth.js module identity shared with crossing-dispat
 
 ## Local open/close state
 
-StatsFab owns a boolean open flag. The map launcher sets it directly; the welcome launcher publishes Stats through the existing application event channel. StatsOverlay receives IsOpen and an OnClose callback. Close/Escape clears the flag and cancels session work; reopening starts default city scope and selection. Info keeps its existing independent open/close controls. No URL/history entry, ownership token, Back/Forward interception, surface switching, reload marker or shared navigation service is used.
+StatsFab owns a boolean open flag. The map launcher sets it directly; the welcome launcher publishes Stats through the existing application event channel. StatsOverlay receives IsOpen and an OnClose callback. Close/Escape clears the flag, unsubscribes from presentation updates and releases dialog-owned presentation; reopening starts default city scope and selection while reusing matching app-owned evidence. Info keeps its existing independent open/close controls. No URL/history entry, Back/Forward interception, surface switching or reload marker is used; the app-owned store receives the current city and navigation changes independently of dialog visibility.
 
 ## Full-screen shell and native focus
 

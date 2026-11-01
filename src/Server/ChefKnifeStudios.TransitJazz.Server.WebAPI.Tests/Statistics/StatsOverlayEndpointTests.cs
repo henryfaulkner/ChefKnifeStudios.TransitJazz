@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http;
+using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
@@ -10,6 +11,7 @@ using ChefKnifeStudios.TransitJazz.Shared.Stats;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -29,6 +31,34 @@ public sealed class StatsOverlayEndpointTests
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
         Assert.Contains("\"code\":\"stats_disabled\"", body);
         Assert.DoesNotContain("connection", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task LegacyAnonymousPostReturnsAdditiveScheduleMetadataCompressedAndNoStore()
+    {
+        await using var host = await StartHost(EnabledOptions(), new StaticQuery(EmptyResult()));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/stats/overlay/query")
+        {
+            Content = Json("{\"scope\":\"all\",\"routeJoinKeys\":[]}")
+        };
+        request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
+
+        using var response = await host.Client.SendAsync(request);
+        var compressedBytes = await response.Content.ReadAsByteArrayAsync();
+        using var compressedStream = new MemoryStream(compressedBytes);
+        using var gzip = new GZipStream(compressedStream, CompressionMode.Decompress);
+        using var reader = new StreamReader(gzip);
+        var body = await reader.ReadToEndAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("gzip", Assert.Single(response.Content.Headers.ContentEncoding));
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        using var json = JsonDocument.Parse(body);
+        var root = json.RootElement;
+        Assert.Equal(60, root.GetProperty("refreshIntervalMinutes").GetInt32());
+        var refreshWindow = root.GetProperty("refreshWindowStartUtc").GetDateTime();
+        var nextRefresh = root.GetProperty("nextRefreshAtUtc").GetDateTime();
+        Assert.True(nextRefresh > refreshWindow);
     }
 
     [Fact]
@@ -199,6 +229,47 @@ public sealed class StatsOverlayEndpointTests
         Assert.Contains("\"code\":\"rate_limited\"", await secondResponse.Content.ReadAsStringAsync());
     }
 
+    [Fact]
+    public async Task CanceledEndpointWaiterLeavesSafeSharedFillAvailableToAnotherRequest()
+    {
+        var query = new BlockingEndpointQuery();
+        await using var host = await StartHost(EnabledOptions(), query);
+        using var cancellation = new CancellationTokenSource();
+        using var canceledRequest = new HttpRequestMessage(HttpMethod.Post, "/stats/overlay/query")
+        {
+            Content = Json("{\"scope\":\"all\",\"routeJoinKeys\":[]}")
+        };
+        var canceledResponse = host.Client.SendAsync(canceledRequest, cancellation.Token);
+        await query.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var liveResponse = host.Client.PostAsync("/stats/overlay/query", Json("{\"scope\":\"all\",\"routeJoinKeys\":[]}"));
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledResponse);
+        Assert.False(query.Canceled.Task.IsCompleted);
+
+        query.Release.TrySetResult();
+        using var response = await liveResponse;
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal(1, query.Calls);
+        Assert.False(query.Canceled.Task.IsCompleted);
+    }
+
+    [Fact]
+    public async Task HostStoppingCancelsTheEndpointSharedRead()
+    {
+        var query = new BlockingEndpointQuery();
+        await using var host = await StartHost(EnabledOptions(), query);
+        var request = host.Client.PostAsync("/stats/overlay/query", Json("{\"scope\":\"all\",\"routeJoinKeys\":[]}"));
+        await query.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await host.StopAsync();
+        query.Release.TrySetResult();
+        Assert.True(query.Token.IsCancellationRequested);
+        try { _ = await request; }
+        catch (Exception exception) when (exception is OperationCanceledException or ObjectDisposedException) { }
+    }
+
     static StringContent Json(string json) => new(json, Encoding.UTF8, "application/json");
 
     static StatsOverlayOptions EnabledOptions() => new()
@@ -229,12 +300,21 @@ public sealed class StatsOverlayEndpointTests
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        builder.Services.AddResponseCompression(compression =>
+        {
+            compression.EnableForHttps = true;
+            compression.Providers.Add<GzipCompressionProvider>();
+        });
+        builder.Services.Configure<GzipCompressionProviderOptions>(compression =>
+            compression.Level = CompressionLevel.Fastest);
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton<TimeProvider>(new TestTimeProvider());
         builder.Services.AddSingleton<StatsOverlayService>(services =>
-            new StatsOverlayService(query, options, services.GetRequiredService<TimeProvider>()));
+            new StatsOverlayService(query, options, services.GetRequiredService<TimeProvider>(),
+                hostStoppingToken: services.GetRequiredService<Microsoft.Extensions.Hosting.IHostApplicationLifetime>().ApplicationStopping));
         builder.Services.AddStatsOverlayRateLimiting(tokenLimit, TimeSpan.FromDays(1));
         var app = builder.Build();
+        app.UseResponseCompression();
         app.UseRateLimiter();
         app.MapStatsEndpoints();
         await app.StartAsync();
@@ -244,6 +324,7 @@ public sealed class StatsOverlayEndpointTests
     sealed class TestHostState(WebApplication app, HttpClient client) : IAsyncDisposable
     {
         public HttpClient Client { get; } = client;
+        public Task StopAsync() => app.StopAsync();
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
@@ -280,6 +361,37 @@ public sealed class StatsOverlayEndpointTests
     sealed class FixedResultQuery(StatsOverlayQueryResult result) : IStatsOverlayQuery
     {
         public Task<StatsOverlayQueryResult> ReadAsync(StatsOverlayQueryInput input, TimeSpan timeout, CancellationToken cancellationToken) => Task.FromResult(result);
+    }
+
+    sealed class BlockingEndpointQuery : IStatsOverlayQuery
+    {
+        int calls;
+        public int Calls => Volatile.Read(ref calls);
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Canceled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public CancellationToken Token { get; private set; }
+
+        public async Task<StatsOverlayQueryResult> ReadAsync(StatsOverlayQueryInput input, TimeSpan timeout,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref calls);
+            Token = cancellationToken;
+            using var registration = cancellationToken.Register(() => Canceled.TrySetResult());
+            Started.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+            var result = EmptyResult();
+            result.CohortHours = input.Hours.Select(hour => new StatsOverlayCohortHour
+            {
+                CitySlug = hour.CitySlug,
+                HourStartUtc = hour.HourStartUtc,
+                IsToday = hour.IsToday,
+                IsLast24 = hour.IsLast24,
+                IsEligible = false,
+                Reason = "missing_cohort"
+            }).ToList();
+            return result;
+        }
     }
 
     sealed class UnknownLengthContent(byte[] bytes) : HttpContent

@@ -117,7 +117,8 @@ builder.Services.AddSingleton<StatsOverlayService>(sp => new StatsOverlayService
     sp.GetService<IStatsOverlayQuery>(),
     sp.GetRequiredService<StatsOverlayOptions>(),
     sp.GetRequiredService<TimeProvider>(),
-    sp.GetService<StatsOverlayReportedVehiclePolicyCatalog>()?.Catalog));
+    sp.GetService<StatsOverlayReportedVehiclePolicyCatalog>()?.Catalog,
+    sp.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping));
 
 builder.Services.AddStatsOverlayRateLimiting();
 

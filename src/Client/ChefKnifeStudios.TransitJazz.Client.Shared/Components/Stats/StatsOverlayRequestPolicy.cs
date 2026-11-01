@@ -1,76 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Services;
 
 namespace ChefKnifeStudios.TransitJazz.Client.Shared.Components.Stats;
-
-public static class StatsOverlayRefreshPolicy
-{
-    public static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
-
-    public static bool ShouldRunLoop(bool sessionOpen, bool hidden, bool disposed) =>
-        sessionOpen && !hidden && !disposed;
-
-    public static bool ShouldStartLoop(bool sessionOpen, bool hidden, bool disposed, bool loopAlreadyRunning) =>
-        ShouldRunLoop(sessionOpen, hidden, disposed) && !loopAlreadyRunning;
-
-    public static bool ShouldRefresh(
-        DateTimeOffset nowUtc,
-        bool hidden,
-        bool needsVisibleRefresh,
-        DateTimeOffset? lastSuccessAtUtc) =>
-        !hidden && (needsVisibleRefresh || lastSuccessAtUtc is null || nowUtc - lastSuccessAtUtc >= Interval);
-}
-
-/// <summary>Owns the single cancellable refresh delay for the currently visible Stats session.</summary>
-public sealed class StatsOverlayRefreshLoopState
-{
-    StatsOverlayRefreshLoopLease? _current;
-
-    public bool IsRunning => _current is { IsCancellationRequested: false };
-
-    public bool TryStart(CancellationToken sessionToken, out StatsOverlayRefreshLoopLease? lease)
-    {
-        if (sessionToken.IsCancellationRequested || IsRunning)
-        {
-            lease = null;
-            return false;
-        }
-
-        lease = new StatsOverlayRefreshLoopLease(sessionToken);
-        _current = lease;
-        return true;
-    }
-
-    public void Stop()
-    {
-        var current = _current;
-        _current = null;
-        current?.Cancel();
-    }
-
-    public void Complete(StatsOverlayRefreshLoopLease lease)
-    {
-        ArgumentNullException.ThrowIfNull(lease);
-        if (ReferenceEquals(_current, lease)) _current = null;
-        lease.Dispose();
-    }
-}
-
-public sealed class StatsOverlayRefreshLoopLease : IDisposable
-{
-    readonly CancellationTokenSource _cancellation;
-
-    internal StatsOverlayRefreshLoopLease(CancellationToken sessionToken) =>
-        _cancellation = CancellationTokenSource.CreateLinkedTokenSource(sessionToken);
-
-    public CancellationToken Token => _cancellation.Token;
-    public bool IsCancellationRequested => _cancellation.IsCancellationRequested;
-    public void Cancel() => _cancellation.Cancel();
-    public void Dispose() => _cancellation.Dispose();
-}
 
 public static class StatsOverlayErrorResources
 {
@@ -103,7 +37,7 @@ public sealed class StatsOverlayRetryPolicy
 {
     static readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(60);
     static readonly TimeSpan MaximumDelay = TimeSpan.FromMinutes(5);
-    TimeSpan _nextDelay = InitialDelay;
+    int _consecutiveFailures;
 
     public DateTimeOffset? RetryAtUtc { get; private set; }
 
@@ -115,16 +49,21 @@ public sealed class StatsOverlayRetryPolicy
     public DateTimeOffset RecordFailure(DateTimeOffset nowUtc, TimeSpan? serverRetryAfter = null)
     {
         var serviceDelay = serverRetryAfter is { } value && value > TimeSpan.Zero ? value : TimeSpan.Zero;
-        var delay = _nextDelay > serviceDelay ? _nextDelay : serviceDelay;
+        var backoffDelay = BackoffDelay(_consecutiveFailures);
+        var delay = backoffDelay > serviceDelay ? backoffDelay : serviceDelay;
+        if (_consecutiveFailures < int.MaxValue) _consecutiveFailures++;
         RetryAtUtc = nowUtc + delay;
-        _nextDelay = TimeSpan.FromTicks(Math.Min(MaximumDelay.Ticks, _nextDelay.Ticks * 2));
         return RetryAtUtc.Value;
     }
+
+    public static TimeSpan BackoffDelay(int consecutiveFailures) =>
+        TimeSpan.FromSeconds(Math.Min(MaximumDelay.TotalSeconds,
+            InitialDelay.TotalSeconds * Math.Pow(2, Math.Clamp(consecutiveFailures, 0, 3))));
 
     public void RecordSuccess()
     {
         RetryAtUtc = null;
-        _nextDelay = InitialDelay;
+        _consecutiveFailures = 0;
     }
 
     public void Reset() => RecordSuccess();
@@ -263,5 +202,22 @@ public static class StatsOverlayResponseSelection
 
         return response.Selection.RouteJoinKeys.SequenceEqual(
             routeJoinKeys.OrderBy(key => key, StringComparer.Ordinal), StringComparer.Ordinal);
+    }
+}
+
+public sealed record StatsOverlayOpenDecision(
+    StatsSnapshotState? Evidence,
+    bool ShowInitialLoader,
+    bool ShouldRequest);
+
+public static class StatsOverlayOpenPolicy
+{
+    public static StatsOverlayOpenDecision Evaluate(StatsSnapshotState? matchingEvidence)
+    {
+        var usable = matchingEvidence?.Snapshot is not null && !matchingEvidence.Freshness.IsExpired;
+        return new(
+            matchingEvidence,
+            ShowInitialLoader: !usable,
+            ShouldRequest: !usable || matchingEvidence!.Freshness.IsDue || matchingEvidence.ProblemCode is not null);
     }
 }

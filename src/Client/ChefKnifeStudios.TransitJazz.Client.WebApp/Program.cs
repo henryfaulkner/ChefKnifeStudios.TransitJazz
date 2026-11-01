@@ -97,6 +97,16 @@ builder.Services.AddTransient<ISettingsService, SettingsService>();
 builder.Services.AddSingleton<IOutsideClickJsInterop, OutsideClickJsInterop>();
 builder.Services.AddSingleton<IViewportSizeJsInterop, ViewportSizeJsInterop>();
 builder.Services.AddSingleton<IPageVisibilityJsInterop, PageVisibilityJsInterop>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.AddScoped<IStatsSnapshotNavigation, StatsSnapshotNavigation>();
+builder.Services.AddScoped<IStatsSnapshotDiagnostics, StatsSnapshotDiagnostics>();
+builder.Services.AddScoped<StatsSnapshotStore>(services => new StatsSnapshotStore(
+    services.GetRequiredService<IStatsEndpointsService>(),
+    services.GetRequiredService<TimeProvider>(),
+    services.GetRequiredService<IPageVisibilityJsInterop>(),
+    services.GetRequiredService<IStatsSnapshotNavigation>(),
+    services.GetRequiredService<IFeatureFlagService>(),
+    diagnostics: services.GetRequiredService<IStatsSnapshotDiagnostics>()));
 
 builder.Services.AddLocalization();
 builder.Services.AddScoped<StatsChartText>();
