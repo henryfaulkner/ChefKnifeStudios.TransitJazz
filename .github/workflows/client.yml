@@ -2,7 +2,7 @@ name: TransitJazz Client CI/CD
 
 on:
   push:
-    branches: [main, 062-stats-retrieval-optimization]
+    branches: [main]
 
 jobs:
   build:
