@@ -23,6 +23,7 @@ public sealed class StatsOverlayOptions
 
     public bool Enabled { get; set; }
     public bool ReportedVehiclesEnabled { get; set; }
+    public int RefreshIntervalMinutes { get; set; } = 60;
     public int IngestionGraceMinutes { get; set; } = 2;
     public int MaximumRequestBytes { get; set; } = 4 * 1024 * 1024;
     public int MaximumResponseBytes { get; set; } = 8 * 1024 * 1024;
@@ -32,7 +33,19 @@ public sealed class StatsOverlayOptions
     public int MaximumCategories { get; set; } = 32;
     public int MaximumCacheEntries { get; set; } = 33;
     public long MaximumCacheBytes { get; set; } = 64L * 1024 * 1024;
-    public int CacheSeconds { get; set; } = 60;
+    // Fixed retention budgets; internal setters support deterministic admission tests.
+    int? maximumFilteredCacheEntries;
+    long? maximumFilteredCacheBytes;
+    internal int MaximumFilteredCacheEntries
+    {
+        get => maximumFilteredCacheEntries ?? Math.Min(8, MaximumCacheEntries);
+        set => maximumFilteredCacheEntries = value;
+    }
+    internal long MaximumFilteredCacheBytes
+    {
+        get => maximumFilteredCacheBytes ?? Math.Min(16L * 1024 * 1024, MaximumCacheBytes);
+        set => maximumFilteredCacheBytes = value;
+    }
     public int MaximumConcurrentReads { get; set; } = 4;
     public int ReadTimeoutSeconds { get; set; } = 5;
     public List<StatsOverlayCityOptions> Cities { get; set; } = [];
@@ -70,6 +83,8 @@ public sealed class StatsOverlayOptions
     public void Validate(bool requireCities = false)
     {
         if (IngestionGraceMinutes is < 1 or > 10) throw new ArgumentOutOfRangeException(nameof(IngestionGraceMinutes));
+        if (RefreshIntervalMinutes is < 1 or > 60 || 60 % RefreshIntervalMinutes != 0)
+            throw new ArgumentOutOfRangeException(nameof(RefreshIntervalMinutes));
         if (MaximumRequestBytes is < 1024 or > 4 * 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(MaximumRequestBytes));
         if (MaximumResponseBytes is < 1024 or > 8 * 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(MaximumResponseBytes));
         if (MaximumRouteKeyBytes is < 1 or > 512) throw new ArgumentOutOfRangeException(nameof(MaximumRouteKeyBytes));
@@ -78,7 +93,10 @@ public sealed class StatsOverlayOptions
         if (MaximumCategories is < 1 or > 32) throw new ArgumentOutOfRangeException(nameof(MaximumCategories));
         if (MaximumCacheEntries is < 1 or > 33) throw new ArgumentOutOfRangeException(nameof(MaximumCacheEntries));
         if (MaximumCacheBytes is < 1024 * 1024 or > 64L * 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(MaximumCacheBytes));
-        if (CacheSeconds is < 1 or > 60) throw new ArgumentOutOfRangeException(nameof(CacheSeconds));
+        if (MaximumFilteredCacheEntries is < 0 or > 32 || MaximumFilteredCacheEntries > MaximumCacheEntries)
+            throw new ArgumentOutOfRangeException(nameof(MaximumFilteredCacheEntries));
+        if (MaximumFilteredCacheBytes is < 0 or > 64L * 1024 * 1024 || MaximumFilteredCacheBytes > MaximumCacheBytes)
+            throw new ArgumentOutOfRangeException(nameof(MaximumFilteredCacheBytes));
         if (MaximumConcurrentReads is < 1 or > 4) throw new ArgumentOutOfRangeException(nameof(MaximumConcurrentReads));
         if (ReadTimeoutSeconds is < 1 or > 5) throw new ArgumentOutOfRangeException(nameof(ReadTimeoutSeconds));
         if (Cities is null || Cities.Count > MaximumCities || requireCities && Cities.Count == 0)

@@ -10,6 +10,58 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.Tests;
 public sealed class StatsOverlayProjectionTests
 {
     [Fact]
+    public void HistoricalRootSnapshotDoesNotPromoteItsPreviousDayAsCurrentAuthoritativeFallback()
+    {
+        var currentDate = new DateOnly(2026, 4, 1);
+        var previousDate = currentDate.AddDays(-1);
+        var city = City("toronto", "StatsCityToronto", currentDate, "America/Toronto") with
+        {
+            LocalDayStartUtc = new DateTime(2026, 4, 1, 4, 0, 0, DateTimeKind.Utc),
+            LocalDayEndUtc = new DateTime(2026, 4, 2, 4, 0, 0, DateTimeKind.Utc)
+        };
+        var previousCity = city with
+        {
+            LocalDate = previousDate,
+            LocalDayStartUtc = city.LocalDayStartUtc.AddDays(-1),
+            LocalDayEndUtc = city.LocalDayStartUtc,
+            RequestedTodayStartUtc = city.LocalDayStartUtc.AddDays(-1),
+            RequestedTodayEndUtc = city.LocalDayStartUtc
+        };
+        var response = Response("city", [], [], [], [], [city]) with
+        {
+            GeneratedAtUtc = new DateTime(2026, 4, 1, 12, 0, 0, DateTimeKind.Utc),
+            TodayDistance = new StatsDistanceSummary
+            {
+                Window = "today", Kilometers = 0, Coverage = Coverage("complete", 24, 24)
+            },
+            TodayReportedVehicles = new StatsReportedVehicleSummary
+            {
+                Window = "today", Count = 0, State = "complete", Cities = []
+            },
+            PreviousDay = new StatsPreviousDaySnapshot
+            {
+                City = previousCity,
+                Distance = new StatsDistanceSummary
+                {
+                    Window = "today", Kilometers = 99, Coverage = Coverage("complete", 24, 24)
+                },
+                ReportedVehicles = new StatsReportedVehicleSummary { Window = "today", Count = 99, State = "complete" },
+                CategoryShares = [], Bubbles = [], Timeline = new StatsTimeline { SeriesKind = "category", Series = [] }
+            }
+        };
+
+        var projected = StatsOverlayProjection.Build(response, key => key, isHistorical: true);
+
+        Assert.True(projected.IsHistorical);
+        Assert.False(projected.IsPreviousDay);
+        Assert.Equal(currentDate, projected.DailyEvidenceDate);
+        Assert.Equal("StatsDistanceOnDate", projected.DailyDistanceHeadingKey);
+        Assert.Equal(0, projected.DailyDistance.Kilometers);
+        Assert.Equal("0", projected.TodayReportedVehicles.CountText);
+        Assert.Same(response, projected.Snapshot);
+    }
+
+    [Fact]
     public void PreviousDayProjectionUsesOneDailyPeriodForChartsCountsAndLabels()
     {
         var yesterdayCity = City("toronto", "StatsCityToronto", new DateOnly(2026, 4, 1), "America/Toronto") with

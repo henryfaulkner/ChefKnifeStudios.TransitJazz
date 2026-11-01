@@ -17,11 +17,11 @@ Read spec, plan, research, data model and both contracts before task generation.
 ## Implementation sequence for tasks
 
 1. Record current warm/cold open behavior, requests/reads/size/serialization, map/audio readiness, never-opened sessions and retained/transient browser memory with named supported desktop/mobile device, browser/network/load profile and variability. Store real results in validation.md during implementation.
-2. Add response metadata, startup-valid schedule/subset options and pure schedule helper. Extend contract fixtures and update feature-058 API/read/UI contracts to remove conflicting minute-only/unfiltered-only/session ownership claims. Preserve SQL and reporting fixtures.
+2. Add response metadata, startup-valid interval option and fixed subset budgets and pure schedule helper. Extend contract fixtures and update feature-058 API/read/UI contracts to remove conflicting minute-only/unfiltered-only/session ownership claims. Preserve SQL and reporting fixtures.
 3. Extend existing server exact cache/shared fills, shutdown/deadline cleanup, monotonic expiry, budgets and bounded telemetry. Verify selected-route coalescing and no stale fallback.
 4. Build store-only DTO state, deterministic time/jitter seams, bounded slots, atomic acceptance, per-selection retries/global 429 and fair single-request scheduler. No charts in store.
-5. Register/start/stop from App/WebApp; preparation flag defaults off beneath StatsOverlay. Verify shared map listener ordering without adding another listener. Refactor overlay to matching reads/notifications, retaining projection/focus/tables/theme behavior.
-6. Run focused correctness, browser and matched-load checks; record measured gates. Roll out schedule-aware server/filtered cache, then store-backed on-open, then preparation. Expand only after evidence passes.
+5. Register/start/stop from App/WebApp; enabled StatsOverlay always prepares city and All at startup. Verify shared map listener ordering without adding another listener. Refactor overlay to matching reads/notifications, retaining projection/focus/tables/theme behavior.
+6. Run focused correctness, browser and matched-load checks; record measured gates. Deploy schedule-aware serving before the client with startup preparation. Expand only after evidence passes.
 
 ## Future local verification commands
 
@@ -41,15 +41,24 @@ Use existing opt-in disposable PostgreSQL configuration only for retained arithm
 ```json
 {
   "StatsOverlay": {
+    "Enabled": true,
+    "ReportedVehiclesEnabled": false,
     "RefreshIntervalMinutes": 60,
     "IngestionGraceMinutes": 2,
-    "MaximumFilteredCacheEntries": 8,
-    "MaximumFilteredCacheBytes": 16777216
+    "MaximumCacheEntries": 33,
+    "MaximumCacheBytes": 67108864
+  },
+  "AppSettings": {
+    "FeatureFlags": {
+      "StatsOverlay": true
+    }
   }
 }
 ```
 
-Keep total bounds 33 entries/67108864 bytes, read limit four/five seconds, existing request/response/rate-limit safety. Retire CacheSeconds from active server policy. Client feature configuration adds `AppSettings.FeatureFlags.StatsOverlayPreparation` default false beneath `StatsOverlay`; app retention starts three slots/33554432 estimated bytes. Apply equal server configuration through existing restart/redeploy operations. Changing interval to 15 needs no client rebuild; clients learn next accepted metadata. Browser clocks beyond 30-second future-generation tolerance can yield invalid-response evidence; do not silently invent freshness.
+These are the repository defaults: 60-minute schedule, two-minute ingestion grace, 33 entries/67108864 estimated bytes total, and fixed internal caps of 8 filtered entries/16777216 estimated bytes, clamped to those totals. Server limits remain four concurrent fills, a five-second whole-fill deadline, existing request/response caps and endpoint rate limits. `CacheSeconds` is removed; expiration follows the response's fixed refresh boundary or earlier root-city day boundary. Enabled `StatsOverlay` always prepares city and All at startup and refreshes them while visible. `StatsOverlay.RefreshIntervalMinutes` (default 60) is the only configuration added by this feature; filtered retention uses fixed internal budgets of eight entries/16 MiB. Client snapshot retention remains three slots/33554432 estimated bytes.
+
+Before changing the refresh interval, grace or cache bounds, apply the same settings to every API replica and use the existing restart/redeploy path. Verify the resolved configuration on all replicas before comparing hit/coalescing metrics; mixed policy replicas can return different original generation times. A 15-minute interval needs no client rebuild because clients adopt valid schedule metadata from accepted responses. Browser clocks more than 30 seconds ahead of the server generation can produce `invalid_response`; do not manufacture freshness.
 
 ## Release evidence and rollback
 
@@ -57,4 +66,4 @@ Record every profile/result/exception, not just pass labels. Demonstrate no open
 
 Browser walkthrough covers initial cold opening, warm city/All, repeated close/reopen, rapid routes/navigation, success then failure, offline, hidden/resume, clock jumps, midnight, mixed old/new server, resource/theme/focus/accessibility and disposal. Units/theme presentation performs no requests; this feature does not add units control.
 
-Rollback preparation=false leaves store on-open and displayed boundary refresh. Set filtered entries=0 disables retention but preserves exact shared fills. StatsOverlay=false stops all work; server stats_disabled suppresses session attempts. Preserve endpoint/metrics/SQL throughout. Measure legacy clients' minute polling until reload before claiming reduced traffic. No distributed/persistent cache, conditional requests, cross-tab coordination, stats push or worker/schema work.
+Disable client presentation with `AppSettings.FeatureFlags.StatsOverlay=false`; disable server reads independently with `StatsOverlay.Enabled=false`, which returns `stats_disabled`. Each setting uses its existing app configuration restart/redeploy path. Preserve endpoint semantics, telemetry and SQL. Legacy clients keep their 60-second fallback behavior until reload; measure their request rate separately before claiming total traffic reduction. No distributed/persistent cache, conditional requests, cross-tab coordination, stats push or worker/schema work is introduced.

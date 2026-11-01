@@ -23,3 +23,31 @@ window.trackCityView = function (city) {
     if (!city) return;
     window.trackPageView("/" + city, "City: " + city);
 };
+
+// Stats retrieval diagnostics are finite aggregate events with no selection identity.
+window.trackStatsSnapshotEvent = function (eventName, ageBucket) {
+    var allowedEvents = [
+        "stats_preparation_complete",
+        "stats_warm_open",
+        "stats_loader",
+        "stats_snapshot_age_on_open",
+        "stats_admission_skipped",
+        "stats_failure"
+    ];
+    if (allowedEvents.indexOf(eventName) === -1 || typeof umami === "undefined") return;
+
+    if (eventName === "stats_snapshot_age_on_open") {
+        var allowedAgeBuckets = [
+            "UnderOneMinute",
+            "OneToFiveMinutes",
+            "FiveToFifteenMinutes",
+            "FifteenToSixtyMinutes",
+            "OverSixtyMinutes"
+        ];
+        if (allowedAgeBuckets.indexOf(ageBucket) === -1) return;
+        umami.track(eventName, { age_bucket: ageBucket });
+        return;
+    }
+
+    umami.track(eventName);
+};

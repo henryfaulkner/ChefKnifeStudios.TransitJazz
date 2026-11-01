@@ -137,7 +137,7 @@ Cache valid 200 responses even when their evidence is partial, pending, unavaila
 
 Route combinations are unbounded in principle. Retain the existing **33-entry / 64 MiB total cache caps** and conservative object-size admission estimate. Add a filtered-entry subset capped initially at **eight entries / 16 MiB**, counted inside those totals. These are proposed starting settings, subject to representative payload measurements.
 
-Expose the subset limits as `MaximumFilteredCacheEntries` and `MaximumFilteredCacheBytes`; validate them against the total caps. Zero filtered entries disables filtered response retention while preserving bounded exact-request coalescing.
+Keep subset budgets internal: eight entries and 16 MiB, clamped to the existing configured total caps. Do not expose additional filtered-retention configuration. Preserve bounded exact-request coalescing.
 
 - Expired entries are removed first.
 - Filtered admission may evict the least recently used filtered entries, but cannot evict unfiltered city/All entries.
@@ -310,7 +310,7 @@ Extend the existing Stats telemetry with bounded labels for scope (`city`/`all`)
 
 Follow the repository's existing client diagnostics convention for prefetch completion, warm-open success, loader display, snapshot age on open, and refresh failures. Prefer aggregate counters/timings; do not add a new telemetry platform for this feature.
 
-Add a separate client background-prefetch rollout switch under the existing statistics feature gate. Roll out the schedule-aware server and filtered caching first, then the store-backed overlay, then background prefetch. Old clients may keep minute polling until their next page reload; measure this overlap rather than assuming an immediate traffic reduction. With prefetch off, the same store should support on-open retrieval and visible-overlay boundary refreshes, providing a concrete rollback path without restoring a second request owner. With Stats disabled entirely, no statistics work runs.
+The existing statistics feature gate controls startup preparation, retained-overlay retrieval and visible baseline refresh together. RefreshIntervalMinutes (default 60) is the only configuration added by this feature; there is no separate preparation flag or configurable filtered-retention budget. Deploy the schedule-aware server before the client. Old clients may keep minute polling until their next page reload; measure this overlap. With Stats disabled entirely, no statistics work runs.
 
 Rollback can disable background prefetch to reduce HTTP/egress, and set filtered server admission to zero to restore unfiltered-only caching. Retain the original metric endpoint and database behavior throughout. Update deployment settings/contracts and record actual validation evidence before broad enablement; this design performs no deployment or commit.
 

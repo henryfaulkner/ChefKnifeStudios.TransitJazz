@@ -41,7 +41,10 @@ All properties listed below are binding. Nullable evidence properties are explic
 | contractVersion | `"stats-overlay-v1"` |
 | metricDefinitionVersion | `"observed-city-route-hour-statistics-v1"`, including wholly unavailable responses |
 | generatedAtUtc | Actual cold snapshot as-of; remains unchanged on cached delivery |
-| cutoffUtc | `floorUtcHour(generatedAtUtc - 2 minutes)` |
+| cutoffUtc | `floorUtcHour(generatedAtUtc - configured IngestionGraceMinutes)` |
+| refreshIntervalMinutes | Configured integer divisor of 60; present on every valid response from a new server |
+| refreshWindowStartUtc | UTC start of the fixed refresh window containing the original generation time |
+| nextRefreshAtUtc | Effective UTC expiry: earlier of the next fixed refresh boundary and the earliest future root-city local-day end |
 | selection | Validated normalized request, retaining unknown selected keys |
 | cities | One CityWindow for city, every configured public city for All, including unavailable cities |
 | routeOptions | Unfiltered retained option union for city; empty in All |
@@ -52,6 +55,8 @@ All properties listed below are binding. Nullable evidence properties are explic
 | timeline | Category stacked or city unstacked Timeline |
 | warnings | Unique bounded stable code list; localized copy is client-owned |
 | previousDay | Optional city-only PreviousDaySnapshot while today has no eligible completed hours; absent/null otherwise |
+
+Refresh metadata is additive. Old clients ignore these fields. A new client distinguishes all-three-absent legacy responses from explicit null or partial schedule metadata. All-absent legacy responses use a 60-second freshness and hard-expiry limit from `generatedAtUtc`; the client does not infer hourly freshness. Any supplied null/partial set, invalid interval, unusable or non-UTC timestamp, or invalid ordering is `invalid_response` and cannot replace previously accepted evidence.
 
 ### Early-morning city display
 
@@ -114,15 +119,19 @@ Data/coverage reasons include `missing_cohort`, `partial_cohort`, `no_data`, `co
 | 413 | request_too_large | Body or selected-key cap exceeded; no SQL |
 | 422 | scope_too_large / response_too_large | Historical union/city/category/numeric/response bound; never truncated success |
 | 429 | rate_limited | Trusted-client token budget; Retry-After |
-| 503 | stats_disabled / dependency_unavailable / read_timeout / read_busy | Read exposure off, DB/schema dependency, five-second deadline or cold-admission saturation; safe retry hint |
+| 503 | stats_disabled / dependency_unavailable / read_timeout / busy | Read exposure off, DB/schema dependency, five-second deadline or cold-admission saturation; safe retry hint |
 
 ProblemDetails has stable `code`, safe fixed title/status and optional trace correlation; it contains no SQL, credentials or exception message. Client displays localized resource text, not arbitrary server detail. Numeric/date Retry-After is parsed to a delay; a longer service delay overrides local backoff. Initial delay is 60 seconds, increases to five minutes under continued failure and resets after success. An active cooldown also governs selection changes/retry/visibility restoration.
 
 ## Bounded service behavior
 
-Dedicated cache: successful unfiltered scopes only, absolute 60s TTL, <=33 replaceable configured slots, initial 64 MiB object budget, own five-second coalesced-fill deadline. Key identity includes scope/city/cutoff/local dates/definition/cadence/config-set version. All is one database snapshot, never concatenated city caches. Return original generatedAtUtc, no silent expired fallback; quarantine visibility lag <=TTL.
+Schedule-aware cache: successful All, city-baseline and exact filtered selections share the same bounded cache and in-flight identity. Canonical identity includes scope/city, the ordinal-sorted distinct case-sensitive route-key array, cutoff and refresh window, interval/grace, contract/metric versions, configured city/date/zone/cadence policy, and reported-vehicle enablement/source/cadence fingerprints. All remains one independent consistent database read, never concatenated city caches. Reordered/duplicate routes join only when their normalized exact selection and full policy identity match; other routes, case variants, cities and scopes remain isolated.
 
-Endpoint limiter: ten-token burst, one token/second refill (60/minute sustained), no queue, trusted IP provenance. Cold DB fills: four concurrent/instance with immediate busy failure; no unlimited waiting. Deadline spans acquisition/query/projection/size check and cancellation. Compression is existing API middleware; raw JSON success <=8 MiB before headers, typical compressed city target <1 MiB. Cache object memory and request/results/in-flight working memory are separately measured at supported scope/replica count.
+Retain at most 33 entries/64 MiB estimated total, with a filtered subset of at most 8 entries/16 MiB by default. Filtered entries may displace filtered LRU entries but never baseline evidence. Baseline admission evicts filtered entries before the oldest baseline; a full set of 33 baselines can serve a filtered result uncached. Remove expired entries before admission. Estimate from the single bounded serialization using UTF-8 bytes ×8 plus fixed response, canonical key, selection-slot and entry overhead; this is an admission estimate, not actual heap measurement. `CacheSeconds` is retired from active configuration and policy.
+
+Entries expire at their original `nextRefreshAtUtc` or corresponding monotonic lifetime, whichever comes first. A clock regression flushes retained entries. Never serve expired fallback or cache a fill that crossed its original boundary. The five-second shared-fill deadline spans query, projection and response-size validation; host shutdown cancels shared work, while an individual caller cancellation only stops that caller's wait. Allow at most four concurrent cold fills per instance, with immediate `busy` when no matching fill can join and no queue. Exact fill promises are published under a short lock; query, projection, serialization and waits run outside that lock. A matching waiter joins even when all read slots are occupied.
+
+Endpoint limiter: ten-token burst, one token/second refill (60/minute sustained), no queue, trusted IP provenance. Requests remain anonymous bounded POSTs with `Cache-Control: no-store`; successful responses must fit the 8 MiB uncompressed response cap before publication. Compression uses the existing API middleware. Cache estimates do not stand in for separate measurements of transient query/projection/serialization memory or supported replica-count load.
 
 No vehicle/trip/listener/raw-feed/capture-run identifiers, credentials, unrestricted SQL or EF/Pax types appear in the response. Read exposure and launchers are independent from capture, dry run and city settings. A missing city's retained history is data availability; unavailable database/schema is service failure.
 

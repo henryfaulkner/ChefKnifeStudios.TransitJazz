@@ -6,6 +6,54 @@ namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.Statistics;
 
 public sealed class StatsOverlayWindowTests
 {
+    [Fact]
+    public void RefreshWindowUsesIngestionGraceForItsFixedNextBoundary()
+    {
+        var hourly = StatsOverlayRefreshPolicy.Resolve(
+            DateTimeOffset.Parse("2026-10-30T10:59:00Z"), 60, 2);
+        var quarterHourly = StatsOverlayRefreshPolicy.Resolve(
+            DateTimeOffset.Parse("2026-10-30T10:59:00Z"), 15, 2);
+
+        Assert.Equal(DateTime.Parse("2026-10-30T10:02:00Z").ToUniversalTime(), hourly.RefreshWindowStartUtc);
+        Assert.Equal(DateTime.Parse("2026-10-30T11:02:00Z").ToUniversalTime(), hourly.ScheduledNextRefreshUtc);
+        Assert.Equal(hourly.ScheduledNextRefreshUtc, hourly.NextRefreshAtUtc);
+        Assert.Equal(DateTime.Parse("2026-10-30T10:47:00Z").ToUniversalTime(), quarterHourly.RefreshWindowStartUtc);
+        Assert.Equal(DateTime.Parse("2026-10-30T11:02:00Z").ToUniversalTime(), quarterHourly.ScheduledNextRefreshUtc);
+    }
+
+    [Fact]
+    public void RefreshWindowUsesMathematicalFloorAtBoundariesAndAllowsGraceLongerThanInterval()
+    {
+        var beforeQuarterBoundary = StatsOverlayRefreshPolicy.Resolve(
+            DateTimeOffset.Parse("2026-10-30T11:01:59Z"), 15, 2);
+        var atQuarterBoundary = StatsOverlayRefreshPolicy.Resolve(
+            DateTimeOffset.Parse("2026-10-30T11:02:00Z"), 15, 2);
+        var preEpoch = StatsOverlayRefreshPolicy.Resolve(
+            DateTimeOffset.Parse("1969-12-31T23:59:59Z"), 1, 10);
+
+        Assert.Equal(DateTime.Parse("2026-10-30T10:47:00Z").ToUniversalTime(), beforeQuarterBoundary.RefreshWindowStartUtc);
+        Assert.Equal(DateTime.Parse("2026-10-30T11:02:00Z").ToUniversalTime(), beforeQuarterBoundary.ScheduledNextRefreshUtc);
+        Assert.Equal(DateTime.Parse("2026-10-30T11:02:00Z").ToUniversalTime(), atQuarterBoundary.RefreshWindowStartUtc);
+        Assert.Equal(DateTime.Parse("2026-10-30T11:17:00Z").ToUniversalTime(), atQuarterBoundary.ScheduledNextRefreshUtc);
+        Assert.Equal(DateTime.Parse("1969-12-31T23:59:00Z").ToUniversalTime(), preEpoch.RefreshWindowStartUtc);
+        Assert.Equal(DateTime.UnixEpoch, preEpoch.ScheduledNextRefreshUtc);
+    }
+
+    [Fact]
+    public void RefreshWindowShortensToFutureRootDayEndButIgnoresHistoricalDayEnds()
+    {
+        var now = DateTimeOffset.Parse("2026-10-30T10:59:00Z");
+        var schedule = StatsOverlayRefreshPolicy.Resolve(now, 60, 2,
+        [
+            DateTime.Parse("2026-10-30T10:00:00Z"),
+            DateTime.Parse("2026-10-30T11:01:00Z"),
+            DateTime.Parse("2026-10-30T23:00:00Z")
+        ]);
+
+        Assert.Equal(DateTime.Parse("2026-10-30T11:02:00Z").ToUniversalTime(), schedule.ScheduledNextRefreshUtc);
+        Assert.Equal(DateTime.Parse("2026-10-30T11:01:00Z").ToUniversalTime(), schedule.NextRefreshAtUtc);
+    }
+
     [Theory]
     [InlineData("2026-04-02T04:00:00Z", 23)]
     [InlineData("2026-04-02T04:02:00Z", 24)]

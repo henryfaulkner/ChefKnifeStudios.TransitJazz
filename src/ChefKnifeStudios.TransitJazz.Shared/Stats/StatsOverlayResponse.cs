@@ -24,10 +24,44 @@ public static class StatsOverlayVocabulary
 
 public sealed record StatsOverlayResponse
 {
+    int? refreshIntervalMinutes;
+    DateTime? refreshWindowStartUtc;
+    DateTime? nextRefreshAtUtc;
+
     public string ContractVersion { get; init; } = StatsOverlayVocabulary.ContractVersion;
     public string MetricDefinitionVersion { get; init; } = StatsOverlayVocabulary.MetricDefinitionVersion;
     public DateTime GeneratedAtUtc { get; init; }
     public DateTime CutoffUtc { get; init; }
+    [JsonIgnore] public bool RefreshIntervalMinutesPresent { get; private init; }
+    [JsonIgnore] public bool RefreshWindowStartUtcPresent { get; private init; }
+    [JsonIgnore] public bool NextRefreshAtUtcPresent { get; private init; }
+    public int? RefreshIntervalMinutes
+    {
+        get => refreshIntervalMinutes;
+        init
+        {
+            refreshIntervalMinutes = value;
+            RefreshIntervalMinutesPresent = true;
+        }
+    }
+    public DateTime? RefreshWindowStartUtc
+    {
+        get => refreshWindowStartUtc;
+        init
+        {
+            refreshWindowStartUtc = value;
+            RefreshWindowStartUtcPresent = true;
+        }
+    }
+    public DateTime? NextRefreshAtUtc
+    {
+        get => nextRefreshAtUtc;
+        init
+        {
+            nextRefreshAtUtc = value;
+            NextRefreshAtUtcPresent = true;
+        }
+    }
     public required StatsSelection Selection { get; init; }
     public required IReadOnlyList<StatsCityWindow> Cities { get; init; }
     public required IReadOnlyList<StatsRouteOption> RouteOptions { get; init; }

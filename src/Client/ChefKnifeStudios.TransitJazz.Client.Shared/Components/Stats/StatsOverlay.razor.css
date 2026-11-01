@@ -28,6 +28,24 @@
 .stats-overlay--dark .stats-overlay__previous-day { border-inline-start-color: #b0bec5; }
 .stats-overlay__previous-day h1 { margin: 0; font-size: 1.25rem; }
 .stats-overlay__previous-day p { margin: .4rem 0 0; line-height: 1.5; }
+.stats-overlay__historical,
+.stats-overlay__overdue,
+.stats-overlay__error,
+.stats-overlay__unavailable,
+.stats-overlay__recovery { margin: 0 0 1rem; padding: .9rem 1rem; border: 1px solid #8d6e00; border-radius: .5rem; background: #fff8e1; color: #302500; }
+.stats-overlay__error { border-color: #b3261e; background: #fce8e6; color: #4a1110; }
+.stats-overlay__recovery { border-color: #386a20; background: #edf7e8; color: #18320f; }
+.stats-overlay--dark .stats-overlay__historical,
+.stats-overlay--dark .stats-overlay__overdue,
+.stats-overlay--dark .stats-overlay__unavailable { border-color: #d0b45a; background: #302b1c; color: #fff3c4; }
+.stats-overlay--dark .stats-overlay__error { border-color: #ffb4ab; background: #3b2220; color: #ffdad6; }
+.stats-overlay--dark .stats-overlay__recovery { border-color: #a4d18a; background: #22301b; color: #d7f2c5; }
+.stats-overlay__historical h1 { margin: 0; font-size: 1.25rem; }
+.stats-overlay__historical p,
+.stats-overlay__overdue p,
+.stats-overlay__error p,
+.stats-overlay__unavailable p { margin: .4rem 0 0; line-height: 1.5; }
+.stats-overlay__snapshot-updated { margin: .75rem 0; font-size: .875rem; opacity: .8; }
 .stats-overlay .stats-overlay__loader { position: fixed; inset: 0; height: 100%; background: transparent; pointer-events: none; }
 .stats-overlay .app-loader__ring { border-right-color: currentColor; border-top-color: currentColor; }
 .stats-overlay .app-loader__label { color: inherit; }

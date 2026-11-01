@@ -29,12 +29,12 @@ Fields are optional only for old-server deserialization; do not assign default 6
 | RefreshIntervalMinutes | 60; integer 1–60, divides 60; reject fractional configuration |
 | IngestionGraceMinutes | Existing 2; existing 1–10 validation |
 | MaximumCacheEntries / Bytes | Existing 33 / 64 MiB maximum |
-| MaximumFilteredCacheEntries | 8, nonnegative and <=total entries; zero disables retention only |
-| MaximumFilteredCacheBytes | 16 MiB, nonnegative and <=total bytes; positive when filtered entries >0 |
+| Filtered entry budget (internal) | Eight, clamped to the existing total entry limit; no configuration setting |
+| Filtered byte budget (internal) | 16 MiB, clamped to the existing total byte limit; no configuration setting |
 | MaximumConcurrentReads / ReadTimeoutSeconds | Existing maximum four / five |
 | CacheSeconds | Retired from active schedule-aware server policy/config/validation/tests |
 
-At lower configured total bounds, configure valid filtered subset explicitly; startup fails inconsistent settings. Configuration uses existing restart path with equal settings per replica. Open clients adopt settings on next accepted response/reload; no push.
+RefreshIntervalMinutes is the only configuration added by this feature. Lower existing total bounds automatically constrain the internal filtered subset. Configuration uses existing restart path with equal settings per replica. Open clients adopt settings on next accepted response/reload; no push.
 
 Use one TimeProvider-backed helper:
 

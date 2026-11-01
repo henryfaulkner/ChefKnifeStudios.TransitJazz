@@ -175,6 +175,117 @@ public sealed class StatsOverlayContractTests
         Assert.Equal("unavailable", deserialized.Last24ReportedVehicles.State);
     }
 
+    [Fact]
+    public void RefreshSchedulePresenceDistinguishesLegacyAbsenceFromExplicitNull()
+    {
+        var response = new StatsOverlayResponse
+        {
+            GeneratedAtUtc = DateTime.UnixEpoch,
+            CutoffUtc = DateTime.UnixEpoch,
+            Selection = new StatsSelection("all", null, []),
+            Cities = [],
+            RouteOptions = [],
+            TodayDistance = new StatsDistanceSummary { Window = "today", Kilometers = null, Coverage = EmptyCoverage() },
+            Last24Distance = new StatsDistanceSummary { Window = "last24CompletedHours", Kilometers = null, Coverage = EmptyCoverage() },
+            CategoryShares = [],
+            Bubbles = [],
+            Timeline = new StatsTimeline { SeriesKind = "unavailable", Series = [] },
+            Warnings = []
+        };
+
+        var legacyJson = JsonSerializer.Serialize(response, JsonSettings.DefaultOptions);
+        var legacy = JsonSerializer.Deserialize<StatsOverlayResponse>(legacyJson, JsonSettings.DefaultOptions)!;
+        var explicitNullJson = legacyJson[..^1]
+            + ",\"refreshIntervalMinutes\":null,\"refreshWindowStartUtc\":null,\"nextRefreshAtUtc\":null}";
+        var explicitNull = JsonSerializer.Deserialize<StatsOverlayResponse>(explicitNullJson, JsonSettings.DefaultOptions)!;
+
+        Assert.False(legacy.RefreshIntervalMinutesPresent);
+        Assert.False(legacy.RefreshWindowStartUtcPresent);
+        Assert.False(legacy.NextRefreshAtUtcPresent);
+        Assert.True(explicitNull.RefreshIntervalMinutesPresent);
+        Assert.True(explicitNull.RefreshWindowStartUtcPresent);
+        Assert.True(explicitNull.NextRefreshAtUtcPresent);
+        Assert.Null(explicitNull.RefreshIntervalMinutes);
+        Assert.Null(explicitNull.RefreshWindowStartUtc);
+        Assert.Null(explicitNull.NextRefreshAtUtc);
+    }
+
+    [Fact]
+    public void RefreshSchedulePresenceTracksEveryPartialJsonCombinationAndRejectsFractionalInterval()
+    {
+        var legacyJson = JsonSerializer.Serialize(new StatsOverlayResponse
+        {
+            GeneratedAtUtc = DateTime.UnixEpoch,
+            CutoffUtc = DateTime.UnixEpoch,
+            Selection = new StatsSelection("all", null, []),
+            Cities = [],
+            RouteOptions = [],
+            TodayDistance = new StatsDistanceSummary { Window = "today", Kilometers = null, Coverage = EmptyCoverage() },
+            Last24Distance = new StatsDistanceSummary { Window = "last24CompletedHours", Kilometers = null, Coverage = EmptyCoverage() },
+            CategoryShares = [],
+            Bubbles = [],
+            Timeline = new StatsTimeline { SeriesKind = "unavailable", Series = [] },
+            Warnings = []
+        }, JsonSettings.DefaultOptions);
+        var propertyValues = new[]
+        {
+            "\"refreshIntervalMinutes\":60",
+            "\"refreshWindowStartUtc\":\"1970-01-01T00:00:00Z\"",
+            "\"nextRefreshAtUtc\":\"1970-01-01T01:00:00Z\""
+        };
+
+        for (var mask = 1; mask < 8; mask++)
+        {
+            var selected = propertyValues.Where((_, index) => (mask & (1 << index)) != 0);
+            var json = legacyJson[..^1] + "," + string.Join(',', selected) + "}";
+            var parsed = JsonSerializer.Deserialize<StatsOverlayResponse>(json, JsonSettings.DefaultOptions)!;
+
+            Assert.Equal((mask & 1) != 0, parsed.RefreshIntervalMinutesPresent);
+            Assert.Equal((mask & 2) != 0, parsed.RefreshWindowStartUtcPresent);
+            Assert.Equal((mask & 4) != 0, parsed.NextRefreshAtUtcPresent);
+        }
+
+        var fractionalJson = legacyJson[..^1] + ",\"refreshIntervalMinutes\":7.5}";
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<StatsOverlayResponse>(fractionalJson, JsonSettings.DefaultOptions));
+    }
+
+    [Fact]
+    public void RefreshScheduleMetadataSerializesAdditivelyAndRoundTripsItsPresence()
+    {
+        var response = new StatsOverlayResponse
+        {
+            GeneratedAtUtc = new DateTime(2026, 1, 2, 12, 2, 0, DateTimeKind.Utc),
+            CutoffUtc = new DateTime(2026, 1, 2, 12, 0, 0, DateTimeKind.Utc),
+            RefreshIntervalMinutes = 15,
+            RefreshWindowStartUtc = new DateTime(2026, 1, 2, 12, 0, 0, DateTimeKind.Utc),
+            NextRefreshAtUtc = new DateTime(2026, 1, 2, 12, 15, 0, DateTimeKind.Utc),
+            Selection = new StatsSelection("all", null, []),
+            Cities = [],
+            RouteOptions = [],
+            TodayDistance = new StatsDistanceSummary { Window = "today", Kilometers = null, Coverage = EmptyCoverage() },
+            Last24Distance = new StatsDistanceSummary { Window = "last24CompletedHours", Kilometers = null, Coverage = EmptyCoverage() },
+            CategoryShares = [],
+            Bubbles = [],
+            Timeline = new StatsTimeline { SeriesKind = "unavailable", Series = [] },
+            Warnings = []
+        };
+
+        var json = JsonSerializer.Serialize(response, JsonSettings.DefaultOptions);
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        Assert.Equal(15, root.GetProperty("refreshIntervalMinutes").GetInt32());
+        Assert.Equal("2026-01-02T12:00:00Z", root.GetProperty("refreshWindowStartUtc").GetString());
+        Assert.Equal("2026-01-02T12:15:00Z", root.GetProperty("nextRefreshAtUtc").GetString());
+
+        var parsed = JsonSerializer.Deserialize<StatsOverlayResponse>(json, JsonSettings.DefaultOptions)!;
+        Assert.True(parsed.RefreshIntervalMinutesPresent);
+        Assert.True(parsed.RefreshWindowStartUtcPresent);
+        Assert.True(parsed.NextRefreshAtUtcPresent);
+        Assert.Equal(response.RefreshIntervalMinutes, parsed.RefreshIntervalMinutes);
+        Assert.Equal(response.RefreshWindowStartUtc, parsed.RefreshWindowStartUtc);
+        Assert.Equal(response.NextRefreshAtUtc, parsed.NextRefreshAtUtc);
+    }
+
     static StatsCoverage EmptyCoverage() => new()
     {
         State = "unavailable", Exclusions = [], PendingThroughUtc = DateTime.UnixEpoch,

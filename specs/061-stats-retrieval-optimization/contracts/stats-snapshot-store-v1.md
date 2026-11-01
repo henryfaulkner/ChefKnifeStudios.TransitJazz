@@ -16,7 +16,7 @@ StopAsync()                               cancel, await, unsubscribe
 
 Register one instance per WASM app. App starts after first interactive render, subscribes navigation/shared visibility before initial hidden read, and stops/disposes owned work. Map retains sole AddVisibilityChangeListenerAsync callback registration. Store subscribes VisibilityChanged and never removes/disposes map's listener. Verify App/map startup/remount order; initial hidden tab issues no requests. Existing ApplicationViewModel initialization remains independent.
 
-Both statistics and new StatsOverlayPreparation flag enable baseline preparation; new flag defaults off. Stats off means no work. Server stats_disabled suppresses automatic work until explicit configuration reevaluation/reload. Preparation off uses the same owner for on-open retrieval and displayed selection boundary refresh; never restores a dialog timer. Start returns without awaiting network; all launched tasks are observed, canceled and awaited at stop.
+The existing StatsOverlay flag enables presentation and baseline preparation together; no separate preparation setting exists. Stats off means no work. Server stats_disabled suppresses automatic work until explicit configuration reevaluation/reload. Opening joins matching preparation through the same owner; never restore a dialog timer. Start returns without awaiting network; all launched tasks are observed, canceled and awaited at stop.
 
 ## Selection, retention and generations
 

@@ -2,8 +2,12 @@
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services
 @using Microsoft.Extensions.Localization
+@using ChefKnifeStudios.TransitJazz.Client.Core.Services
 @inject IApplicationViewModel ApplicationViewModel
 @inject IStringLocalizer<RouteFilterResources> Loc
+@inject NavigationManager NavigationManager
+@inject StatsSnapshotStore StatsSnapshotStore
+@implements IAsyncDisposable
 
 <Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
@@ -27,4 +31,12 @@
     {
         _ = ApplicationViewModel.InitializeAsync();
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await StatsSnapshotStore.StartAsync(NavigationManager.ResolveCity());
+    }
+
+    public ValueTask DisposeAsync() => new(StatsSnapshotStore.StopAsync());
 }

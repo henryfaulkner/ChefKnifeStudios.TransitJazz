@@ -12,6 +12,27 @@ namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.Statistics;
 public sealed class StatsOverlayProjectionTests
 {
     [Theory]
+    [InlineData(60, "2026-01-02T06:02:00Z")]
+    [InlineData(15, "2026-01-02T05:17:00Z")]
+    public async Task CityProjectionIncludesRefreshScheduleMetadata(int refreshIntervalMinutes, string expectedNextRefreshUtc)
+    {
+        var generatedAt = DateTimeOffset.Parse("2026-01-02T05:02:00Z");
+        var options = Options("atlanta");
+        options.RefreshIntervalMinutes = refreshIntervalMinutes;
+        var service = new StatsOverlayService(new ProjectionQuery(BuildNoDataResult), options,
+            new FixedTimeProvider(generatedAt));
+
+        var response = await service.ReadAsync(new StatsOverlayRequest
+        {
+            Scope = "city", CitySlug = "atlanta", RouteJoinKeys = []
+        }, CancellationToken.None);
+
+        Assert.Equal(refreshIntervalMinutes, response.RefreshIntervalMinutes);
+        Assert.Equal(DateTime.Parse("2026-01-02T05:02:00Z").ToUniversalTime(), response.RefreshWindowStartUtc);
+        Assert.Equal(DateTime.Parse(expectedNextRefreshUtc).ToUniversalTime(), response.NextRefreshAtUtc);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task EarlyCityViewIncludesYesterdayAndPreservesTodayAndRollingTotals(bool filtered)

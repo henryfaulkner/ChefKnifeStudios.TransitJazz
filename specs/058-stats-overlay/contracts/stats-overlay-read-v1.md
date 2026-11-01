@@ -37,6 +37,12 @@ If multiple statements prove clearer, use one short read-only REPEATABLE READ tr
 
 The whole cold-read deadline is five seconds including connection acquisition, commands, projection and response size validation. Pass cancellation to every DB operation, clamp command/server timeouts to remaining budget and perform no unlimited retry/queue. Dedicated four-read admission and bounded cache fills are defined in [API contract](stats-overlay-api-v1.md). Reuse the existing city/hour/route index; add an index only after measured query-plan justification.
 
+## Schedule-aware retrieval identity
+
+Feature 061 adds bounded reuse around the read without changing this SQL, cohort eligibility, route arithmetic or coverage rules. Cache and in-flight sharing use the same structured identity: scope, canonical city, ordinal-sorted distinct case-sensitive route keys, cutoff and refresh window, configured cadence/grace, contract and metric versions, city/date/zone membership, and reported-vehicle policy/source fingerprints. Identical normalized filtered requests may share a fill and retained response; distinct route sets, case variants, cities and All remain isolated. There is no unfiltered-only cache path and filtered reads never borrow an unfiltered snapshot.
+
+All remains one complete consistent read. Every selected city/hour is validated against the full retained cohort before route selection is applied. Cache expiry follows the response's original fixed refresh boundary or earlier future root-day boundary, and expires on the UTC or monotonic deadline. Clock regression flushes retained entries; expired or crossed-boundary responses are never served as fallback. Exact budgets, eviction, cancellation and additive schedule compatibility are specified in the [refresh API/read extension](../../061-stats-retrieval-optimization/contracts/stats-refresh-api-v1.md).
+
 ## Whole-cohort eligibility
 
 For each city/hour, inspect **every retained row**, even rows outside a filter. Contributing cohort requires:

@@ -1,5 +1,7 @@
 using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Stats;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Charts;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Services;
+using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
 using Xunit;
 
@@ -8,67 +10,50 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.Tests;
 public sealed class StatsOverlaySessionTests
 {
     [Fact]
-    public void RefreshPolicyUsesOneMinuteBoundaryAndNeverRefreshesWhileHidden()
+    public async Task WarmOpenReadsMatchingStoreEvidenceWithoutLoaderOrRequestAndSurvivesCloseReopen()
     {
-        var now = new DateTimeOffset(2026, 10, 11, 12, 0, 0, TimeSpan.Zero);
-        var lastSuccess = now;
+        var now = new DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
+        var endpoints = new StatsSnapshotStoreTests.ControlledStatsEndpoints();
+        var store = new StatsSnapshotStore(endpoints, new StatsSnapshotTestTimeProvider(now),
+            new StatsSnapshotStoreTests.VisibilitySpy(), new StatsSnapshotStoreTests.NavigationSpy());
+        var selection = new StatsSelection("city", "toronto", []);
+        try
+        {
+            await store.StartAsync("toronto");
+            var pending = store.EnsureRequestedAsync(selection);
+            var call = await endpoints.WaitForCallAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+            call.Return(StatsSnapshotStoreTests.SuccessResponse(
+                StatsSnapshotAcceptanceTests.ValidResponse(selection, now.UtcDateTime)));
+            await pending.WaitAsync(TimeSpan.FromSeconds(2));
 
-        Assert.False(StatsOverlayRefreshPolicy.ShouldRefresh(now.AddSeconds(59), false, false, lastSuccess));
-        Assert.True(StatsOverlayRefreshPolicy.ShouldRefresh(now.AddMinutes(1), false, false, lastSuccess));
-        Assert.True(StatsOverlayRefreshPolicy.ShouldRefresh(now, false, true, lastSuccess));
-        Assert.False(StatsOverlayRefreshPolicy.ShouldRefresh(now.AddDays(1), true, true, lastSuccess));
-        Assert.True(StatsOverlayRefreshPolicy.ShouldRefresh(now, false, false, null));
-    }
+            store.SetOverlaySelection(selection);
+            var firstOpen = StatsOverlayOpenPolicy.Evaluate(store.TryGet(selection));
+            var evidence = Assert.IsType<StatsSnapshotState>(firstOpen.Evidence);
+            var firstPresentation = StatsOverlayProjection.Build(evidence.Snapshot!, key => $"first:{key}");
+            Assert.False(firstOpen.ShowInitialLoader);
+            Assert.False(firstOpen.ShouldRequest);
+            Assert.Same(evidence.Snapshot, firstPresentation.Snapshot);
 
-    [Fact]
-    public void RefreshPolicyCannotPollWhenClosedHiddenOrDisposedAndAllowsOnlyOneLoop()
-    {
-        Assert.True(StatsOverlayRefreshPolicy.ShouldRunLoop(sessionOpen: true, hidden: false, disposed: false));
-        Assert.True(StatsOverlayRefreshPolicy.ShouldStartLoop(sessionOpen: true, hidden: false, disposed: false, loopAlreadyRunning: false));
-        Assert.False(StatsOverlayRefreshPolicy.ShouldStartLoop(sessionOpen: true, hidden: false, disposed: false, loopAlreadyRunning: true));
-        Assert.False(StatsOverlayRefreshPolicy.ShouldRunLoop(sessionOpen: false, hidden: false, disposed: false));
-        Assert.False(StatsOverlayRefreshPolicy.ShouldRunLoop(sessionOpen: true, hidden: true, disposed: false));
-        Assert.False(StatsOverlayRefreshPolicy.ShouldRunLoop(sessionOpen: true, hidden: false, disposed: true));
+            store.SetOverlaySelection(null);
+            store.SetOverlaySelection(selection);
+            var reopened = StatsOverlayOpenPolicy.Evaluate(store.TryGet(selection));
+            var localizedPresentation = StatsOverlayProjection.Build(
+                reopened.Evidence!.Snapshot!, key => $"second:{key}", isDark: true);
+            var themePresentation = StatsOverlayProjection.Build(
+                reopened.Evidence.Snapshot!, key => $"second:{key}", isDark: false);
 
-    }
-
-    [Fact]
-    public async Task RefreshLoopLeaseCancelsPendingTickAndCannotClearANewerVisibleLoop()
-    {
-        using var session = new CancellationTokenSource();
-        var loops = new StatsOverlayRefreshLoopState();
-        Assert.True(loops.TryStart(session.Token, out var first));
-        Assert.NotNull(first);
-        Assert.False(loops.TryStart(session.Token, out var duplicate));
-        Assert.Null(duplicate);
-
-        var firstCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var firstRegistration = first!.Token.Register(() => firstCancelled.TrySetResult());
-        loops.Stop(); // the visibility-hidden and dispose paths both stop this same owned loop
-        await firstCancelled.Task.WaitAsync(TimeSpan.FromSeconds(1));
-        Assert.False(loops.IsRunning);
-
-        Assert.True(loops.TryStart(session.Token, out var second)); // visible restoration starts one fresh timer
-        Assert.NotNull(second);
-        loops.Complete(first); // late completion of the old timer must not release the new timer's ownership
-        Assert.True(loops.IsRunning);
-
-        var secondCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var secondRegistration = second!.Token.Register(() => secondCancelled.TrySetResult());
-        loops.Stop();
-        await secondCancelled.Task.WaitAsync(TimeSpan.FromSeconds(1));
-        loops.Complete(second);
-        Assert.False(loops.IsRunning);
-    }
-
-    [Fact]
-    public void RefreshIsDueAtTheCompletedHourAndLocalMidnightWhenTheMinuteBoundaryPasses()
-    {
-        var lastSuccess = new DateTimeOffset(2026, 4, 2, 3, 59, 0, TimeSpan.Zero);
-
-        Assert.False(StatsOverlayRefreshPolicy.ShouldRefresh(lastSuccess.AddSeconds(59), false, false, lastSuccess));
-        Assert.True(StatsOverlayRefreshPolicy.ShouldRefresh(lastSuccess.AddMinutes(1), false, false, lastSuccess));
-        Assert.True(StatsOverlayRefreshPolicy.ShouldRefresh(lastSuccess.AddHours(1), false, false, lastSuccess));
+            Assert.False(reopened.ShowInitialLoader);
+            Assert.False(reopened.ShouldRequest);
+            Assert.Same(evidence.Snapshot, localizedPresentation.Snapshot);
+            Assert.NotSame(firstPresentation, localizedPresentation);
+            Assert.NotSame(localizedPresentation, themePresentation);
+            Assert.NotEqual(firstPresentation.Timeline.XAxisTitle, localizedPresentation.Timeline.XAxisTitle);
+            Assert.Equal(selection.Scope, reopened.Evidence.Selection.Scope);
+            Assert.Equal(selection.CitySlug, reopened.Evidence.Selection.CitySlug);
+            Assert.Equal(selection.RouteJoinKeys, reopened.Evidence.Selection.RouteJoinKeys);
+            Assert.Single(endpoints.Calls);
+        }
+        finally { await store.StopAsync(); }
     }
 
     [Fact]
@@ -181,14 +166,18 @@ public sealed class StatsOverlaySessionTests
             new DateOnly(2026, 10, 11));
         Assert.True(state.TryAccept(3, 3, response, Presentation(response), "city", "toronto", []));
         var before = state.Current!;
+        var retainedTimeline = before.Presentation.Timeline;
+        var retainedReportedTable = before.Presentation.TodayReportedVehicles;
         var requestGate = new StatsOverlayRequestGate();
         Assert.True(requestGate.TryBegin(4));
 
-        var replacement = Presentation(response);
+        var replacement = StatsOverlayProjection.Build(response, key => $"changed:{key}");
         Assert.True(state.TryReplacePresentation(replacement));
 
         Assert.Same(response, state.Current!.Snapshot);
         Assert.Same(replacement, state.Current.Presentation);
+        Assert.NotSame(retainedTimeline, state.Current.Presentation.Timeline);
+        Assert.NotSame(retainedReportedTable, state.Current.Presentation.TodayReportedVehicles);
         Assert.Equal(before.Snapshot.CutoffUtc, state.Current.Snapshot.CutoffUtc);
         Assert.Equal(before.Snapshot.Cities, state.Current.Snapshot.Cities);
         Assert.Equal(4, requestGate.ActiveGeneration);
@@ -213,6 +202,8 @@ public sealed class StatsOverlaySessionTests
         Assert.True(state.Current!.IsStale);
         Assert.Same(accepted.Snapshot, state.Current.Snapshot);
         Assert.Same(accepted.Presentation, state.Current.Presentation);
+        Assert.Same(accepted.Presentation.Timeline, state.Current.Presentation.Timeline);
+        Assert.Same(accepted.Presentation.TodayReportedVehicles, state.Current.Presentation.TodayReportedVehicles);
         Assert.Equal(new DateTime(2026, 10, 11, 12, 0, 0, DateTimeKind.Utc), state.Current.Snapshot.GeneratedAtUtc);
         Assert.Equal(new DateTime(2026, 10, 11, 11, 0, 0, DateTimeKind.Utc), state.Current.Snapshot.CutoffUtc);
         Assert.Equal(new DateOnly(2026, 10, 11), Assert.Single(state.Current.Snapshot.Cities).LocalDate);

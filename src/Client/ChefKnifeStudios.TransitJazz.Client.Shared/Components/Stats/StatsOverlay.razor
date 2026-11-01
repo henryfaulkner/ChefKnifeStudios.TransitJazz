@@ -7,11 +7,9 @@
 @using ChefKnifeStudios.TransitJazz.Client.Shared.ViewModels
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Charts
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components
-@using ChefKnifeStudios.TransitJazz.Client.Core.Services.EndpointsServices
 @using ChefKnifeStudios.TransitJazz.Shared.Stats
 @using System.ComponentModel
 @using System.Globalization
-@using System.Net
 @using System.Threading
 @using System.Threading.Tasks
 @using Microsoft.JSInterop
@@ -21,8 +19,7 @@
 @inject ISettingsService SettingsService
 @inject IApplicationViewModel ApplicationViewModel
 @inject StatsChartText T
-@inject IStatsEndpointsService StatsEndpoints
-@inject IPageVisibilityJsInterop PageVisibility
+@inject StatsSnapshotStore SnapshotStore
 @inject NavigationManager NavigationManager
 
 @if (_isOpen)
@@ -73,12 +70,28 @@
                     <p>@T.Get("StatsShowingYesterday")</p>
                 </div>
             }
+            @if (dashboard.IsHistorical)
+            {
+                <div class="stats-overlay__historical" role="status" aria-live="polite">
+                    @if (dashboard.DailyEvidenceDate is { } dailyDate)
+                    {
+                        <h1>@T.Get("StatsHistoricalSnapshotDate", FormatDate(dailyDate))</h1>
+                        <p>@T.Get("StatsHistoricalSnapshotExplanation")</p>
+                    }
+                    else
+                    {
+                        <p>@T.Get("StatsHistoricalAllSnapshotExplanation")</p>
+                    }
+                </div>
+            }
             <section class="stats-overlay__dashboard">
                 <SeriesChart Model="@dashboard.Timeline" Title="@T.Get("StatsCumulativeDistance")"
                                 State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
                 <section class="stats-overlay__totals" aria-label="@T.Get(dashboard.DailyDistanceHeadingKey)">
                     <article>
-                        <h2>@T.Get(dashboard.DailyDistanceHeadingKey)</h2>
+                        <h2>@(dashboard.DailyDistanceHeadingKey == "StatsDistanceOnDate"
+                            ? T.Get(dashboard.DailyDistanceHeadingKey, FormatDate(dashboard.DailyEvidenceDate))
+                            : T.Get(dashboard.DailyDistanceHeadingKey))</h2>
                         <p><strong>@T.Format(ToDouble(dashboard.DailyDistance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
                     </article>
                     <article>
@@ -86,7 +99,9 @@
                         <p><strong>@T.Format(ToDouble(dashboard.Snapshot.Last24Distance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
                     </article>
                     <article class="stats-overlay__reported" aria-labelledby="stats-reported-today-heading">
-                        <h2 id="stats-reported-today-heading">@T.Get(dashboard.TodayReportedVehicles.HeadingKey)</h2>
+                        <h2 id="stats-reported-today-heading">@(dashboard.TodayReportedVehicles.HeadingKey == "StatsReportedVehiclesOnDate"
+                            ? T.Get(dashboard.TodayReportedVehicles.HeadingKey, FormatDate(dashboard.DailyEvidenceDate))
+                            : T.Get(dashboard.TodayReportedVehicles.HeadingKey))</h2>
                         <p class="stats-overlay__reported-count"><strong>@dashboard.TodayReportedVehicles.CountText</strong></p>
                     </article>
                     <article class="stats-overlay__reported" aria-labelledby="stats-reported-last24-heading">
@@ -100,14 +115,29 @@
                 <PieChart Model="@dashboard.CategoryPie" Title="@T.Get("StatsCategoryShares")"
                             State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
             </section>
+            <p class="stats-overlay__snapshot-updated">@T.Get("StatsSnapshotUpdatedAt", SnapshotUpdatedAtText)</p>
+        }
+        @if (_recoveryNotice)
+        {
+            <p class="stats-overlay__recovery" role="status" aria-live="polite">@T.Get("StatsRefreshRecovered")</p>
         }
         @if (_presentation is not null)
         {
             @if (_isStale && _errorCode is not null)
             {
-                <div class="stats-overlay__error" role="alert">
+                <div class="stats-overlay__error" role="status" aria-live="polite">
+                    <p>@T.Get("StatsStale")</p>
+                    <p>@T.Get("StatsSnapshotUpdatedAt", SnapshotUpdatedAtText)</p>
                     <p>@T.Get(StatsOverlayErrorResources.ResourceKey(_errorCode))</p>
-                    <button type="button" disabled="@_retryPolicy.IsCoolingDown(DateTimeOffset.UtcNow)" @onclick="RetryAsync">@T.Get("StatsRetry")</button>
+                    <button type="button" @onclick="RetryAsync">@T.Get("StatsRetry")</button>
+                </div>
+            }
+            else if (_isStale && !_isHistorical)
+            {
+                <div class="stats-overlay__overdue" role="status" aria-live="polite">
+                    <p>@T.Get("StatsOverdueNotice")</p>
+                    <p>@T.Get("StatsSnapshotUpdatedAt", SnapshotUpdatedAtText)</p>
+                    <button type="button" @onclick="RetryAsync">@T.Get("StatsRetry")</button>
                 </div>
             }
         }
@@ -120,9 +150,16 @@
         }
         else if (_errorCode is not null)
         {
-            <div class="stats-overlay__error" role="alert">
+            <div class="stats-overlay__error" role="status" aria-live="polite">
                 <p>@T.Get(StatsOverlayErrorResources.ResourceKey(_errorCode))</p>
-                <button type="button" disabled="@_retryPolicy.IsCoolingDown(DateTimeOffset.UtcNow)" @onclick="RetryAsync">@T.Get("StatsRetry")</button>
+                <button type="button" @onclick="RetryAsync">@T.Get("StatsRetry")</button>
+            </div>
+        }
+        else
+        {
+            <div class="stats-overlay__unavailable" role="status">
+                <p>@T.Get("StatsNoMatchingSnapshot")</p>
+                <button type="button" @onclick="RetryAsync">@T.Get("StatsRetry")</button>
             </div>
         }
     </main>
@@ -144,14 +181,12 @@
     StatsOverlayResponse? _snapshot => _acceptedSnapshot.Current?.Snapshot;
     StatsOverlayPresentation? _presentation => _acceptedSnapshot.Current?.Presentation;
     bool _isStale => _acceptedSnapshot.Current?.IsStale == true;
+    bool _isHistorical => _acceptedSnapshot.Current?.Presentation.IsHistorical == true;
     IReadOnlyList<StatsRouteOption> _routeOptions = [];
     readonly StatsRouteSelectionState _routeSelection = new();
     CancellationTokenSource? _sessionCancellation;
-    readonly StatsOverlayRefreshLoopState _refreshLoop = new();
-    CancellationTokenSource? _requestCancellation;
     CancellationTokenSource? _selectionDebounceCancellation;
-    readonly StatsOverlayRequestGate _requestGate = new();
-    readonly StatsOverlayRetryPolicy _retryPolicy = new();
+    StatsSelection? _subscribedSelection;
     string _citySlug = string.Empty;
     string CurrentCityName => T.Get(_citySlug switch
     {
@@ -167,13 +202,10 @@
     });
     string _scope = "city";
     string? _errorCode;
-    DateTimeOffset? _lastSuccessAtUtc;
+    bool _recoveryNotice;
+    StatsSnapshotFreshness _freshness = new(false, false, false, false);
     long _generation;
     bool _isLoading;
-    bool _isRefreshing;
-    bool _isHidden;
-    bool _needsVisibleRefresh;
-    bool _selectionPending;
     bool _hasAcceptedCityOptions;
 
     protected override void OnInitialized()
@@ -182,7 +214,6 @@
         _citySlug = NavigationManager.ResolveCity();
         EventNotificationService.EventReceived += HandleEvent;
         NavigationManager.LocationChanged += HandleLocationChanged;
-        PageVisibility.VisibilityChanged += HandlePageVisibilityChanged;
         ApplicationViewModel.PropertyChanged += HandleRouteMetadataChanged;
     }
 
@@ -225,19 +256,6 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_disposed) return;
-        if (firstRender)
-        {
-            try
-            {
-                _isHidden = await PageVisibility.GetHiddenAsync();
-                if (_isHidden)
-                {
-                    _needsVisibleRefresh = true;
-                    CancelActiveRequest();
-                }
-            }
-            catch (JSException) { }
-        }
         if (_focusOnRender && _isOpen && !_disposed)
         {
             _focusOnRender = false;
@@ -267,27 +285,29 @@
         _hasAcceptedCityOptions = false;
         _acceptedSnapshot.Clear();
         _errorCode = null;
-        _retryPolicy.Reset();
-        _isLoading = true;
-        _isRefreshing = false;
-        _selectionPending = false;
-        _needsVisibleRefresh = false;
+        _recoveryNotice = false;
+        _freshness = new(false, false, false, false);
+        _isLoading = false;
         _generation++;
-        _requestGate.InvalidatePending();
-        _lastSuccessAtUtc = null;
-        var generation = _generation;
+        var selection = CurrentSelection;
+        SnapshotStore.SetOverlaySelection(selection);
+        SubscribeToSelection(selection);
+        var evidence = SnapshotStore.TryGet(selection);
+        ApplyStoreState(selection, evidence, rebuildPresentation: true);
+        var decision = StatsOverlayOpenPolicy.Evaluate(evidence);
+        SnapshotStore.RecordOverlayOpened(evidence, decision.ShowInitialLoader);
+        _isLoading = decision.ShowInitialLoader && evidence?.ProblemCode is null;
         await InvokeAsync(StateHasChanged);
-        StartRefreshLoop();
-        await RequestSnapshotAsync(generation, retainSnapshot: false);
+        if (decision.ShouldRequest)
+            await EnsureSelectionAsync(selection, _generation, retainSnapshot: _snapshot is not null);
     }
 
     void CloseSession()
     {
-        StopRefreshLoop();
         _generation++;
-        _requestGate.InvalidatePending();
+        UnsubscribeFromSelection();
+        SnapshotStore.SetOverlaySelection(null);
         CancelSelectionDebounce();
-        CancelActiveRequest();
         _sessionCancellation?.Cancel();
         _sessionCancellation?.Dispose();
         _sessionCancellation = null;
@@ -296,10 +316,9 @@
         _hasAcceptedCityOptions = false;
         _routeSelection.Clear();
         _errorCode = null;
+        _recoveryNotice = false;
+        _freshness = new(false, false, false, false);
         _isLoading = false;
-        _isRefreshing = false;
-        _selectionPending = false;
-        _needsVisibleRefresh = false;
     }
 
     async Task ChangeScopeAsync(string scope)
@@ -309,22 +328,26 @@
         _routeSelection.Clear();
         _routeOptions = [];
         _hasAcceptedCityOptions = false;
-        _selectionPending = false;
         CancelSelectionDebounce();
-        CancelActiveRequest();
+        var selection = CurrentSelection;
+        SwitchStoreSelection(selection);
         _acceptedSnapshot.Clear();
-        _isLoading = true;
-        _isRefreshing = false;
+        _errorCode = null;
+        _recoveryNotice = false;
+        ApplyStoreState(selection, SnapshotStore.TryGet(selection), rebuildPresentation: true);
+        var decision = StatsOverlayOpenPolicy.Evaluate(SnapshotStore.TryGet(selection));
+        _isLoading = decision.ShowInitialLoader && _errorCode is null;
+        if (_isLoading) SnapshotStore.RecordLoader();
         var generation = ++_generation;
         await InvokeAsync(StateHasChanged);
-        await RequestSnapshotAsync(generation, retainSnapshot: false);
+        if (decision.ShouldRequest)
+            await EnsureSelectionAsync(selection, generation, retainSnapshot: _snapshot is not null);
     }
 
     async Task RetryAsync()
     {
-        if (_retryPolicy.IsCoolingDown(DateTimeOffset.UtcNow)) return;
         var generation = _generation;
-        await RequestSnapshotAsync(generation, retainSnapshot: _snapshot is not null);
+        await EnsureSelectionAsync(CurrentSelection, generation, retainSnapshot: _snapshot is not null);
     }
 
     IReadOnlyList<StatsRouteOption> CurrentRouteOptions => _routeSelection.MergeOptions(
@@ -366,30 +389,25 @@
     async Task ScheduleSelectionRequestAsync()
     {
         CancelSelectionDebounce();
-        CancelActiveRequest();
         var sessionToken = _sessionCancellation?.Token ?? CancellationToken.None;
         if (sessionToken.IsCancellationRequested) return;
         var debounce = CancellationTokenSource.CreateLinkedTokenSource(sessionToken);
         _selectionDebounceCancellation = debounce;
         var generation = ++_generation;
-        _selectionPending = true;
+        var selection = CurrentSelection;
+        SwitchStoreSelection(selection);
         _acceptedSnapshot.Clear();
-        _isLoading = true;
-        _isRefreshing = false;
+        _errorCode = null;
+        _recoveryNotice = false;
+        var evidence = SnapshotStore.TryGet(selection);
+        ApplyStoreState(selection, evidence, rebuildPresentation: true);
+        _isLoading = evidence?.Snapshot is null && evidence?.ProblemCode is null;
+        if (_isLoading) SnapshotStore.RecordLoader();
         await InvokeAsync(StateHasChanged);
         try
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(200), debounce.Token);
-            if (_disposed || !_isOpen || generation != _generation || debounce.IsCancellationRequested) return;
-            if (_retryPolicy.IsCoolingDown(DateTimeOffset.UtcNow))
-            {
-                _isLoading = false;
-                _selectionPending = false;
-                _errorCode = StatsOverlayRetryPolicy.CooldownProblemCode(_errorCode);
-                await InvokeAsync(StateHasChanged);
-                return;
-            }
-            await RequestSnapshotAsync(generation, retainSnapshot: false);
+            await EnsureSelectionAsync(selection, generation, retainSnapshot: _snapshot is not null,
+                debounceFilteredSelection: true, debounce.Token);
         }
         catch (OperationCanceledException) when (debounce.IsCancellationRequested) { }
         finally
@@ -407,100 +425,25 @@
         debounce?.Cancel();
     }
 
-    async Task RequestSnapshotAsync(long generation, bool retainSnapshot)
+    async Task EnsureSelectionAsync(
+        StatsSelection selection,
+        long generation,
+        bool retainSnapshot,
+        bool debounceFilteredSelection = false,
+        CancellationToken requestToken = default)
     {
         if (_disposed || !_isOpen || _sessionCancellation is null || generation != _generation) return;
-        if (_requestCancellation is not null)
-        {
-            if (_requestGate.ActiveGeneration != generation || _requestCancellation.IsCancellationRequested)
-                _requestGate.QueueLatest(generation, retainSnapshot);
-            return;
-        }
-        if (_isHidden) return;
-        var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(_sessionCancellation.Token);
-        var admission = StatsOverlayRequestAdmissionPolicy.TryBegin(
-            _requestGate, _retryPolicy, generation, DateTimeOffset.UtcNow);
-        if (admission == StatsOverlayRequestAdmission.CoolingDown)
-        {
-            requestCancellation.Dispose();
-            _isLoading = false;
-            _isRefreshing = false;
-            _selectionPending = false;
-            _errorCode = StatsOverlayRetryPolicy.CooldownProblemCode(_errorCode);
-            await InvokeAsync(StateHasChanged);
-            return;
-        }
-        if (admission == StatsOverlayRequestAdmission.AlreadyActive)
-        {
-            _requestGate.QueueLatest(generation, retainSnapshot);
-            requestCancellation.Dispose();
-            return;
-        }
-
-        _requestCancellation = requestCancellation;
-        _needsVisibleRefresh = false;
-        var requestToken = requestCancellation.Token;
         _isLoading = !retainSnapshot || _snapshot is null;
-        _isRefreshing = retainSnapshot && _snapshot is not null;
-        _acceptedSnapshot.MarkFresh();
-        _errorCode = null;
         await InvokeAsync(StateHasChanged);
         try
         {
-            var requestScope = _scope;
-            var requestCity = requestScope == "city" ? _citySlug : null;
-            var requestedRouteKeys = requestScope == "city" ? _routeSelection.SelectedKeys.ToArray() : [];
-            var response = await StatsEndpoints.QueryAsync(new StatsOverlayRequest
-            {
-                Scope = requestScope,
-                CitySlug = requestCity,
-                RouteJoinKeys = requestedRouteKeys
-            }, requestToken);
-            if (_disposed || !_isOpen || generation != _generation || requestToken.IsCancellationRequested) return;
-
-            if (response.Result.IsSuccess && response.Result.Value is { } snapshot)
-            {
-                StatsOverlayPresentation nextPresentation;
-                try
-                {
-                    nextPresentation = BuildPresentation(snapshot);
-                }
-                catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NullReferenceException)
-                {
-                    _errorCode = "invalid_response";
-                    _acceptedSnapshot.MarkStale();
-                    _retryPolicy.RecordFailure(DateTimeOffset.UtcNow);
-                    return;
-                }
-
-                if (!_acceptedSnapshot.TryAccept(
-                        generation, _generation, snapshot, nextPresentation,
-                        requestScope, requestCity, requestedRouteKeys))
-                {
-                    _errorCode = "invalid_response";
-                    _acceptedSnapshot.MarkStale();
-                    _retryPolicy.RecordFailure(DateTimeOffset.UtcNow);
-                }
-                else
-                {
-                    _routeOptions = snapshot.Selection.Scope == "city" ? snapshot.RouteOptions : [];
-                    _hasAcceptedCityOptions = snapshot.Selection.Scope == "city";
-                    _lastSuccessAtUtc = DateTimeOffset.UtcNow;
-                    _needsVisibleRefresh = false;
-                    _retryPolicy.RecordSuccess();
-                    _acceptedSnapshot.MarkFresh();
-                    _errorCode = null;
-                    _selectionPending = false;
-                }
-            }
+            var token = requestToken.CanBeCanceled ? requestToken : _sessionCancellation.Token;
+            if (debounceFilteredSelection)
+                await SnapshotStore.EnsureDisplayedSelectionAsync(selection, token);
             else
-            {
-                _errorCode = response.ProblemCode ?? "dependency_unavailable";
-                _acceptedSnapshot.MarkStale();
-                _retryPolicy.RecordFailure(DateTimeOffset.UtcNow, response.RetryAfter);
-            }
+                await SnapshotStore.EnsureRequestedAsync(selection, token);
         }
-        catch (OperationCanceledException) when (requestToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (_sessionCancellation?.IsCancellationRequested == true)
         {
         }
         catch
@@ -509,103 +452,127 @@
             {
                 _errorCode = "dependency_unavailable";
                 _acceptedSnapshot.MarkStale();
-                _retryPolicy.RecordFailure(DateTimeOffset.UtcNow);
             }
         }
         finally
         {
-            PendingStatsOverlayRequest? pendingRequest = null;
-            if (ReferenceEquals(_requestCancellation, requestCancellation))
-            {
-                _requestCancellation = null;
-                pendingRequest = _requestGate.Complete(generation, _generation);
-            }
-            requestCancellation.Dispose();
             if (!_disposed && generation == _generation)
             {
+                var latest = SnapshotStore.TryGet(selection);
+                if (latest is not null) ApplyStoreState(selection, latest, rebuildPresentation: false);
                 _isLoading = false;
-                _isRefreshing = false;
-                _selectionPending = false;
                 await InvokeAsync(StateHasChanged);
             }
-            if (pendingRequest is { } nextRequest)
-                await InvokeAsync(() => RequestSnapshotAsync(nextRequest.Generation, nextRequest.RetainSnapshot));
         }
     }
 
-    void StartRefreshLoop()
+    StatsSelection CurrentSelection => StatsSnapshotPolicy.NormalizeSelection(new(
+        _scope,
+        _scope == "city" ? _citySlug : null,
+        _scope == "city" ? _routeSelection.SelectedKeys.ToArray() : []));
+
+    void SwitchStoreSelection(StatsSelection selection)
     {
-        if (!StatsOverlayRefreshPolicy.ShouldStartLoop(
-                _isOpen, _isHidden, _disposed, loopAlreadyRunning: _refreshLoop.IsRunning)
-            || _sessionCancellation is null)
-            return;
-        if (!_refreshLoop.TryStart(_sessionCancellation.Token, out var refresh) || refresh is null) return;
-        _ = RefreshLoopAsync(refresh);
+        UnsubscribeFromSelection();
+        SnapshotStore.SetOverlaySelection(selection);
+        SubscribeToSelection(selection);
     }
 
-    void StopRefreshLoop() => _refreshLoop.Stop();
-
-    async Task RefreshLoopAsync(StatsOverlayRefreshLoopLease refresh)
+    void SubscribeToSelection(StatsSelection selection)
     {
-        var cancellationToken = refresh.Token;
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested
-                   && StatsOverlayRefreshPolicy.ShouldRunLoop(_isOpen, _isHidden, _disposed))
-            {
-                await Task.Delay(TimeSpan.FromSeconds(60), cancellationToken);
-                if (StatsOverlayRefreshPolicy.ShouldRunLoop(_isOpen, _isHidden, _disposed)
-                    && _requestCancellation is null
-                    && !_retryPolicy.IsCoolingDown(DateTimeOffset.UtcNow))
-                {
-                    if (StatsOverlayRefreshPolicy.ShouldRefresh(
-                            DateTimeOffset.UtcNow, _isHidden, _needsVisibleRefresh, _lastSuccessAtUtc))
-                        await RequestSnapshotAsync(_generation, retainSnapshot: _snapshot is not null);
-                }
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-        finally
-        {
-            _refreshLoop.Complete(refresh);
-        }
+        _subscribedSelection = selection;
+        SnapshotStore.StateChanged += HandleStoreStateChanged;
     }
 
-    public Task OnStatsVisibilityChanged(bool hidden)
+    void UnsubscribeFromSelection()
     {
-        if (_disposed) return Task.CompletedTask;
-        return InvokeAsync(async () =>
+        if (_subscribedSelection is null) return;
+        SnapshotStore.StateChanged -= HandleStoreStateChanged;
+        _subscribedSelection = null;
+    }
+
+    void HandleStoreStateChanged(StatsSelection selection, StatsSnapshotState state)
+    {
+        if (_disposed || !_isOpen || _subscribedSelection is not { } subscribed
+            || !SameSelection(selection, subscribed)) return;
+        _ = InvokeAsync(() =>
         {
-            _isHidden = hidden;
-            if (hidden)
-            {
-                _needsVisibleRefresh = true;
-                StopRefreshLoop();
-                CancelSelectionDebounce();
-                CancelActiveRequest();
-            }
-            else
-            {
-                StartRefreshLoop();
-            }
+            if (_disposed || !_isOpen || !SameSelection(selection, CurrentSelection)) return;
+            ApplyStoreState(selection, SnapshotStore.TryGet(selection) ?? state, rebuildPresentation: true);
+            _isLoading = false;
             StateHasChanged();
-            if (StatsOverlayRefreshPolicy.ShouldRefresh(
-                    DateTimeOffset.UtcNow, hidden, _needsVisibleRefresh || _selectionPending, _lastSuccessAtUtc)
-                && !_retryPolicy.IsCoolingDown(DateTimeOffset.UtcNow))
-                await RequestSnapshotAsync(_generation, retainSnapshot: _snapshot is not null);
         });
     }
 
-    void HandlePageVisibilityChanged(bool hidden) => _ = OnStatsVisibilityChanged(hidden);
+    void ApplyStoreState(StatsSelection selection, StatsSnapshotState? state, bool rebuildPresentation)
+    {
+        if (state is null)
+        {
+            _freshness = new(false, false, false, false);
+            _errorCode = null;
+            _recoveryNotice = false;
+            if (rebuildPresentation) _acceptedSnapshot.Clear();
+            return;
+        }
+
+        var previousErrorCode = _errorCode;
+        _freshness = state.Freshness;
+        _errorCode = state.ProblemCode;
+        if (_errorCode is not null) _recoveryNotice = false;
+        else if (previousErrorCode is not null && state.Snapshot is not null) _recoveryNotice = true;
+        if (state.Snapshot is not { } snapshot)
+        {
+            if (_snapshot is not null) _acceptedSnapshot.MarkStale();
+            return;
+        }
+
+        if (_snapshot is not null && ReferenceEquals(_snapshot, snapshot))
+        {
+            if (rebuildPresentation && _presentation?.IsHistorical != state.Freshness.IsHistorical)
+                _acceptedSnapshot.TryReplacePresentation(BuildPresentation(snapshot));
+            if (state.Freshness.IsStale || state.ProblemCode is not null) _acceptedSnapshot.MarkStale();
+            else _acceptedSnapshot.MarkFresh();
+            return;
+        }
+
+        if (!rebuildPresentation || !_isOpen) return;
+        try
+        {
+            var presentation = BuildPresentation(snapshot);
+            if (_acceptedSnapshot.TryAccept(_generation, _generation, snapshot, presentation,
+                    selection.Scope, selection.CitySlug, selection.RouteJoinKeys))
+            {
+                _routeOptions = selection.Scope == "city" ? snapshot.RouteOptions : [];
+                _hasAcceptedCityOptions = selection.Scope == "city";
+                if (state.Freshness.IsStale || state.ProblemCode is not null) _acceptedSnapshot.MarkStale();
+            }
+            else
+            {
+                _errorCode = "invalid_response";
+                _acceptedSnapshot.MarkStale();
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NullReferenceException)
+        {
+            _errorCode = "invalid_response";
+            _acceptedSnapshot.MarkStale();
+        }
+    }
+
+    static bool SameSelection(StatsSelection left, StatsSelection right) =>
+        string.Equals(left.Scope, right.Scope, StringComparison.Ordinal)
+        && string.Equals(left.CitySlug, right.CitySlug, StringComparison.Ordinal)
+        && left.RouteJoinKeys.SequenceEqual(right.RouteJoinKeys, StringComparer.Ordinal);
 
     StatsOverlayPresentation BuildPresentation(StatsOverlayResponse snapshot) =>
-        StatsOverlayProjection.Build(snapshot, key => T.Get(key), ApplicationViewModel.RouteShapes, isDark: _isDark);
+        StatsOverlayProjection.Build(snapshot, key => T.Get(key), ApplicationViewModel.RouteShapes,
+            isDark: _isDark, isHistorical: _freshness.IsHistorical);
 
-    void CancelActiveRequest()
-    {
-        var request = _requestCancellation;
-        request?.Cancel();
-    }
+    string SnapshotUpdatedAtText => _snapshot?.GeneratedAtUtc.ToString(
+        "MMMM d, yyyy h:mm:ss tt 'UTC'", CultureInfo.GetCultureInfo("en")) ?? string.Empty;
+
+    static string FormatDate(DateOnly? date) => date?.ToString("MMMM d, yyyy", CultureInfo.GetCultureInfo("en"))
+        ?? string.Empty;
 
     static double? ToDouble(decimal? value) => value is { } number ? (double)number : null;
 
@@ -617,6 +584,5 @@
         CloseSession();
         EventNotificationService.EventReceived -= HandleEvent;
         NavigationManager.LocationChanged -= HandleLocationChanged;
-        PageVisibility.VisibilityChanged -= HandlePageVisibilityChanged;
     }
 }

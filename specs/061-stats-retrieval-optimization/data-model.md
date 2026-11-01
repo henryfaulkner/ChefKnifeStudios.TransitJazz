@@ -36,16 +36,16 @@ Legacy mode: minute schedule and hard expiry original GeneratedAtUtc+60 seconds,
 
 ## AppSchedulerState
 
-Fields: started/disposed; statistics/preparation/session-suppressed flags; current city; overlay closed/exact displayed selection; visibility; endpoint cooldown; single active request/generation; latest filtered desire/debounce deadline; city/All due bits and fairness cursor; one cancellable next wakeup; one jitter sample per selection/window. No queue of ticks/clicks. All tasks observed and canceled/awaited at stop.
+Fields: started/disposed; statistics/session-suppressed flags; current city; overlay closed/exact displayed selection; visibility; endpoint cooldown; single active request/generation; latest filtered desire/debounce deadline; city/All due bits and fairness cursor; one cancellable next wakeup; one jitter sample per selection/window. No queue of ticks/clicks. All tasks observed and canceled/awaited at stop.
 
 Transitions:
 
-1. Start -> read visibility; visible+preparation prepares city then All without blocking render/audio. Repeated start idempotent.
+1. Start -> read visibility; visible+statistics enabled prepares city then All without blocking render/audio. Repeated start idempotent.
 2. Open -> synchronous matching read; ensure missing/due through same admission. Close -> remove filtered automatic desire and presentation subscription; retain slots. Next open defaults current-city/unfiltered.
 3. Boundary -> mark due once, sample positive jitter; displayed first then fair baseline turns. At most one interactive turn ahead of overdue baseline; alternate city/All. Already satisfied window consumes duplicate trigger.
 4. Hide -> pause network delay/cancel app wait, preserve snapshots. Resume -> evaluate elapsed deadlines and refresh needed selections once; no tick replay.
 5. Failure -> per-selection backoff; 429 also endpoint cooldown. HTTP success resets transport backoff, valid atomic acceptance clears evidence error. User controls cannot bypass either applicable cooldown.
-6. Navigate -> advance epoch, invalidate/cancel old city/filtered work and slots, retain All; warm new city if preparation enabled/visible.
+6. Navigate -> advance epoch, invalidate/cancel old city/filtered work and slots, retain All; warm new city if statistics enabled/visible.
 7. stats_disabled -> suppress automatic requests until explicit feature reevaluation/reload. Stats off/stop -> no work, cancel/await/unsubscribe.
 
 ## Presentation ownership

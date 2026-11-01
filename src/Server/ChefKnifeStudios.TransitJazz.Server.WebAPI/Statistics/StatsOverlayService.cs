@@ -4,7 +4,6 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -21,7 +20,8 @@ public sealed class StatsOverlayService(
     IStatsOverlayQuery? query,
     StatsOverlayOptions options,
     TimeProvider timeProvider,
-    ReportedVehicleSourceCatalog? reportedVehicleCatalog = null)
+    ReportedVehicleSourceCatalog? reportedVehicleCatalog = null,
+    CancellationToken hostStoppingToken = default)
 {
     const long MaxJavaScriptExactInteger = 9_007_199_254_740_991L;
     static readonly HashSet<string> SafeReasons = new(StatsOverlayVocabulary.Reasons, StringComparer.Ordinal);
@@ -30,8 +30,33 @@ public sealed class StatsOverlayService(
     readonly Dictionary<string, Task<StatsOverlayResponse>> inFlight = new(StringComparer.Ordinal);
     readonly SemaphoreSlim readSlots = new(options.MaximumConcurrentReads, options.MaximumConcurrentReads);
     long cachedEstimatedBytes;
+    long accessSequence;
+    DateTimeOffset? lastObservedUtc;
 
-    sealed record CacheEntry(string IdentityKey, StatsOverlayResponse Response, long EstimatedBytes, DateTimeOffset CreatedAt);
+    sealed record CacheEntry(string IdentityKey, StatsOverlayResponse Response, long EstimatedBytes,
+        DateTimeOffset CreatedAt, DateTimeOffset ExpiresAtUtc, long CreatedAtTimestamp, TimeSpan Lifetime,
+        bool IsFiltered, long LastAccessSequence);
+    sealed record SelectionIdentity(string Scope, string? CitySlug, string[] RouteJoinKeys);
+    sealed record ConfiguredCityIdentity(string CitySlug, string DisplayNameKey, string TimeZoneId, int HealthyCadenceLimitSeconds);
+    sealed record PlannedCityIdentity(string CitySlug, DateOnly LocalDate, string TimeZoneId, int HealthyCadenceLimitSeconds,
+        DateTime LocalDayStartUtc, DateTime LocalDayEndUtc);
+    sealed record ReportedVehicleIdentity(string CitySlug, string SourceSetFingerprint, string CadencePolicyFingerprint);
+    sealed record CacheIdentity(
+        string Scope,
+        string? CitySlug,
+        string[] RouteJoinKeys,
+        DateTime CutoffUtc,
+        DateTime RefreshWindowStartUtc,
+        DateTime NextRefreshAtUtc,
+        int RefreshIntervalMinutes,
+        int IngestionGraceMinutes,
+        int MaximumCategories,
+        bool ReportedVehiclesEnabled,
+        string ContractVersion,
+        string MetricDefinitionVersion,
+        ConfiguredCityIdentity[] ConfiguredCities,
+        PlannedCityIdentity[] PlannedCities,
+        ReportedVehicleIdentity[] ReportedVehicles);
 
     sealed class ResponseSizeLimitException : Exception;
 
@@ -132,45 +157,88 @@ public sealed class StatsOverlayService(
         }
 
         var normalized = StatsOverlayPolicy.NormalizeRequest(request, options);
-        var plan = StatsOverlayPolicy.Resolve(normalized, options, timeProvider.GetUtcNow());
-        var cacheable = RouteKeys(normalized).Length == 0;
+        var asOf = timeProvider.GetUtcNow();
+        var plan = StatsOverlayPolicy.Resolve(normalized, options, asOf);
+        var generatedAtTimestamp = timeProvider.GetTimestamp();
         var key = BuildCacheKey(normalized, plan, options);
         var cacheScope = CacheScopeKey(normalized);
+        var selectionKind = RouteKeys(normalized).Length > 0 ? "filtered" : "unfiltered";
         Task<StatsOverlayResponse> fill;
+        TaskCompletionSource<StatsOverlayResponse>? fillOwner = null;
         lock (cacheGate)
         {
-            RemoveExpired(timeProvider.GetUtcNow());
-            if (cacheable && cache.TryGetValue(cacheScope, out var cached))
+            var now = timeProvider.GetUtcNow();
+            ObserveClock(now);
+            RemoveExpired(now, timeProvider.GetTimestamp());
+            if (cache.TryGetValue(cacheScope, out var cached))
             {
                 if (string.Equals(cached.IdentityKey, key, StringComparison.Ordinal))
                 {
-                    StatsOverlayTelemetry.RecordCacheEvent(normalized.Scope, "hit");
+                    cache[cacheScope] = cached with { LastAccessSequence = ++accessSequence };
+                    StatsOverlayTelemetry.RecordCacheEvent(normalized.Scope, selectionKind, "hit");
                     return cached.Response;
                 }
                 // A scope has one replaceable snapshot slot. A changed cutoff or policy
                 // identity evicts the old value before starting the replacement read.
-                cache.Remove(cacheScope);
-                cachedEstimatedBytes -= cached.EstimatedBytes;
+                RemoveCacheEntry(cacheScope, "identity_changed");
             }
-            if (cacheable && inFlight.TryGetValue(key, out var existing))
+            if (inFlight.TryGetValue(key, out var existing))
             {
-                StatsOverlayTelemetry.RecordCacheEvent(normalized.Scope, "coalesced");
+                StatsOverlayTelemetry.RecordCacheEvent(normalized.Scope, selectionKind, "coalesced");
                 fill = existing;
             }
             else
             {
                 if (!readSlots.Wait(0)) throw new StatsOverlayRequestException("busy", 503);
-                StatsOverlayTelemetry.RecordCacheEvent(normalized.Scope, cacheable ? "miss" : "uncached");
-                fill = FillSnapshotAsync(normalized, plan, cacheScope, key, cacheable,
-                    cacheable ? CancellationToken.None : cancellationToken);
-                if (cacheable) inFlight.Add(key, fill);
-                _ = fill.ContinueWith(static task => _ = task.Exception,
-                    CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                    TaskScheduler.Default);
+                StatsOverlayTelemetry.RecordCacheEvent(normalized.Scope, selectionKind, "miss");
+                fillOwner = new TaskCompletionSource<StatsOverlayResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+                fill = fillOwner.Task;
+                inFlight.Add(key, fill);
             }
         }
 
+        if (fillOwner is not null)
+            _ = CompleteFillAsync(fillOwner, normalized, plan, cacheScope, key, generatedAtTimestamp);
         return await fill.WaitAsync(cancellationToken);
+    }
+
+    async Task CompleteFillAsync(
+        TaskCompletionSource<StatsOverlayResponse> fillOwner,
+        StatsOverlayRequest normalized,
+        StatsSnapshotPlan plan,
+        string cacheScope,
+        string cacheKey,
+        long generatedAtTimestamp)
+    {
+        StatsOverlayResponse? response = null;
+        Exception? failure = null;
+        try
+        {
+            response = await FillSnapshotAsync(normalized, plan, cacheScope, cacheKey, generatedAtTimestamp);
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+        }
+        finally
+        {
+            readSlots.Release();
+            lock (cacheGate)
+            {
+                if (inFlight.TryGetValue(cacheKey, out var current) && ReferenceEquals(current, fillOwner.Task))
+                    inFlight.Remove(cacheKey);
+            }
+        }
+
+        if (failure is not null)
+        {
+            fillOwner.TrySetException(failure);
+            _ = fillOwner.Task.Exception;
+        }
+        else
+        {
+            fillOwner.TrySetResult(response!);
+        }
     }
 
     async Task<StatsOverlayResponse> FillSnapshotAsync(
@@ -178,15 +246,12 @@ public sealed class StatsOverlayService(
         StatsSnapshotPlan plan,
         string cacheScope,
         string cacheKey,
-        bool cacheable,
-        CancellationToken callerCancellation)
+        long generatedAtTimestamp)
     {
-        await Task.Yield();
-        using var deadline = callerCancellation.CanBeCanceled
-            ? CancellationTokenSource.CreateLinkedTokenSource(callerCancellation)
-            : new CancellationTokenSource();
-        deadline.CancelAfter(TimeSpan.FromSeconds(options.ReadTimeoutSeconds));
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(options.ReadTimeoutSeconds), timeProvider);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, hostStoppingToken);
+        var startedAt = timeProvider.GetTimestamp();
+        TimeSpan Elapsed() => timeProvider.GetElapsedTime(startedAt);
         try
         {
             if (query is null) throw new StatsOverlayRequestException("dependency_unavailable", 503);
@@ -197,13 +262,9 @@ public sealed class StatsOverlayService(
             StatsOverlayQueryResult result;
             try
             {
-                var remaining = TimeSpan.FromSeconds(options.ReadTimeoutSeconds) - stopwatch.Elapsed;
+                var remaining = TimeSpan.FromSeconds(options.ReadTimeoutSeconds) - Elapsed();
                 if (remaining <= TimeSpan.Zero) throw new TimeoutException("Stats query deadline elapsed before the read started.");
                 result = await query.ReadAsync(queryInput, remaining, deadline.Token);
-            }
-            catch (OperationCanceledException) when (callerCancellation.IsCancellationRequested)
-            {
-                throw;
             }
             catch (OperationCanceledException) when (deadline.IsCancellationRequested)
             {
@@ -259,14 +320,10 @@ public sealed class StatsOverlayService(
                 StatsOverlayTelemetry.RecordResponseBytes(normalized.Scope, checked(options.MaximumResponseBytes + 1));
                 throw new StatsOverlayRequestException("response_too_large", 422);
             }
-            if (stopwatch.Elapsed > TimeSpan.FromSeconds(options.ReadTimeoutSeconds))
+            if (Elapsed() > TimeSpan.FromSeconds(options.ReadTimeoutSeconds))
                 throw new StatsOverlayRequestException("read_timeout", 503);
-            if (cacheable) CacheSnapshot(cacheScope, cacheKey, response, EstimateObjectBytes(responseBytes));
+            CacheSnapshot(cacheScope, cacheKey, response, EstimateObjectBytes(responseBytes, cacheKey, cacheScope), generatedAtTimestamp);
             return response;
-        }
-        catch (OperationCanceledException) when (callerCancellation.IsCancellationRequested)
-        {
-            throw;
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
@@ -274,18 +331,19 @@ public sealed class StatsOverlayService(
         }
         finally
         {
-            StatsOverlayTelemetry.RecordReadDuration(normalized.Scope, stopwatch.Elapsed);
-            readSlots.Release();
-            if (cacheable)
-            {
-                lock (cacheGate) inFlight.Remove(cacheKey);
-            }
+            StatsOverlayTelemetry.RecordReadDuration(normalized.Scope,
+                RouteKeys(normalized).Length > 0 ? "filtered" : "unfiltered", Elapsed());
         }
     }
 
     static StatsOverlayResponse ProjectSnapshot(StatsSnapshotPlan plan, StatsOverlayRequest normalized,
         StatsOverlayQueryResult result, StatsOverlayOptions options)
     {
+        var schedule = StatsOverlayRefreshPolicy.Resolve(
+            new DateTimeOffset(DateTime.SpecifyKind(plan.GeneratedAtUtc, DateTimeKind.Utc), TimeSpan.Zero),
+            options.RefreshIntervalMinutes,
+            options.IngestionGraceMinutes,
+            plan.Cities.Select(city => city.LocalDayEndUtc));
         var indexes = new ProjectionIndexes(result);
         var windows = plan.Cities.Select(city => BuildCityWindow(city, plan, normalized, options, result, indexes)).ToArray();
         var todayCoverageByCity = windows.ToDictionary(window => window.CitySlug, window => window.TodayCoverage, StringComparer.Ordinal);
@@ -301,6 +359,9 @@ public sealed class StatsOverlayService(
         {
             GeneratedAtUtc = plan.GeneratedAtUtc,
             CutoffUtc = plan.CutoffUtc,
+            RefreshIntervalMinutes = options.RefreshIntervalMinutes,
+            RefreshWindowStartUtc = schedule.RefreshWindowStartUtc,
+            NextRefreshAtUtc = schedule.NextRefreshAtUtc,
             Selection = new StatsSelection(normalized.Scope!, normalized.CitySlug, RouteKeys(normalized)),
             Cities = windows,
             RouteOptions = string.Equals(normalized.Scope, "city", StringComparison.Ordinal)
@@ -348,73 +409,197 @@ public sealed class StatsOverlayService(
         ReportedVehicleWindows = result.ReportedVehicleWindows.Where(row => row.Window == "last24CompletedHours").ToList()
     };
 
-    void CacheSnapshot(string scope, string identityKey, StatsOverlayResponse response, long estimatedBytes)
+    void CacheSnapshot(string scope, string identityKey, StatsOverlayResponse response, long estimatedBytes,
+        long generatedAtTimestamp)
     {
-        if (estimatedBytes > options.MaximumCacheBytes) return;
+        var isFiltered = response.Selection.RouteJoinKeys.Count > 0;
+        var selectionKind = isFiltered ? "filtered" : "unfiltered";
+        if (estimatedBytes > options.MaximumCacheBytes)
+        {
+            StatsOverlayTelemetry.RecordCacheEvent(response.Selection.Scope, selectionKind, "admission_skipped", "total_nonfit");
+            return;
+        }
+        if (isFiltered && (options.MaximumFilteredCacheEntries == 0 || options.MaximumFilteredCacheBytes == 0
+            || estimatedBytes > options.MaximumFilteredCacheBytes))
+        {
+            StatsOverlayTelemetry.RecordCacheEvent(response.Selection.Scope, selectionKind, "admission_skipped",
+                options.MaximumFilteredCacheEntries == 0 || options.MaximumFilteredCacheBytes == 0
+                    ? "filtered_retention_disabled" : "filtered_nonfit");
+            return;
+        }
         var generatedAtUtc = new DateTimeOffset(
             DateTime.SpecifyKind(response.GeneratedAtUtc, DateTimeKind.Utc), TimeSpan.Zero);
-        var expiresAt = generatedAtUtc.AddSeconds(options.CacheSeconds);
+        if (response.NextRefreshAtUtc is not { } nextRefreshAtUtc)
+        {
+            StatsOverlayTelemetry.RecordCacheEvent(response.Selection.Scope, selectionKind, "admission_skipped", "expired_before_admission");
+            return;
+        }
+        var expiresAtUtc = new DateTimeOffset(DateTime.SpecifyKind(nextRefreshAtUtc, DateTimeKind.Utc), TimeSpan.Zero);
+        var lifetime = expiresAtUtc - generatedAtUtc;
+        if (lifetime <= TimeSpan.Zero)
+        {
+            StatsOverlayTelemetry.RecordCacheEvent(response.Selection.Scope, selectionKind, "admission_skipped", "expired_before_admission");
+            return;
+        }
         lock (cacheGate)
         {
             var now = timeProvider.GetUtcNow();
-            RemoveExpired(now);
-            // TTL is measured from the captured snapshot time, not admission time.
-            // A slow read must not extend visibility beyond the policy window.
-            if (now >= expiresAt) return;
-            if (cache.TryGetValue(scope, out var newer)
-                && newer.CreatedAt > generatedAtUtc) return;
-            if (cache.Remove(scope, out var previous)) cachedEstimatedBytes -= previous.EstimatedBytes;
-            while (cache.Count >= options.MaximumCacheEntries || cachedEstimatedBytes + estimatedBytes > options.MaximumCacheBytes)
+            var nowTimestamp = timeProvider.GetTimestamp();
+            ObserveClock(now);
+            RemoveExpired(now, nowTimestamp);
+            // Retention ends at the boundary already published by this snapshot.
+            // A delayed fill cannot extend the original wall-clock or monotonic lifetime.
+            if (now < generatedAtUtc || IsExpired(expiresAtUtc, generatedAtTimestamp,
+                    lifetime, now, nowTimestamp))
             {
-                var oldest = cache.MinBy(pair => pair.Value.CreatedAt);
-                if (oldest.Equals(default(KeyValuePair<string, CacheEntry>))) break;
-                cache.Remove(oldest.Key);
-                cachedEstimatedBytes -= oldest.Value.EstimatedBytes;
+                StatsOverlayTelemetry.RecordCacheEvent(response.Selection.Scope, selectionKind, "admission_skipped", "expired_before_admission");
+                return;
             }
-            if (cache.Count >= options.MaximumCacheEntries || cachedEstimatedBytes + estimatedBytes > options.MaximumCacheBytes) return;
-            cache.Add(scope, new CacheEntry(identityKey, response, estimatedBytes, generatedAtUtc));
+            if (cache.TryGetValue(scope, out var newer)
+                && newer.CreatedAt > generatedAtUtc)
+            {
+                StatsOverlayTelemetry.RecordCacheEvent(response.Selection.Scope, selectionKind, "admission_skipped", "newer_generation");
+                return;
+            }
+            if (cache.ContainsKey(scope)) RemoveCacheEntry(scope, "replacement");
+            while (isFiltered && (FilteredCount() + 1 > options.MaximumFilteredCacheEntries
+                || FilteredBytes() + estimatedBytes > options.MaximumFilteredCacheBytes))
+            {
+                if (!EvictLeastRecentlyUsedFiltered())
+                {
+                    StatsOverlayTelemetry.RecordCacheEvent(response.Selection.Scope, selectionKind, "admission_skipped", "baseline_protection");
+                    return;
+                }
+            }
+            while (cache.Count + 1 > options.MaximumCacheEntries
+                || cachedEstimatedBytes + estimatedBytes > options.MaximumCacheBytes)
+            {
+                var evicted = EvictLeastRecentlyUsedFiltered();
+                if (!evicted && !isFiltered) evicted = EvictOldestBaseline();
+                if (!evicted)
+                {
+                    StatsOverlayTelemetry.RecordCacheEvent(response.Selection.Scope, selectionKind, "admission_skipped", "baseline_protection");
+                    return;
+                }
+            }
+            cache.Add(scope, new CacheEntry(identityKey, response, estimatedBytes, generatedAtUtc,
+                expiresAtUtc, generatedAtTimestamp, lifetime, isFiltered, ++accessSequence));
             cachedEstimatedBytes += estimatedBytes;
+            StatsOverlayTelemetry.RecordCacheEntryChange(response.Selection.Scope, selectionKind, 1, estimatedBytes);
         }
     }
 
-    // This deliberately overweights the serialized UTF-8 size to account for UTF-16
-    // strings and per-object/collection overhead. It is an admission estimate, not a
-    // measured heap size; actual object-memory measurement remains a release validation item.
-    static long EstimateObjectBytes(int serializedUtf8Bytes) => checked((long)serializedUtf8Bytes * 8 + 4_096);
+    int FilteredCount() => cache.Values.Count(entry => entry.IsFiltered);
 
-    void RemoveExpired(DateTimeOffset now)
+    long FilteredBytes() => cache.Values.Where(entry => entry.IsFiltered).Sum(entry => entry.EstimatedBytes);
+
+    bool EvictLeastRecentlyUsedFiltered()
     {
-        foreach (var expired in cache.Where(pair => now >= pair.Value.CreatedAt.AddSeconds(options.CacheSeconds))
+        var key = cache.Where(pair => pair.Value.IsFiltered)
+            .OrderBy(pair => pair.Value.LastAccessSequence)
+            .Select(pair => pair.Key).FirstOrDefault();
+        return key is not null && RemoveCacheEntry(key, "filtered_lru");
+    }
+
+    bool EvictOldestBaseline()
+    {
+        var key = cache.Where(pair => !pair.Value.IsFiltered)
+            .OrderBy(pair => pair.Value.CreatedAt)
+            .Select(pair => pair.Key).FirstOrDefault();
+        return key is not null && RemoveCacheEntry(key, "oldest_baseline");
+    }
+
+    bool RemoveCacheEntry(string key, string reason)
+    {
+        if (!cache.Remove(key, out var entry)) return false;
+        cachedEstimatedBytes -= entry.EstimatedBytes;
+        var selectionKind = entry.IsFiltered ? "filtered" : "unfiltered";
+        StatsOverlayTelemetry.RecordCacheEvent(entry.Response.Selection.Scope, selectionKind, "eviction", reason);
+        StatsOverlayTelemetry.RecordCacheEntryChange(entry.Response.Selection.Scope, selectionKind, -1, -entry.EstimatedBytes);
+        return true;
+    }
+
+    // This deliberately overweights serialized UTF-8 bytes and adds canonical identity,
+    // selection-slot and entry overhead. It is an admission estimate, not a measured
+    // heap size; actual object-memory measurement remains a release validation item.
+    static long EstimateObjectBytes(int serializedUtf8Bytes, string canonicalIdentity, string selectionSlot) =>
+        checked((long)serializedUtf8Bytes * 8 + 4_096
+            + Encoding.UTF8.GetByteCount(canonicalIdentity)
+            + Encoding.UTF8.GetByteCount(selectionSlot)
+            + 512);
+
+    void ObserveClock(DateTimeOffset now)
+    {
+        if (lastObservedUtc is { } previous && now < previous)
+        {
+            foreach (var entry in cache.Values)
+            {
+                var selectionKind = entry.IsFiltered ? "filtered" : "unfiltered";
+                StatsOverlayTelemetry.RecordCacheEvent(entry.Response.Selection.Scope, selectionKind, "eviction", "clock_rollback");
+                StatsOverlayTelemetry.RecordCacheEntryChange(entry.Response.Selection.Scope, selectionKind, -1, -entry.EstimatedBytes);
+            }
+            cache.Clear();
+            cachedEstimatedBytes = 0;
+        }
+        lastObservedUtc = now;
+    }
+
+    void RemoveExpired(DateTimeOffset now, long timestamp)
+    {
+        foreach (var expired in cache.Where(pair => IsExpired(pair.Value, now, timestamp))
                      .Select(pair => pair.Key).ToArray())
         {
-            cachedEstimatedBytes -= cache[expired].EstimatedBytes;
-            cache.Remove(expired);
+            RemoveCacheEntry(expired, "expired");
         }
     }
 
+    bool IsExpired(CacheEntry entry, DateTimeOffset now, long timestamp) =>
+        IsExpired(entry.ExpiresAtUtc, entry.CreatedAtTimestamp, entry.Lifetime, now, timestamp);
+
+    bool IsExpired(DateTimeOffset expiresAtUtc, long generatedAtTimestamp, TimeSpan lifetime,
+        DateTimeOffset now, long timestamp) =>
+        now >= expiresAtUtc || timeProvider.GetElapsedTime(generatedAtTimestamp, timestamp) >= lifetime;
+
     static string CacheScopeKey(StatsOverlayRequest selection) =>
-        string.Equals(selection.Scope, "all", StringComparison.Ordinal)
-            ? "all"
-            : "city:" + selection.CitySlug;
+        JsonSerializer.Serialize(new SelectionIdentity(selection.Scope!, selection.CitySlug, RouteKeys(selection)),
+            JsonSettings.DefaultOptions);
 
     string BuildCacheKey(StatsOverlayRequest selection, StatsSnapshotPlan plan, StatsOverlayOptions options)
     {
-        var planKey = string.Join(";", plan.Cities.Select(city => string.Join(",", city.City.CitySlug,
-            city.LocalDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), city.City.TimeZoneId,
-            city.City.HealthyCadenceLimitSeconds.ToString(CultureInfo.InvariantCulture))));
-        var material = string.Join("|", selection.Scope, selection.CitySlug ?? string.Empty,
-            plan.CutoffUtc.ToString("O", CultureInfo.InvariantCulture), planKey,
-            JsonSerializer.Serialize(options),
-            options.ReportedVehiclesEnabled ? ReportedVehicleCacheIdentity() : "reported-disabled");
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material)));
+        var schedule = StatsOverlayRefreshPolicy.Resolve(
+            new DateTimeOffset(DateTime.SpecifyKind(plan.GeneratedAtUtc, DateTimeKind.Utc), TimeSpan.Zero),
+            options.RefreshIntervalMinutes,
+            options.IngestionGraceMinutes,
+            plan.Cities.Select(city => city.LocalDayEndUtc));
+        var identity = new CacheIdentity(
+            selection.Scope!,
+            selection.CitySlug,
+            RouteKeys(selection),
+            plan.CutoffUtc,
+            schedule.RefreshWindowStartUtc,
+            schedule.NextRefreshAtUtc,
+            options.RefreshIntervalMinutes,
+            options.IngestionGraceMinutes,
+            options.MaximumCategories,
+            options.ReportedVehiclesEnabled,
+            StatsOverlayVocabulary.ContractVersion,
+            StatsOverlayVocabulary.MetricDefinitionVersion,
+            options.Cities.OrderBy(city => city.CitySlug, StringComparer.Ordinal)
+                .Select(city => new ConfiguredCityIdentity(city.CitySlug, city.DisplayNameKey,
+                    city.TimeZoneId, city.HealthyCadenceLimitSeconds)).ToArray(),
+            plan.Cities.Select(city => new PlannedCityIdentity(city.City.CitySlug, city.LocalDate,
+                city.City.TimeZoneId, city.City.HealthyCadenceLimitSeconds,
+                city.LocalDayStartUtc, city.LocalDayEndUtc)).ToArray(),
+            options.ReportedVehiclesEnabled ? ReportedVehicleCacheIdentity() : []);
+        return JsonSerializer.Serialize(identity, JsonSettings.DefaultOptions);
     }
 
-    string ReportedVehicleCacheIdentity() => reportedVehicleCatalog is null
-        ? "reported-policy-missing"
-        : string.Join(";", reportedVehicleCatalog.Cities.OrderBy(city => city.CitySlug, StringComparer.Ordinal)
-            .Select(city => string.Join(":", city.CitySlug,
+    ReportedVehicleIdentity[] ReportedVehicleCacheIdentity() => reportedVehicleCatalog is null
+        ? [new ReportedVehicleIdentity("", "reported-policy-missing", "reported-policy-missing")]
+        : reportedVehicleCatalog.Cities.OrderBy(city => city.CitySlug, StringComparer.Ordinal)
+            .Select(city => new ReportedVehicleIdentity(city.CitySlug,
                 reportedVehicleCatalog.SourceSetFingerprint(city.CitySlug),
-                reportedVehicleCatalog.CadencePolicyFingerprint(city.CitySlug))));
+                reportedVehicleCatalog.CadencePolicyFingerprint(city.CitySlug))).ToArray();
 
     static string[] RouteKeys(StatsOverlayRequest request) => request.RouteJoinKeys ?? [];
 
@@ -432,7 +617,7 @@ public sealed class StatsOverlayService(
 
         return new StatsOverlayQueryInput
         {
-            Scope = plan.Selection.Scope,
+            Scope = plan.Selection.Scope!,
             SelectedRouteKeys = RouteKeys(plan.Selection),
             MaximumRoutesPerCity = options.MaximumSelectedRoutes,
             MaximumCategories = options.MaximumCategories,

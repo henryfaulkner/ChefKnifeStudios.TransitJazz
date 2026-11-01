@@ -14,15 +14,15 @@ A visitor uses the map and audio while current-city and All-cities statistics be
 
 **Why this priority**: Removing repeated loading screens is the principal visitor benefit; preparation must preserve the map and listening experience.
 
-**Independent Test**: Start a visible app with preparation enabled, wait for current-city and All preparation, then open, switch scope, close, and reopen statistics while observing displayed data, requests, map readiness, and audio readiness.
+**Independent Test**: Start a visible app with statistics enabled, wait for current-city and All preparation, then open, switch scope, close, and reopen statistics while observing displayed data, requests, map readiness, and audio readiness.
 
 **Acceptance Scenarios**:
 
-1. **Given** a visible app with statistics and background preparation enabled, **When** initial UI load completes, **Then** current-city retrieval begins before All-cities retrieval without delaying rendering, transit updates, or audio.
+1. **Given** a visible app with statistics enabled, **When** initial UI load completes, **Then** current-city retrieval begins before All-cities retrieval without delaying rendering, transit updates, or audio.
 2. **Given** an admitted matching baseline snapshot before its boundary, **When** statistics opens, **Then** its data appears without a full loader or opening-triggered request and includes its original update time.
 3. **Given** matching data is visible, **When** that selection refreshes or the dialog closes and reopens, **Then** retained data survives and refresh preserves usable charts, tables, and focus.
 4. **Given** an open overlay, **When** only theme or the independently planned units preference changes, **Then** presentation updates without retrieval or a different data identity.
-5. **Given** background preparation is disabled, **When** statistics opens without retained data, **Then** on-open retrieval and subsequent visible-overlay boundary refresh work through the same request ownership.
+5. **Given** startup preparation is still in flight, **When** statistics opens, **Then** opening joins matching work through the same request owner.
 
 ---
 
@@ -65,7 +65,7 @@ A visitor switching cities, scopes, or routes always sees the requested selectio
 
 ### User Story 4 - Share work within measured resource limits (Priority: P2)
 
-An operator serves repeated identical selections with bounded shared work, measures request and processing costs, and can disable preparation or selected-route retention independently.
+An operator serves repeated identical selections with bounded shared work, measures request and processing costs, and can adjust the refresh interval through one numeric setting.
 
 **Why this priority**: Savings must hold under boundary bursts and diverse selections without sacrificing correctness or exceeding resource limits.
 
@@ -77,7 +77,7 @@ An operator serves repeated identical selections with bounded shared work, measu
 2. **Given** matching retained server evidence before its boundary, **When** another visitor requests it, **Then** no new underlying read occurs and original generation/schedule metadata is preserved.
 3. **Given** selected-route retention is full, **When** another combination arrives, **Then** baseline entries are protected, totals stay bounded, and a valid uncached response remains possible.
 4. **Given** expired server evidence and failed replacement, **When** a request completes, **Then** the existing safe failure returns without silent expired-server fallback.
-5. **Given** preparation is off or filtered retention is zero, **When** statistics is used, **Then** the documented on-open path or exact-request shared-fill path remains available respectively.
+5. **Given** statistics is disabled, **When** the app starts or navigation changes, **Then** no statistics work runs.
 
 ### Edge Cases
 
@@ -98,7 +98,7 @@ An operator serves repeated identical selections with bounded shared work, measu
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST prepare current-city statistics first and All-cities next after first visible UI load when statistics and preparation are enabled, without blocking map, transit updates, or audio readiness.
+- **FR-001**: The system MUST prepare current-city statistics first and All-cities next after first visible UI load when statistics are enabled, without blocking map, transit updates, or audio readiness.
 - **FR-002**: One app-lifetime retrieval owner MUST manage idempotent startup, all request triggers, retained evidence, scheduling, notifications, and teardown independently of dialog lifetime. Statistics disabled means no statistics work; a server-disabled result stops automatic attempts until explicit feature reevaluation or reload.
 - **FR-003**: At most three snapshot slots MUST be retained: current unfiltered city, All-cities, and latest filtered selection, initially within 32 MiB estimated retained-object memory. Admission priority MUST be city, All, then filtered. Oversized valid responses MAY serve an active consumer without retention; missed retention MUST be recorded.
 - **FR-004**: Navigation MUST discard prior-city slots and cancel/invalidate their work, retain independent All evidence, and prepare the new city. Reopening MUST preserve existing current-city/unfiltered initial controls without clearing retained evidence.
@@ -108,7 +108,7 @@ An operator serves repeated identical selections with bounded shared work, measu
 - **FR-008**: New-server responses MUST convey original interval, refresh-window start, and effective next refresh alongside existing generation, cutoff, selection, coverage, and day metadata. Hits MUST preserve these values; additive fields MUST remain compatible with existing clients.
 - **FR-009**: Missing scheduling fields MUST use legacy 60-second scheduling/expiry and existing short retention until schedule-aware evidence arrives; clients MUST NOT infer hourly freshness. Supplied invalid interval, ordering, or timestamps MUST be invalid evidence.
 - **FR-010**: Settings changes MUST follow existing reload/restart operations and consistent replica configuration. Open clients learn changes on their next accepted response or reload; no configuration push is required.
-- **FR-011**: A visible app with preparation enabled MUST refresh city/All at returned boundaries even with the overlay closed. Filtered selections MUST refresh automatically only while displayed. Opening with usable matching evidence MUST NOT add a request.
+- **FR-011**: A visible app with statistics enabled MUST refresh city/All at returned boundaries even with the overlay closed. Filtered selections MUST refresh automatically only while displayed. Opening with usable matching evidence MUST NOT add a request.
 - **FR-012**: Scheduling MUST wait for the earliest needed boundary, use independent positive 0–5 second jitter without early requests, and recompute after acceptance, resume, or changed metadata. Evidence satisfying a window MUST satisfy duplicate triggers. Local-day, stale-notice, and expiry transitions MUST be evaluated during backoff too.
 - **FR-013**: Hidden tabs MUST pause scheduling, cancel app-owned waiting requests, and retain snapshots. Resume MUST refresh overdue selections once with displayed selection first, without replaying ticks. Closing MUST NOT count as hidden. Shared visibility ownership MUST remain intact.
 - **FR-014**: At most one statistics request per app MUST run. Exact duplicates MUST join work; new route sets MUST preserve 200 ms debounce and only the latest filtered desire. Due work MUST prioritize displayed selection, city, then All while fairly alternating due baselines so interaction cannot starve them.
@@ -127,14 +127,14 @@ An operator serves repeated identical selections with bounded shared work, measu
 - **FR-027**: Caller cancellation MUST stop only its wait. Shared work MUST terminate on its own deadline or host shutdown and release resources on every outcome. Failed fills MUST be removable for retry.
 - **FR-028**: Fills finishing after a boundary MUST NOT be retained or replace newer evidence. If returned, their original expired boundary MUST remain visible and permit admitted follow-up. Clock changes MUST NOT resurrect expired server entries.
 - **FR-029**: Valid successful responses, including partial, pending, unavailable, and zero evidence, MUST be eligible for retention. Transport failures/problems MUST NOT be retained as statistics. Expiry followed by failure MUST return the existing safe failure without silent expired-server fallback.
-- **FR-030**: Server retention MUST stay within 33 entries/64 MiB estimated objects. Filtered retention MUST initially stay within eight entries/16 MiB inside those totals. Configurable subset limits MUST validate against totals; zero entries MUST disable filtered retention while preserving bounded exact coalescing.
+- **FR-030**: Server retention MUST stay within 33 entries/64 MiB estimated objects. Filtered retention MUST initially stay within eight entries/16 MiB inside those totals. Fixed internal subset limits MUST stay within the existing configured totals while preserving bounded exact coalescing.
 - **FR-031**: Expired entries MUST be removed first. Filtered admission MAY evict least-recently-used filtered entries but MUST NOT evict baselines. Baselines MUST evict filtered entries before older baselines when needed. Nonfitting valid responses MUST return uncached. Estimates MUST include key/entry overhead; transient memory MUST be measured separately.
 - **FR-032**: Retention MUST remain process-local and bounded. Replicas MUST preserve equivalent semantics/bounded freshness without promising identical evidence or one global read/hour. All MUST remain one consistent read, not assembled from cached cities.
 - **FR-033**: Existing rate limiting, safe errors, compression, response caps, anonymous access, and no-store transport behavior MUST remain. No new raw identities/sensitive fields may be exposed. Persistent browser storage, distributed retention, conditional retrieval, cross-tab coordination, statistics push, new bulk endpoints, worker/schema changes, and changed aggregation queries are out of scope.
-- **FR-034**: A separate preparation rollout switch MUST sit beneath the existing statistics gate. With preparation off the same owner MUST support on-open retrieval and visible-overlay boundary refresh; with statistics off no work runs. Filtered retention MUST be independently reversible to zero without removing coalescing.
+- **FR-034**: The existing StatsOverlay flag MUST control all statistics work, including startup preparation and visible baseline refresh. This feature MUST add only the numeric RefreshIntervalMinutes configuration (default 60); no separate preparation flag or configurable filtered-retention settings. With statistics off no work runs. Filtered retention uses fixed internal budgets within existing total limits.
 - **FR-035**: Existing diagnostics MUST measure bounded-label hits, misses, coalescing, evictions, skipped admission, entries/estimated bytes, fill duration, preparation completion, warm opens, loaders, age on open, and failures. Route sets, raw keys, hashes, and visitor identifiers MUST NOT be metric labels; no new telemetry platform is required.
 - **FR-036**: Before broad enablement, baseline/matched evidence MUST cover warm/cold opens, never-opened sessions, map/audio readiness, response sizes, retained/transient memory, requests, compressed egress, serialization cost, underlying reads, snapshot age, boundary lag, and loader frequency. Verification MUST include same-scope bursts, diverse selections, pressure, replicas, shared-IP limits, 500 visible apps, and synchronized boundaries.
-- **FR-037**: Delivery MUST update existing read/response contracts and deployment settings to remove unfiltered-only sharing/retention and fixed-minute freshness claims. Rollout MUST stage schedule-aware serving/filtered retention, retained-overlay retrieval, then preparation; measure legacy overlap and document rollback/actual evidence before expansion.
+- **FR-037**: Delivery MUST update existing read/response contracts and deployment settings to remove unfiltered-only sharing/retention and fixed-minute freshness claims. Rollout MUST deploy schedule-aware serving before the client with retained-overlay retrieval and startup preparation; measure legacy overlap and document rollback/actual evidence before expansion.
 
 ### Key Entities *(include if feature involves data)*
 

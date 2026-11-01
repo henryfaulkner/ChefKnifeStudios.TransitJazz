@@ -27,6 +27,23 @@ public sealed class StatsResourcesTests
         Assert.All(englishValues, pair => Assert.False(string.IsNullOrWhiteSpace(pair.Value), pair.Key));
     }
 
+    [Fact]
+    public void SnapshotFreshnessAndDatedHistoryHaveExplicitResourceCopy()
+    {
+        var root = FindRepositoryRoot(AppContext.BaseDirectory);
+        var path = Path.Combine(root, "src", "Client", "ChefKnifeStudios.TransitJazz.Client.Shared", "Resources", "RouteFilterResources.resx");
+        var values = XDocument.Load(path).Root!.Elements("data")
+            .Where(IsFeatureResource)
+            .ToDictionary(element => element.Attribute("name")!.Value, element => element.Element("value")?.Value);
+
+        Assert.Equal("Snapshot updated {0}", values["StatsSnapshotUpdatedAt"]);
+        Assert.Equal("No newer snapshot was received after the refresh boundary.", values["StatsOverdueNotice"]);
+        Assert.Equal("Historical daily evidence from {0}", values["StatsHistoricalSnapshotDate"]);
+        Assert.Equal("Today's values are not available in this older snapshot.", values["StatsHistoricalSnapshotExplanation"]);
+        Assert.Equal("Distance on {0}", values["StatsDistanceOnDate"]);
+        Assert.Equal("Vehicles reported on {0}", values["StatsReportedVehiclesOnDate"]);
+    }
+
     static bool IsFeatureResource(XElement element) =>
         element.Attribute("name")?.Value.StartsWith("Stats", StringComparison.Ordinal) == true
         || element.Attribute("name")?.Value is "InfoOverlayTitle"

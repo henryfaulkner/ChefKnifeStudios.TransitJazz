@@ -20,12 +20,13 @@ public static class StatsOverlayProjection
         StatsOverlayResponse response,
         Func<string, string> localize,
         IReadOnlyDictionary<string, RouteShapeFeature>? routeShapes = null,
-        bool isDark = false)
+        bool isDark = false,
+        bool isHistorical = false)
     {
         ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(localize);
         var snapshot = response;
-        if (response.Selection.Scope == "city" && response.PreviousDay is { } previous)
+        if (!isHistorical && response.Selection.Scope == "city" && response.PreviousDay is { } previous)
         {
             response = response with
             {
@@ -88,11 +89,14 @@ public static class StatsOverlayProjection
         bubbles.Validate();
         timeline.Validate();
         var dailyReported = ProjectReportedVehicles(response.TodayReportedVehicles, response, localize, culture);
-        if (snapshot.Selection.Scope == "city" && snapshot.PreviousDay is not null)
+        if (isHistorical && snapshot.Selection.Scope == "city")
+            dailyReported = dailyReported with { HeadingKey = "StatsReportedVehiclesOnDate" };
+        else if (snapshot.Selection.Scope == "city" && snapshot.PreviousDay is not null)
             dailyReported = dailyReported with { HeadingKey = "StatsReportedVehiclesYesterday" };
         return new StatsOverlayPresentation(snapshot, pie, bubbles, timeline,
             dailyReported,
-            ProjectReportedVehicles(response.Last24ReportedVehicles, response, localize, culture));
+            ProjectReportedVehicles(response.Last24ReportedVehicles, response, localize, culture),
+            isHistorical);
     }
 
     static StatsReportedVehiclePresentation ProjectReportedVehicles(StatsReportedVehicleSummary summary,
@@ -369,11 +373,16 @@ public sealed record StatsOverlayPresentation(
     BubbleChartModel Bubbles,
     SeriesChartModel Timeline,
     StatsReportedVehiclePresentation TodayReportedVehicles,
-    StatsReportedVehiclePresentation Last24ReportedVehicles)
+    StatsReportedVehiclePresentation Last24ReportedVehicles,
+    bool IsHistorical = false)
 {
-    public bool IsPreviousDay => Snapshot.Selection.Scope == "city" && Snapshot.PreviousDay is not null;
+    public bool IsPreviousDay => !IsHistorical && Snapshot.Selection.Scope == "city" && Snapshot.PreviousDay is not null;
     public StatsDistanceSummary DailyDistance => IsPreviousDay ? Snapshot.PreviousDay!.Distance : Snapshot.TodayDistance;
-    public string DailyDistanceHeadingKey => IsPreviousDay ? "StatsDistanceYesterday" : "StatsDistanceToday";
+    public DateOnly? DailyEvidenceDate => Snapshot.Selection.Scope != "city" ? null : IsPreviousDay
+        ? Snapshot.PreviousDay!.City.LocalDate
+        : Snapshot.Cities.FirstOrDefault()?.LocalDate;
+    public string DailyDistanceHeadingKey => IsHistorical && Snapshot.Selection.Scope == "city" ? "StatsDistanceOnDate"
+        : IsPreviousDay ? "StatsDistanceYesterday" : "StatsDistanceToday";
 }
 
 public sealed record StatsReportedVehiclePresentation(
