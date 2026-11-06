@@ -37,7 +37,7 @@ internal static class SeriesChartConfig
                     {
                     x = model.NumericXValues is null ? (object)model.Labels[index] : model.NumericXValues[index],
                     y = series.CanvasValues[index],
-                    tooltipLines = new[] { $"{series.Label}: {Format(series.CanvasValues[index])} km" },
+                    tooltipLines = new[] { $"{series.Label}: {Format(series.CanvasValues[index])} {model.DistanceUnit}" },
                     tooltipTitle = FormatTooltipTime(evidence) ?? model.Labels[index],
                     tickLabel = model.NumericAxisLabelMode == NumericAxisLabelMode.LocalClockOffset ? model.Labels[index] : null
                     };

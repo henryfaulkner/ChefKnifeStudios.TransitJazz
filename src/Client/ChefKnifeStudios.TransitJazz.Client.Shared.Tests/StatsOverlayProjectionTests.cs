@@ -1,6 +1,7 @@
 using System.Globalization;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Components;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Stats;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
 using Xunit;
@@ -9,6 +10,76 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.Tests;
 
 public sealed class StatsOverlayProjectionTests
 {
+    [Fact]
+    public void ImperialProjectionConvertsEveryDistanceSurfaceFromOriginalMetricEvidence()
+    {
+        var response = Response("city", [],
+            [new StatsCategoryShare("bus", 1.609344m, 100, "today")],
+            [new StatsTimelineSeries
+            {
+                Key = "category:bus", CategoryKey = "bus", WindowReference = "today",
+                Buckets = [Bucket(1, 1.609344m, 16.09344m, 16.09344m)]
+            }],
+            [Bubble("route-a", "route", "toronto", "Bus", 16.09344m, 1.609344m, 2, 1.609344m, 3, 4, 12, 12, "bus")]) with
+        {
+            TodayDistance = new StatsDistanceSummary
+            {
+                Window = "today", Kilometers = 16.09344m, Coverage = Coverage("complete", 24, 24)
+            },
+            Last24Distance = new StatsDistanceSummary
+            {
+                Window = "last24CompletedHours", Kilometers = 1.609344m, Coverage = Coverage("complete", 24, 24)
+            }
+        };
+
+        var view = StatsOverlayProjection.Build(response, UnitLocalize, units: StatsUnitSystem.Imperial);
+
+        Assert.Same(response, view.Snapshot);
+        Assert.Equal(StatsUnitSystem.Imperial, view.UnitSystem);
+        Assert.Equal(10m, view.DailyDisplayDistance);
+        Assert.Equal(1m, view.Last24DisplayDistance);
+        Assert.Equal("miles", view.DistanceUnitLabel);
+        Assert.Equal("Distance (mi)", view.CategoryPie.DatasetLabel);
+        Assert.Equal(1d, Assert.Single(view.CategoryPie.Rows).Distance);
+
+        var bubble = Assert.Single(view.Bubbles.GetPlottedPoints());
+        Assert.Equal(10d, bubble.X);
+        Assert.Equal(1d, bubble.Y);
+        Assert.Equal(2d, bubble.MeanActiveVehicles);
+        Assert.Equal(1d, bubble.Distance);
+        Assert.Equal("Average vehicle speed (mph)", view.BubbleXAxisTitle);
+        Assert.Equal("Average distance per hour (mi/h)", view.BubbleYAxisTitle);
+        Assert.Contains(bubble.TooltipLines, line => line.Contains("(mph): 10", StringComparison.Ordinal));
+        Assert.Contains(bubble.TooltipLines, line => line.Contains("(mi/h): 1", StringComparison.Ordinal));
+
+        var timeline = Assert.Single(view.Timeline.Series);
+        Assert.Equal("Cumulative distance (mi)", view.Timeline.YAxisTitle);
+        Assert.Equal(10d, timeline.CanvasValues[0]);
+        Assert.Equal(10d, timeline.KnownValues![0]);
+        var point = timeline.PointEvidence![0]!;
+        Assert.Equal(1d, point.HourlyKnownDistance);
+        Assert.Equal(10d, point.KnownCumulativeDistance);
+        Assert.Equal(10d, point.CombinedPlottedSubtotal);
+        Assert.Contains(point.TooltipLines, line => line.EndsWith("1.00 mi", StringComparison.Ordinal));
+        Assert.Equal(16.09344m, response.TodayDistance.Kilometers);
+        Assert.Equal(1.609344m, response.Last24Distance.Kilometers);
+        Assert.Equal(16.09344m, response.Timeline.Series[0].Buckets[0].PlotCumulativeKilometers);
+
+        var metricBaseline = StatsOverlayProjection.Build(response, UnitLocalize);
+        for (var cycle = 0; cycle < 10; cycle++)
+        {
+            _ = StatsOverlayProjection.Build(response, UnitLocalize, units: StatsUnitSystem.Imperial);
+            var restored = StatsOverlayProjection.Build(response, UnitLocalize);
+            Assert.Same(response, restored.Snapshot);
+            Assert.Equal(metricBaseline.CategoryPie.GetTableDistances(), restored.CategoryPie.GetTableDistances());
+            Assert.Equal(metricBaseline.Bubbles.Rows.Select(row => (row.X, row.Y, row.Distance)),
+                restored.Bubbles.Rows.Select(row => (row.X, row.Y, row.Distance)));
+            Assert.Equal(metricBaseline.Timeline.Series[0].Values, restored.Timeline.Series[0].Values);
+            Assert.Equal(metricBaseline.Timeline.Series[0].KnownValues, restored.Timeline.Series[0].KnownValues);
+        }
+        Assert.Equal(16.09344m, response.TodayDistance.Kilometers);
+    }
+
     [Fact]
     public void HistoricalRootSnapshotDoesNotPromoteItsPreviousDayAsCurrentAuthoritativeFallback()
     {
@@ -102,8 +173,8 @@ public sealed class StatsOverlayProjectionTests
         Assert.Equal("17", projected.TodayReportedVehicles.CountText);
         Assert.Equal("29", projected.Last24ReportedVehicles.CountText);
         Assert.Equal(160m, projected.Snapshot.Last24Distance.Kilometers);
-        Assert.Equal(20d, Assert.Single(projected.CategoryPie.Rows).Kilometers);
-        Assert.Equal(20d, Assert.Single(projected.Bubbles.GetPlottedPoints()).DistanceKilometers);
+        Assert.Equal(20d, Assert.Single(projected.CategoryPie.Rows).Distance);
+        Assert.Equal(20d, Assert.Single(projected.Bubbles.GetPlottedPoints()).Distance);
         Assert.Contains(20d, Assert.Single(projected.Timeline.Series).CanvasValues);
 
         var today = StatsOverlayProjection.Build(response with { PreviousDay = null }, key => key);
@@ -293,10 +364,10 @@ public sealed class StatsOverlayProjectionTests
         var view = StatsOverlayProjection.Build(response, key => key);
 
         Assert.Equal("partial", view.CategoryPie.Rows[0].CoverageReference);
-        Assert.Equal(30d, view.CategoryPie.Rows[0].Kilometers);
+        Assert.Equal(30d, view.CategoryPie.Rows[0].Distance);
         Assert.Equal(60d, view.CategoryPie.Rows[0].Percent);
-        Assert.Equal(0d, view.CategoryPie.Rows[2].Kilometers);
-        Assert.Null(view.CategoryPie.Rows[3].Kilometers);
+        Assert.Equal(0d, view.CategoryPie.Rows[2].Distance);
+        Assert.Null(view.CategoryPie.Rows[3].Distance);
         Assert.Equal("StatsCategoryUnknown", view.CategoryPie.Rows[3].Label);
 
         var plottedBubble = Assert.Single(view.Bubbles.GetPlottedPoints());
@@ -359,13 +430,13 @@ public sealed class StatsOverlayProjectionTests
         var torontoSeries = view.Timeline.Series.Single(series => series.Key == "city:toronto");
         Assert.Equal(25, denverSeries.Values.Count);
         Assert.Null(denverSeries.Values[23]);
-        Assert.Equal(23d, denverSeries.PointEvidence![22]!.KnownCumulativeKilometers);
+        Assert.Equal(23d, denverSeries.PointEvidence![22]!.KnownCumulativeDistance);
         Assert.Contains("01:00 -06:00", denverSeries.PointEvidence[0]!.LocalLabel);
         Assert.Contains("01:00 -05:00", torontoSeries.PointEvidence![0]!.LocalLabel);
         Assert.Equal("-04:00", torontoSeries.PointEvidence[1]!.UtcOffset);
         Assert.Null(torontoSeries.Values[24]);
-        Assert.Null(torontoSeries.PointEvidence[24]!.HourlyKnownKilometers);
-        Assert.Null(torontoSeries.PointEvidence[24]!.KnownCumulativeKilometers);
+        Assert.Null(torontoSeries.PointEvidence[24]!.HourlyKnownDistance);
+        Assert.Null(torontoSeries.PointEvidence[24]!.KnownCumulativeDistance);
         Assert.Equal("localized:StatsCityDenver", denverSeries.Label);
         var denverBubble = view.Bubbles.Rows.Single(row => row.Key == "city:denver");
         Assert.Null(denverBubble.Color);
@@ -416,7 +487,7 @@ public sealed class StatsOverlayProjectionTests
         var row = Assert.Single(view.CategoryPie.Rows);
 
         Assert.Equal(coverageState, row.CoverageReference);
-        Assert.Null(row.Kilometers);
+        Assert.Null(row.Distance);
         Assert.Null(row.Percent);
     }
 
@@ -503,6 +574,24 @@ public sealed class StatsOverlayProjectionTests
         FullyCoveredHours = availableHours, AvailableRouteHours = availableHours,
         PendingThroughUtc = new DateTime(2026, 4, 2, 12, 0, 0, DateTimeKind.Utc),
         Exclusions = []
+    };
+
+    static string UnitLocalize(string key) => key switch
+    {
+        "StatsDistanceUnit" => "kilometers",
+        "StatsDistanceUnitImperial" => "miles",
+        "StatsDistanceUnitShort" => "km",
+        "StatsDistanceUnitShortImperial" => "mi",
+        "StatsSpeedUnit" => "km/h",
+        "StatsSpeedUnitImperial" => "mph",
+        "StatsFleetRateUnit" => "km/h",
+        "StatsFleetRateUnitImperial" => "mi/h",
+        "StatsDistanceHeading" => "Distance ({0})",
+        "StatsPieDataset" => "Distance ({0})",
+        "StatsCumulativeDistanceUnit" => "Cumulative distance ({0})",
+        "StatsAverageVehicleSpeedUnit" => "Average vehicle speed ({0})",
+        "StatsAverageDistancePerHourUnit" => "Average distance per hour ({0})",
+        _ => key,
     };
 
     static StatsBubbleStatistic Bubble(

@@ -27,6 +27,28 @@ public sealed class StatsChartTextTests
         }
     }
 
+    [Fact]
+    public void DecimalFormattingUsesEnglishAndRestoresBothCallerCultures()
+    {
+        var priorCulture = CultureInfo.CurrentCulture;
+        var priorUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("es-ES");
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("es");
+            var text = new StatsChartText(new CultureReportingLocalizer());
+
+            Assert.Equal("1,609.34", text.Format(1609.344m));
+            Assert.Equal("es-ES", CultureInfo.CurrentCulture.Name);
+            Assert.Equal("es", CultureInfo.CurrentUICulture.Name);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = priorCulture;
+            CultureInfo.CurrentUICulture = priorUiCulture;
+        }
+    }
+
     sealed class CultureReportingLocalizer : IStringLocalizer<RouteFilterResources>
     {
         public LocalizedString this[string name] => new(name, $"{CultureInfo.CurrentUICulture.Name}:{name}");

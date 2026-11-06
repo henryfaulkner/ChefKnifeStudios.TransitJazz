@@ -12,12 +12,18 @@ public sealed class BubbleChartModel
     public const double MaximumMarkerRadiusPixels = 24;
     public const double MinimumMarkerRadiusPixels = 3;
 
-    public BubbleChartModel(IReadOnlyList<BubbleChartRow> rows) => Rows = Array.AsReadOnly(rows.Select(row => row with
+    public BubbleChartModel(IReadOnlyList<BubbleChartRow> rows, string? distanceHeading = null)
     {
-        TooltipLines = row.TooltipLines is null ? null : Array.AsReadOnly(row.TooltipLines.ToArray())
-    }).ToArray());
+        Rows = Array.AsReadOnly(rows.Select(row => row with
+        {
+            TooltipLines = row.TooltipLines is null ? null : Array.AsReadOnly(row.TooltipLines.ToArray())
+        }).ToArray());
+        DistanceHeading = distanceHeading ?? StatsChartModelResources.Format("StatsDistanceHeading",
+            StatsChartModelResources.Get("StatsDistanceUnitShort"));
+    }
 
     public IReadOnlyList<BubbleChartRow> Rows { get; }
+    public string DistanceHeading { get; }
 
     public void Validate()
     {
@@ -32,7 +38,7 @@ public sealed class BubbleChartModel
             ValidateNonnegativeFinite(row.X, "Bubble X");
             ValidateNonnegativeFinite(row.Y, "Bubble Y");
             ValidateNonnegativeFinite(row.MeanActiveVehicles, "Bubble area measure");
-            ValidateNonnegativeFinite(row.DistanceKilometers, "Bubble distance");
+            ValidateNonnegativeFinite(row.Distance, "Bubble distance");
             ValidateNonnegativeFinite(row.RouteVehicleHours, "Bubble route hours");
             ValidateNonnegativeFinite(row.ActiveClockHours, "Bubble active clock hours");
             ValidateNonnegativeFinite(row.ExpectedCoverageHours, "Bubble expected coverage");
@@ -68,7 +74,7 @@ public sealed class BubbleChartModel
                     MaximumMarkerRadiusPixels * Math.Sqrt(item.Row.MeanActiveVehicles.Value / maximum)),
                 item.Row.ColorKey ?? item.Row.Key,
                 item.Row.TooltipLines ?? Array.Empty<string>(),
-                item.Row.DistanceKilometers,
+                item.Row.Distance,
                 item.Row.RouteVehicleHours,
                 item.Row.ActiveClockHours,
                 item.Row.ActivitySampleNumerator,
@@ -96,7 +102,7 @@ public sealed record BubbleChartRow(
     string? OmissionReason,
     string? ColorKey = null,
     IReadOnlyList<string>? TooltipLines = null,
-    double? DistanceKilometers = null,
+    double? Distance = null,
     double? RouteVehicleHours = null,
     double? ActiveClockHours = null,
     long? ActivitySampleNumerator = null,
@@ -114,7 +120,7 @@ public sealed record PlottedBubblePoint(
     double RadiusPixels,
     string ColorKey,
     IReadOnlyList<string> TooltipLines,
-    double? DistanceKilometers,
+    double? Distance,
     double? RouteVehicleHours,
     double? ActiveClockHours,
     long? ActivitySampleNumerator,

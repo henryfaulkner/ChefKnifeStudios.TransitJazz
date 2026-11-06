@@ -187,21 +187,21 @@
 
         foreach (var series in model.Series)
         {
-            yield return TableHeader(series.Label);
+            yield return TableHeader($"{series.Label} ({model.DistanceUnit})");
             if (series.KnownValues is not null)
-                yield return TableHeader($"{series.Label} ({T.Get("StatsKnownAmount")})");
+                yield return TableHeader($"{series.Label} ({T.Get("StatsKnownAmount")}, {model.DistanceUnit})");
             if (model.EnableSeriesVisibility)
                 yield return TableHeader($"{series.Label} ({T.Get("StatsVisibilityState")})");
             if (series.PointEvidence is not null)
-                foreach (var heading in SeriesEvidenceHeadings(series.Label))
+                foreach (var heading in SeriesEvidenceHeadings(series.Label, model.DistanceUnit))
                     yield return TableHeader(heading);
         }
 
         if (hasSharedEvidence)
         {
-            yield return TableHeader(T.Get("StatsHourlyKnown"));
-            yield return TableHeader(T.Get("StatsKnownCumulative"));
-            yield return TableHeader(T.Get("StatsPlottedCumulative"));
+            yield return TableHeader($"{T.Get("StatsHourlyKnown")} ({model.DistanceUnit})");
+            yield return TableHeader($"{T.Get("StatsKnownCumulative")} ({model.DistanceUnit})");
+            yield return TableHeader($"{T.Get("StatsPlottedCumulative")} ({model.DistanceUnit})");
         }
     }
 
@@ -234,8 +234,8 @@
         }
         if (hasSharedEvidence && model.PointEvidence is { } details)
         {
-            cells.Add(NumberCell(details[index]?.HourlyKnownKilometers));
-            cells.Add(NumberCell(details[index]?.KnownCumulativeKilometers));
+            cells.Add(NumberCell(details[index]?.HourlyKnownDistance));
+            cells.Add(NumberCell(details[index]?.KnownCumulativeDistance));
             cells.Add(NumberCell(details[index]?.CombinedPlottedSubtotal));
         }
         foreach (var cell in cells)
@@ -263,7 +263,7 @@
     string[] SharedEvidenceHeadings() =>
     [T.Get("StatsIntervalStart"), T.Get("StatsIntervalEnd"), T.Get("StatsUtcOffset"), T.Get("StatsCoverageState")];
 
-    string[] SeriesEvidenceHeadings(string label) =>
+    string[] SeriesEvidenceHeadings(string label, string distanceUnit) =>
     [
         $"{label} ({T.Get("StatsLocalDate")})",
         $"{label} ({T.Get("StatsIntervalStart")})",
@@ -271,9 +271,9 @@
         $"{label} ({T.Get("StatsUtcOffset")})",
         $"{label} ({T.Get("StatsCoverageState")})",
         $"{label} ({T.Get("StatsReason")})",
-        $"{label} ({T.Get("StatsHourlyKnown")})",
-        $"{label} ({T.Get("StatsKnownCumulative")})",
-        $"{label} ({T.Get("StatsCombinedPlottedSubtotal")})"
+        $"{label} ({T.Get("StatsHourlyKnown")}, {distanceUnit})",
+        $"{label} ({T.Get("StatsKnownCumulative")}, {distanceUnit})",
+        $"{label} ({T.Get("StatsCombinedPlottedSubtotal")}, {distanceUnit})"
     ];
 
     void AddEvidenceCells(List<RenderFragment> cells, ChartPointEvidence? point)
@@ -286,8 +286,8 @@
         cells.Add(TextCell(point?.Reason is { } reason
             ? T.Get(ChartLocalization.ReasonKey(reason))
             : T.Get("StatsNone")));
-        cells.Add(NumberCell(point?.HourlyKnownKilometers));
-        cells.Add(NumberCell(point?.KnownCumulativeKilometers));
+        cells.Add(NumberCell(point?.HourlyKnownDistance));
+        cells.Add(NumberCell(point?.KnownCumulativeDistance));
         cells.Add(NumberCell(point?.CombinedPlottedSubtotal));
     }
 

@@ -33,8 +33,8 @@ internal static class PieChartConfig
             new PieDataset
             {
                 Id = "category-distance",
-                Label = "Observed distance (km)",
-                Data = slices.Select(slice => (object)slice.Kilometers).ToList(),
+                Label = model.DatasetLabel,
+                Data = slices.Select(slice => (object)slice.Distance).ToList(),
                 BackgroundColor = new IndexableOption<string>(slices.Select(slice =>
                     ChartPresentation.GetSeriesStyle("category:" + slice.Key, isDark).Color).ToList()),
                 BorderColor = new IndexableOption<string>(theme.SurfaceColor),

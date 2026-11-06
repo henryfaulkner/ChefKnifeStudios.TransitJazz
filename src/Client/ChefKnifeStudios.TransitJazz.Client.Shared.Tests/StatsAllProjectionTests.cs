@@ -1,5 +1,6 @@
 using System.Globalization;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Stats;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
 using Xunit;
 
@@ -64,7 +65,7 @@ public sealed class StatsAllProjectionTests
         Assert.Empty(view.Snapshot.RouteOptions);
         Assert.Equal("all", view.Snapshot.Selection.Scope);
         Assert.Equal(123m, view.Snapshot.TodayDistance.Kilometers);
-        Assert.Equal(123d, view.CategoryPie.Rows.Sum(row => row.Kilometers!.Value));
+        Assert.Equal(123d, view.CategoryPie.Rows.Sum(row => row.Distance!.Value));
         Assert.Equal(2, view.CategoryPie.Rows.Count);
         Assert.True(view.Timeline.EnableSeriesVisibility);
         Assert.Equal(25, view.Timeline.NumericXValues!.Count);
@@ -80,7 +81,7 @@ public sealed class StatsAllProjectionTests
         Assert.Contains("01:00 -05:00", toronto.PointEvidence[1]!.LocalLabel);
         Assert.Equal("-05:00", toronto.PointEvidence[1]!.UtcOffset);
         Assert.Null(toronto.Values[24]);
-        Assert.Null(toronto.PointEvidence[24]!.HourlyKnownKilometers);
+        Assert.Null(toronto.PointEvidence[24]!.HourlyKnownDistance);
         Assert.Equal("future", toronto.PointEvidence[24]!.Reason);
         Assert.Equal("localized:StatsReasonFuture", toronto.PointEvidence[24]!.TooltipLines.Last());
         Assert.All(boston.Values, value => Assert.Null(value));
@@ -96,6 +97,20 @@ public sealed class StatsAllProjectionTests
         Assert.Equal("localized:StatsCityAtlanta", view.Bubbles.Rows[0].Label);
         Assert.Equal("localized:StatsCityAtlanta", view.Bubbles.Rows[0].TooltipLines![0]);
         Assert.Equal(cities.Length, view.Bubbles.GetTableRows().Count);
+
+        var imperial = StatsOverlayProjection.Build(response, key => key, units: StatsUnitSystem.Imperial);
+        Assert.Same(response, imperial.Snapshot);
+        Assert.Equal(123m / 1.609344m, imperial.DailyDisplayDistance);
+        Assert.Equal(240m / 1.609344m, imperial.Last24DisplayDistance);
+        Assert.Equal((double)(70m / 1.609344m), imperial.CategoryPie.Rows[0].Distance);
+        Assert.Equal((double)(10m / 1.609344m), imperial.Timeline.Series[0].CanvasValues[0]);
+        Assert.Equal((double)(5m / 1.609344m), imperial.Bubbles.Rows[0].X);
+        Assert.Equal((double)(10m / 1.609344m), imperial.Bubbles.Rows[0].Y);
+        Assert.Equal((double)(20m / 1.609344m), imperial.Bubbles.Rows[0].Distance);
+        Assert.Equal(4d, imperial.Bubbles.Rows[0].RouteVehicleHours);
+        Assert.Null(imperial.Timeline.Series.Single(series => series.Key == "city:toronto").Values[24]);
+        Assert.All(imperial.Timeline.Series.Single(series => series.Key == "city:boston").Values, Assert.Null);
+        Assert.Equal(25, imperial.Timeline.NumericXValues!.Count);
     }
 
     static StatsTimelineSeries MakeSeries(StatsCityWindow city)

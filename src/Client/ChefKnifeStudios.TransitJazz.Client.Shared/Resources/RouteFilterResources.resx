@@ -486,6 +486,51 @@
   <data name="StatsDistanceUnit" xml:space="preserve">
     <value>kilometers</value>
   </data>
+  <data name="StatsDistanceUnitImperial" xml:space="preserve">
+    <value>miles</value>
+  </data>
+  <data name="StatsDistanceUnitShort" xml:space="preserve">
+    <value>km</value>
+  </data>
+  <data name="StatsDistanceUnitShortImperial" xml:space="preserve">
+    <value>mi</value>
+  </data>
+  <data name="StatsSpeedUnit" xml:space="preserve">
+    <value>km/h</value>
+  </data>
+  <data name="StatsSpeedUnitImperial" xml:space="preserve">
+    <value>mph</value>
+  </data>
+  <data name="StatsFleetRateUnit" xml:space="preserve">
+    <value>km/h</value>
+  </data>
+  <data name="StatsFleetRateUnitImperial" xml:space="preserve">
+    <value>mi/h</value>
+  </data>
+  <data name="StatsUnits" xml:space="preserve">
+    <value>Units</value>
+  </data>
+  <data name="StatsMetric" xml:space="preserve">
+    <value>Metric</value>
+  </data>
+  <data name="StatsImperial" xml:space="preserve">
+    <value>Imperial</value>
+  </data>
+  <data name="StatsDistanceHeading" xml:space="preserve">
+    <value>Distance ({0})</value>
+  </data>
+  <data name="StatsPieDataset" xml:space="preserve">
+    <value>Observed distance ({0})</value>
+  </data>
+  <data name="StatsCumulativeDistanceUnit" xml:space="preserve">
+    <value>Cumulative distance ({0})</value>
+  </data>
+  <data name="StatsAverageVehicleSpeedUnit" xml:space="preserve">
+    <value>Average vehicle speed ({0})</value>
+  </data>
+  <data name="StatsAverageDistancePerHourUnit" xml:space="preserve">
+    <value>Average distance per hour ({0})</value>
+  </data>
   <data name="StatsReportedVehiclesToday" xml:space="preserve">
     <value>Vehicles reported today</value>
   </data>

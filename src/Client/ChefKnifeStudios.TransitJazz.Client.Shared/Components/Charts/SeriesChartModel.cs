@@ -31,7 +31,8 @@ public sealed class SeriesChartModel
         bool isStacked,
         IReadOnlyList<ChartPointEvidence?>? pointEvidence = null,
         NumericAxisLabelMode numericAxisLabelMode = NumericAxisLabelMode.ElapsedHours,
-        bool enableSeriesVisibility = false)
+        bool enableSeriesVisibility = false,
+        string? distanceUnit = null)
     {
         XAxisTitle = xAxisTitle;
         YAxisTitle = yAxisTitle;
@@ -42,6 +43,7 @@ public sealed class SeriesChartModel
         PointEvidence = pointEvidence is null ? null : SnapshotEvidence(pointEvidence);
         NumericAxisLabelMode = numericAxisLabelMode;
         EnableSeriesVisibility = enableSeriesVisibility;
+        DistanceUnit = distanceUnit ?? StatsChartModelResources.Get("StatsDistanceUnitShort");
     }
 
     public string XAxisTitle { get; }
@@ -53,6 +55,7 @@ public sealed class SeriesChartModel
     public IReadOnlyList<ChartPointEvidence?>? PointEvidence { get; }
     public NumericAxisLabelMode NumericAxisLabelMode { get; }
     public bool EnableSeriesVisibility { get; }
+    public string DistanceUnit { get; }
 
     public void Validate()
     {
@@ -127,8 +130,8 @@ public sealed record ChartPointEvidence(
     string UtcOffset,
     string CoverageState,
     double? CombinedPlottedSubtotal,
-    double? HourlyKnownKilometers,
-    double? KnownCumulativeKilometers,
+    double? HourlyKnownDistance,
+    double? KnownCumulativeDistance,
     IReadOnlyList<string> TooltipLines,
     string? Reason = null);
 

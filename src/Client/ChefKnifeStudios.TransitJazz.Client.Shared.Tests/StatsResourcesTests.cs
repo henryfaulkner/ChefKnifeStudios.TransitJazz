@@ -94,6 +94,13 @@ public sealed class StatsResourcesTests
 
             Assert.Equal("View data table", text.Get("StatsChartTable"));
             Assert.Equal("kilometers", text.Get("StatsDistanceUnit"));
+            Assert.Equal("miles", text.Get("StatsDistanceUnitImperial"));
+            Assert.Equal("km", text.Get("StatsDistanceUnitShort"));
+            Assert.Equal("mi", text.Get("StatsDistanceUnitShortImperial"));
+            Assert.Equal("mph", text.Get("StatsSpeedUnitImperial"));
+            Assert.Equal("mi/h", text.Get("StatsFleetRateUnitImperial"));
+            Assert.Equal("Average vehicle speed (mph)", text.Get("StatsAverageVehicleSpeedUnit", text.Get("StatsSpeedUnitImperial")));
+            Assert.Equal("Average distance per hour (mi/h)", text.Get("StatsAverageDistancePerHourUnit", text.Get("StatsFleetRateUnitImperial")));
             Assert.Equal("Partial coverage", text.Get("StatsCoveragePartial"));
             Assert.Equal("0.001", text.Format(0.001, "0.###"));
         }

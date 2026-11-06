@@ -48,4 +48,8 @@ public partial class Settings : ObservableObject
     [ObservableProperty]
     [property: HiddenSetting]
     BackfillTexture _backfillTexture = BackfillTexture.Noise;
+
+    [ObservableProperty]
+    [property: HiddenSetting]
+    StatsUnitSystem _statsUnits = StatsUnitSystem.Metric;
 }

@@ -77,7 +77,7 @@
         builder.AddContent(6, Header(T.Get("StatsEntity")));
         builder.AddContent(6, Header(XAxisTitle));
         builder.AddContent(6, Header(YAxisTitle));
-        builder.AddContent(6, Header(T.Get("StatsKilometers")));
+        builder.AddContent(6, Header(Model.DistanceHeading));
         builder.AddContent(6, Header(T.Get("StatsRouteHours")));
         builder.AddContent(6, Header(T.Get("StatsActiveClockHours")));
         builder.AddContent(6, Header(T.Get("StatsMeanActiveVehicles")));
@@ -157,7 +157,7 @@
         builder.CloseElement();
         var cells = new[]
         {
-            Format(row.X), Format(row.Y), Format(row.DistanceKilometers), Format(row.RouteVehicleHours),
+            Format(row.X), Format(row.Y), Format(row.Distance), Format(row.RouteVehicleHours),
             Format(row.ActiveClockHours), T.Format(row.MeanActiveVehicles, "#,##0.###"),
             Format(row.ActivitySampleNumerator), Format(row.ActivitySampleDenominator),
             Format(row.ExpectedCoverageHours), Format(row.AvailableCoverageHours),
