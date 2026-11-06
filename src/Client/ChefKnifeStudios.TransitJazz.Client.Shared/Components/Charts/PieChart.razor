@@ -65,13 +65,13 @@
 
         builder.OpenElement(0, "table");
         builder.OpenElement(1, "caption");
-        builder.AddContent(2, $"{Title} — observed distance ({T.Get("StatsDistanceUnit")})");
+        builder.AddContent(2, $"{Title} — observed distance ({Model.DistanceUnitLabel})");
         if (!string.IsNullOrWhiteSpace(PeriodLabel)) builder.AddContent(3, $" — {PeriodLabel}");
         builder.CloseElement();
         builder.OpenElement(4, "thead");
         builder.OpenElement(5, "tr");
         builder.AddContent(6, Header(T.Get("StatsCategory")));
-        builder.AddContent(6, Header(T.Get("StatsDistanceUnit")));
+        builder.AddContent(6, Header(Model.DistanceUnitLabel));
         builder.AddContent(6, Header(T.Get("StatsShare")));
         builder.AddContent(6, Header(T.Get("StatsCoverage")));
         builder.CloseElement();
@@ -137,7 +137,7 @@
         builder.AddAttribute(2, "scope", "row");
         builder.AddContent(3, row.Label);
         builder.CloseElement();
-        builder.AddContent(4, Cell(Format(row.Kilometers)));
+        builder.AddContent(4, Cell(Format(row.Distance)));
         builder.AddContent(5, Cell(row.Percent is { } percent ? $"{T.Format(percent)}%" : T.Get("StatsUnavailable")));
         builder.AddContent(6, Cell(T.Get(ChartLocalization.CoverageKey(row.CoverageReference))));
         builder.CloseElement();

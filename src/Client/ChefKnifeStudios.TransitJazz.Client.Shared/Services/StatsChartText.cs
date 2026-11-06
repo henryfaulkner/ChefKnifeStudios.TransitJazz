@@ -34,6 +34,10 @@ public sealed class StatsChartText(IStringLocalizer<RouteFilterResources> locali
         ? number.ToString(format, CultureInfo.GetCultureInfo("en"))
         : Get("StatsUnavailable");
 
+    public string Format(decimal? value, string format = "#,##0.##") => value is { } number
+        ? number.ToString(format, CultureInfo.GetCultureInfo("en"))
+        : Get("StatsUnavailable");
+
     public string Format(long? value) => value is { } number
         ? number.ToString("N0", CultureInfo.GetCultureInfo("en"))
         : Get("StatsUnavailable");

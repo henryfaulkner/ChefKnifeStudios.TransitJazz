@@ -1,5 +1,6 @@
 using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Stats;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Charts;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
@@ -170,8 +171,9 @@ public sealed class StatsOverlaySessionTests
         var retainedReportedTable = before.Presentation.TodayReportedVehicles;
         var requestGate = new StatsOverlayRequestGate();
         Assert.True(requestGate.TryBegin(4));
+        state.MarkStale();
 
-        var replacement = StatsOverlayProjection.Build(response, key => $"changed:{key}");
+        var replacement = StatsOverlayProjection.Build(response, key => $"changed:{key}", units: StatsUnitSystem.Imperial);
         Assert.True(state.TryReplacePresentation(replacement));
 
         Assert.Same(response, state.Current!.Snapshot);
@@ -180,8 +182,14 @@ public sealed class StatsOverlaySessionTests
         Assert.NotSame(retainedReportedTable, state.Current.Presentation.TodayReportedVehicles);
         Assert.Equal(before.Snapshot.CutoffUtc, state.Current.Snapshot.CutoffUtc);
         Assert.Equal(before.Snapshot.Cities, state.Current.Snapshot.Cities);
+        Assert.True(state.Current.IsStale);
+        Assert.Equal(StatsUnitSystem.Imperial, state.Current.Presentation.UnitSystem);
         Assert.Equal(4, requestGate.ActiveGeneration);
         Assert.False(requestGate.TryBegin(5));
+
+        state.Clear();
+        Assert.False(state.TryReplacePresentation(replacement));
+        Assert.False(state.TryAccept(3, 4, response, replacement, "city", "toronto", []));
     }
 
     [Fact]

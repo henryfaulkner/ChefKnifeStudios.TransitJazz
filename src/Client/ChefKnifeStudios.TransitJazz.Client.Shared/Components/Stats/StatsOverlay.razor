@@ -1,4 +1,4 @@
-@using ChefKnifeStudios.TransitJazz.Client.Core.Services
+﻿@using ChefKnifeStudios.TransitJazz.Client.Core.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Models
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
@@ -14,9 +14,11 @@
 @using System.Threading.Tasks
 @using Microsoft.JSInterop
 @using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.Extensions.Logging
 @implements IDisposable
 @inject IEventNotificationService EventNotificationService
 @inject ISettingsService SettingsService
+@inject Microsoft.Extensions.Logging.ILogger<StatsOverlay> Logger
 @inject IApplicationViewModel ApplicationViewModel
 @inject StatsChartText T
 @inject StatsSnapshotStore SnapshotStore
@@ -30,15 +32,30 @@
         aria-label="@T.Get("StatsTitle")"
         @ref="_overlayElement"
         @onkeydown="HandleKeyDown">
-    <div class="stats-overlay__scope" role="radiogroup" aria-label="@T.Get("StatsScope")">
-        <label>
-            <input type="radio" name="stats-scope" value="city" checked="@(_scope == "city")" @onchange='() => ChangeScopeAsync("city")' />
-            <span>@CurrentCityName</span>
-        </label>
-        <label>
-            <input type="radio" name="stats-scope" value="all" checked="@(_scope == "all")" @onchange='() => ChangeScopeAsync("all")' />
-            <span>@T.Get("StatsAllCities")</span>
-        </label>
+    <div class="stats-overlay__controls">
+        <div class="stats-overlay__toggle" role="radiogroup" aria-label="@T.Get("StatsScope")">
+            <label>
+                <input type="radio" name="stats-scope" value="city" checked="@(_scope == "city")" @onchange='() => ChangeScopeAsync("city")' />
+                <span>@CurrentCityName</span>
+            </label>
+            <label>
+                <input type="radio" name="stats-scope" value="all" checked="@(_scope == "all")" @onchange='() => ChangeScopeAsync("all")' />
+                <span>@T.Get("StatsAllCities")</span>
+            </label>
+        </div>
+
+        <div class="stats-overlay__toggle stats-overlay__units" role="radiogroup" aria-label="@T.Get("StatsUnits")">
+            <label>
+                <input type="radio" name="stats-units" value="metric" checked="@(_unitSystem == StatsUnitSystem.Metric)"
+                       @onchange="() => ChangeUnitSystem(StatsUnitSystem.Metric)" />
+                <span>@T.Get("StatsMetric")</span>
+            </label>
+            <label>
+                <input type="radio" name="stats-units" value="imperial" checked="@(_unitSystem == StatsUnitSystem.Imperial)"
+                       @onchange="() => ChangeUnitSystem(StatsUnitSystem.Imperial)" />
+                <span>@T.Get("StatsImperial")</span>
+            </label>
+        </div>
     </div>
 
     @if (_scope == "city" && (_hasAcceptedCityOptions || _routeSelection.Count > 0))
@@ -87,18 +104,18 @@
                 </div>
             }
             <section class="stats-overlay__dashboard">
-                <SeriesChart Model="@dashboard.Timeline" Title="@T.Get("StatsCumulativeDistance")"
+                <SeriesChart Model="@dashboard.Timeline" Title="@dashboard.Timeline.YAxisTitle"
                                 State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
                 <section class="stats-overlay__totals" aria-label="@T.Get(dashboard.DailyDistanceHeadingKey)">
                     <article>
                         <h2>@(dashboard.DailyDistanceHeadingKey == "StatsDistanceOnDate"
                             ? T.Get(dashboard.DailyDistanceHeadingKey, FormatDate(dashboard.DailyEvidenceDate))
                             : T.Get(dashboard.DailyDistanceHeadingKey))</h2>
-                        <p><strong>@T.Format(ToDouble(dashboard.DailyDistance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
+                        <p><strong>@T.Format(dashboard.DailyDisplayDistance)</strong> @dashboard.DistanceUnitLabel</p>
                     </article>
                     <article>
                         <h2>@T.Get("StatsDistanceLast24")</h2>
-                        <p><strong>@T.Format(ToDouble(dashboard.Snapshot.Last24Distance.Kilometers))</strong> @T.Get("StatsDistanceUnit")</p>
+                        <p><strong>@T.Format(dashboard.Last24DisplayDistance)</strong> @dashboard.DistanceUnitLabel</p>
                     </article>
                     <article class="stats-overlay__reported" aria-labelledby="stats-reported-today-heading">
                         <h2 id="stats-reported-today-heading">@(dashboard.TodayReportedVehicles.HeadingKey == "StatsReportedVehiclesOnDate"
@@ -112,7 +129,7 @@
                     </article>
                 </section>
                 <BubbleChart Model="@dashboard.Bubbles" Title="@T.Get(dashboard.Snapshot.Selection.Scope == "city" ? "StatsRouteActivity" : "StatsCityActivity")"
-                                XAxisTitle="@T.Get("StatsBubbleX")" YAxisTitle="@T.Get("StatsBubbleY")"
+                                XAxisTitle="@dashboard.BubbleXAxisTitle" YAxisTitle="@dashboard.BubbleYAxisTitle"
                                 State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
                 <PieChart Model="@dashboard.CategoryPie" Title="@T.Get("StatsCategoryShares")"
                             State="@(_isLoading ? ChartLoadState.Loading : ChartLoadState.Ready)" IsDark="@_isDark" />
@@ -175,6 +192,7 @@
 
     bool _isOpen;
     bool _isDark;
+    StatsUnitSystem _unitSystem = StatsUnitSystem.Metric;
     bool _accordionExpanded;
     bool _disposed;
     ElementReference _overlayElement;
@@ -215,7 +233,18 @@
 
     protected override void OnInitialized()
     {
-        _isDark = SettingsService.GetSettings().IsDarkModeEnabled;
+        try
+        {
+            var settings = SettingsService.GetSettings();
+            _isDark = settings.IsDarkModeEnabled;
+            _unitSystem = StatsDisplayUnits.Normalize(settings.StatsUnits);
+        }
+        catch (Exception ex)
+        {
+            _isDark = false;
+            _unitSystem = StatsUnitSystem.Metric;
+            Logger.LogWarning(ex, "Could not load Stats display preferences; using Metric for this opening.");
+        }
         _citySlug = NavigationManager.ResolveCity();
         EventNotificationService.EventReceived += HandleEvent;
         NavigationManager.LocationChanged += HandleLocationChanged;
@@ -227,7 +256,11 @@
         if (_isOpen == IsOpen) return;
         _isOpen = IsOpen;
         _focusOnRender = _isOpen;
-        if (_isOpen) _ = InvokeAsync(StartNewSessionAsync);
+        if (_isOpen)
+        {
+            LoadUnitPreference();
+            _ = InvokeAsync(StartNewSessionAsync);
+        }
         else CloseSession();
     }
 
@@ -254,6 +287,37 @@
         if (_isOpen && _snapshot is { } snapshot)
             _acceptedSnapshot.TryReplacePresentation(BuildPresentation(snapshot));
         StateHasChanged();
+    }
+
+    void LoadUnitPreference()
+    {
+        try
+        {
+            _unitSystem = StatsDisplayUnits.Normalize(
+                SettingsService.GetSettingValue<StatsUnitSystem>(nameof(Settings.StatsUnits)));
+        }
+        catch (Exception ex)
+        {
+            _unitSystem = StatsUnitSystem.Metric;
+            Logger.LogWarning(ex, "Could not load Stats display units; using Metric for this opening.");
+        }
+    }
+
+    void ChangeUnitSystem(StatsUnitSystem units)
+    {
+        units = StatsDisplayUnits.Normalize(units);
+        if (_unitSystem == units) return;
+
+        _unitSystem = units;
+        RefreshPresentation();
+        try
+        {
+            SettingsService.SetSettingValue(nameof(Settings.StatsUnits), units);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not save Stats display units; keeping the selection for this opening.");
+        }
     }
 
     Task HandleKeyDown(KeyboardEventArgs args) => args.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
@@ -629,15 +693,13 @@
 
     StatsOverlayPresentation BuildPresentation(StatsOverlayResponse snapshot) =>
         StatsOverlayProjection.Build(snapshot, key => T.Get(key), ApplicationViewModel.RouteShapes,
-            isDark: _isDark, isHistorical: _freshness.IsHistorical);
+            isDark: _isDark, isHistorical: _freshness.IsHistorical, units: _unitSystem);
 
     string SnapshotUpdatedAtText => _snapshot?.GeneratedAtUtc.ToString(
         "MMMM d, yyyy h:mm:ss tt 'UTC'", CultureInfo.GetCultureInfo("en")) ?? string.Empty;
 
     static string FormatDate(DateOnly? date) => date?.ToString("MMMM d, yyyy", CultureInfo.GetCultureInfo("en"))
         ?? string.Empty;
-
-    static double? ToDouble(decimal? value) => value is { } number ? (double)number : null;
 
     public void Dispose()
     {

@@ -6,6 +6,26 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.Tests;
 public sealed class StatsTimelineVisibilityTests
 {
     [Fact]
+    public void ReconcileKeepsHiddenStableKeysAcrossMetricAndImperialModelReplacement()
+    {
+        var state = new StatsTimelineVisibilityState();
+        var metric = new SeriesChartModel("Time", "Cumulative distance (km)", ["1 AM"], [1],
+            [new ChartSeries("city:toronto", "Toronto", [10])], false, enableSeriesVisibility: true);
+        var imperial = new SeriesChartModel("Time", "Cumulative distance (mi)", ["1 AM"], [1],
+            [new ChartSeries("city:toronto", "Toronto", [(double)(10m / 1.609344m)])], false,
+            enableSeriesVisibility: true, distanceUnit: "mi");
+
+        state.Reconcile(metric.Series.Select(series => series.Key));
+        state.SetVisibility("city:toronto", false);
+        state.Reconcile(imperial.Series.Select(series => series.Key));
+
+        Assert.False(state.IsVisible("city:toronto"));
+        Assert.Equal(metric.Series[0].Key, imperial.Series[0].Key);
+        Assert.Equal(10d, metric.Series[0].Values[0]);
+        Assert.Equal((double)(10m / 1.609344m), imperial.Series[0].Values[0]);
+    }
+
+    [Fact]
     public void ReconcilePreservesVisibilityAcrossRefreshReorderAndThemeInputs()
     {
         var state = new StatsTimelineVisibilityState();

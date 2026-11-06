@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Charts;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Models;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Services;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
 
@@ -21,7 +23,8 @@ public static class StatsOverlayProjection
         Func<string, string> localize,
         IReadOnlyDictionary<string, RouteShapeFeature>? routeShapes = null,
         bool isDark = false,
-        bool isHistorical = false)
+        bool isHistorical = false,
+        StatsUnitSystem units = StatsUnitSystem.Metric)
     {
         ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(localize);
@@ -39,13 +42,21 @@ public static class StatsOverlayProjection
             };
         }
         var culture = CultureInfo.GetCultureInfo("en");
+        units = StatsDisplayUnits.Normalize(units);
+        var isImperial = units == StatsUnitSystem.Imperial;
+        var distanceUnit = localize(isImperial ? "StatsDistanceUnitImperial" : "StatsDistanceUnit");
+        var distanceUnitShort = localize(isImperial ? "StatsDistanceUnitShortImperial" : "StatsDistanceUnitShort");
+        var speedUnit = localize(isImperial ? "StatsSpeedUnitImperial" : "StatsSpeedUnit");
+        var fleetRateUnit = localize(isImperial ? "StatsFleetRateUnitImperial" : "StatsFleetRateUnit");
 
         var pie = new PieChartModel(response.CategoryShares.Select(item => new PieChartRow(
             item.CategoryKey,
             localize(CategoryResourceKey(item.CategoryKey)),
-            ToDouble(item.Kilometers),
+            ToDouble(StatsDisplayUnits.ConvertDistance(item.Kilometers, units)),
             ToDouble(item.Percent),
-            CoverageForReference(response, item.CoverageReference))).ToArray());
+            CoverageForReference(response, item.CoverageReference))).ToArray(),
+            distanceUnitShort,
+            string.Format(culture, localize("StatsPieDataset"), distanceUnitShort));
 
         var routeCategories = response.RouteOptions.ToDictionary(option => (option.CitySlug, option.RouteJoinKey),
             option => option.CategoryKey);
@@ -65,14 +76,14 @@ public static class StatsOverlayProjection
             return new BubbleChartRow(
                 item.EntityKey,
                 label,
-                ToDouble(item.X),
-                ToDouble(item.Y),
+                ToDouble(StatsDisplayUnits.ConvertDistance(item.X, units)),
+                ToDouble(StatsDisplayUnits.ConvertDistance(item.Y, units)),
                 ToDouble(item.MeanActiveVehicles),
                 item.Coverage.State,
                 item.OmissionReason,
                 item.EntityKind == "city" ? "city:" + item.CitySlug : item.CategoryKey ?? item.EntityKey,
-                BubbleTooltip(item, label, localize, culture),
-                ToDouble(item.DistanceKilometers),
+                BubbleTooltip(item, label, localize, culture, units, speedUnit, fleetRateUnit),
+                ToDouble(StatsDisplayUnits.ConvertDistance(item.DistanceKilometers, units)),
                 ToDouble(item.RouteVehicleHours),
                 ToDouble(item.ActiveClockHours),
                 item.ActivitySampleNumerator,
@@ -82,9 +93,9 @@ public static class StatsOverlayProjection
                 Color: item.EntityKind == "route"
                     ? ChartPresentation.GetRouteColor(item.CitySlug, item.RouteJoinKey ?? item.EntityKey, category, routeShapes, isDark)
                     : null);
-        }).ToArray());
+        }).ToArray(), string.Format(culture, localize("StatsDistanceHeading"), distanceUnitShort));
 
-        var timeline = BuildTimeline(response, localize, culture);
+        var timeline = BuildTimeline(response, localize, culture, units, distanceUnitShort);
         pie.Validate();
         bubbles.Validate();
         timeline.Validate();
@@ -93,10 +104,18 @@ public static class StatsOverlayProjection
             dailyReported = dailyReported with { HeadingKey = "StatsReportedVehiclesOnDate" };
         else if (snapshot.Selection.Scope == "city" && snapshot.PreviousDay is not null)
             dailyReported = dailyReported with { HeadingKey = "StatsReportedVehiclesYesterday" };
+        var bubbleXTitle = string.Format(culture, localize("StatsAverageVehicleSpeedUnit"), speedUnit);
+        var bubbleYTitle = string.Format(culture, localize("StatsAverageDistancePerHourUnit"), fleetRateUnit);
         return new StatsOverlayPresentation(snapshot, pie, bubbles, timeline,
             dailyReported,
             ProjectReportedVehicles(response.Last24ReportedVehicles, response, localize, culture),
-            isHistorical);
+            isHistorical,
+            units,
+            StatsDisplayUnits.ConvertDistance(response.TodayDistance.Kilometers, units),
+            StatsDisplayUnits.ConvertDistance(snapshot.Last24Distance.Kilometers, units),
+            distanceUnit,
+            bubbleXTitle,
+            bubbleYTitle);
     }
 
     static StatsReportedVehiclePresentation ProjectReportedVehicles(StatsReportedVehicleSummary summary,
@@ -218,7 +237,9 @@ public static class StatsOverlayProjection
     static SeriesChartModel BuildTimeline(
         StatsOverlayResponse response,
         Func<string, string> localize,
-        CultureInfo culture)
+        CultureInfo culture,
+        StatsUnitSystem units,
+        string distanceUnitShort)
     {
         if (response.Timeline.SeriesKind == "category")
         {
@@ -241,19 +262,21 @@ public static class StatsOverlayProjection
                 var category = categories[categoryIndex];
                 var rows = perCategoryValues[category.Key];
                 var aligned = orderedBuckets.Select(bucket => rows.TryGetValue(bucket.ElapsedHours, out var row) ? row : null).ToArray();
-                var categoryTotals = aligned.Select(bucket => ToDouble(bucket?.PlotCumulativeKilometers)).ToArray();
-                series.Add(ProjectSeries(category.Key, localize(CategoryResourceKey(category.CategoryKey)), aligned, categoryTotals, culture, localize));
+                var categoryTotals = aligned.Select(bucket => ToDouble(StatsDisplayUnits.ConvertDistance(bucket?.PlotCumulativeKilometers, units))).ToArray();
+                series.Add(ProjectSeries(category.Key, localize(CategoryResourceKey(category.CategoryKey)), aligned, categoryTotals,
+                    culture, localize, units, distanceUnitShort));
             }
 
             return new SeriesChartModel(
                 localize("StatsLocalTime"),
-                localize("StatsCumulativeDistance"),
+                string.Format(culture, localize("StatsCumulativeDistanceUnit"), distanceUnitShort),
                 labels,
                 x,
                 series,
                 isStacked: false,
                 numericAxisLabelMode: NumericAxisLabelMode.LocalClockOffset,
-                enableSeriesVisibility: true);
+                enableSeriesVisibility: true,
+                distanceUnit: distanceUnitShort);
         }
 
         if (response.Timeline.SeriesKind == "city")
@@ -267,18 +290,19 @@ public static class StatsOverlayProjection
                 var byHour = city.Buckets.ToDictionary(bucket => (double)bucket.ElapsedHours);
                 var aligned = coordinates.Select(hour => byHour.TryGetValue(hour, out var bucket) ? bucket : null).ToArray();
                 return ProjectSeries(city.Key, CityLabel(city.CitySlug, response.Cities, localize), aligned,
-                    aligned.Select(bucket => ToDouble(bucket?.PlotCumulativeKilometers)).ToArray(), culture,
-                    localize, citySlug: city.CitySlug);
+                    aligned.Select(bucket => ToDouble(StatsDisplayUnits.ConvertDistance(bucket?.PlotCumulativeKilometers, units))).ToArray(),
+                    culture, localize, units, distanceUnitShort, citySlug: city.CitySlug);
             }).ToArray();
             return new SeriesChartModel(
                 localize("StatsLocalTime"),
-                localize("StatsCumulativeDistance"),
+                string.Format(culture, localize("StatsCumulativeDistanceUnit"), distanceUnitShort),
                 labels,
                 coordinates,
                 series,
                 isStacked: false,
                 numericAxisLabelMode: NumericAxisLabelMode.LocalClockOffset,
-                enableSeriesVisibility: true);
+                enableSeriesVisibility: true,
+                distanceUnit: distanceUnitShort);
         }
 
         throw new ArgumentException("The response contains an unsupported timeline shape.", nameof(response));
@@ -291,12 +315,14 @@ public static class StatsOverlayProjection
         IReadOnlyList<double?> combinedValues,
         CultureInfo culture,
         Func<string, string> localize,
+        StatsUnitSystem units,
+        string distanceUnitShort,
         string? citySlug = null)
     {
-        var values = alignedBuckets.Select(bucket => ToDouble(bucket?.PlotCumulativeKilometers)).ToArray();
-        var known = alignedBuckets.Select(bucket => ToDouble(bucket?.CumulativeObservedKilometers)).ToArray();
+        var values = alignedBuckets.Select(bucket => ToDouble(StatsDisplayUnits.ConvertDistance(bucket?.PlotCumulativeKilometers, units))).ToArray();
+        var known = alignedBuckets.Select(bucket => ToDouble(StatsDisplayUnits.ConvertDistance(bucket?.CumulativeObservedKilometers, units))).ToArray();
         var evidence = alignedBuckets.Select((bucket, index) => bucket is null ? null : BuildPointEvidence(bucket, label,
-            combinedValues[index], culture, citySlug, localize)).ToArray();
+            combinedValues[index], culture, citySlug, localize, units, distanceUnitShort)).ToArray();
         return new ChartSeries(key, label, values, known, evidence);
     }
 
@@ -306,13 +332,15 @@ public static class StatsOverlayProjection
         double? combined,
         CultureInfo culture,
         string? citySlug,
-        Func<string, string> localize)
+        Func<string, string> localize,
+        StatsUnitSystem units,
+        string distanceUnitShort)
     {
         var local = FormatLocalBucket(bucket, culture);
         var intervalStart = UtcText(bucket.StartUtc);
         var intervalEnd = UtcText(bucket.EndUtc);
-        var known = ToDouble(bucket.CumulativeObservedKilometers);
-        var hourly = ToDouble(bucket.HourlyKnownKilometers);
+        var known = ToDouble(StatsDisplayUnits.ConvertDistance(bucket.CumulativeObservedKilometers, units));
+        var hourly = ToDouble(StatsDisplayUnits.ConvertDistance(bucket.HourlyKnownKilometers, units));
         var lines = new List<string>
         {
             citySlug is null ? seriesLabel : $"{seriesLabel} · {local}",
@@ -320,9 +348,9 @@ public static class StatsOverlayProjection
             $"{localize(ChartLocalization.CoverageKey(bucket.CoverageState))}: {local}"
         };
         if (bucket.Reason is { } reason) lines.Add(localize(ChartLocalization.ReasonKey(reason)));
-        if (hourly is { } amount) lines.Add(string.Format(culture, "{0}: {1:N2} {2}", localize("StatsHourlyKnown"), amount, localize("StatsDistanceUnit")));
-        if (known is { } prefix) lines.Add(string.Format(culture, "{0}: {1:N2} {2}", localize("StatsKnownCumulative"), prefix, localize("StatsDistanceUnit")));
-        if (combined is { } total) lines.Add(string.Format(culture, "{0}: {1:N2} {2}", localize("StatsCombinedPlottedSubtotal"), total, localize("StatsDistanceUnit")));
+        if (hourly is { } amount) lines.Add(string.Format(culture, "{0}: {1:N2} {2}", localize("StatsHourlyKnown"), amount, distanceUnitShort));
+        if (known is { } prefix) lines.Add(string.Format(culture, "{0}: {1:N2} {2}", localize("StatsKnownCumulative"), prefix, distanceUnitShort));
+        if (combined is { } total) lines.Add(string.Format(culture, "{0}: {1:N2} {2}", localize("StatsCombinedPlottedSubtotal"), total, distanceUnitShort));
 
         return new ChartPointEvidence(local, intervalStart, intervalEnd, bucket.UtcOffset,
             bucket.CoverageState, combined, hourly, known, lines, bucket.Reason);
@@ -332,15 +360,20 @@ public static class StatsOverlayProjection
         StatsBubbleStatistic item,
         string label,
         Func<string, string> localize,
-        CultureInfo culture)
+        CultureInfo culture,
+        StatsUnitSystem units,
+        string speedUnit,
+        string fleetRateUnit)
     {
         string Format(decimal? value) => value?.ToString("#,##0.##", culture) ?? localize("StatsUnavailable");
+        var y = StatsDisplayUnits.ConvertDistance(item.Y, units);
+        var x = StatsDisplayUnits.ConvertDistance(item.X, units);
         var lines = new List<string>
         {
             label,
             $"{localize("StatsAverageVehicles")}: {Format(item.MeanActiveVehicles)} vehicles",
-            $"{localize("StatsAverageKilometersPerHour")}: {Format(item.Y)} km/hr",
-            $"{localize("StatsAverageDistancePerVehicleHour")}: {Format(item.X)} km/hr"
+            $"{string.Format(culture, localize("StatsAverageDistancePerHourUnit"), fleetRateUnit)}: {Format(y)}",
+            $"{string.Format(culture, localize("StatsAverageVehicleSpeedUnit"), speedUnit)}: {Format(x)}"
         };
         if (item.OmissionReason is { } reason) lines.Add(localize(ChartLocalization.ReasonKey(reason)));
         return lines;
@@ -374,7 +407,13 @@ public sealed record StatsOverlayPresentation(
     SeriesChartModel Timeline,
     StatsReportedVehiclePresentation TodayReportedVehicles,
     StatsReportedVehiclePresentation Last24ReportedVehicles,
-    bool IsHistorical = false)
+    bool IsHistorical = false,
+    StatsUnitSystem UnitSystem = StatsUnitSystem.Metric,
+    decimal? DailyDisplayDistance = null,
+    decimal? Last24DisplayDistance = null,
+    string DistanceUnitLabel = "kilometers",
+    string BubbleXAxisTitle = "",
+    string BubbleYAxisTitle = "")
 {
     public bool IsPreviousDay => !IsHistorical && Snapshot.Selection.Scope == "city" && Snapshot.PreviousDay is not null;
     public StatsDistanceSummary DailyDistance => IsPreviousDay ? Snapshot.PreviousDay!.Distance : Snapshot.TodayDistance;

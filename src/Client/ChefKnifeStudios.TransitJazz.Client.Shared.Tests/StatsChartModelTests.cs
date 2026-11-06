@@ -6,6 +6,41 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.Tests;
 public sealed class StatsChartModelTests
 {
     [Fact]
+    public void DistanceModelsCarryUnitContextAndKeepTableAndPlotValuesAligned()
+    {
+        var pie = new PieChartModel(
+            [new PieChartRow("bus", "Bus", 1.25, 100, "complete")],
+            distanceUnitLabel: "mi", datasetLabel: "Observed distance (mi)");
+        var bubble = new BubbleChartModel(
+            [new BubbleChartRow("city:a", "City A", 2, 3, 4, "complete", null, Distance: 1.25)],
+            distanceHeading: "Distance (mi)");
+        var series = new SeriesChartModel("Local time", "Cumulative distance (mi)", ["1 AM"], [1],
+            [new ChartSeries("city:a", "City A", [1.25], [1.25])], false, distanceUnit: "mi");
+
+        Assert.Equal("mi", pie.DistanceUnitLabel);
+        Assert.Equal("Observed distance (mi)", pie.DatasetLabel);
+        Assert.Equal(pie.GetTableDistances(), pie.GetPositiveSlices().Select(slice => (double?)slice.Distance));
+        Assert.Equal("Distance (mi)", bubble.DistanceHeading);
+        Assert.Equal(bubble.GetTableRows()[0].Distance, bubble.GetPlottedPoints()[0].Distance);
+        Assert.Equal("mi", series.DistanceUnit);
+        Assert.Equal("Cumulative distance (mi)", series.YAxisTitle);
+        Assert.Equal(series.Series[0].TableValues, series.Series[0].CanvasValues);
+    }
+
+    [Fact]
+    public void ChartModelsUseResourceBackedMetricContextByDefault()
+    {
+        var pie = new PieChartModel([]);
+        var bubble = new BubbleChartModel([]);
+        var series = new SeriesChartModel("Time", "Cumulative distance (km)", [], [], [], false);
+
+        Assert.Equal("km", pie.DistanceUnitLabel);
+        Assert.Equal("Observed distance (km)", pie.DatasetLabel);
+        Assert.Equal("Distance (km)", bubble.DistanceHeading);
+        Assert.Equal("km", series.DistanceUnit);
+    }
+
+    [Fact]
     public void SeriesModel_ValidatesAlignedFiniteValuesAndIncreasingNumericX()
     {
         var model = new SeriesChartModel(
@@ -65,8 +100,8 @@ public sealed class StatsChartModelTests
 
         Assert.Equal("01:00 -04:00", model.PointEvidence![0]!.LocalLabel);
         Assert.Equal("2026-04-01T05:00:00Z", model.PointEvidence[0]!.IntervalStartUtc);
-        Assert.Equal(13, model.PointEvidence[0]!.HourlyKnownKilometers);
-        Assert.Equal(37, model.PointEvidence[0]!.KnownCumulativeKilometers);
+        Assert.Equal(13, model.PointEvidence[0]!.HourlyKnownDistance);
+        Assert.Equal(37, model.PointEvidence[0]!.KnownCumulativeDistance);
         Assert.Equal(8, model.Series[0].Values[0]);
         Assert.Equal(13, model.Series[0].KnownValues![0]);
     }
@@ -98,8 +133,8 @@ public sealed class StatsChartModelTests
         Assert.Equal("Apr 1 · 23:00 -06:00", model.Series[1].PointEvidence![0]!.LocalLabel);
         Assert.Equal("2026-04-02T05:00:00Z", model.Series[0].PointEvidence[0]!.IntervalStartUtc);
         Assert.Equal("2026-04-02T05:00:00Z", model.Series[1].PointEvidence[0]!.IntervalStartUtc);
-        Assert.Equal(55, model.Series[0].PointEvidence[1]!.KnownCumulativeKilometers);
-        Assert.Equal(42, model.Series[1].PointEvidence[1]!.KnownCumulativeKilometers);
+        Assert.Equal(55, model.Series[0].PointEvidence[1]!.KnownCumulativeDistance);
+        Assert.Equal(42, model.Series[1].PointEvidence[1]!.KnownCumulativeDistance);
         Assert.Null(model.Series[1].Values[1]);
     }
 
@@ -173,8 +208,8 @@ public sealed class StatsChartModelTests
         var slices = model.GetPositiveSlices();
         Assert.Single(slices);
         Assert.Equal("rail", slices[0].Key);
-        Assert.Equal(25d, slices[0].Kilometers);
-        Assert.Equal(model.Rows.Select(row => row.Kilometers), model.GetTableKilometers());
+        Assert.Equal(25d, slices[0].Distance);
+        Assert.Equal(model.Rows.Select(row => row.Distance), model.GetTableDistances());
     }
 
     [Fact]
@@ -216,7 +251,7 @@ public sealed class StatsChartModelTests
         Assert.Equal("bus", point.ColorKey);
         Assert.Equal("Route 10", point.Label);
         Assert.Equal(new[] { "Route 10", "5 active vehicles; 6 of 8 route hours" }, point.TooltipLines);
-        Assert.Equal(120, point.DistanceKilometers);
+        Assert.Equal(120, point.Distance);
         Assert.Equal(7, point.ActivitySampleNumerator);
         Assert.Equal(10, point.ActivitySampleDenominator);
         Assert.Equal(8, point.ExpectedCoverageHours);

@@ -19,7 +19,7 @@ public sealed class StatsAccessibleEvidenceTests
         model.Validate();
 
         Assert.Equal(new[] { "bus", "rail" }, model.GetPositiveSlices().Select(slice => slice.Key));
-        Assert.Equal(new double?[] { 30, 20, 0, null }, model.GetTableKilometers());
+        Assert.Equal(new double?[] { 30, 20, 0, null }, model.GetTableDistances());
         Assert.Equal(new[] { "partial", "complete", "complete", "unavailable" }, model.Rows.Select(row => row.CoverageReference));
     }
 
@@ -38,7 +38,7 @@ public sealed class StatsAccessibleEvidenceTests
         Assert.Equal(new[] { "r1", "r2" }, model.GetPlottedPoints().Select(point => point.Key));
         Assert.Equal((0d, 0d, 30d, 6d, 2d, 180L, 120L),
             (model.GetPlottedPoints()[0].X, model.GetPlottedPoints()[0].Y,
-                model.GetPlottedPoints()[0].DistanceKilometers,
+                model.GetPlottedPoints()[0].Distance,
                 model.GetPlottedPoints()[0].RouteVehicleHours,
                 model.GetPlottedPoints()[0].ActiveClockHours,
                 model.GetPlottedPoints()[0].ActivitySampleNumerator,
@@ -70,6 +70,6 @@ public sealed class StatsAccessibleEvidenceTests
         Assert.Equal("2026-11-01T05:00:00.0000000Z", series.PointEvidence![0]!.IntervalEndUtc);
         Assert.Equal("-06:00", series.PointEvidence[0]!.UtcOffset);
         Assert.Equal("partial", series.PointEvidence[1]!.CoverageState);
-        Assert.Equal(12, series.PointEvidence[1]!.KnownCumulativeKilometers);
+        Assert.Equal(12, series.PointEvidence[1]!.KnownCumulativeDistance);
     }
 }
