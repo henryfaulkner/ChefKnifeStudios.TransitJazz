@@ -24,7 +24,12 @@ let _activeFilter = null;
 // C# pushes the current effective filter here on every selection/hover change (and at dispatch).
 // Pass null/empty to clear the filter (all routes pass).
 export function setActiveFilter(keys) {
-    _activeFilter = (keys && keys.length > 0) ? new Set(keys) : null;
+    try {
+        _activeFilter = (keys && keys.length > 0) ? new Set(keys) : null;
+        return true;
+    } catch (_) {
+        return false;
+    }
 }
 
 // Live audio-enabled flag, pushed from C# on every mute/unmute toggle. Re-checked at FIRE time
@@ -39,6 +44,7 @@ let _audioEnabled = true;
 // C# pushes the current mute/unmute setting here on every AudioSettingChanged toggle (and init).
 export function setAudioEnabled(enabled) {
     _audioEnabled = !!enabled;
+    return _audioEnabled === !!enabled;
 }
 
 // A crossing is allowed to fire iff there is no active filter or its route is in the filter.
@@ -57,6 +63,14 @@ async function _getSynth() {
     // instance TransitSynthJsInterop imports → shared _unlocked state (feature 040).
     _synthModule = await import('./transit-synth.js');
     return _synthModule;
+}
+
+// Verify the dispatch path used by real crossings can reach the same unlocked synth module.
+export async function isPlaybackSupported() {
+    const synth = await _getSynth();
+    return typeof synth.triggerNote === 'function'
+        && typeof synth.isPlaybackSupported === 'function'
+        && synth.isPlaybackSupported();
 }
 
 // Fire one crossing's three effects together. Duration is resolved in-JS (no interop round-trip)

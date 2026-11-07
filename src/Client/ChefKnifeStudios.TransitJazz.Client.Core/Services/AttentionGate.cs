@@ -13,6 +13,7 @@ namespace ChefKnifeStudios.TransitJazz.Client.Core.Services;
 /// </summary>
 public interface IDeliveryControl
 {
+    bool IsJoined { get; }
     bool DesiredDelivery { set; }
     Task PauseAsync();
     Task ResumeAsync();
@@ -29,7 +30,6 @@ public interface IDeliveryControl
 public sealed class AttentionGate(IDeliveryControl deliveryControl)
 {
     readonly SemaphoreSlim _lock = new(1, 1);
-    bool _joined = true; // TransitMap starts already joined via SignalRNotificationService.InitAsync
 
     public Task OnVisibilityChangedAsync(bool hidden, bool audioEnabled) =>
         ReconcileAsync(hidden, audioEnabled);
@@ -45,14 +45,12 @@ public sealed class AttentionGate(IDeliveryControl deliveryControl)
         await _lock.WaitAsync();
         try
         {
-            if (desired == _joined) return;
+            if (desired == deliveryControl.IsJoined) return;
 
             if (desired)
                 await deliveryControl.ResumeAsync();
             else
                 await deliveryControl.PauseAsync();
-
-            _joined = desired;
         }
         finally
         {

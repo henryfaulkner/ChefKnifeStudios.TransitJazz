@@ -1,34 +1,86 @@
 @using ChefKnifeStudios.TransitJazz.Client.Core.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Models
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop
+@using Microsoft.Extensions.Localization
 @implements IDisposable
 @inject IEventNotificationService EventNotificationService
 @inject ISettingsService SettingsService
+@inject SettingsChangeController SettingsChangeController
+@inject IStringLocalizer<RouteFilterResources> Loc
 
 <div class="mapstyle-fab-container">
     <MatFAB Icon="@GetIcon()"
             Mini="true"
             @onclick="HandleToggleMapStyle" />
 </div>
+@if (_lastChange is { } change && change.Status is not (SettingsChangeStatus.Applied or SettingsChangeStatus.Superseded))
+{
+    <p class="settings-change-status" role="status" aria-live="polite">@GetChangeStatusText(change)</p>
+}
 
 @code {
     Settings _settings = new();
+    SettingsChangeOutcome? _lastChange;
 
     protected override void OnInitialized()
     {
         _settings = SettingsService.GetSettings();
+        EventNotificationService.EventReceived += HandleEventReceived;
     }
 
     string GetIcon() => _settings.IsStreetMapEnabled ? "map" : "layers";
 
-    void HandleToggleMapStyle()
+    async Task HandleToggleMapStyle()
     {
         var newValue = !_settings.IsStreetMapEnabled;
-        SettingsService.SetSettingValue(nameof(Settings.IsStreetMapEnabled), newValue);
+        _lastChange = await SettingsChangeController.ChangeAsync(
+            nameof(Settings.IsStreetMapEnabled),
+            newValue,
+            (requested, cancellationToken) => ApplyMapStyleAsync(requested),
+            (previous, cancellationToken) => ApplyMapStyleAsync(previous));
+        var applied = _lastChange.Status is SettingsChangeStatus.Applied or SettingsChangeStatus.AppliedSessionOnly;
+        var persisted = _lastChange.IsPersisted;
         _settings = SettingsService.GetSettings();
-        EventNotificationService.PostEvent(this, new GisSettingChangedEventArgs { IsStreetMapEnabled = _settings.IsStreetMapEnabled });
+        if (applied || _lastChange.Status == SettingsChangeStatus.Superseded)
+            _lastChange = null;
+        if (applied)
+            EventNotificationService.PostEvent(this, new SettingsCommittedEventArgs
+            {
+                PropertyName = nameof(Settings.IsStreetMapEnabled),
+                IsPersisted = persisted,
+                ChangeOutcome = _lastChange
+            });
+        await InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose() { }
+    async Task<SettingsEffectResult> ApplyMapStyleAsync(bool streetMapEnabled)
+    {
+        var succeeded = await EventNotificationService.PostEventAsync(this, new GisSettingChangedEventArgs
+        {
+            IsStreetMapEnabled = streetMapEnabled,
+            IsDarkModeEnabled = SettingsService.GetSettings().IsDarkModeEnabled
+        });
+        return succeeded ? SettingsEffectResult.Success : SettingsEffectResult.PartialFailure;
+    }
+
+    string GetChangeStatusText(SettingsChangeOutcome outcome) => outcome.Status switch
+    {
+        SettingsChangeStatus.AppliedSessionOnly => Loc["ToastSettingsNotSaved"],
+        SettingsChangeStatus.MixedState => Loc["SettingsMixedEffectFailure"],
+        _ => Loc["ToastSettingsApplyFailure"]
+    };
+
+    void HandleEventReceived(object sender, IEventArgs e)
+    {
+        if (e is not SettingsCommittedEventArgs committed) return;
+        _settings = SettingsService.GetSettings();
+        if (committed.PropertyName == nameof(Settings.IsStreetMapEnabled))
+            _lastChange = committed.ChangeOutcome ?? (committed.IsPersisted ? null : _lastChange);
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => EventNotificationService.EventReceived -= HandleEventReceived;
 }

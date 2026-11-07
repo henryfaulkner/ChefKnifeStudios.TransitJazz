@@ -49,12 +49,20 @@ public class HttpService : IHttpService
     {
         try
         {
-            var response = await _client.GetAsync(requestUri, ct);
+            using var response = await _client.GetAsync(requestUri, ct);
             return await HandleResponse<T>(response, ct);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return Result<T>.Error(ex.Message);
+            throw;
+        }
+        catch (JsonException)
+        {
+            return Result<T>.Error("invalid_response");
+        }
+        catch (Exception)
+        {
+            return Result<T>.Error("request_failed");
         }
     }
 
@@ -223,23 +231,22 @@ public class HttpService : IHttpService
                 var content = JsonSerializer.Deserialize<T>(raw, _options);
                 return Result<T>.Success(content!);
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[HttpService] Deserialization failed for {Type}", typeof(T).Name);
-                return Result<T>.Error($"Deserialization failed: {ex.Message}");
+                return Result<T>.Error("invalid_response");
             }
         }
-
-        var errorBody = await response.Content.ReadAsStringAsync(ct);
-        _logger.LogWarning("[HttpService] {Method} {Uri} → {Status} body={Body}",
-            response.RequestMessage?.Method, response.RequestMessage?.RequestUri, (int)response.StatusCode, errorBody);
-
         return response.StatusCode switch
         {
             System.Net.HttpStatusCode.NotFound => Result<T>.NotFound(),
             System.Net.HttpStatusCode.Unauthorized => Result<T>.Unauthorized(),
             System.Net.HttpStatusCode.Forbidden => Result<T>.Forbidden(),
-            _ => Result<T>.Error(response.ReasonPhrase ?? "Error")
+            _ => Result<T>.Error("request_failed")
         };
     }
 }

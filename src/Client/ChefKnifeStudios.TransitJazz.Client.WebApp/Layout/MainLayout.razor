@@ -9,13 +9,17 @@
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Blades
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components.FABs
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Notifications
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Stats
 @using ChefKnifeStudios.TransitJazz.Shared
 
 <div class="mj-theme @(_isDark ? "mj-dark" : "")">
     <MatThemeProvider Theme="@_currentTheme">
         @Body
-        <MatToastContainer />
+        @if (_notificationHostReady)
+        {
+            <NotificationHost />
+        }
         <AudioFab />
         @if (StatsOverlayAvailable)
         {
@@ -36,6 +40,7 @@
 
     private MatTheme _currentTheme = LightTheme;
     private bool _isDark;
+    private bool _notificationHostReady;
     private static readonly MatTheme LightTheme = new MatTheme
     {
         Primary = ColorConstants.Light.Primary,
@@ -61,6 +66,20 @@
         _isDark = SettingsService.GetSettings().IsDarkModeEnabled;
         _currentTheme = _isDark ? DarkTheme : LightTheme;
         EventNotificationService.EventReceived += HandleThemeChange;
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            return InvokeAsync(() =>
+            {
+                _notificationHostReady = true;
+                StateHasChanged();
+            });
+        }
+
+        return Task.CompletedTask;
     }
 
     private void HandleThemeChange(object sender, IEventArgs e)

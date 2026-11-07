@@ -2,6 +2,7 @@
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Attributes
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Models
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Resources
+@using ChefKnifeStudios.TransitJazz.Client.Shared.Services
 @using Microsoft.Extensions.Localization
 @using System.ComponentModel
 @using System.Reflection
@@ -25,13 +26,30 @@
                 var label = Localizer[resourceKey].Value ?? resourceKey;
                 var currentValue = prop.GetValue(_settings) as bool? ?? false;
 
-                <MatCheckbox TValue="bool"
-                             Value="@currentValue"
-                             ValueChanged="@((bool val) => HandleSettingPressed(propName, val))">
-                    @label
-                </MatCheckbox>
+                @if (propName == nameof(Settings.IsAudioEnabled))
+                {
+                    <div id="@_audioEnableGestureId">
+                        <MatCheckbox TValue="bool"
+                                     Value="@currentValue"
+                                     ValueChanged="@((bool val) => HandleSettingPressed(propName, val))">
+                            @label
+                        </MatCheckbox>
+                    </div>
+                }
+                else
+                {
+                    <MatCheckbox TValue="bool"
+                                 Value="@currentValue"
+                                 ValueChanged="@((bool val) => HandleSettingPressed(propName, val))">
+                        @label
+                    </MatCheckbox>
+                }
             }
         </div>
+        @foreach (var change in _changes.Values.Where(change => change.Status is not (SettingsChangeStatus.Applied or SettingsChangeStatus.Superseded)))
+        {
+            <p class="settings-change-status" role="status" aria-live="polite">@GetChangeStatusText(change)</p>
+        }
 
         @if (_showDevInstrumentToggles)
         {

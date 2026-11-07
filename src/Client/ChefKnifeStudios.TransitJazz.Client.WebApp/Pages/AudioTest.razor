@@ -96,8 +96,8 @@
     async Task UnlockAsync()
     {
         Log("UnlockAsync →");
-        await Synth.UnlockAsync();
-        _unlocked = await Synth.IsUnlockedAsync();
+        var outcome = await Synth.UnlockAsync();
+        _unlocked = outcome == ChefKnifeStudios.TransitJazz.Client.Shared.Services.Audio.AudioUnlockStatus.Running;
         Log($"  unlocked = {_unlocked}");
     }
 
