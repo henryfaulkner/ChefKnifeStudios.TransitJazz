@@ -27,13 +27,15 @@ public sealed record CityFetchResult(
 {
     public bool HasSuccessfulSource => SuccessfulSourceCount > 0;
     public ImmutableArray<ReportedVehicleSourceObservation> ReportedVehicleObservations { get; init; } = [];
+    public ImmutableArray<SourceObservationEvidence> SourceObservations { get; init; } = [];
 
     public static CityFetchResult FromSources(
         FeedMessage? feed,
         int successfulSourceCount,
         int failedSourceCount,
         DateTimeOffset? sourceTimestampUtc = null,
-        IEnumerable<ReportedVehicleSourceObservation>? reportedVehicleObservations = null)
+        IEnumerable<ReportedVehicleSourceObservation>? reportedVehicleObservations = null,
+        IEnumerable<SourceObservationEvidence>? sourceObservations = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(successfulSourceCount);
         ArgumentOutOfRangeException.ThrowIfNegative(failedSourceCount);
@@ -46,6 +48,10 @@ public sealed record CityFetchResult(
                 ? CityFetchOutcome.PartialFailure
                 : validRecordCount == 0 ? CityFetchOutcome.Empty : CityFetchOutcome.Success;
 
+        var normalizedSourceObservations = sourceObservations?.ToImmutableArray() ?? [];
+        foreach (var observation in normalizedSourceObservations)
+            observation.Validate();
+
         return new CityFetchResult(
             normalized,
             outcome,
@@ -55,6 +61,7 @@ public sealed record CityFetchResult(
             failedSourceCount)
         {
             ReportedVehicleObservations = reportedVehicleObservations?.ToImmutableArray() ?? [],
+            SourceObservations = normalizedSourceObservations,
         };
     }
 
@@ -65,6 +72,7 @@ public sealed record CityFetchResult(
         var failed = 0;
         DateTimeOffset? newestTimestamp = null;
         var observations = ImmutableArray.CreateBuilder<ReportedVehicleSourceObservation>();
+        var sourceObservations = ImmutableArray.CreateBuilder<SourceObservationEvidence>();
 
         foreach (var source in sources)
         {
@@ -72,12 +80,13 @@ public sealed record CityFetchResult(
             successful += source.SuccessfulSourceCount;
             failed += source.FailedSourceCount;
             observations.AddRange(source.ReportedVehicleObservations);
+            sourceObservations.AddRange(source.SourceObservations);
             if (source.SourceTimestampUtc is { } timestamp
                 && (newestTimestamp is null || timestamp > newestTimestamp))
                 newestTimestamp = timestamp;
         }
 
-        return FromSources(feed, successful, failed, newestTimestamp, observations);
+        return FromSources(feed, successful, failed, newestTimestamp, observations, sourceObservations);
     }
 
     public static DateTimeOffset? ToTimestamp(ulong? unixSeconds) =>

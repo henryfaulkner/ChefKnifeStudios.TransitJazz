@@ -8,6 +8,7 @@ using System.Data;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
 
@@ -158,7 +159,20 @@ public sealed class CityRouteHourStatisticsStore(IDbContextFactory<AppDbContext>
         && a.CrossingsSuppressedDeltaLeqZero == b.CrossingsSuppressedDeltaLeqZero
         && a.CrossingsSuppressedTeleport == b.CrossingsSuppressedTeleport
         && a.CrossingsSuppressedTransfer == b.CrossingsSuppressedTransfer
-        && a.IncompleteReasons.SequenceEqual(b.IncompleteReasons, StringComparer.Ordinal);
+        && a.IncompleteReasons.SequenceEqual(b.IncompleteReasons, StringComparer.Ordinal)
+        && string.Equals(a.SourceEvidence, b.SourceEvidence, StringComparison.Ordinal)
+        && a.DistanceValid == b.DistanceValid
+        && a.ActivityValid == b.ActivityValid
+        && a.PublicationValid == b.PublicationValid
+        && SameStrings(a.DistanceReasons, b.DistanceReasons)
+        && SameStrings(a.ActivityReasons, b.ActivityReasons)
+        && SameStrings(a.PublicationReasons, b.PublicationReasons)
+        && string.Equals(a.SourceSetFingerprint, b.SourceSetFingerprint, StringComparison.Ordinal)
+        && string.Equals(a.ActivitySupportFingerprint, b.ActivitySupportFingerprint, StringComparison.Ordinal);
+
+    static bool SameStrings(string[]? left, string[]? right) => left is null
+        ? right is null
+        : right is not null && left.SequenceEqual(right, StringComparer.Ordinal);
 
     static CityRouteHourStatistic Copy(CityRouteHourStatistic row) => new()
     {
@@ -199,7 +213,64 @@ public sealed class CityRouteHourStatisticsStore(IDbContextFactory<AppDbContext>
         CrossingsSuppressedDeltaLeqZero = row.CrossingsSuppressedDeltaLeqZero,
         CrossingsSuppressedTeleport = row.CrossingsSuppressedTeleport,
         CrossingsSuppressedTransfer = row.CrossingsSuppressedTransfer,
+        SourceEvidence = row.SourceEvidence is null ? null : CanonicalizeSourceEvidence(row.SourceEvidence),
+        DistanceValid = row.DistanceValid,
+        ActivityValid = row.ActivityValid,
+        PublicationValid = row.PublicationValid,
+        DistanceReasons = row.DistanceReasons?.ToArray(),
+        ActivityReasons = row.ActivityReasons?.ToArray(),
+        PublicationReasons = row.PublicationReasons?.ToArray(),
+        SourceSetFingerprint = row.SourceSetFingerprint,
+        ActivitySupportFingerprint = row.ActivitySupportFingerprint,
     };
+
+    static string CanonicalizeSourceEvidence(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream)) WriteCanonical(document.RootElement, writer);
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    static void WriteCanonical(JsonElement element, Utf8JsonWriter writer)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
+                {
+                    writer.WritePropertyName(property.Name);
+                    WriteCanonical(property.Value, writer);
+                }
+                writer.WriteEndObject();
+                break;
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var value in element.EnumerateArray()) WriteCanonical(value, writer);
+                writer.WriteEndArray();
+                break;
+            case JsonValueKind.String:
+                writer.WriteStringValue(element.GetString());
+                break;
+            case JsonValueKind.Number:
+                if (element.TryGetInt64(out var integer)) writer.WriteNumberValue(integer);
+                else if (element.TryGetDecimal(out var number)) writer.WriteNumberValue(number);
+                else writer.WriteRawValue(element.GetRawText());
+                break;
+            case JsonValueKind.True:
+                writer.WriteBooleanValue(true);
+                break;
+            case JsonValueKind.False:
+                writer.WriteBooleanValue(false);
+                break;
+            case JsonValueKind.Null:
+                writer.WriteNullValue();
+                break;
+            default:
+                throw new ArgumentException("Unsupported source evidence JSON value.", nameof(element));
+        }
+    }
 
     static async Task SetLocalTimeoutsAsync(AppDbContext context, int commandTimeoutSeconds, CancellationToken cancellationToken)
     {

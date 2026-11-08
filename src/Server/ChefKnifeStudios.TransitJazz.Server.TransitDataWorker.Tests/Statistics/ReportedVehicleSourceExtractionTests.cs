@@ -1,242 +1,187 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
-using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
-using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.Cities;
-using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using ProtoBuf;
-using System.Net;
-using System.Text.Json;
 using Xunit;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.Statistics;
 
 public sealed class ReportedVehicleSourceExtractionTests
 {
-    static readonly DateTimeOffset Receipt = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
+    static readonly DateTimeOffset ReceiptUtc = new(2026, 11, 7, 12, 5, 0, TimeSpan.Zero);
 
-    [Fact]
-    public async Task GtfsExtractionKeepsUnmappableVehiclesAndExcludesDeletedAndNonVehicleEntities()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FetchProducesIndependentBusAndRailEvidenceWhetherReportedCaptureIsEnabled(bool reportedCaptureEnabled)
     {
-        var feed = new FeedMessage
-        {
-            Entities =
-            [
-                Vehicle("orphan", position: null, route: null),
-                new FeedEntity
-                {
-                    Id = "deleted",
-                    IsDeleted = true,
-                    Vehicle = new VehiclePosition { Vehicle = new VehicleDescriptor { Id = "deleted" } },
-                },
-                new FeedEntity { Id = "trip", TripUpdate = new TripUpdate() },
-                Vehicle(null, position: null, route: null),
-            ]
-        };
-        var config = new CityConfig
-        {
-            Name = "test-city",
-            GtfsRtUrls = ["https://feed/one"],
-            ReportedVehicleSources = [Source("gtfs-1", "city-bus")],
-        };
-        var clock = new FixedClock(Receipt);
-        var city = new GtfsRtCity(config, new FakeHttpClientFactory(_ => Protobuf(feed)),
-            NullLogger<GtfsRtCity>.Instance, clock, captureReportedVehicles: true);
+        using var clients = new StubHttpClientFactory(BusFeed(), RailJson());
+        var city = CreateCity(clients, reportedCaptureEnabled, railEnabled: true, new FixedClock(ReceiptUtc));
 
-        var result = await city.FetchVehiclesAsync(CancellationToken.None);
-        var observation = Assert.Single(result.ReportedVehicleObservations);
+        var fetch = await city.FetchVehiclesAsync(CancellationToken.None);
 
-        Assert.Equal(CityFetchOutcome.Success, result.Outcome);
-        Assert.Equal(4, result.ValidRecordCount);
-        Assert.Equal(Receipt.UtcDateTime, observation.ReceiptUtc);
-        Assert.Equal(2, observation.RawVehicleRecordCount);
-        Assert.Equal(1, observation.UnidentifiableRecordCount);
-        Assert.Equal("orphan", Assert.Single(observation.Identities).Value);
-    }
-
-    [Fact]
-    public async Task MartaRailExtractionIncludesOriginalTrainIdsBeforeRealtimeAndPositionFilters()
-    {
-        var options = Options.Create(new RailRealtimeOptions
+        Assert.Equal(CityFetchOutcome.Success, fetch.Outcome);
+        Assert.Equal(new[] { "marta-bus", "marta-rail" },
+            fetch.SourceObservations.Select(source => source.SourceKey).Order(StringComparer.Ordinal));
+        Assert.All(fetch.SourceObservations, source =>
         {
-            Enabled = true,
-            ReportedVehicleCaptureEnabled = true,
-            BusReportedVehicleSource = Source("marta-bus", "marta-bus"),
-            RailReportedVehicleSource = new ReportedVehicleSourceConfig
-            {
-                SourceKey = "marta-rail", IdentityNamespace = "marta-rail", IdentityKind = "agency-train-id",
-            },
+            Assert.Equal("success", source.Outcome);
+            Assert.Equal(ReceiptUtc.UtcDateTime, source.ReceiptUtc);
+            Assert.Null(source.FailureReason);
         });
-        var railJson = """
-            [
-              {"TRAIN_ID":"T1","IS_REALTIME":"false","LINE":"1"},
-              {"TRAIN_ID":"T2","IS_REALTIME":"true","LINE":"2","LATITUDE":"bad","LONGITUDE":"bad"},
-              {"IS_REALTIME":"true","LINE":"2","LATITUDE":"33","LONGITUDE":"-84"}
-            ]
-            """;
-        var factory = new FakeHttpClientFactory(request =>
-            request.RequestUri!.Host == "gtfs-rt.itsmarta.com" ? Protobuf(new FeedMessage()) : Json(railJson));
-        var city = new MartaCity(factory, options, NullLogger<MartaCity>.Instance, new FixedClock(Receipt));
 
-        var result = await city.FetchVehiclesAsync(CancellationToken.None);
-        var rail = Assert.Single(result.ReportedVehicleObservations.Where(x => x.SourceKey == "marta-rail"));
-
-        Assert.Equal(3, rail.RawVehicleRecordCount);
-        Assert.Equal(new[] { "T1", "T2" }, rail.Identities.Select(x => x.Value));
-        Assert.Empty(result.Feed.Entities);
-    }
-
-    [Fact]
-    public async Task NymtaFetchesRawSubwayVehiclesBeforeUnavailableStopOffsets()
-    {
-        var feed = new FeedMessage { Entities = [Vehicle("train-7", position: null, route: "7")] };
-        var options = Options.Create(new SubwaySynthesisOptions
+        if (reportedCaptureEnabled)
         {
-            GtfsRtUrls = ["https://feed/subway"],
-            ReportedVehicleCaptureEnabled = true,
-            ReportedVehicleSources = [Source("nyc-subway-group", "nyc-rail")],
-        });
-        var factory = new FakeHttpClientFactory(request => request.RequestUri!.AbsolutePath.Contains("stop-offsets", StringComparison.Ordinal)
-            ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
-            : Protobuf(feed));
-        var bus = new CityConfig { Name = "new-york-city", GtfsRtUrls = [] };
-        var city = new NymtaCity(factory, options, bus, NullLogger<NymtaCity>.Instance,
-            NullLogger<GtfsRtCity>.Instance, new FixedClock(Receipt));
+            var bus = Assert.Single(fetch.ReportedVehicleObservations, observation => observation.SourceKey == "marta-bus");
+            var rail = Assert.Single(fetch.ReportedVehicleObservations, observation => observation.SourceKey == "marta-rail");
+            Assert.Equal(new[] { "bus-no-position", "bus-positioned" }, bus.Identities.Select(identity => identity.Value));
+            Assert.Equal(new[] { "train-non-realtime", "train-realtime" }, rail.Identities.Select(identity => identity.Value));
+        }
+        else
+        {
+            Assert.Empty(fetch.ReportedVehicleObservations);
+        }
 
-        var result = await city.FetchVehiclesAsync(CancellationToken.None);
-        var observation = Assert.Single(result.ReportedVehicleObservations);
-
-        Assert.Equal(CityFetchOutcome.Empty, result.Outcome);
-        Assert.Empty(result.Feed.Entities);
-        Assert.Equal("train-7", Assert.Single(observation.Identities).Value);
-        Assert.Equal(Receipt.UtcDateTime, observation.ReceiptUtc);
+        foreach (var observation in fetch.ReportedVehicleObservations)
+            observation.Dispose();
     }
 
     [Fact]
-    public void CombineRetainsPerSourceObservationsEvenWhenAggregateFeedIsEmpty()
+    public async Task FailedBusAndSuccessfulRailRemainSeparateAndDoNotEraseExpectedBusEvidence()
     {
-        var definition = Source("source-a", "domain-a").ToDefinition();
-        var observation = ReportedVehicleSourceObservation.Successful(definition, Receipt, ["x"]);
-        var combined = CityFetchResult.Combine(
-            CityFetchResult.FromSources(new FeedMessage(), 1, 0, reportedVehicleObservations: [observation]),
-            CityFetchResult.FromSources(new FeedMessage(), 1, 0));
+        using var clients = new StubHttpClientFactory(BusFeed(), RailJson()) { BusStatusCode = HttpStatusCode.ServiceUnavailable };
+        var city = CreateCity(clients, reportedCaptureEnabled: false, railEnabled: true, new FixedClock(ReceiptUtc));
 
-        Assert.Single(combined.ReportedVehicleObservations);
-        Assert.Equal("x", Assert.Single(combined.ReportedVehicleObservations[0].Identities).Value);
-        Assert.Equal(CityFetchOutcome.Empty, combined.Outcome);
+        var fetch = await city.FetchVehiclesAsync(CancellationToken.None);
+
+        Assert.Equal(CityFetchOutcome.PartialFailure, fetch.Outcome);
+        var bus = Assert.Single(fetch.SourceObservations, source => source.SourceKey == "marta-bus");
+        Assert.Equal("failed", bus.Outcome);
+        Assert.Equal("source_failure", bus.FailureReason);
+        Assert.False(bus.PositionedCoverageValid);
+        var rail = Assert.Single(fetch.SourceObservations, source => source.SourceKey == "marta-rail");
+        Assert.Equal("success", rail.Outcome);
+        Assert.Contains(fetch.SourceObservations, source => source.SourceKey == "marta-bus");
+        Assert.Empty(fetch.ReportedVehicleObservations);
     }
 
     [Fact]
-    public async Task SeattleCapturesEachRawAgencyPopulationBeforeDisplayFilters()
+    public async Task DisabledRailRemainsAnExplicitExpectedSourceWhenReportedCaptureIsOff()
     {
-        var kcm = SeattleTestFixtures.Feed(
-            SeattleTestFixtures.Vehicle("raw-512", "512", timestamp: Receipt),
-            SeattleTestFixtures.Vehicle("shared-without-position", "100451", timestamp: Receipt, omitPosition: true),
-            SeattleTestFixtures.Vehicle("stale-shared", "102767", timestamp: Receipt.AddSeconds(-121)),
-            SeattleTestFixtures.Vehicle(null, "100451", timestamp: Receipt),
+        using var clients = new StubHttpClientFactory(BusFeed(), RailJson());
+        var city = CreateCity(clients, reportedCaptureEnabled: false, railEnabled: false, new FixedClock(ReceiptUtc));
+
+        var fetch = await city.FetchVehiclesAsync(CancellationToken.None);
+
+        var bus = Assert.Single(fetch.SourceObservations, source => source.SourceKey == "marta-bus");
+        Assert.Equal("success", bus.Outcome);
+        var rail = Assert.Single(fetch.SourceObservations, source => source.SourceKey == "marta-rail");
+        Assert.Equal("disabled", rail.Outcome);
+        Assert.Equal("source_disabled", rail.FailureReason);
+        Assert.False(rail.PositionedCoverageValid);
+    }
+
+    static MartaCity CreateCity(StubHttpClientFactory clients, bool reportedCaptureEnabled,
+        bool railEnabled, TimeProvider clock) => new(
+        clients,
+        Options.Create(new RailRealtimeOptions
+        {
+            Enabled = railEnabled,
+            BaseUrl = "https://marta.invalid/rail",
+            ReportedVehicleCaptureEnabled = reportedCaptureEnabled,
+            BusReportedVehicleSource = Source("marta-bus"),
+            RailReportedVehicleSource = Source("marta-rail"),
+        }),
+        NullLogger<MartaCity>.Instance,
+        clock);
+
+    static ReportedVehicleSourceConfig Source(string key) => new()
+    {
+        SourceKey = key,
+        IdentityNamespace = key,
+        IdentityKind = "vehicle-descriptor-id",
+    };
+
+    static FeedMessage BusFeed() => new()
+    {
+        Entities =
+        [
             new FeedEntity
             {
-                Id = "route-less",
+                Id = "bus-positioned",
                 Vehicle = new VehiclePosition
                 {
-                    Vehicle = new VehicleDescriptor { Id = "route-less" }, Trip = null!, Position = null!,
-                    Timestamp = (ulong)Receipt.ToUnixTimeSeconds(),
+                    Vehicle = new VehicleDescriptor { Id = "bus-positioned" },
+                    Trip = new TripDescriptor { RouteId = "B1" },
+                    Position = new Position { Latitude = 33.7f, Longitude = -84.4f },
                 },
             },
-            SeattleTestFixtures.Vehicle("deleted", "100451", timestamp: Receipt, deleted: true),
-            new FeedEntity { Id = "trip-update", TripUpdate = new TripUpdate() });
-        var soundTransit = SeattleTestFixtures.Feed(
-            SeattleTestFixtures.Vehicle("shared-without-position", "556", timestamp: Receipt),
-            SeattleTestFixtures.Vehicle("stale-shared", "547", timestamp: Receipt));
-        var config = new CityConfig
-        {
-            Name = CityNames.Seattle,
-            GtfsRtUrls =
-            [
-                "https://s3.amazonaws.com/kcm-alerts-realtime-prod/vehiclepositions.pb",
-                "https://api.pugetsound.onebusaway.org/api/gtfs_realtime/vehicle-positions-for-agency/40.pb",
-            ],
-            SeattleSoundTransitApiKeyEnvVar = SeattleCity.SoundTransitApiKeySetting,
-            ReportedVehicleSources = [Source("kcm", "kcm-test"), Source("sound-transit", "st-test")],
-        };
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            [SeattleCity.SoundTransitApiKeySetting] = SeattleTestFixtures.SoundTransitKeySentinel,
-        }).Build();
-        var city = new SeattleCity(config,
-            new SeattleTestFixtures.CapturingHttpClientFactory(_ => new SeattleTestFixtures.CapturingHandler((request, _) =>
-                Task.FromResult(SeattleTestFixtures.ProtobufResponse(request.RequestUri!.Host == "s3.amazonaws.com" ? kcm : soundTransit)))),
-            configuration, NullLogger<SeattleCity>.Instance, new SeattleTestFixtures.FixedTimeProvider(Receipt),
-            captureReportedVehicles: true);
-
-        var result = await city.FetchVehiclesAsync(CancellationToken.None);
-        var kcmObservation = Assert.Single(result.ReportedVehicleObservations, observation => observation.SourceKey == "kcm");
-        var stObservation = Assert.Single(result.ReportedVehicleObservations, observation => observation.SourceKey == "sound-transit");
-
-        Assert.Equal(5, kcmObservation.RawVehicleRecordCount);
-        Assert.Equal(1, kcmObservation.UnidentifiableRecordCount);
-        Assert.Equal(new[] { "raw-512", "route-less", "shared-without-position", "stale-shared" },
-            kcmObservation.Identities.Select(identity => identity.Value));
-        Assert.Equal(2, stObservation.RawVehicleRecordCount);
-        Assert.Equal(new[] { "shared-without-position", "stale-shared" },
-            stObservation.Identities.Select(identity => identity.Value));
-        Assert.Equal(Receipt.UtcDateTime, kcmObservation.ReceiptUtc);
-        Assert.Equal(Receipt.UtcDateTime, stObservation.ReceiptUtc);
-        Assert.DoesNotContain(result.Feed.Entities, entity => entity.Vehicle?.Trip?.RouteId == "512");
-        Assert.DoesNotContain(result.Feed.Entities, entity => entity.Vehicle?.Vehicle?.Id == "st:shared-without-position");
-    }
-
-    static ReportedVehicleSourceConfig Source(string key, string identityNamespace) => new()
-    {
-        SourceKey = key, IdentityNamespace = identityNamespace, IdentityKind = "vehicle-descriptor-id",
+            new FeedEntity
+            {
+                Id = "bus-no-position",
+                Vehicle = new VehiclePosition { Vehicle = new VehicleDescriptor { Id = "bus-no-position" } },
+            },
+        ],
     };
 
-    static FeedEntity Vehicle(string? id, Position? position, string? route) => new()
+    static string RailJson() => JsonSerializer.Serialize(new[]
     {
-        Id = id ?? "missing-descriptor",
-        Vehicle = new VehiclePosition
-        {
-            Vehicle = new VehicleDescriptor { Id = id! },
-            Trip = route is null ? null! : new TripDescriptor { RouteId = route },
-            Position = position!,
-        }
-    };
-
-    static HttpResponseMessage Protobuf(FeedMessage feed)
-    {
-        var stream = new MemoryStream();
-        Serializer.Serialize(stream, feed);
-        stream.Position = 0;
-        return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(stream) };
-    }
-
-    static HttpResponseMessage Json(string value) => new(HttpStatusCode.OK)
-    {
-        Content = new StringContent(value, System.Text.Encoding.UTF8, "application/json")
-    };
+        new RailArrivalDto { TrainId = "train-realtime", Line = "RED", Latitude = "33.7", Longitude = "-84.4", IsRealtime = "true" },
+        new RailArrivalDto { TrainId = "train-non-realtime", Line = "BLUE", Latitude = "", Longitude = "", IsRealtime = "false" },
+    });
 
     sealed class FixedClock(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
     }
 
-    sealed class FakeHttpClientFactory(Func<HttpRequestMessage, HttpResponseMessage> respond) : IHttpClientFactory
+    sealed class StubHttpClientFactory : IHttpClientFactory, IDisposable
     {
-        public HttpClient CreateClient(string name) => new(new FakeHandler(respond), disposeHandler: true)
+        readonly FeedMessage _busFeed;
+        readonly string _railJson;
+        readonly HttpClient _bus;
+        readonly HttpClient _rail;
+
+        public StubHttpClientFactory(FeedMessage busFeed, string railJson)
         {
-            BaseAddress = name == "GtfsStaticApi" ? new Uri("https://fake/")
-                : name == "RailRealtimeApi" ? new Uri("https://fake/rail") : null,
-        };
+            _busFeed = busFeed;
+            _railJson = railJson;
+            _bus = new HttpClient(new ResponseHandler(() =>
+                new HttpResponseMessage(BusStatusCode) { Content = new ByteArrayContent(Serialize(_busFeed)) }));
+            _rail = new HttpClient(new ResponseHandler(() =>
+                new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(_railJson, Encoding.UTF8, "application/json") }))
+            {
+                BaseAddress = new Uri("https://marta.invalid/rail"),
+            };
+        }
+
+        public HttpStatusCode BusStatusCode { get; set; } = HttpStatusCode.OK;
+
+        public HttpClient CreateClient(string name) => name == "RailRealtimeApi" ? _rail : _bus;
+
+        static byte[] Serialize(FeedMessage feed)
+        {
+            using var stream = new MemoryStream();
+            ProtoBuf.Serializer.Serialize(stream, feed);
+            return stream.ToArray();
+        }
+
+        public void Dispose()
+        {
+            _bus.Dispose();
+            _rail.Dispose();
+        }
     }
 
-    sealed class FakeHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    sealed class ResponseHandler(Func<HttpResponseMessage> response) : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-            => Task.FromResult(respond(request));
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(response());
     }
 }

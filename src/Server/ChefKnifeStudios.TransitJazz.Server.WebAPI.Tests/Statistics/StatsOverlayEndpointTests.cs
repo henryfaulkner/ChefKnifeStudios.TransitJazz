@@ -62,6 +62,72 @@ public sealed class StatsOverlayEndpointTests
     }
 
     [Fact]
+    public async Task ContractHeaderDefaultsToV1AcceptsExactV2AndAddsVary()
+    {
+        var query = new StaticQuery(EmptyResult());
+        await using var host = await StartHost(EnabledOptions(), query);
+        var body = "{\"scope\":\"all\",\"routeJoinKeys\":[]}";
+
+        using var legacy = await host.Client.PostAsync("/stats/overlay/query", Json(body));
+        using var explicitLegacyRequest = new HttpRequestMessage(HttpMethod.Post, "/stats/overlay/query") { Content = Json(body) };
+        explicitLegacyRequest.Headers.TryAddWithoutValidation("X-TransitJazz-Stats-Contract", "stats-overlay-v1");
+        using var explicitLegacy = await host.Client.SendAsync(explicitLegacyRequest);
+        using var v2Request = new HttpRequestMessage(HttpMethod.Post, "/stats/overlay/query") { Content = Json(body) };
+        v2Request.Headers.TryAddWithoutValidation("X-TransitJazz-Stats-Contract", "\t stats-overlay-v2 \t");
+        using var v2 = await host.Client.SendAsync(v2Request);
+
+        Assert.Equal(HttpStatusCode.OK, legacy.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, explicitLegacy.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, v2.StatusCode);
+        Assert.Equal("no-store", v2.Headers.CacheControl?.ToString());
+        Assert.Contains("X-TransitJazz-Stats-Contract", v2.Headers.Vary);
+        Assert.Contains("\"contractVersion\":\"stats-overlay-v1\"", await legacy.Content.ReadAsStringAsync());
+        Assert.Contains("\"contractVersion\":\"stats-overlay-v1\"", await explicitLegacy.Content.ReadAsStringAsync());
+        Assert.Contains("\"contractVersion\":\"stats-overlay-v2\"", await v2.Content.ReadAsStringAsync());
+        Assert.Equal(2, query.Calls);
+    }
+
+    [Fact]
+    public async Task InvalidContractHeaderValuesAreRejectedBeforeQueryOrCacheFill()
+    {
+        var query = new StaticQuery(EmptyResult());
+        await using var host = await StartHost(EnabledOptions(), query);
+        var headers = new[]
+        {
+            new[] { "stats-overlay-v1", "stats-overlay-v2" },
+            new[] { "stats-overlay-v9" },
+            new[] { "STATS-OVERLAY-V2" },
+        };
+
+        foreach (var values in headers)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/stats/overlay/query")
+            {
+                Content = Json("{\"scope\":\"all\",\"routeJoinKeys\":[]}")
+            };
+            request.Headers.TryAddWithoutValidation("X-TransitJazz-Stats-Contract", values);
+            using var response = await host.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+            Assert.Contains("X-TransitJazz-Stats-Contract", response.Headers.Vary);
+            Assert.Contains("unsupported_stats_contract", await response.Content.ReadAsStringAsync());
+        }
+
+        Assert.Equal(0, query.Calls);
+    }
+
+    [Fact]
+    public void EmptyContractHeaderValueIsRejected()
+    {
+        var headers = new HeaderDictionary { [StatsOverlayPolicy.ContractHeaderName] = string.Empty };
+
+        var exception = Assert.Throws<StatsOverlayRequestException>(() => StatsOverlayPolicy.NormalizeContract(headers));
+
+        Assert.Equal("unsupported_stats_contract", exception.Code);
+        Assert.Equal(400, exception.StatusCode);
+    }
+
+    [Fact]
     public async Task RequestBodyAndUnknownFieldsAreRejectedBeforeQuery()
     {
         var query = new StaticQuery(new StatsOverlayQueryResult());

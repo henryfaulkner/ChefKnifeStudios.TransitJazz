@@ -137,5 +137,101 @@ public sealed class RouteHourCatalogAndLimitTests
         Assert.Equal(1, rows[1].ObservedCycleCount);
     }
 
+    [Fact]
+    public void Failed_source_is_unavailable_not_a_valid_zero_population()
+    {
+        var fixture = new RouteHourCaptureFixture();
+        var capture = new RouteHourStatisticsCapture(fixture.Runtime(), fixture.Sink, fixture.Clock,
+            NullLogger<RouteHourStatisticsCapture>.Instance);
+        var catalog = RouteHourCaptureFixture.Catalog().Catalog;
+        var at = Utc(10);
+        fixture.Clock.SetUtcNow(at);
+        var cycle = capture.BeginCycle(RouteHourCaptureFixture.City, catalog)!;
+        cycle.AttachSourceEvidence("Route-A", RouteHourCaptureFixture.FailedSourceEvidence("Route-A"));
+
+        capture.CompleteCycle(cycle, false, false, true, at, catalog, RouteHourIncompleteReason.SourceFailure);
+        capture.FlushPending();
+
+        var row = Assert.Single(fixture.Sink.Batches.SelectMany(batch => batch.Rows));
+        Assert.Equal(RouteHourStatisticRow.SourceEvidenceDefinition, row.DefinitionVersion);
+        Assert.Equal(RouteHourCoverageStatus.NoData, row.CollectionStatus);
+        Assert.Equal(0, row.ActiveVehicleCountSum);
+        Assert.False(row.DistanceValid);
+        Assert.False(row.ActivityValid);
+        Assert.False(row.PublicationValid);
+        Assert.Contains("source_failure", row.ActivityReasons!);
+    }
+
+    [Fact]
+    public void Source_outage_keeps_supported_activity_and_distance_without_inventing_outage_zeros()
+    {
+        var fixture = new RouteHourCaptureFixture();
+        var capture = new RouteHourStatisticsCapture(fixture.Runtime(), fixture.Sink, fixture.Clock,
+            NullLogger<RouteHourStatisticsCapture>.Instance);
+        var catalog = RouteHourCaptureFixture.Catalog().Catalog;
+
+        foreach (var minute in new[] { 5, 10 })
+        {
+            var at = Utc(minute);
+            fixture.Clock.SetUtcNow(at);
+            var cycle = capture.BeginCycle(RouteHourCaptureFixture.City, catalog)!;
+            cycle.AttachSourceEvidence("Route-A", RouteHourCaptureFixture.SourceEvidence("Route-A", at));
+            capture.RecordEligibleVehicle(cycle, "vehicle-1", "shape-a");
+            capture.ObserveMovement(cycle, "vehicle-1", "Route-A", (ulong)(1_000 + minute), 100 + minute * 2);
+            capture.CompleteCycle(cycle, true, true, false, at, catalog);
+        }
+
+        var failedAt = Utc(15);
+        fixture.Clock.SetUtcNow(failedAt);
+        var failedCycle = capture.BeginCycle(RouteHourCaptureFixture.City, catalog)!;
+        failedCycle.AttachSourceEvidence("Route-A", RouteHourCaptureFixture.FailedSourceEvidence("Route-A"));
+        capture.CompleteCycle(failedCycle, false, true, false, failedAt, catalog, RouteHourIncompleteReason.SourceFailure);
+        capture.FlushPending();
+
+        var row = Assert.Single(fixture.Sink.Batches.SelectMany(batch => batch.Rows));
+        Assert.Equal(RouteHourStatisticRow.SourceEvidenceDefinition, row.DefinitionVersion);
+        Assert.Equal(RouteHourCoverageStatus.Partial, row.CollectionStatus);
+        Assert.Equal(2, row.ActiveVehicleCountSum);
+        Assert.Equal(10m, row.DistanceMetersSum);
+        Assert.True(row.ActivityValid);
+        Assert.True(row.DistanceValid);
+        Assert.True(row.PublicationValid);
+        Assert.Equal(2, Assert.Single(row.SourceEvidence!.Sources).SuccessfulPollCount);
+        Assert.Equal(1, Assert.Single(row.SourceEvidence.Sources).FailedPollCount);
+        Assert.Contains("source_failure", row.IncompleteReasons);
+    }
+
+    [Fact]
+    public void Catalog_refresh_preserves_measures_for_an_unchanged_route_with_known_dependencies()
+    {
+        var fixture = new RouteHourCaptureFixture();
+        var capture = new RouteHourStatisticsCapture(fixture.Runtime(), fixture.Sink, fixture.Clock,
+            NullLogger<RouteHourStatisticsCapture>.Instance);
+        var original = RouteHourCaptureFixture.Catalog().Catalog;
+        var refreshed = RouteHourCatalog.Create([
+            new RouteHourCatalogInput("Route-A", "bus", "Route-A", ["shape-a", "shape-b"],
+                [new(33.749, -84.388), new(33.75, -84.387)], ["R17", "r17"]),
+            new RouteHourCatalogInput("Route-B", "rail", "Route-B", ["shape-c"],
+                [new(33.75, -84.386), new(33.751, -84.385)], ["R18"]),
+        ]);
+        var at = Utc(10);
+        fixture.Clock.SetUtcNow(at);
+        var cycle = capture.BeginCycle(RouteHourCaptureFixture.City, original)!;
+        cycle.AttachSourceEvidence("Route-A", RouteHourCaptureFixture.SourceEvidence("Route-A", at));
+        capture.RecordEligibleVehicle(cycle, "vehicle-1", "shape-a");
+        capture.ObserveMovement(cycle, "vehicle-1", "Route-A", 1_000, 100);
+        capture.ObserveMovement(cycle, "vehicle-1", "Route-A", 1_010, 110);
+
+        capture.CompleteCycle(cycle, true, true, false, at, refreshed);
+        capture.FlushPending();
+
+        var row = Assert.Single(fixture.Sink.Batches.SelectMany(batch => batch.Rows), item => item.RouteJoinKey == "Route-A");
+        Assert.Equal(RouteHourStatisticRow.SourceEvidenceDefinition, row.DefinitionVersion);
+        Assert.True(row.CatalogChanged);
+        Assert.True(row.DistanceValid);
+        Assert.True(row.ActivityValid);
+        Assert.True(row.PublicationValid);
+    }
+
     static DateTime Utc(int minute) => new(2026, 10, 1, 12, minute, 0, DateTimeKind.Utc);
 }

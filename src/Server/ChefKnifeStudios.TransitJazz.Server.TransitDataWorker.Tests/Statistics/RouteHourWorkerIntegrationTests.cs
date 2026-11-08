@@ -1,6 +1,8 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Checkpoints;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Metrics;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.GtfsStatic;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.Cities;
@@ -10,14 +12,205 @@ using ChefKnifeStudios.TransitJazz.Shared.Geospatial;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using System.Net;
 using System.Reflection;
+using System.Text;
 using Xunit;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.Statistics;
 
 public sealed class RouteHourWorkerIntegrationTests
 {
+    [Fact]
+    public async Task MartaRailFailureDoesNotEraseBusActivityInTheFetchToWorkerPath()
+    {
+        var fixture = new RouteHourCaptureFixture();
+        var receipt = new DateTimeOffset(2026, 10, 1, 12, 5, 0, TimeSpan.Zero);
+        fixture.Clock.SetUtcNow(receipt);
+        using var clients = new MartaSourceHttpClientFactory(BusFeed(), railSucceeds: false);
+        var city = new MartaCity(clients, Options.Create(new RailRealtimeOptions
+        {
+            Enabled = true,
+            BaseUrl = "https://marta.invalid/rail",
+        }), NullLogger<MartaCity>.Instance, fixture.Clock);
+        var capture = new RouteHourStatisticsCapture(fixture.Runtime(RouteHourCaptureMode.DryRun), fixture.Sink,
+            fixture.Clock, NullLogger<RouteHourStatisticsCapture>.Instance);
+        var shapes = new InMemoryRouteShapeSource();
+        shapes.Publish([
+            RouteHourCaptureFixture.Shape("static-1", "B1", "bus"),
+            RailShape("BLUE", 33.71),
+            RailShape("GREEN", 33.72),
+            RailShape("RED", 33.73),
+            RailShape("GOLD", 33.74),
+        ]);
+        using var worker = new Worker(NullLogger<Worker>.Instance, new RouteHourCaptureFixture.RecordingPublisher(), [city],
+            new TriggerPointGenerator(NullLogger<TriggerPointGenerator>.Instance), routeShapeSource: shapes,
+            routeHourStatisticsCapture: capture);
+        await worker.InitializeRouteIndexAsync(CancellationToken.None);
+
+        var cycle = await worker.ExecuteCityCycleAsync(city, CancellationToken.None,
+            receipt.UtcDateTime, receipt);
+        capture.FlushPending();
+
+        Assert.Equal(CityFetchOutcome.PartialFailure, cycle.Fetch.Outcome);
+        Assert.Equal(1, cycle.Result.VehiclesProcessed);
+        var busRow = Assert.Single(fixture.Sink.Batches.SelectMany(batch => batch.Rows), row => row.RouteJoinKey == "B1");
+        Assert.Equal(1, busRow.ValidActiveSampleCount);
+        Assert.Equal(1, busRow.ActiveVehicleCountSum);
+        Assert.Equal(RouteHourStatisticRow.SourceEvidenceDefinition, busRow.DefinitionVersion);
+        Assert.True(busRow.ActivityValid);
+        var busEvidence = Assert.Single(Assert.IsType<RouteHourSourceSummary>(busRow.SourceEvidence).Sources);
+        Assert.Equal("marta-bus", busEvidence.SourceKey);
+        Assert.Equal(1, busEvidence.SuccessfulSupportCount);
+        Assert.Empty(busEvidence.Reasons);
+
+        var railRow = Assert.Single(fixture.Sink.Batches.SelectMany(batch => batch.Rows), row => row.RouteJoinKey == "RED");
+        Assert.Equal(0, railRow.ValidActiveSampleCount);
+        Assert.False(railRow.ActivityValid);
+        var railEvidence = Assert.Single(Assert.IsType<RouteHourSourceSummary>(railRow.SourceEvidence).Sources);
+        Assert.Equal("marta-rail", railEvidence.SourceKey);
+        Assert.Equal(1, railEvidence.FailedPollCount);
+        Assert.Contains("source_failure", railEvidence.Reasons);
+    }
+
+    [Fact]
+    public async Task MartaBusFailureDoesNotEraseRailActivityInTheFetchToWorkerPath()
+    {
+        var fixture = new RouteHourCaptureFixture();
+        var receipt = new DateTimeOffset(2026, 10, 1, 12, 5, 0, TimeSpan.Zero);
+        fixture.Clock.SetUtcNow(receipt);
+        using var clients = new MartaSourceHttpClientFactory(new FeedMessage(), railSucceeds: true,
+            busSucceeds: false, railJson: RailJson());
+        var city = new MartaCity(clients, Options.Create(new RailRealtimeOptions
+        {
+            Enabled = true,
+            BaseUrl = "https://marta.invalid/rail",
+        }), NullLogger<MartaCity>.Instance, fixture.Clock);
+        var capture = new RouteHourStatisticsCapture(fixture.Runtime(RouteHourCaptureMode.DryRun), fixture.Sink,
+            fixture.Clock, NullLogger<RouteHourStatisticsCapture>.Instance);
+        var shapes = new InMemoryRouteShapeSource();
+        shapes.Publish([
+            RouteHourCaptureFixture.Shape("static-1", "B1", "bus"),
+            RailShape("BLUE", 33.71),
+            RailShape("GREEN", 33.72),
+            RailShape("RED", 33.73),
+            RailShape("GOLD", 33.74),
+        ]);
+        using var worker = new Worker(NullLogger<Worker>.Instance, new RouteHourCaptureFixture.RecordingPublisher(), [city],
+            new TriggerPointGenerator(NullLogger<TriggerPointGenerator>.Instance), routeShapeSource: shapes,
+            routeHourStatisticsCapture: capture);
+        await worker.InitializeRouteIndexAsync(CancellationToken.None);
+
+        var cycle = await worker.ExecuteCityCycleAsync(city, CancellationToken.None,
+            receipt.UtcDateTime, receipt);
+        capture.FlushPending();
+
+        Assert.Equal(CityFetchOutcome.PartialFailure, cycle.Fetch.Outcome);
+        Assert.Equal(1, cycle.Result.VehiclesProcessed);
+        var railRow = Assert.Single(fixture.Sink.Batches.SelectMany(batch => batch.Rows), row => row.RouteJoinKey == "RED");
+        Assert.Equal(1, railRow.ValidActiveSampleCount);
+        Assert.Equal(1, railRow.ActiveVehicleCountSum);
+        Assert.Equal(RouteHourStatisticRow.SourceEvidenceDefinition, railRow.DefinitionVersion);
+        Assert.True(railRow.ActivityValid);
+        var railEvidence = Assert.Single(Assert.IsType<RouteHourSourceSummary>(railRow.SourceEvidence).Sources);
+        Assert.Equal("marta-rail", railEvidence.SourceKey);
+        Assert.Equal(1, railEvidence.SuccessfulSupportCount);
+        Assert.Empty(railEvidence.Reasons);
+
+        var busRow = Assert.Single(fixture.Sink.Batches.SelectMany(batch => batch.Rows), row => row.RouteJoinKey == "B1");
+        Assert.Equal(0, busRow.ValidActiveSampleCount);
+        Assert.False(busRow.ActivityValid);
+        var busEvidence = Assert.Single(Assert.IsType<RouteHourSourceSummary>(busRow.SourceEvidence).Sources);
+        Assert.Equal("marta-bus", busEvidence.SourceKey);
+        Assert.Equal(1, busEvidence.FailedPollCount);
+        Assert.Contains("source_failure", busEvidence.Reasons);
+    }
+
+    [Fact]
+    public async Task MartaAllSourceFailureProducesNoDataInsteadOfAValidZeroPopulation()
+    {
+        var fixture = new RouteHourCaptureFixture();
+        var receipt = new DateTimeOffset(2026, 10, 1, 12, 5, 0, TimeSpan.Zero);
+        fixture.Clock.SetUtcNow(receipt);
+        using var clients = new MartaSourceHttpClientFactory(new FeedMessage(), railSucceeds: false,
+            busSucceeds: false);
+        var city = new MartaCity(clients, Options.Create(new RailRealtimeOptions
+        {
+            Enabled = true,
+            BaseUrl = "https://marta.invalid/rail",
+        }), NullLogger<MartaCity>.Instance, fixture.Clock);
+        var capture = new RouteHourStatisticsCapture(fixture.Runtime(RouteHourCaptureMode.DryRun), fixture.Sink,
+            fixture.Clock, NullLogger<RouteHourStatisticsCapture>.Instance);
+        var shapes = AtlantaRouteShapes();
+        using var worker = new Worker(NullLogger<Worker>.Instance, new RouteHourCaptureFixture.RecordingPublisher(), [city],
+            new TriggerPointGenerator(NullLogger<TriggerPointGenerator>.Instance), routeShapeSource: shapes,
+            routeHourStatisticsCapture: capture);
+        await worker.InitializeRouteIndexAsync(CancellationToken.None);
+
+        var cycle = await worker.ExecuteCityCycleAsync(city, CancellationToken.None,
+            receipt.UtcDateTime, receipt);
+        capture.FlushPending();
+
+        Assert.Equal(CityFetchOutcome.Failure, cycle.Fetch.Outcome);
+        var rows = fixture.Sink.Batches.SelectMany(batch => batch.Rows).ToArray();
+        var busRow = Assert.Single(rows, row => row.RouteJoinKey == "B1");
+        var railRow = Assert.Single(rows, row => row.RouteJoinKey == "RED");
+        Assert.Equal(RouteHourCoverageStatus.NoData, busRow.CollectionStatus);
+        Assert.Equal(RouteHourCoverageStatus.NoData, railRow.CollectionStatus);
+        Assert.Equal(0, busRow.ValidActiveSampleCount);
+        Assert.Equal(0, railRow.ValidActiveSampleCount);
+        Assert.Equal(1, Assert.Single(Assert.IsType<RouteHourSourceSummary>(busRow.SourceEvidence).Sources).FailedPollCount);
+        Assert.Equal(1, Assert.Single(Assert.IsType<RouteHourSourceSummary>(railRow.SourceEvidence).Sources).FailedPollCount);
+    }
+
+    [Fact]
+    public async Task MartaSuccessfulEmptySourcesSupplyAValidZeroPopulationSample()
+    {
+        var fixture = new RouteHourCaptureFixture();
+        var receipt = new DateTimeOffset(2026, 10, 1, 12, 5, 0, TimeSpan.Zero);
+        fixture.Clock.SetUtcNow(receipt);
+        using var clients = new MartaSourceHttpClientFactory(new FeedMessage(), railSucceeds: true);
+        var city = new MartaCity(clients, Options.Create(new RailRealtimeOptions
+        {
+            Enabled = true,
+            BaseUrl = "https://marta.invalid/rail",
+        }), NullLogger<MartaCity>.Instance, fixture.Clock);
+        var capture = new RouteHourStatisticsCapture(fixture.Runtime(RouteHourCaptureMode.DryRun), fixture.Sink,
+            fixture.Clock, NullLogger<RouteHourStatisticsCapture>.Instance);
+        var shapes = AtlantaRouteShapes();
+        using var worker = new Worker(NullLogger<Worker>.Instance, new RouteHourCaptureFixture.RecordingPublisher(), [city],
+            new TriggerPointGenerator(NullLogger<TriggerPointGenerator>.Instance), routeShapeSource: shapes,
+            routeHourStatisticsCapture: capture);
+        await worker.InitializeRouteIndexAsync(CancellationToken.None);
+
+        var cycle = await worker.ExecuteCityCycleAsync(city, CancellationToken.None,
+            receipt.UtcDateTime, receipt);
+        capture.FlushPending();
+
+        Assert.Equal(CityFetchOutcome.Empty, cycle.Fetch.Outcome);
+        var busRow = Assert.Single(fixture.Sink.Batches.SelectMany(batch => batch.Rows), row => row.RouteJoinKey == "B1");
+        Assert.Equal(1, busRow.ValidActiveSampleCount);
+        Assert.Equal(0, busRow.ActiveVehicleCountSum);
+        Assert.True(busRow.ActivityValid);
+        var busEvidence = Assert.Single(Assert.IsType<RouteHourSourceSummary>(busRow.SourceEvidence).Sources);
+        Assert.Equal(1, busEvidence.EmptyPollCount);
+        Assert.Empty(busEvidence.Reasons);
+    }
+
+    static InMemoryRouteShapeSource AtlantaRouteShapes()
+    {
+        var shapes = new InMemoryRouteShapeSource();
+        shapes.Publish([
+            RouteHourCaptureFixture.Shape("static-1", "B1", "bus"),
+            RailShape("BLUE", 33.71),
+            RailShape("GREEN", 33.72),
+            RailShape("RED", 33.73),
+            RailShape("GOLD", 33.74),
+        ]);
+        return shapes;
+    }
+
     [Fact]
     public async Task AliasedDuplicateFeedCountsOneActiveRepresentativeButKeepsEveryProcessedObservation()
     {
@@ -133,6 +326,51 @@ public sealed class RouteHourWorkerIntegrationTests
     }
 
     static DateTime Utc(int hour, int minute) => new(2026, 10, 1, hour, minute, 0, DateTimeKind.Utc);
+
+    static FeedMessage BusFeed() => RouteHourCaptureFixture.Feed(
+        RouteHourCaptureFixture.Vehicle("bus-1", "B1", -84.4f, 2_000));
+
+    static string RailJson() => "[{\"TRAIN_ID\":\"rail-1\",\"LINE\":\"RED\",\"LATITUDE\":\"33.71\",\"LONGITUDE\":\"-84.4\",\"IS_REALTIME\":\"true\"}]";
+
+    static RouteShapeFeature RailShape(string line, double latitude) => new("Feature",
+        new RouteShapeGeometry("LineString", Enumerable.Range(0, 11)
+            .Select(index => new[] { -84.4 + index * 0.001, latitude }).ToArray()),
+        new RouteShapeProperties($"rail-{line.ToLowerInvariant()}", line, "#000000", "#ffffff", Category: "rail", City: "atlanta"));
+
+    sealed class MartaSourceHttpClientFactory(FeedMessage busFeed, bool railSucceeds,
+        bool busSucceeds = true, string? railJson = null) : IHttpClientFactory, IDisposable
+    {
+        readonly HttpClient _bus = new(new Handler(() => busSucceeds
+            ? ProtobufResponse(busFeed)
+            : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)));
+        readonly HttpClient _rail = new(new Handler(() => railSucceeds
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(railJson ?? "[]", Encoding.UTF8, "application/json") }
+            : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)))
+        {
+            BaseAddress = new Uri("https://marta.invalid/rail"),
+        };
+
+        public HttpClient CreateClient(string name) => name == "RailRealtimeApi" ? _rail : _bus;
+
+        static HttpResponseMessage ProtobufResponse(FeedMessage feed)
+        {
+            using var stream = new MemoryStream();
+            ProtoBuf.Serializer.Serialize(stream, feed);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(stream.ToArray()) };
+        }
+
+        public void Dispose()
+        {
+            _bus.Dispose();
+            _rail.Dispose();
+        }
+
+        sealed class Handler(Func<HttpResponseMessage> response) : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                Task.FromResult(response());
+        }
+    }
 
     static SeattleCity SeattleCityForTest(FeedMessage kcm, FeedMessage firstSt, FeedMessage laterSt,
         Func<int> phase, MutableClock clock)

@@ -34,9 +34,16 @@ public class CityConfig
     public string? SeattleSoundTransitApiKeyEnvVar { get; set; }
     public string[] RouteIdNormalization { get; set; } = [];
 
+    /// <summary>Returns the source policy for this city's current grouped route catalog.
+    /// Cities without an explicit contract remain unknown instead of inheriting a category guess.</summary>
+    public RouteHourSourceInventory ResolveRouteHourSourceInventory(RouteHourCatalog catalog)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        return catalog.ResolveSourceInventory(Name);
+    }
+
     public class RailRealtimeConfig
     {
-        public string BaseUrl { get; set; } = string.Empty;
         public bool Enabled { get; set; }
         public ReportedVehicleSourceConfig? ReportedVehicleSource { get; set; }
     }

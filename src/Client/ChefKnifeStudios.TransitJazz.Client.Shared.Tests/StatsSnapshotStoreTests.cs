@@ -334,7 +334,28 @@ public sealed class StatsSnapshotStoreTests
             clock.Advance(TimeSpan.FromHours(1));
             var refresh = store.EnsureRequestedAsync(selection);
             var refreshCall = await endpoints.WaitForCallAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
-            var malformed = ScheduledResponse(selection) with { Timeline = null! };
+            var malformed = StatsSnapshotAcceptanceTests.ValidV2Response(selection) with
+            {
+                RefreshIntervalMinutes = 60,
+                RefreshWindowStartUtc = Start.UtcDateTime,
+                NextRefreshAtUtc = Start.UtcDateTime.AddHours(1),
+                TodayDistance = StatsSnapshotAcceptanceTests.ValidV2Response(selection).TodayDistance with
+                {
+                    Coverage = StatsSnapshotAcceptanceTests.ValidV2Response(selection).TodayDistance.Coverage with
+                    {
+                        SourceCoverage = [new StatsSourceCoverage
+                        {
+                            CitySlug = "toronto", SourceKey = "test-source", WindowReference = "today",
+                            State = "complete", ContributingHours = 1, FullyCoveredHours = 1,
+                            CoveredPeriods = [new StatsUtcHourPeriod
+                            {
+                                StartUtc = Start.UtcDateTime.AddMinutes(-90), EndUtc = Start.UtcDateTime.AddMinutes(-30)
+                            }],
+                            UnavailablePeriods = [], Reasons = []
+                        }]
+                    }
+                }
+            };
             refreshCall.Return(SuccessResponse(malformed));
             await refresh.WaitAsync(TimeSpan.FromSeconds(2));
 
@@ -660,6 +681,11 @@ public sealed class StatsSnapshotStoreTests
             CallCreated?.Invoke(call);
             return ExecuteAsync(call);
         }
+
+        public Task<HttpServiceResponse<StatsOverlayResponse>> QueryAsync(
+            StatsOverlayRequest request,
+            string contractVersion,
+            CancellationToken cancellationToken = default) => QueryAsync(request, cancellationToken);
 
         async Task<HttpServiceResponse<StatsOverlayResponse>> ExecuteAsync(StatsEndpointCall call)
         {

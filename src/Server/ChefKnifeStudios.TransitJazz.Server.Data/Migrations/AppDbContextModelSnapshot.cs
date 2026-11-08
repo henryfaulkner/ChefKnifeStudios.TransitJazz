@@ -544,6 +544,19 @@ namespace ChefKnifeStudios.TransitJazz.Server.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("active_vehicle_count_sum");
 
+                    b.PrimitiveCollection<string[]>("ActivityReasons")
+                        .HasColumnType("text[]")
+                        .HasColumnName("activity_reasons");
+
+                    b.Property<string>("ActivitySupportFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("activity_support_fingerprint");
+
+                    b.Property<bool?>("ActivityValid")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activity_valid");
+
                     b.Property<Guid>("CaptureRunId")
                         .HasColumnType("uuid")
                         .HasColumnName("capture_run_id");
@@ -604,9 +617,17 @@ namespace ChefKnifeStudios.TransitJazz.Server.Data.Migrations
                         .HasColumnType("numeric(20,6)")
                         .HasColumnName("distance_meters_sum");
 
+                    b.PrimitiveCollection<string[]>("DistanceReasons")
+                        .HasColumnType("text[]")
+                        .HasColumnName("distance_reasons");
+
                     b.Property<long>("DistanceRejectedCount")
                         .HasColumnType("bigint")
                         .HasColumnName("distance_rejected_count");
+
+                    b.Property<bool?>("DistanceValid")
+                        .HasColumnType("boolean")
+                        .HasColumnName("distance_valid");
 
                     b.Property<long?>("DistinctActiveVehicleCount")
                         .HasColumnType("bigint")
@@ -663,6 +684,14 @@ namespace ChefKnifeStudios.TransitJazz.Server.Data.Migrations
                         .HasColumnName("persisted_at_utc")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.PrimitiveCollection<string[]>("PublicationReasons")
+                        .HasColumnType("text[]")
+                        .HasColumnName("publication_reasons");
+
+                    b.Property<bool?>("PublicationValid")
+                        .HasColumnType("boolean")
+                        .HasColumnName("publication_valid");
+
                     b.Property<string>("RouteCatalogFingerprint")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -672,6 +701,15 @@ namespace ChefKnifeStudios.TransitJazz.Server.Data.Migrations
                     b.Property<string>("RouteShortName")
                         .HasColumnType("text")
                         .HasColumnName("route_short_name");
+
+                    b.Property<string>("SourceEvidence")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("source_evidence");
+
+                    b.Property<string>("SourceSetFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_set_fingerprint");
 
                     b.Property<long>("StaleObservationsCount")
                         .HasColumnType("bigint")
@@ -722,6 +760,12 @@ namespace ChefKnifeStudios.TransitJazz.Server.Data.Migrations
                             t.HasCheckConstraint("ck_city_route_hour_samples", "valid_active_sample_count <= observed_cycle_count AND valid_publish_cycle_count <= observed_cycle_count AND failed_cycle_count <= observed_cycle_count AND stale_observations_count <= vehicle_observations_processed_count AND crossings_published_count <= crossings_detected_count AND peak_active_vehicle_count <= active_vehicle_count_sum AND (distinct_active_vehicle_count IS NULL OR distinct_active_vehicle_count >= peak_active_vehicle_count)");
 
                             t.HasCheckConstraint("ck_city_route_hour_status", "collection_status IN ('Complete','Partial','NoData')");
+
+                            t.HasCheckConstraint("ck_city_route_hour_v2_complete", "definition_version <> 'observed-city-route-hour-statistics-v2'\r\nOR collection_status <> 'Complete'\r\nOR (distance_valid AND activity_valid AND publication_valid\r\n    AND source_evidence->'membershipKnown' = 'true'::jsonb\r\n    AND source_evidence->'expectedSourceKeys' = source_evidence->'contributingSourceKeys')");
+
+                            t.HasCheckConstraint("ck_city_route_hour_v2_evidence", "(definition_version <> 'observed-city-route-hour-statistics-v2'\r\n    AND source_evidence IS NULL AND distance_valid IS NULL AND activity_valid IS NULL AND publication_valid IS NULL\r\n    AND distance_reasons IS NULL AND activity_reasons IS NULL AND publication_reasons IS NULL\r\n    AND source_set_fingerprint IS NULL AND activity_support_fingerprint IS NULL)\r\nOR\r\n(definition_version = 'observed-city-route-hour-statistics-v2'\r\n    AND source_evidence IS NOT NULL AND octet_length(source_evidence::text) <= 65536\r\n    AND jsonb_typeof(source_evidence) = 'object'\r\n    AND COALESCE(source_evidence->>'schemaVersion' = 'route-hour-source-evidence-v1', false)\r\n    AND COALESCE(source_evidence->>'sourceSetFingerprint' = source_set_fingerprint, false)\r\n    AND COALESCE(\r\n        jsonb_typeof(source_evidence->'expectedSourceKeys') = 'array'\r\n        AND jsonb_array_length(source_evidence->'expectedSourceKeys') <= 32\r\n        AND jsonb_typeof(source_evidence->'contributingSourceKeys') = 'array'\r\n        AND jsonb_typeof(source_evidence->'sources') = 'array'\r\n        AND jsonb_array_length(source_evidence->'sources') <= 32\r\n        AND jsonb_array_length(source_evidence->'sources') = jsonb_array_length(source_evidence->'expectedSourceKeys')\r\n        AND jsonb_typeof(source_evidence->'membershipKnown') = 'boolean'\r\n        AND (source_evidence->'membershipKnown' = 'true'::jsonb\r\n            OR (jsonb_array_length(source_evidence->'expectedSourceKeys') = 0\r\n                AND jsonb_array_length(source_evidence->'contributingSourceKeys') = 0)), false)\r\n    AND source_set_fingerprint ~ '^[0-9a-f]{64}$'\r\n    AND (activity_support_fingerprint IS NULL OR activity_support_fingerprint ~ '^[0-9a-f]{64}$')\r\n    AND distance_valid IS NOT NULL AND activity_valid IS NOT NULL AND publication_valid IS NOT NULL\r\n    AND distance_reasons IS NOT NULL AND activity_reasons IS NOT NULL AND publication_reasons IS NOT NULL\r\n    AND cardinality(distance_reasons) <= 16 AND cardinality(activity_reasons) <= 16\r\n    AND cardinality(publication_reasons) <= 16\r\n    AND (NOT activity_valid OR activity_support_fingerprint IS NOT NULL))");
+
+                            t.HasCheckConstraint("ck_city_route_hour_v2_reasons", "definition_version <> 'observed-city-route-hour-statistics-v2'\r\nOR (distance_reasons <@ ARRAY['boundary_unproven','capture_failure','catalog_changed','gap_exceeded','identity_limit_exceeded','invalid_measure_evidence','invalid_source_positions','population_incomplete','processing_failure','publication_unavailable','route_index_unavailable','source_disabled','source_failure','source_recovered','unaligned_activity_samples','unknown_source_provenance','unsupported_definition']::text[]\r\n    AND activity_reasons <@ ARRAY['boundary_unproven','capture_failure','catalog_changed','gap_exceeded','identity_limit_exceeded','invalid_measure_evidence','invalid_source_positions','population_incomplete','processing_failure','publication_unavailable','route_index_unavailable','source_disabled','source_failure','source_recovered','unaligned_activity_samples','unknown_source_provenance','unsupported_definition']::text[]\r\n    AND publication_reasons <@ ARRAY['boundary_unproven','capture_failure','catalog_changed','gap_exceeded','identity_limit_exceeded','invalid_measure_evidence','invalid_source_positions','population_incomplete','processing_failure','publication_unavailable','route_index_unavailable','source_disabled','source_failure','source_recovered','unaligned_activity_samples','unknown_source_provenance','unsupported_definition']::text[])");
                         });
                 });
 

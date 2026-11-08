@@ -9,12 +9,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Channels;
+using System.Text.Json;
 
 namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
 
 /// <summary>Bounded, single-reader persistence queue for immutable route-hour envelopes.</summary>
 public sealed class RouteHourStatisticsWriter : BackgroundService, IRouteHourStatisticsSink
 {
+    static readonly JsonSerializerOptions SourceEvidenceJsonOptions = new(JsonSerializerDefaults.Web);
     readonly Channel<FinalizedRouteHourStatisticsBatch> _channel;
     readonly ICityRouteHourStatisticsStore _store;
     readonly RouteHourHistoryOptions _options;
@@ -154,6 +156,15 @@ public sealed class RouteHourStatisticsWriter : BackgroundService, IRouteHourSta
         CrossingsSuppressedDeltaLeqZero = row.CrossingsSuppressedDeltaLeqZero,
         CrossingsSuppressedTeleport = row.CrossingsSuppressedTeleport,
         CrossingsSuppressedTransfer = row.CrossingsSuppressedTransfer,
+        SourceEvidence = row.SourceEvidence is null ? null : JsonSerializer.Serialize(row.SourceEvidence, SourceEvidenceJsonOptions),
+        DistanceValid = row.DistanceValid,
+        ActivityValid = row.ActivityValid,
+        PublicationValid = row.PublicationValid,
+        DistanceReasons = row.DistanceReasons?.ToArray(),
+        ActivityReasons = row.ActivityReasons?.ToArray(),
+        PublicationReasons = row.PublicationReasons?.ToArray(),
+        SourceSetFingerprint = row.SourceSetFingerprint,
+        ActivitySupportFingerprint = row.ActivitySupportFingerprint,
     };
 
     public override void Dispose()

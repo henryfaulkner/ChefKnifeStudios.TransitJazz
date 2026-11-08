@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
+using Microsoft.AspNetCore.Http;
 
 namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
 
@@ -35,6 +36,26 @@ public sealed record StatsSnapshotPlan(
 
 public static class StatsOverlayPolicy
 {
+    public const string ContractHeaderName = "X-TransitJazz-Stats-Contract";
+
+    public static string NormalizeContract(IHeaderDictionary headers)
+    {
+        ArgumentNullException.ThrowIfNull(headers);
+        var values = headers[ContractHeaderName];
+        if (values.Count == 0) return StatsOverlayVocabulary.ContractVersion;
+        if (values.Count != 1 || values[0] is not { } raw)
+            throw new StatsOverlayRequestException("unsupported_stats_contract", 400);
+
+        var contract = raw.Trim(' ', '\t');
+        if (contract.Contains(','))
+            throw new StatsOverlayRequestException("unsupported_stats_contract", 400);
+        if (string.Equals(contract, StatsOverlayVocabulary.ContractVersion, StringComparison.Ordinal)
+            || string.Equals(contract, StatsOverlayVocabulary.ContractVersionV2, StringComparison.Ordinal))
+            return contract;
+
+        throw new StatsOverlayRequestException("unsupported_stats_contract", 400);
+    }
+
     public static StatsOverlayRequest NormalizeRequest(
         StatsOverlayRequest? request,
         StatsOverlayOptions options)

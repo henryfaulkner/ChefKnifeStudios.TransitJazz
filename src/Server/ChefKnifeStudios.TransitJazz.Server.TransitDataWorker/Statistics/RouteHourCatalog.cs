@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using ChefKnifeStudios.TransitJazz.Shared;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 
@@ -84,6 +85,11 @@ public sealed class RouteHourCatalog
         return _aliases.TryGetValue(routeIdOrKey, out var canonical)
             && _entries.TryGetValue(canonical, out entry!);
     }
+
+    /// <summary>Resolves only city-specific source contracts. Route category alone is never a
+    /// source identity for cities without an explicit mapping.</summary>
+    public RouteHourSourceInventory ResolveSourceInventory(string citySlug) =>
+        RouteHourSourceInventory.Resolve(citySlug, this);
 
     public static RouteHourCatalog Create(IEnumerable<RouteHourCatalogInput> inputs)
     {
@@ -173,5 +179,66 @@ public sealed class RouteHourCatalog
         Span<byte> bytes = stackalloc byte[4];
         System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(bytes, (uint)value);
         stream.Write(bytes);
+    }
+}
+
+/// <summary>Expected city feed inventory and the explicit per-route source dependencies that
+/// qualify a captured route hour. Atlanta's contract is intentionally scoped to MARTA.</summary>
+public sealed record RouteHourSourceInventory(
+    ImmutableArray<string> ExpectedSourceKeys,
+    ImmutableArray<RouteSourceDependency> RouteDependencies,
+    bool MembershipKnown)
+{
+    static readonly ImmutableArray<string> MartaSourceKeys = ["marta-bus", "marta-rail"];
+    static readonly ImmutableHashSet<string> MartaRailLines =
+        ImmutableHashSet.Create(StringComparer.OrdinalIgnoreCase, "BLUE", "GREEN", "RED", "GOLD");
+
+    internal static RouteHourSourceInventory Resolve(string citySlug, RouteHourCatalog catalog)
+    {
+        ArgumentNullException.ThrowIfNull(citySlug);
+        ArgumentNullException.ThrowIfNull(catalog);
+        if (!string.Equals(citySlug, CityNames.Marta, StringComparison.OrdinalIgnoreCase))
+            return new([], [], MembershipKnown: false);
+
+        var dependencies = ImmutableArray.CreateBuilder<RouteSourceDependency>();
+        var mappedRailLines = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var busRoutes = 0;
+        var membershipKnown = catalog.Entries.Count > 0
+            && catalog.GeometryIdentityAvailable
+            && catalog.AmbiguousAliases.IsEmpty;
+
+        foreach (var entry in catalog.Entries.Values.OrderBy(entry => entry.RouteJoinKey, StringComparer.Ordinal))
+        {
+            if (entry.Category == "bus")
+            {
+                busRoutes++;
+                dependencies.Add(new RouteSourceDependency(entry.RouteJoinKey, ["marta-bus"]));
+                continue;
+            }
+
+            if (entry.Category == "rail" && TryResolveMartaRailLine(entry, out var line))
+            {
+                mappedRailLines.Add(line);
+                dependencies.Add(new RouteSourceDependency(entry.RouteJoinKey, ["marta-rail"]));
+                continue;
+            }
+
+            membershipKnown = false;
+        }
+
+        if (busRoutes == 0 || !mappedRailLines.SetEquals(MartaRailLines))
+            membershipKnown = false;
+
+        return new(MartaSourceKeys, dependencies.ToImmutable(), membershipKnown);
+    }
+
+    static bool TryResolveMartaRailLine(RouteHourCatalogEntry entry, out string line)
+    {
+        var candidates = new[] { entry.RouteShortName, entry.StaticRouteId, entry.RouteJoinKey }
+            .Concat(entry.ContributingStaticRouteIds);
+        line = candidates.Where(candidate => !string.IsNullOrWhiteSpace(candidate))
+            .Select(candidate => candidate!.Trim().ToUpperInvariant())
+            .FirstOrDefault(MartaRailLines.Contains)!;
+        return line is not null;
     }
 }

@@ -12,7 +12,8 @@ public static class StatsOverlayErrorResources
     [
         "response_too_large", "scope_too_large", "busy", "read_timeout", "rate_limited", "retry_wait",
         "stats_disabled", "stats_unavailable", "dependency_unavailable", "invalid_scope", "invalid_city",
-        "invalid_route_key", "invalid_request", "request_too_large", "unsupported_media_type", "invalid_response"
+        "invalid_route_key", "invalid_request", "request_too_large", "unsupported_media_type",
+        "unsupported_stats_contract", "invalid_response"
     ];
 
     public static string ResourceKey(string? code) => code switch
@@ -28,7 +29,7 @@ public static class StatsOverlayErrorResources
         "invalid_scope" => "StatsInvalidScopeError",
         "invalid_city" => "StatsInvalidCityError",
         "invalid_route_key" => "StatsInvalidRouteKeyError",
-        "invalid_request" or "request_too_large" or "unsupported_media_type" => "StatsInvalidRequestError",
+        "invalid_request" or "request_too_large" or "unsupported_media_type" or "unsupported_stats_contract" => "StatsInvalidRequestError",
         _ => "StatsProblemGeneric"
     };
 }

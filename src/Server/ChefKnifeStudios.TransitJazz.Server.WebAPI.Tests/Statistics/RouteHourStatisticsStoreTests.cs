@@ -1,6 +1,9 @@
 using ChefKnifeStudios.TransitJazz.Server.Data.Models;
 using ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.Statistics;
@@ -108,11 +111,158 @@ public sealed class RouteHourStatisticsStoreTests
         Assert.Empty(await verification.CityRouteHourStatistics.ToListAsync());
     }
 
-    static CityRouteHourStatistic Row(string key) => new()
+    [RouteHourPostgresFact]
+    public async Task V2JsonPropertyOrderIsCanonicalAndEveryEvidenceChangeQuarantinesTheOriginal()
+    {
+        await using var database = await RouteHourStatisticsDatabaseFixture.CreateAsync();
+        var firstHour = new DateTime(2026, 11, 7, 12, 0, 0, DateTimeKind.Utc);
+        var original = V2Row("v2-order", firstHour);
+        Assert.Equal(RouteHourStatisticsWriteOutcome.Inserted, (await database.Store.WriteAsync([original])).Outcome);
+        var reordered = V2Row("v2-order", firstHour);
+        reordered.SourceEvidence = ReorderJsonObject(reordered.SourceEvidence!);
+        Assert.Equal(RouteHourStatisticsWriteOutcome.Unchanged, (await database.Store.WriteAsync([reordered])).Outcome);
+
+        var mutations = new Func<DateTime, string, CityRouteHourStatistic>[]
+        {
+            (hour, key) => V2Row(key, hour, sourceKey: "marta-rail", fingerprintFill: 'd'),
+            (hour, key) => V2Row(key, hour, successfulPollCount: 2),
+            (hour, key) => V2Row(key, hour, startBoundaryOk: false),
+            (hour, key) => V2Row(key, hour, recoveredDuringHour: true, sourceReasons: ["source_recovered"]),
+            (hour, key) => V2Row(key, hour, distanceValid: false, distanceReasons: ["source_failure"]),
+            (hour, key) => V2Row(key, hour, activityValid: false, activityReasons: ["unaligned_activity_samples"]),
+            (hour, key) => V2Row(key, hour, publicationValid: true, publicationReasons: []),
+            (hour, key) => V2Row(key, hour, distanceReasons: ["boundary_unproven"]),
+            (hour, key) => V2Row(key, hour, activityReasons: ["unknown_source_provenance"]),
+            (hour, key) => V2Row(key, hour, publicationReasons: ["source_failure"]),
+            (hour, key) => V2Row(key, hour, fingerprintFill: 'd'),
+            (hour, key) => V2Row(key, hour, supportFill: 'd')
+        };
+
+        for (var index = 0; index < mutations.Length; index++)
+        {
+            var hour = firstHour.AddHours(index + 1);
+            var key = $"v2-change-{index:D2}";
+            var baseline = V2Row(key, hour);
+            var changed = mutations[index](hour, key);
+            Assert.Equal(RouteHourStatisticsWriteOutcome.Inserted, (await database.Store.WriteAsync([baseline])).Outcome);
+            Assert.Equal(RouteHourStatisticsWriteOutcome.Quarantined, (await database.Store.WriteAsync([changed])).Outcome);
+            var retained = await ReadOneAsync(database, key);
+            Assert.True(retained.HasConflict);
+            using var expectedEvidence = JsonDocument.Parse(baseline.SourceEvidence!);
+            using var retainedEvidence = JsonDocument.Parse(retained.SourceEvidence!);
+            Assert.True(JsonElement.DeepEquals(expectedEvidence.RootElement, retainedEvidence.RootElement));
+            Assert.Equal(baseline.SourceSetFingerprint, retained.SourceSetFingerprint);
+            Assert.Equal(baseline.ActivitySupportFingerprint, retained.ActivitySupportFingerprint);
+        }
+    }
+
+    [RouteHourPostgresFact]
+    public async Task ConcurrentMixedVersionWritersShareTheSameHourIdentityAndStickyConflict()
+    {
+        await using var database = await RouteHourStatisticsDatabaseFixture.CreateAsync();
+        var hour = new DateTime(2026, 11, 8, 12, 0, 0, DateTimeKind.Utc);
+        var legacy = Row("mixed-version", hour);
+        var versioned = V2Row("mixed-version", hour);
+
+        var outcomes = await Task.WhenAll(database.Store.WriteAsync([legacy]), database.Store.WriteAsync([versioned]));
+
+        Assert.Equal(1, outcomes.Count(outcome => outcome.Outcome == RouteHourStatisticsWriteOutcome.Inserted));
+        Assert.Equal(1, outcomes.Count(outcome => outcome.Outcome == RouteHourStatisticsWriteOutcome.Quarantined));
+        Assert.True((await ReadOneAsync(database, "mixed-version")).HasConflict);
+    }
+
+    static async Task<CityRouteHourStatistic> ReadOneAsync(RouteHourStatisticsDatabaseFixture database, string key)
+    {
+        await using var context = database.CreateDbContext();
+        return await context.CityRouteHourStatistics.AsNoTracking().SingleAsync(row => row.RouteJoinKey == key);
+    }
+
+    static string ReorderJsonObject(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            foreach (var property in document.RootElement.EnumerateObject().Reverse())
+            {
+                writer.WritePropertyName(property.Name);
+                property.Value.WriteTo(writer);
+            }
+            writer.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    static CityRouteHourStatistic V2Row(
+        string key,
+        DateTime hour,
+        string sourceKey = "marta-bus",
+        long successfulPollCount = 1,
+        bool startBoundaryOk = true,
+        bool recoveredDuringHour = false,
+        string[]? sourceReasons = null,
+        bool distanceValid = true,
+        bool activityValid = true,
+        bool publicationValid = false,
+        string[]? distanceReasons = null,
+        string[]? activityReasons = null,
+        string[]? publicationReasons = null,
+        char fingerprintFill = 'b',
+        char supportFill = 'c')
+    {
+        var fingerprint = new string(fingerprintFill, 64);
+        sourceReasons ??= [];
+        distanceReasons ??= [];
+        activityReasons ??= [];
+        publicationReasons ??= ["publication_unavailable"];
+        var receipt = hour.AddMinutes(5);
+        var row = Row(key, hour);
+        row.DefinitionVersion = CityRouteHourStatistic.SourceEvidenceDefinitionVersion;
+        row.SourceSetFingerprint = fingerprint;
+        row.DistanceValid = distanceValid;
+        row.ActivityValid = activityValid;
+        row.PublicationValid = publicationValid;
+        row.DistanceReasons = distanceReasons;
+        row.ActivityReasons = activityReasons;
+        row.PublicationReasons = publicationReasons;
+        row.ActivitySupportFingerprint = new string(supportFill, 64);
+        row.SourceEvidence = JsonSerializer.Serialize(new
+        {
+            schemaVersion = "route-hour-source-evidence-v1",
+            sourceSetFingerprint = fingerprint,
+            expectedSourceKeys = new[] { sourceKey },
+            contributingSourceKeys = new[] { sourceKey },
+            membershipKnown = true,
+            sources = new[]
+            {
+                new
+                {
+                    sourceKey,
+                    successfulPollCount,
+                    emptyPollCount = 0,
+                    failedPollCount = 0,
+                    disabledPollCount = 0,
+                    firstSuccessfulReceiptUtc = receipt,
+                    lastSuccessfulReceiptUtc = receipt,
+                    maxSuccessfulGapSeconds = 10,
+                    startBoundaryOk,
+                    endBoundaryOk = true,
+                    positionedCoverageValid = true,
+                    recoveredDuringHour,
+                    reasons = sourceReasons
+                }
+            }
+        });
+        row.Validate();
+        return row;
+    }
+
+    static CityRouteHourStatistic Row(string key, DateTime? hourStartUtc = null) => new()
     {
         CitySlug = "atlanta",
         RouteJoinKey = key,
-        HourStartUtc = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc),
+        HourStartUtc = hourStartUtc ?? new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc),
         RouteShortName = key,
         StaticRouteId = "shape-" + key,
         Category = "bus",
@@ -125,8 +275,8 @@ public sealed class RouteHourStatisticsStoreTests
         ObservedCycleCount = 1,
         ValidActiveSampleCount = 1,
         ValidPublishCycleCount = 1,
-        FirstCycleUtc = new DateTime(2026, 10, 1, 12, 5, 0, DateTimeKind.Utc),
-        LastCycleUtc = new DateTime(2026, 10, 1, 12, 5, 0, DateTimeKind.Utc),
+        FirstCycleUtc = (hourStartUtc ?? new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc)).AddMinutes(5),
+        LastCycleUtc = (hourStartUtc ?? new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc)).AddMinutes(5),
         MaxObservationGapSeconds = 10,
         ActiveVehicleCountSum = 0,
         PeakActiveVehicleCount = 0,

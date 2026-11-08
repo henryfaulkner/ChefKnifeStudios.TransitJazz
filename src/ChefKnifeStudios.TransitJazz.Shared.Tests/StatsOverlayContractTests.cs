@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.IO;
 using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
 using Xunit;
@@ -7,6 +8,53 @@ namespace ChefKnifeStudios.TransitJazz.Shared.Tests;
 
 public sealed class StatsOverlayContractTests
 {
+    [Fact]
+    public void V2FixtureRoundTripsBoundedSourceMeasureCategoryAndTimelineEvidence()
+    {
+        var fixturePath = FindFeatureFixture("stats-overlay-v2.json");
+        var response = JsonSerializer.Deserialize<StatsOverlayResponse>(File.ReadAllText(fixturePath), JsonSettings.DefaultOptions)!;
+        var json = JsonSerializer.Serialize(response, JsonSettings.DefaultOptions);
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        Assert.Equal("stats-overlay-v2", root.GetProperty("contractVersion").GetString());
+        Assert.Equal("observed-city-route-hour-statistics-v2", root.GetProperty("metricDefinitionVersion").GetString());
+        Assert.Equal(1, root.GetProperty("todayDistance").GetProperty("coverage").GetProperty("observedRouteHours").GetInt32());
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("last24Distance").GetProperty("kilometers").ValueKind);
+        Assert.Equal("availableDistance", root.GetProperty("categoryShares")[0].GetProperty("denominatorKind").GetString());
+        Assert.Equal("unsupported_definition", root.GetProperty("bubbles")[0]
+            .GetProperty("measureAvailability").GetProperty("yReasons")[0].GetString());
+        Assert.Equal("marta-rail", root.GetProperty("timeline").GetProperty("series")[0]
+            .GetProperty("buckets")[0].GetProperty("sourceCoverage")[0].GetProperty("sourceKey").GetString());
+    }
+
+    [Fact]
+    public void V1SerializationOmitsV2EvidenceFields()
+    {
+        var response = new StatsOverlayResponse
+        {
+            GeneratedAtUtc = DateTime.UnixEpoch,
+            CutoffUtc = DateTime.UnixEpoch,
+            Selection = new StatsSelection("city", "atlanta", []),
+            Cities = [],
+            RouteOptions = [],
+            TodayDistance = new StatsDistanceSummary { Window = "today", Kilometers = null, Coverage = EmptyCoverage() },
+            Last24Distance = new StatsDistanceSummary { Window = "last24", Kilometers = null, Coverage = EmptyCoverage() },
+            CategoryShares = [new StatsCategoryShare("bus", 0, null, "today")],
+            Bubbles = [],
+            Timeline = new StatsTimeline { SeriesKind = "none", Series = [] },
+            Warnings = []
+        };
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(response, JsonSettings.DefaultOptions));
+        var root = document.RootElement;
+
+        Assert.Equal("stats-overlay-v1", root.GetProperty("contractVersion").GetString());
+        Assert.False(root.GetProperty("todayDistance").GetProperty("coverage").TryGetProperty("observedRouteHours", out _));
+        Assert.False(root.GetProperty("categoryShares")[0].TryGetProperty("denominatorKind", out _));
+        Assert.False(root.GetProperty("categoryShares")[0].TryGetProperty("coverage", out _));
+    }
+
     [Fact]
     public void RequestUsesExactScopeAndPreservesCaseDistinctRouteKeys()
     {
@@ -290,4 +338,19 @@ public sealed class StatsOverlayContractTests
     {
         State = "unavailable", Exclusions = [], PendingThroughUtc = DateTime.UnixEpoch,
     };
+
+    static string FindFeatureFixture(string name)
+    {
+        foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+        {
+            var directory = new DirectoryInfo(start);
+            while (directory is not null)
+            {
+                var candidate = Path.Combine(directory.FullName, "specs", "063-atlanta-rail-statistics", "fixtures", name);
+                if (File.Exists(candidate)) return candidate;
+                directory = directory.Parent;
+            }
+        }
+        throw new FileNotFoundException($"Could not locate feature contract fixture '{name}' from the repository root.");
+    }
 }

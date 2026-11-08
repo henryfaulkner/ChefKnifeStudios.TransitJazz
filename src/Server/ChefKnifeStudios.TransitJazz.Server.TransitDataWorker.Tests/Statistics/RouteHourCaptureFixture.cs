@@ -53,6 +53,36 @@ public sealed class RouteHourCaptureFixture
             hour?.AddMinutes(5) ?? new DateTime(2026, 10, 1, 12, 5, 0, DateTimeKind.Utc), 10m,
             false, false, 0, 0, 0, 0, 0, 0m, 0, 0, 0, 0, 0, 0, 0, 0);
 
+    public static RouteHourSourceSummary SourceEvidence(string routeKey, DateTime receiptUtc, string sourceKey = "marta-bus")
+    {
+        var fingerprint = RouteHourSourceSummary.ComputeSourceSetFingerprint([sourceKey],
+            [new RouteSourceDependency(routeKey, [sourceKey])]);
+        return new RouteHourSourceSummary
+        {
+            SourceSetFingerprint = fingerprint,
+            ExpectedSourceKeys = [sourceKey],
+            ContributingSourceKeys = [sourceKey],
+            MembershipKnown = true,
+            Sources = [new SourceHourEvidenceSummary(sourceKey, 1, 0, 0, 0, receiptUtc, receiptUtc, 0,
+                true, true, true, false, [])],
+        };
+    }
+
+    public static RouteHourSourceSummary FailedSourceEvidence(string routeKey, string sourceKey = "marta-bus")
+    {
+        var fingerprint = RouteHourSourceSummary.ComputeSourceSetFingerprint([sourceKey],
+            [new RouteSourceDependency(routeKey, [sourceKey])]);
+        return new RouteHourSourceSummary
+        {
+            SourceSetFingerprint = fingerprint,
+            ExpectedSourceKeys = [sourceKey],
+            ContributingSourceKeys = [],
+            MembershipKnown = true,
+            Sources = [new SourceHourEvidenceSummary(sourceKey, 0, 0, 1, 0, null, null, null,
+                false, false, false, false, ["source_failure"])],
+        };
+    }
+
     public static void InvokeInstrumentationHook(Action hook, Action markCaptureLoss)
     {
         try { hook(); }

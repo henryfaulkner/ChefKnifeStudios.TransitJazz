@@ -1,0 +1,152 @@
+{
+  "contractVersion": "stats-overlay-v2",
+  "metricDefinitionVersion": "observed-city-route-hour-statistics-v2",
+  "generatedAtUtc": "2026-11-07T13:05:00Z",
+  "cutoffUtc": "2026-11-07T13:00:00Z",
+  "selection": { "scope": "city", "citySlug": "atlanta", "routeJoinKeys": [] },
+  "cities": [],
+  "routeOptions": [],
+  "todayDistance": {
+    "window": "today",
+    "kilometers": 120,
+    "coverage": {
+      "state": "partial",
+      "expectedClosedHours": 1,
+      "contributingHours": 1,
+      "fullyCoveredHours": 0,
+      "expectedRouteHours": 2,
+      "availableRouteHours": 1,
+      "selectedRouteCoverage": null,
+      "exclusions": [],
+      "boundaryExcludedHours": 0,
+      "firstContributingUtc": "2026-11-07T12:00:00Z",
+      "lastContributingUtc": "2026-11-07T12:00:00Z",
+      "pendingThroughUtc": "2026-11-07T13:00:00Z",
+      "historicalMembershipUnknown": false,
+      "observedRouteHours": 1,
+      "unavailableRouteHours": 1,
+      "assessmentMeasure": "distance",
+      "sourceCoverage": [
+        {
+          "citySlug": "atlanta",
+          "sourceKey": "marta-bus",
+          "windowReference": "today",
+          "state": "complete",
+          "contributingHours": 1,
+          "fullyCoveredHours": 1,
+          "coveredPeriods": [{ "startUtc": "2026-11-07T12:00:00Z", "endUtc": "2026-11-07T13:00:00Z" }],
+          "unavailablePeriods": [],
+          "reasons": []
+        },
+        {
+          "citySlug": "atlanta",
+          "sourceKey": "marta-rail",
+          "windowReference": "today",
+          "state": "unavailable",
+          "contributingHours": 0,
+          "fullyCoveredHours": 0,
+          "coveredPeriods": [],
+          "unavailablePeriods": [{ "startUtc": "2026-11-07T12:00:00Z", "endUtc": "2026-11-07T13:00:00Z" }],
+          "reasons": ["source_failure"]
+        }
+      ],
+      "measureAvailability": [
+        {
+          "measureKey": "distance",
+          "state": "partial",
+          "reasons": ["source_failure"],
+          "definitionVersions": ["observed-city-route-hour-statistics-v2"],
+          "observedRatio": false
+        }
+      ],
+      "definitionVersions": ["observed-city-route-hour-statistics-v2"]
+    },
+    "contributingCityHours": 1,
+    "expectedCityHours": 1,
+    "contributingCityCount": 1,
+    "expectedCityCount": 1
+  },
+  "last24Distance": {
+    "window": "last24CompletedHours",
+    "kilometers": null,
+    "coverage": {
+      "state": "unavailable",
+      "expectedClosedHours": 1,
+      "contributingHours": 0,
+      "fullyCoveredHours": 0,
+      "expectedRouteHours": null,
+      "availableRouteHours": 0,
+      "selectedRouteCoverage": null,
+      "exclusions": [],
+      "boundaryExcludedHours": 0,
+      "firstContributingUtc": null,
+      "lastContributingUtc": null,
+      "pendingThroughUtc": "2026-11-07T13:00:00Z",
+      "historicalMembershipUnknown": true,
+      "observedRouteHours": 0,
+      "unavailableRouteHours": null,
+      "assessmentMeasure": "distance",
+      "sourceCoverage": [],
+      "measureAvailability": [],
+      "definitionVersions": []
+    },
+    "contributingCityHours": 0,
+    "expectedCityHours": 1,
+    "contributingCityCount": 0,
+    "expectedCityCount": 1
+  },
+  "todayReportedVehicles": {
+    "window": "today", "count": null, "state": "unavailable", "populationScope": "cityFeeds",
+    "definitionVersion": "reported-vehicles-v1", "expectedCityHours": 0, "contributingCityHours": 0,
+    "fullyCoveredCityHours": 0, "expectedCityCount": 0, "contributingCityCount": 0, "cities": [], "limitations": []
+  },
+  "last24ReportedVehicles": {
+    "window": "last24", "count": null, "state": "unavailable", "populationScope": "cityFeeds",
+    "definitionVersion": "reported-vehicles-v1", "expectedCityHours": 0, "contributingCityHours": 0,
+    "fullyCoveredCityHours": 0, "expectedCityCount": 0, "contributingCityCount": 0, "cities": [], "limitations": []
+  },
+  "categoryShares": [
+    {
+      "categoryKey": "bus", "kilometers": 120, "percent": 100, "coverageReference": "today",
+      "denominatorKind": "availableDistance",
+      "coverage": {
+        "state": "partial", "observedRouteHours": 1, "unavailableRouteHours": 0,
+        "assessmentMeasure": "distance", "sourceCoverage": [], "measureAvailability": [], "definitionVersions": [],
+        "exclusions": [], "pendingThroughUtc": "2026-11-07T13:00:00Z"
+      }
+    }
+  ],
+  "bubbles": [
+    {
+      "entityKey": "route:bus-a:atlanta:today", "entityKind": "route", "citySlug": "atlanta", "routeJoinKey": "bus-a",
+      "label": "Route A", "categoryKey": "bus", "distanceKilometers": 120, "routeVehicleHours": 1,
+      "activeClockHours": null, "activitySampleNumerator": null, "sampleDenominator": null,
+      "x": 120, "y": null, "meanActiveVehicles": null,
+      "coverage": { "state": "partial", "exclusions": [], "pendingThroughUtc": "2026-11-07T13:00:00Z" },
+      "omissionReason": null,
+      "measureAvailability": {
+        "xReasons": [], "yReasons": ["unsupported_definition"], "sizeReasons": [], "populationReasons": []
+      }
+    }
+  ],
+  "timeline": {
+    "seriesKind": "single",
+    "stacked": false,
+    "elapsedHourExtent": 1,
+    "series": [
+      {
+        "key": "atlanta:bus", "categoryKey": "bus", "citySlug": "atlanta", "windowReference": "today",
+        "buckets": [
+          {
+            "startUtc": "2026-11-07T12:00:00Z", "endUtc": "2026-11-07T13:00:00Z", "localDate": "2026-11-07",
+            "localEndLabel": "08:00", "utcOffset": "-04:00", "elapsedHours": 1,
+            "hourlyKnownKilometers": 120, "cumulativeObservedKilometers": 120, "plotCumulativeKilometers": 120,
+            "availableSelectedRoutes": 1, "expectedSelectedRoutes": 1, "coverageState": "partial", "reason": "source_failure",
+            "sourceCoverage": [{ "citySlug": "atlanta", "sourceKey": "marta-rail", "state": "unavailable", "reasons": ["source_failure"] }]
+          }
+        ]
+      }
+    ]
+  },
+  "warnings": ["partial_coverage"]
+}

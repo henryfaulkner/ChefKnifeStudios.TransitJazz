@@ -7,6 +7,7 @@ namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 public sealed class RouteHourStatisticsCycle
 {
     readonly Dictionary<string, CycleRouteCounter> _routes;
+    readonly Dictionary<string, RouteHourSourceSummary> _sourceEvidenceByRoute = new(StringComparer.Ordinal);
     readonly HashSet<string> _activityRepresentatives = new(StringComparer.Ordinal);
     readonly int _maxTrackedVehicles;
     readonly int _maxMemberships;
@@ -26,17 +27,37 @@ public sealed class RouteHourStatisticsCycle
     public RouteHourCatalog Catalog { get; }
     public bool CaptureFailed { get; private set; }
     public bool ActivityEvidenceLost { get; private set; }
+    public bool DistanceEvidenceLost { get; private set; }
     public bool PopulationLost { get; private set; }
     public bool PublicationEvidenceLost { get; private set; }
+    bool _unlocalizedEvidenceLost;
     public ImmutableHashSet<string> IncompleteReasons => _incompleteReasons.ToImmutableHashSet(StringComparer.Ordinal);
     readonly HashSet<string> _incompleteReasons = new(StringComparer.Ordinal);
 
+    // Callers with an explicit route-to-source policy can attach its immutable evidence here.
+    // Legacy adapters leave the map empty and keep their conservative v1 row shape.
+    internal void AttachSourceEvidence(string routeKey, RouteHourSourceSummary sourceEvidence)
+    {
+        if (!_routes.ContainsKey(routeKey)) throw new ArgumentException("Source evidence route is not in the cycle catalog.", nameof(routeKey));
+        ArgumentNullException.ThrowIfNull(sourceEvidence);
+        SourceEvidenceValidation.ValidateFingerprint(sourceEvidence.SourceSetFingerprint, nameof(sourceEvidence));
+        _sourceEvidenceByRoute[routeKey] = sourceEvidence;
+    }
+
     internal bool RecordActivity(string vehicleId, string routeAlias)
     {
-        if (string.IsNullOrWhiteSpace(vehicleId) || !Catalog.TryResolve(routeAlias, out var entry)) return false;
+        if (string.IsNullOrWhiteSpace(vehicleId)) return false;
+        if (!Catalog.TryResolve(routeAlias, out var entry))
+        {
+            ActivityEvidenceLost = true;
+            PopulationLost = true;
+            MarkFailure("route_index_unavailable");
+            return false;
+        }
         if (!_activityRepresentatives.Add(vehicleId)) return false;
         if (_activityRepresentatives.Count > _maxTrackedVehicles || _activityRepresentatives.Count > _maxMemberships)
         {
+            _routes[entry.RouteJoinKey].ActivityEvidenceLost = true;
             ActivityEvidenceLost = true;
             PopulationLost = true;
             MarkFailure("identity_limit_exceeded");
@@ -49,57 +70,131 @@ public sealed class RouteHourStatisticsCycle
     internal void RecordMovement(string routeKey, bool accepted, decimal distanceMeters)
     {
         if (!_routes.TryGetValue(routeKey, out var route)) { MarkFailure("route_index_unavailable"); return; }
-        if (accepted)
+        try
         {
-            route.DistanceMetersSum = checked(route.DistanceMetersSum + distanceMeters);
-            route.DistanceIntervalCount = checked(route.DistanceIntervalCount + 1);
+            if (accepted)
+            {
+                route.DistanceMetersSum = checked(route.DistanceMetersSum + distanceMeters);
+                route.DistanceIntervalCount = checked(route.DistanceIntervalCount + 1);
+            }
+            else route.DistanceRejectedCount = checked(route.DistanceRejectedCount + 1);
         }
-        else route.DistanceRejectedCount = checked(route.DistanceRejectedCount + 1);
+        catch (OverflowException)
+        {
+            route.DistanceEvidenceLost = true;
+            MarkFailure("invalid_measure_evidence");
+        }
     }
 
     internal void RecordProcessed(string routeKey, bool stale)
     {
-        if (!_routes.TryGetValue(routeKey, out var route)) { MarkFailure("route_index_unavailable"); return; }
-        route.VehicleObservationsProcessedCount = checked(route.VehicleObservationsProcessedCount + 1);
-        if (stale) route.StaleObservationsCount = checked(route.StaleObservationsCount + 1);
+        if (!_routes.TryGetValue(routeKey, out var route))
+        {
+            MarkFailure("route_index_unavailable");
+            MarkFailure("processing_failure");
+            return;
+        }
+        try
+        {
+            route.VehicleObservationsProcessedCount = checked(route.VehicleObservationsProcessedCount + 1);
+            if (stale) route.StaleObservationsCount = checked(route.StaleObservationsCount + 1);
+        }
+        catch (OverflowException)
+        {
+            route.PublicationEvidenceLost = true;
+            MarkFailure("invalid_measure_evidence");
+        }
     }
 
     internal void RecordSuppressed(string routeKey, CrossingSuppressionReason reason)
     {
         if (!_routes.TryGetValue(routeKey, out var route)) { MarkFailure("route_index_unavailable"); return; }
-        switch (reason)
+        try
         {
-            case CrossingSuppressionReason.FirstSeen: route.CrossingsSuppressedFirstSeen = checked(route.CrossingsSuppressedFirstSeen + 1); break;
-            case CrossingSuppressionReason.DeltaLeqZero: route.CrossingsSuppressedDeltaLeqZero = checked(route.CrossingsSuppressedDeltaLeqZero + 1); break;
-            case CrossingSuppressionReason.Teleport: route.CrossingsSuppressedTeleport = checked(route.CrossingsSuppressedTeleport + 1); break;
-            case CrossingSuppressionReason.RouteTransfer: route.CrossingsSuppressedTransfer = checked(route.CrossingsSuppressedTransfer + 1); break;
+            switch (reason)
+            {
+                case CrossingSuppressionReason.FirstSeen: route.CrossingsSuppressedFirstSeen = checked(route.CrossingsSuppressedFirstSeen + 1); break;
+                case CrossingSuppressionReason.DeltaLeqZero: route.CrossingsSuppressedDeltaLeqZero = checked(route.CrossingsSuppressedDeltaLeqZero + 1); break;
+                case CrossingSuppressionReason.Teleport: route.CrossingsSuppressedTeleport = checked(route.CrossingsSuppressedTeleport + 1); break;
+                case CrossingSuppressionReason.RouteTransfer: route.CrossingsSuppressedTransfer = checked(route.CrossingsSuppressedTransfer + 1); break;
+            }
+        }
+        catch (OverflowException)
+        {
+            route.PublicationEvidenceLost = true;
+            MarkFailure("invalid_measure_evidence");
         }
     }
 
     internal void RecordDetected(string routeKey, long count)
     {
-        if (!_routes.TryGetValue(routeKey, out var route)) { MarkFailure("route_index_unavailable"); return; }
-        route.CrossingsDetectedCount = checked(route.CrossingsDetectedCount + count);
+        if (!_routes.TryGetValue(routeKey, out var route)) { MarkPublicationFailure("route_index_unavailable"); return; }
+        try { route.CrossingsDetectedCount = checked(route.CrossingsDetectedCount + count); }
+        catch (OverflowException)
+        {
+            route.PublicationEvidenceLost = true;
+            MarkFailure("invalid_measure_evidence");
+        }
     }
 
     internal void RecordPublished(IEnumerable<(string RouteKey, long Count)> published)
     {
         foreach (var (routeKey, count) in published)
         {
-            if (!_routes.TryGetValue(routeKey, out var route)) { MarkFailure("route_index_unavailable"); PublicationEvidenceLost = true; continue; }
-            route.CrossingsPublishedCount = checked(route.CrossingsPublishedCount + count);
+            if (!_routes.TryGetValue(routeKey, out var route)) { MarkPublicationFailure("route_index_unavailable"); continue; }
+            try { route.CrossingsPublishedCount = checked(route.CrossingsPublishedCount + count); }
+            catch (OverflowException)
+            {
+                route.PublicationEvidenceLost = true;
+                MarkFailure("invalid_measure_evidence");
+            }
         }
     }
 
     internal void MarkFailure(string reason = "capture_failure")
     {
         CaptureFailed = true;
-        _incompleteReasons.Add(reason);
-        if (reason == "identity_limit_exceeded")
+        _incompleteReasons.Add(reason == "invalid_measure_evidence" ? "capture_failure" : reason);
+        switch (reason)
         {
-            ActivityEvidenceLost = true;
-            PopulationLost = true;
+            case "identity_limit_exceeded":
+                ActivityEvidenceLost = true;
+                PopulationLost = true;
+                break;
+            case "publication_unavailable":
+                PublicationEvidenceLost = true;
+                break;
+            case "source_failure":
+            case "source_disabled":
+            case "invalid_source_positions":
+            case "catalog_changed":
+            case "invalid_measure_evidence":
+                break; // These are coverage limits; route-level evidence decides measure validity.
+            case "route_index_unavailable":
+                DistanceEvidenceLost = true;
+                PublicationEvidenceLost = true;
+                break;
+            default:
+                DistanceEvidenceLost = true;
+                ActivityEvidenceLost = true;
+                PublicationEvidenceLost = true;
+                _unlocalizedEvidenceLost = true;
+                break;
         }
+    }
+
+    internal void MarkMovementIdentityLost(string routeKey)
+    {
+        if (_routes.TryGetValue(routeKey, out var route)) route.DistanceEvidenceLost = true;
+        else DistanceEvidenceLost = true;
+        MarkFailure("identity_limit_exceeded");
+    }
+
+    void MarkPublicationFailure(string reason)
+    {
+        CaptureFailed = true;
+        PublicationEvidenceLost = true;
+        _incompleteReasons.Add(reason);
     }
 
     internal RouteHourCycleSnapshot ToSnapshot(DateTime completedAtUtc, bool activityEligible,
@@ -108,7 +203,22 @@ public sealed class RouteHourStatisticsCycle
         if (!string.Equals(Catalog.ContentFingerprint, finalCatalog.ContentFingerprint, StringComparison.Ordinal))
             MarkFailure("catalog_changed");
         if (!finalCatalog.GeometryIdentityAvailable) MarkFailure("route_index_unavailable");
-        var routes = _routes.ToImmutableDictionary(pair => pair.Key, pair => pair.Value.Snapshot(), StringComparer.Ordinal);
+        var routes = _routes.ToImmutableDictionary(pair => pair.Key, pair =>
+        {
+            _sourceEvidenceByRoute.TryGetValue(pair.Key, out var evidence);
+            var snapshot = pair.Value.Snapshot() with
+            {
+                DistanceEvidenceLost = pair.Value.DistanceEvidenceLost || DistanceEvidenceLost || _unlocalizedEvidenceLost,
+                ActivityEvidenceLost = pair.Value.ActivityEvidenceLost || ActivityEvidenceLost || _unlocalizedEvidenceLost,
+                PublicationEvidenceLost = pair.Value.PublicationEvidenceLost || PublicationEvidenceLost || _unlocalizedEvidenceLost,
+                ActivityEligible = activityEligible && (evidence is null || HasSupportedSourceEvidence(evidence)),
+                PublicationKnown = publicationKnown && (evidence is null || HasSupportedSourceEvidence(evidence)),
+            };
+            if (evidence is null) return snapshot;
+            evidence.Validate(new DateTime(completedAtUtc.Year, completedAtUtc.Month, completedAtUtc.Day,
+                completedAtUtc.Hour, 0, 0, DateTimeKind.Utc), evidence.SourceSetFingerprint);
+            return snapshot with { SourceEvidence = evidence, SourceSetFingerprint = evidence.SourceSetFingerprint };
+        }, StringComparer.Ordinal);
         return new(CitySlug, completedAtUtc, Catalog, finalCatalog, routes,
             activityEligible && !ActivityEvidenceLost,
             publicationKnown && !PublicationEvidenceLost,
@@ -117,6 +227,13 @@ public sealed class RouteHourStatisticsCycle
             PopulationLost,
             IncompleteReasons);
     }
+
+    static bool HasSupportedSourceEvidence(RouteHourSourceSummary evidence) => evidence.MembershipKnown
+        && evidence.ExpectedSourceKeys.Length > 0
+        && evidence.Sources.Length == evidence.ExpectedSourceKeys.Length
+        && evidence.Sources.All(source => source.SuccessfulSupportCount > 0
+            && source.FailedPollCount == 0 && source.DisabledPollCount == 0
+            && source.PositionedCoverageValid);
 
     sealed class CycleRouteCounter(RouteHourCatalogEntry catalog)
     {
@@ -132,6 +249,9 @@ public sealed class RouteHourStatisticsCycle
         public long CrossingsSuppressedDeltaLeqZero;
         public long CrossingsSuppressedTeleport;
         public long CrossingsSuppressedTransfer;
+        public bool DistanceEvidenceLost;
+        public bool ActivityEvidenceLost;
+        public bool PublicationEvidenceLost;
 
         public RouteHourCycleRouteSnapshot Snapshot() => new(catalog, ActiveVehicleIds.ToImmutableArray(),
             VehicleObservationsProcessedCount, StaleObservationsCount, DistanceMetersSum, DistanceIntervalCount,
@@ -147,17 +267,25 @@ public sealed class RouteHourStatisticsCapture
     readonly IRouteHourStatisticsSink _sink;
     readonly TimeProvider _timeProvider;
     readonly ILogger<RouteHourStatisticsCapture> _logger;
-    readonly Guid _captureRunId = Guid.NewGuid();
+    readonly Guid _captureRunId;
     readonly Dictionary<string, CityState> _cities = new(StringComparer.OrdinalIgnoreCase);
     readonly object _citiesGate = new();
 
     public RouteHourStatisticsCapture(RouteHourCaptureRuntimeOptions runtime, IRouteHourStatisticsSink sink,
         TimeProvider timeProvider, ILogger<RouteHourStatisticsCapture> logger)
+        : this(runtime, sink, timeProvider, logger, Guid.NewGuid())
     {
+    }
+
+    internal RouteHourStatisticsCapture(RouteHourCaptureRuntimeOptions runtime, IRouteHourStatisticsSink sink,
+        TimeProvider timeProvider, ILogger<RouteHourStatisticsCapture> logger, Guid captureRunId)
+    {
+        if (captureRunId == Guid.Empty) throw new ArgumentException("Capture run ID cannot be empty.", nameof(captureRunId));
         _runtime = runtime;
         _sink = sink;
         _timeProvider = timeProvider;
         _logger = logger;
+        _captureRunId = captureRunId;
     }
 
     public bool IsEnabledFor(string city) => _runtime.IsEnabledFor(city);
@@ -207,7 +335,7 @@ public sealed class RouteHourStatisticsCapture
             var state = GetCityState(cycle.CitySlug);
             var movement = state.ObserveMovement(vehicleId, entry, sourceTimestampUnixSeconds, alongRouteMeters,
                 _timeProvider.GetUtcNow().UtcDateTime, _runtime.Limits.MaxTrackedVehiclesPerCity);
-            if (movement.IdentityLimitExceeded) cycle.MarkFailure("identity_limit_exceeded");
+            if (movement.IdentityLimitExceeded) cycle.MarkMovementIdentityLost(entry.RouteJoinKey);
             cycle.RecordMovement(entry.RouteJoinKey, movement.Accepted, movement.DistanceMeters);
         }
         catch { cycle.MarkFailure(); }
@@ -245,6 +373,8 @@ public sealed class RouteHourStatisticsCapture
         try
         {
             if (failureReason is { } reason) cycle.MarkFailure(RouteHourStatisticRow.ToReason(reason));
+            else if (cycleFailed && !cycle.CaptureFailed) cycle.MarkFailure("capture_failure");
+            if (!publicationKnown) cycle.MarkFailure("publication_unavailable");
             var final = finalCatalog ?? cycle.Catalog;
             var snapshot = cycle.ToSnapshot(completedAtUtc, activityEligible, publicationKnown, cycleFailed, final);
             Enqueue(GetCityState(cycle.CitySlug), GetCityState(cycle.CitySlug).Accumulator.Observe(snapshot));
@@ -322,6 +452,7 @@ public sealed class RouteHourStatisticsCapture
                 if (_sink.TryEnqueue(batch)) continue;
             }
             catch { }
+            state.Accumulator.MarkCaptureLoss("capture_failure");
             SafeLog(() => _logger.LogWarning("Route-hour batch admission failed for {City}; hour={HourStartUtc}, rows={Rows}.",
                 state.CitySlug, batch.HourStartUtc, batch.RowCount));
         }
@@ -337,6 +468,7 @@ public sealed class RouteHourStatisticsCapture
     {
         try { log(); } catch { }
     }
+
 
     sealed class CityState(string citySlug, Guid runId, RouteHourHistoryOptions options, int cadenceLimit)
     {

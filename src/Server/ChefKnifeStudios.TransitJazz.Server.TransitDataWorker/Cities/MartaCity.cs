@@ -31,6 +31,8 @@ public class MartaCity(
         var sources = new List<CityFetchResult> { await FetchBusFeedAsync(ct) };
         if (railOptions.Value.Enabled)
             sources.Add(await FetchRailEntitiesAsync(ct));
+        else
+            sources.Add(DisabledRailSource());
         return CityFetchResult.Combine(sources);
     }
 
@@ -47,7 +49,9 @@ public class MartaCity(
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning("MARTA bus feed returned {StatusCode}", response.StatusCode);
-                return CityFetchResult.FromSources(null, 0, 1, reportedVehicleObservations: FailedBusObservation("source_failure"));
+                return CityFetchResult.FromSources(null, 0, 1,
+                    reportedVehicleObservations: FailedBusObservation("source_failure"),
+                    sourceObservations: [FailedSource("marta-bus", "source_failure")]);
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
@@ -60,7 +64,10 @@ public class MartaCity(
             {
                 SuccessfulObservation(source, receiptUtc, VehicleDescriptorIds(feed))
             };
-            return CityFetchResult.FromSources(feed, 1, 0, reportedVehicleObservations: observations);
+            var sourceEvidence = SuccessfulSource("marta-bus", receiptUtc, feed.Entities.Count == 0,
+                feed.Entities.Count == 0 || HasValidBusPositions(feed));
+            return CityFetchResult.FromSources(feed, 1, 0, reportedVehicleObservations: observations,
+                sourceObservations: [sourceEvidence]);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -70,7 +77,9 @@ public class MartaCity(
         {
             logger.LogWarning("MARTA bus source failed; exception type {ExceptionType}.",
                 StructuredLogRedactor.SafeExceptionType(ex));
-            return CityFetchResult.FromSources(null, 0, 1, reportedVehicleObservations: FailedBusObservation("source_failure"));
+            return CityFetchResult.FromSources(null, 0, 1,
+                reportedVehicleObservations: FailedBusObservation("source_failure"),
+                sourceObservations: [FailedSource("marta-bus", "source_failure")]);
         }
     }
 
@@ -97,7 +106,8 @@ public class MartaCity(
             };
 
             var realtime = arrivals.Where(a =>
-                string.Equals(a.IsRealtime?.Trim(), "true", StringComparison.OrdinalIgnoreCase));
+                string.Equals(a.IsRealtime?.Trim(), "true", StringComparison.OrdinalIgnoreCase)).ToArray();
+            var positionedCoverageValid = realtime.All(IsUsableRealtimePosition);
 
             var parsed = new List<(string TrainId, string Line, double Lat, double Lon, string? EventTime)>();
             foreach (var a in realtime)
@@ -133,7 +143,8 @@ public class MartaCity(
 
             logger.LogDebug("MARTA rail source fetched {Count} train entities.", entities.Count);
             return CityFetchResult.FromSources(new FeedMessage { Entities = entities }, 1, 0,
-                reportedVehicleObservations: observations);
+                reportedVehicleObservations: observations,
+                sourceObservations: [SuccessfulSource("marta-rail", receiptUtc, realtime.Length == 0, positionedCoverageValid)]);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -143,9 +154,47 @@ public class MartaCity(
         {
             logger.LogWarning("MARTA rail source failed; bus path unaffected. Exception type {ExceptionType}.",
                 StructuredLogRedactor.SafeExceptionType(ex));
-            return CityFetchResult.FromSources(null, 0, 1, reportedVehicleObservations: FailedRailObservation());
+            return CityFetchResult.FromSources(null, 0, 1,
+                reportedVehicleObservations: FailedRailObservation(),
+                sourceObservations: [FailedSource("marta-rail", "invalid_source_payload")]);
         }
     }
+
+    CityFetchResult DisabledRailSource()
+    {
+        var receiptUtc = CanonicalUtc(_timeProvider.GetUtcNow());
+        var evidence = new SourceObservationEvidence("marta-rail", "disabled", receiptUtc,
+            "source_disabled", PositionedCoverageValid: false);
+        return CityFetchResult.FromSources(new FeedMessage(), 0, 0, sourceObservations: [evidence]);
+    }
+
+    static SourceObservationEvidence SuccessfulSource(string sourceKey, DateTimeOffset receiptUtc,
+        bool empty, bool positionedCoverageValid) => new(sourceKey, empty ? "empty" : "success",
+        CanonicalUtc(receiptUtc), null, positionedCoverageValid);
+
+    SourceObservationEvidence FailedSource(string sourceKey, string reason) =>
+        new(sourceKey, "failed", CanonicalUtc(_timeProvider.GetUtcNow()), reason, PositionedCoverageValid: false);
+
+    static DateTime CanonicalUtc(DateTimeOffset value)
+    {
+        var ticks = value.UtcDateTime.Ticks;
+        return new DateTime(ticks - ticks % 10, DateTimeKind.Utc);
+    }
+
+    static bool HasValidBusPositions(FeedMessage feed) => feed.Entities.All(entity =>
+        entity.IsDeleted == true || entity.Vehicle is { Position: { } position }
+        && IsValidCoordinate(position.Latitude, position.Longitude));
+
+    static bool IsUsableRealtimePosition(RailArrivalDto arrival) =>
+        !string.IsNullOrWhiteSpace(arrival.TrainId)
+        && !string.IsNullOrWhiteSpace(arrival.Line)
+        && double.TryParse(arrival.Latitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var latitude)
+        && double.TryParse(arrival.Longitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var longitude)
+        && IsValidCoordinate(latitude, longitude);
+
+    static bool IsValidCoordinate(double latitude, double longitude) =>
+        double.IsFinite(latitude) && double.IsFinite(longitude)
+        && latitude is >= -90 and <= 90 && longitude is >= -180 and <= 180;
 
     IEnumerable<ReportedVehicleSourceObservation> FailedBusObservation(string code)
     {
