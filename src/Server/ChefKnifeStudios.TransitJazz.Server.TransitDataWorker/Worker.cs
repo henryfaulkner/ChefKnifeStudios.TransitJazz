@@ -111,85 +111,13 @@ public class Worker(
             foreach (var city in _cities)
             {
                 var cityStart = DateTime.UtcNow;
-                var fetch = CityFetchResult.FromSources(null, 0, 1);
-                var result = CityTickResult.Unhealthy(city, this);
-                var cityHadError = false;
-                var routeCatalog = GetRouteCatalogSnapshot(city.Name);
-                var cityIndex = routeCatalog.Routes;
-                var routeIndexAvailable = routeCatalog.Ready && cityIndex is not null;
-                var initialModeMap = routeCatalog.Categories;
-                var categoryCaptureEnabled = _categoryStatisticsCapture?.IsEnabledFor(city.Name) == true;
-                var categoryCycle = categoryCaptureEnabled
-                    ? _categoryStatisticsCapture!.BeginCycle(city.Name,
-                        initialModeMap?.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToArray() ?? [],
-                        routeCatalog.Generation)
-                    : null;
-                var routeHourCaptureEnabled = _routeHourStatisticsCapture?.IsEnabledFor(city.Name) == true;
-                var routeHourCycle = routeHourCaptureEnabled
-                    ? _routeHourStatisticsCapture!.BeginCycle(city.Name, routeCatalog.RouteHourCatalog)
-                    : null;
-                string? cityExceptionType = null;
-
-                try
-                {
-                    fetch = await city.FetchVehiclesAsync(stoppingToken);
-                    _reportedVehicleCapture?.Observe(city.Name, fetch.ReportedVehicleObservations);
-
-                    if (fetch.Outcome == CityFetchOutcome.Failure)
-                    {
-                        logger.LogWarning("City {City}: input failed, skipping tick.", city.Name);
-                    }
-                    else if (!routeIndexAvailable)
-                    {
-                        // RouteIndexUnavailable is emitted once per transition/reminder below;
-                        // do not produce one free-text warning for every city on every tick.
-                    }
-                    else
-                    {
-                        var modeMap = initialModeMap;
-                        result = fetch.ValidRecordCount > 0
-                            ? await ProcessSpatialReconciliationAsync(city, fetch.Feed, cityIndex!, modeMap, stoppingToken, categoryCycle, routeCatalog, routeHourCycle)
-                            : CityTickResult.Healthy(city, this, fetch.Feed.Header?.Timestamp, cityStart);
-                    }
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    cityHadError = true;
-                    cityExceptionType = StructuredLogRedactor.SafeExceptionType(ex);
-                    _metricsReporter.ReportCityError(city.Name);
-                    logger.LogError("City {City} tick failed; other cities unaffected; exception type {ExceptionType}.",
-                        city.Name, StructuredLogRedactor.SafeExceptionType(ex));
-                }
-
-                var completedAt = DateTimeOffset.UtcNow;
-                var categoryRouteIndexReady = routeCatalog.Ready && routeIndexAvailable && cityIndex is { Count: > 0 };
-                var activityEligible = categoryRouteIndexReady && !cityHadError && result.HealthOk
-                    && result.ProcessingExceptionType is null
-                    && fetch.Outcome is CityFetchOutcome.Success or CityFetchOutcome.Empty;
-                var publicationKnown = categoryRouteIndexReady && !cityHadError && result.HealthOk
-                    && result.ProcessingExceptionType is null
-                    && fetch.Outcome != CityFetchOutcome.Failure
-                    && (!result.PublishAttempted || result.PublishSucceeded == true);
-                var routeHourPublicationKnown = routeCatalog.RouteHourCatalog is { Entries.Count: > 0 }
-                    && routeIndexAvailable && !cityHadError && result.HealthOk
-                    && fetch.Outcome != CityFetchOutcome.Failure
-                    && (!result.PublishAttempted || result.PublishSucceeded == true);
-                _categoryStatisticsCapture?.CompleteCycle(categoryCycle, activityEligible, publicationKnown,
-                    !activityEligible || !publicationKnown, completedAt.UtcDateTime);
-                var finalRouteHourCatalog = routeHourCaptureEnabled ? GetRouteCatalogSnapshot(city.Name).RouteHourCatalog : null;
-                RouteHourIncompleteReason? routeHourFailure = fetch.Outcome == CityFetchOutcome.Failure
-                    ? RouteHourIncompleteReason.SourceFailure
-                    : !routeIndexAvailable || routeCatalog.RouteHourCatalog is null
-                        ? RouteHourIncompleteReason.RouteIndexUnavailable
-                        : result.ProcessingExceptionType is not null || cityHadError
-                            ? RouteHourIncompleteReason.ProcessingFailure
-                            : !publicationKnown ? RouteHourIncompleteReason.PublicationUnavailable : null;
-                _routeHourStatisticsCapture?.CompleteCycle(routeHourCycle, activityEligible, routeHourPublicationKnown,
-                    !activityEligible || !routeHourPublicationKnown, completedAt.UtcDateTime, finalRouteHourCatalog, routeHourFailure);
+                var cityCycle = await ExecuteCityCycleAsync(city, stoppingToken, cityStart);
+                var fetch = cityCycle.Fetch;
+                var result = cityCycle.Result;
+                var cityHadError = cityCycle.CityHadError;
+                var cityExceptionType = cityCycle.ExceptionType;
+                var routeIndexAvailable = cityCycle.RouteIndexAvailable;
+                var completedAt = cityCycle.CompletedAt;
                 _metricsReporter.ReportCityCycle(new CityCycleMetrics(
                     city.Name, completedAt, fetch, result, completedAt.UtcDateTime - cityStart,
                     result.VehiclesProcessed > 0 || result.TonesEmitted > 0, cityHadError));
@@ -261,6 +189,189 @@ public class Worker(
                     _cities.Count));
             }
         }
+    }
+
+    internal readonly record struct CityCycleExecution(
+        CityFetchResult Fetch,
+        CityTickResult Result,
+        bool CityHadError,
+        string? ExceptionType,
+        bool RouteIndexAvailable,
+        DateTimeOffset CompletedAt);
+
+    /// <summary>Runs the same fetch, reconciliation and capture path used by the hosted cycle.
+    /// The optional fixed instant is an internal deterministic test seam; the hosted scheduler
+    /// continues to supply wall-clock time and owns cycle cadence.</summary>
+    internal async Task<CityCycleExecution> ExecuteCityCycleAsync(
+        ITransitCity city,
+        CancellationToken stoppingToken,
+        DateTime? cityStartUtc = null,
+        DateTimeOffset? completedAtUtc = null)
+    {
+        var cityStart = cityStartUtc ?? DateTime.UtcNow;
+        var fetch = CityFetchResult.FromSources(null, 0, 1);
+        var result = CityTickResult.Unhealthy(city, this);
+        var cityHadError = false;
+        var routeCatalog = GetRouteCatalogSnapshot(city.Name);
+        var cityIndex = routeCatalog.Routes;
+        var routeIndexAvailable = routeCatalog.Ready && cityIndex is not null;
+        var initialModeMap = routeCatalog.Categories;
+        var categoryCaptureEnabled = _categoryStatisticsCapture?.IsEnabledFor(city.Name) == true;
+        var categoryCycle = categoryCaptureEnabled
+            ? _categoryStatisticsCapture!.BeginCycle(city.Name,
+                initialModeMap?.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToArray() ?? [],
+                routeCatalog.Generation)
+            : null;
+        var routeHourCaptureEnabled = _routeHourStatisticsCapture?.IsEnabledFor(city.Name) == true;
+        var routeHourCycle = routeHourCaptureEnabled
+            ? _routeHourStatisticsCapture!.BeginCycle(city.Name, routeCatalog.RouteHourCatalog)
+            : null;
+        string? cityExceptionType = null;
+
+        try
+        {
+            fetch = await city.FetchVehiclesAsync(stoppingToken);
+            _reportedVehicleCapture?.Observe(city.Name, fetch.ReportedVehicleObservations);
+
+            if (fetch.Outcome == CityFetchOutcome.Failure)
+            {
+                logger.LogWarning("City {City}: input failed, skipping tick.", city.Name);
+            }
+            else if (!routeIndexAvailable)
+            {
+                // RouteIndexUnavailable is emitted once per transition/reminder below;
+                // do not produce one free-text warning for every city on every tick.
+            }
+            else
+            {
+                result = fetch.ValidRecordCount > 0
+                    ? await ProcessSpatialReconciliationAsync(city, fetch.Feed, cityIndex!, initialModeMap,
+                        stoppingToken, categoryCycle, routeCatalog, routeHourCycle)
+                    : CityTickResult.Healthy(city, this, fetch.Feed.Header?.Timestamp, cityStart);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            cityHadError = true;
+            cityExceptionType = StructuredLogRedactor.SafeExceptionType(ex);
+            _metricsReporter.ReportCityError(city.Name);
+            logger.LogError("City {City} tick failed; other cities unaffected; exception type {ExceptionType}.",
+                city.Name, StructuredLogRedactor.SafeExceptionType(ex));
+        }
+
+        var completedAt = completedAtUtc ?? DateTimeOffset.UtcNow;
+        var sourceInventory = routeCatalog.RouteHourCatalog?.ResolveSourceInventory(city.Name);
+        var hasSourceEvidence = routeHourCycle is not null
+            && sourceInventory is { MembershipKnown: true }
+            && SourceObservationsMatchInventory(sourceInventory, fetch.SourceObservations);
+        if (hasSourceEvidence)
+            AttachRouteHourSourceEvidence(routeHourCycle!, sourceInventory!, fetch.SourceObservations);
+
+        var categoryRouteIndexReady = routeCatalog.Ready && routeIndexAvailable && cityIndex is { Count: > 0 };
+        var activityEligible = categoryRouteIndexReady && !cityHadError && result.HealthOk
+            && result.ProcessingExceptionType is null
+            && fetch.Outcome is CityFetchOutcome.Success or CityFetchOutcome.Empty;
+        var publicationKnown = categoryRouteIndexReady && !cityHadError && result.HealthOk
+            && result.ProcessingExceptionType is null
+            && fetch.Outcome != CityFetchOutcome.Failure
+            && (!result.PublishAttempted || result.PublishSucceeded == true);
+        var routeHourHasSourceSupport = hasSourceEvidence
+            ? HasSupportedRouteSource(sourceInventory!, fetch.SourceObservations)
+            : fetch.Outcome is CityFetchOutcome.Success or CityFetchOutcome.Empty;
+        var routeHourActivityEligible = routeCatalog.RouteHourCatalog is { Entries.Count: > 0 }
+            && routeIndexAvailable && !cityHadError && result.HealthOk
+            && result.ProcessingExceptionType is null && routeHourHasSourceSupport;
+        var routeHourPublicationKnown = routeCatalog.RouteHourCatalog is { Entries.Count: > 0 }
+            && routeIndexAvailable && !cityHadError && result.HealthOk
+            && result.ProcessingExceptionType is null && routeHourHasSourceSupport
+            && (!result.PublishAttempted || result.PublishSucceeded == true);
+        _categoryStatisticsCapture?.CompleteCycle(categoryCycle, activityEligible, publicationKnown,
+            !activityEligible || !publicationKnown, completedAt.UtcDateTime);
+        var finalRouteHourCatalog = routeHourCaptureEnabled ? GetRouteCatalogSnapshot(city.Name).RouteHourCatalog : null;
+        RouteHourIncompleteReason? routeHourFailure = fetch.Outcome == CityFetchOutcome.Failure
+            ? RouteHourIncompleteReason.SourceFailure
+            : !routeIndexAvailable || routeCatalog.RouteHourCatalog is null
+                ? RouteHourIncompleteReason.RouteIndexUnavailable
+                : result.ProcessingExceptionType is not null || cityHadError
+                    ? RouteHourIncompleteReason.ProcessingFailure
+                    : !publicationKnown ? RouteHourIncompleteReason.PublicationUnavailable : null;
+        _routeHourStatisticsCapture?.CompleteCycle(routeHourCycle, routeHourActivityEligible, routeHourPublicationKnown,
+            !routeHourActivityEligible || !routeHourPublicationKnown, completedAt.UtcDateTime, finalRouteHourCatalog, routeHourFailure);
+
+        return new CityCycleExecution(fetch, result, cityHadError, cityExceptionType,
+            routeIndexAvailable, completedAt);
+    }
+
+    static bool SourceObservationsMatchInventory(RouteHourSourceInventory inventory,
+        ImmutableArray<SourceObservationEvidence> observations)
+    {
+        if (observations.IsDefault || observations.Length != inventory.ExpectedSourceKeys.Length) return false;
+        var keys = observations.Select(observation => observation.SourceKey).Order(StringComparer.Ordinal).ToArray();
+        return keys.SequenceEqual(inventory.ExpectedSourceKeys, StringComparer.Ordinal)
+            && keys.Distinct(StringComparer.Ordinal).Count() == keys.Length;
+    }
+
+    static bool HasSupportedRouteSource(RouteHourSourceInventory inventory,
+        ImmutableArray<SourceObservationEvidence> observations)
+    {
+        var byKey = observations.ToDictionary(observation => observation.SourceKey, StringComparer.Ordinal);
+        return inventory.RouteDependencies.Any(dependency => dependency.SourceKeys.Length > 0
+            && dependency.SourceKeys.All(key => byKey.TryGetValue(key, out var source)
+                && (source.Outcome is "success" or "empty") && source.PositionedCoverageValid));
+    }
+
+    static void AttachRouteHourSourceEvidence(RouteHourStatisticsCycle cycle,
+        RouteHourSourceInventory inventory,
+        ImmutableArray<SourceObservationEvidence> observations)
+    {
+        var byKey = observations.ToDictionary(observation => observation.SourceKey, StringComparer.Ordinal);
+        foreach (var dependency in inventory.RouteDependencies)
+        {
+            var routeSources = dependency.SourceKeys.Order(StringComparer.Ordinal).ToImmutableArray();
+            var sources = routeSources.Select(key => BuildSourceHourEvidence(key,
+                byKey.TryGetValue(key, out var observation) ? observation : null)).ToImmutableArray();
+            var fingerprint = RouteHourSourceSummary.ComputeSourceSetFingerprint(routeSources, [dependency]);
+            var summary = new RouteHourSourceSummary
+            {
+                SourceSetFingerprint = fingerprint,
+                ExpectedSourceKeys = routeSources,
+                ContributingSourceKeys = sources.Where(source => source.SuccessfulSupportCount > 0 && source.PositionedCoverageValid)
+                    .Select(source => source.SourceKey).ToImmutableArray(),
+                MembershipKnown = true,
+                Sources = sources,
+            };
+            cycle.AttachSourceEvidence(dependency.RouteJoinKey, summary);
+        }
+    }
+
+    static SourceHourEvidenceSummary BuildSourceHourEvidence(string sourceKey, SourceObservationEvidence? observation)
+    {
+        if (observation is null)
+            return new(sourceKey, 0, 0, 1, 0, null, null, null,
+                false, false, false, false, ["unknown_source_provenance"]);
+
+        observation.Validate();
+        if (observation.Outcome is "success" or "empty")
+        {
+            var invalidPositions = !observation.PositionedCoverageValid;
+            return new(sourceKey,
+                observation.Outcome == "success" ? 1 : 0,
+                observation.Outcome == "empty" ? 1 : 0,
+                0, 0,
+                observation.ReceiptUtc, observation.ReceiptUtc, 0,
+                false, false, observation.PositionedCoverageValid, false,
+                invalidPositions ? ["invalid_source_positions"] : []);
+        }
+
+        var disabled = observation.Outcome == "disabled";
+        var reason = disabled ? "source_disabled"
+            : observation.FailureReason is "unknown_source_provenance" ? "unknown_source_provenance" : "source_failure";
+        return new(sourceKey, 0, 0, disabled ? 0 : 1, disabled ? 1 : 0,
+            null, null, null, false, false, false, false, [reason]);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

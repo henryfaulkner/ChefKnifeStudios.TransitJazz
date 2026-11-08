@@ -46,6 +46,10 @@ public sealed class CityRouteHourStatisticModelTests
         Assert.Equal(0, row.ActiveVehicleCountSum);
         Assert.Null(row.DistinctActiveVehicleCount);
         Assert.Equal(["boundary_unproven"], row.IncompleteReasons);
+        Assert.Null(row.SourceEvidence);
+        Assert.Null(row.DistanceValid);
+        Assert.Null(row.ActivityValid);
+        Assert.Null(row.PublicationValid);
     }
 
     static CityRouteHourStatistic PartialRow() => new()

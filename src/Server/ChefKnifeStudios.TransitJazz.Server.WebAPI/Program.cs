@@ -167,11 +167,12 @@ builder.Services.ConfigureHttpJsonOptions(static options =>
     JsonSettings.ApplyTo(options.SerializerOptions);
 });
 
+var railRealtimeSection = builder.Configuration.GetSection(RailRealtimeOptions.SectionName);
 builder.Services.AddHttpClient("RailRealtimeApi", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Cities:0:RailRealtime:BaseUrl"]!);
+    client.BaseAddress = new Uri(railRealtimeSection["BaseUrl"]!);
 });
-builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection("Cities:0:RailRealtime"));
+builder.Services.Configure<RailRealtimeOptions>(railRealtimeSection);
 builder.Services.AddSingleton<MartaCity>();
 
 var cityConfigs = builder.Configuration.GetSection("Cities").Get<List<CityConfig>>() ?? [];
@@ -270,6 +271,7 @@ var nymtaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityName
 var martaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Marta, StringComparison.OrdinalIgnoreCase));
 builder.Services.PostConfigure<RailRealtimeOptions>(options =>
 {
+    options.Enabled = martaConfig?.RailRealtime?.Enabled == true;
     options.ReportedVehicleCaptureEnabled = reportedVehicleConfiguration.Runtime.IsEnabledFor(CityNames.Marta);
     options.BusReportedVehicleSource = martaConfig?.ReportedVehicleSources.SingleOrDefault();
     options.RailReportedVehicleSource = martaConfig?.RailRealtime?.ReportedVehicleSource;

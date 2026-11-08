@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Collections.Generic;
 
 namespace ChefKnifeStudios.TransitJazz.Client.Core.Services;
 
@@ -12,6 +13,8 @@ public interface IHttpService
     Task<Result<T>> GetAsync<T>(string? requestUri, CancellationToken ct = default);
     Task<Result<T>> PostAsync<X, T>(string? requestUri, X body, CancellationToken ct = default);
     Task<HttpServiceResponse<T>> PostWithMetadataAsync<X, T>(string? requestUri, X body, CancellationToken ct = default);
+    Task<HttpServiceResponse<T>> PostWithMetadataAsync<X, T>(
+        string? requestUri, X body, IReadOnlyDictionary<string, string> requestHeaders, CancellationToken ct = default);
     Task<Result> PostAsync<X>(string? requestUri, X body, CancellationToken ct = default);
     Task<Result<T>> PutAsync<X, T>(string? requestUri, X body, CancellationToken ct = default);
     Task<Result<T>> PatchAsync<X, T>(string? requestUri, X body, CancellationToken ct = default);
@@ -80,11 +83,28 @@ public class HttpService : IHttpService
     }
 
     /// <summary>Opt-in POST path for callers that need safe status and retry metadata.</summary>
-    public async Task<HttpServiceResponse<T>> PostWithMetadataAsync<X, T>(string? requestUri, X body, CancellationToken ct = default)
+    public Task<HttpServiceResponse<T>> PostWithMetadataAsync<X, T>(string? requestUri, X body, CancellationToken ct = default) =>
+        PostWithMetadataAsync<X, T>(requestUri, body, EmptyHeaders, ct);
+
+    static readonly IReadOnlyDictionary<string, string> EmptyHeaders = new Dictionary<string, string>();
+
+    public async Task<HttpServiceResponse<T>> PostWithMetadataAsync<X, T>(
+        string? requestUri, X body, IReadOnlyDictionary<string, string> requestHeaders, CancellationToken ct = default)
     {
         try
         {
-            using var response = await _client.PostAsJsonAsync(requestUri, body, _options, ct);
+            ArgumentNullException.ThrowIfNull(requestHeaders);
+            using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+            {
+                Content = JsonContent.Create(body, options: _options)
+            };
+            foreach (var (name, value) in requestHeaders)
+            {
+                if (!request.Headers.TryAddWithoutValidation(name, value))
+                    return new HttpServiceResponse<T>(Result<T>.Error("request_failed"), null, "request_failed", null);
+            }
+
+            using var response = await _client.SendAsync(request, ct);
             var retryAfter = GetRetryAfter(response);
             if (response.IsSuccessStatusCode)
             {
@@ -126,7 +146,7 @@ public class HttpService : IHttpService
     static readonly HashSet<string> SafeProblemCodes = new(StringComparer.Ordinal)
     {
         "stats_disabled", "dependency_unavailable", "invalid_request", "request_too_large",
-        "unsupported_media_type", "invalid_scope", "invalid_city", "invalid_route_key",
+        "unsupported_media_type", "unsupported_stats_contract", "invalid_scope", "invalid_city", "invalid_route_key",
         "scope_too_large", "response_too_large", "busy", "read_timeout", "rate_limited"
     };
 

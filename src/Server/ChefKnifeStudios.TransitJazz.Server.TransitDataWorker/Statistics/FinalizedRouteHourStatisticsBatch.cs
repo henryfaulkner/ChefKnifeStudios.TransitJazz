@@ -66,6 +66,17 @@ public sealed record RouteHourStatisticRow(
     long CrossingsSuppressedTransfer)
 {
     public static string Definition => "observed-city-route-hour-statistics-v1";
+    public static string SourceEvidenceDefinition => "observed-city-route-hour-statistics-v2";
+
+    public RouteHourSourceSummary? SourceEvidence { get; init; }
+    public bool? DistanceValid { get; init; }
+    public bool? ActivityValid { get; init; }
+    public bool? PublicationValid { get; init; }
+    public ImmutableArray<string>? DistanceReasons { get; init; }
+    public ImmutableArray<string>? ActivityReasons { get; init; }
+    public ImmutableArray<string>? PublicationReasons { get; init; }
+    public string? SourceSetFingerprint { get; init; }
+    public string? ActivitySupportFingerprint { get; init; }
 
     public void Validate()
     {
@@ -129,6 +140,66 @@ public sealed record RouteHourStatisticRow(
             && (ValidActiveSampleCount != 0 || ValidPublishCycleCount != 0 || ActiveVehicleCountSum != 0 || PeakActiveVehicleCount != 0
                 || DistanceMetersSum != 0 || DistanceIntervalCount != 0 || CrossingsPublishedCount != 0))
             throw new ArgumentException("NoData rows cannot contain eligible measures.");
+
+        ValidateVersionedEvidence();
+    }
+
+    void ValidateVersionedEvidence()
+    {
+        if (DefinitionVersion != SourceEvidenceDefinition)
+        {
+            if (SourceEvidence is not null || DistanceValid is not null || ActivityValid is not null || PublicationValid is not null
+                || DistanceReasons is not null || ActivityReasons is not null || PublicationReasons is not null
+                || SourceSetFingerprint is not null || ActivitySupportFingerprint is not null)
+                throw new ArgumentException("Legacy route-hour rows must keep v2 evidence unknown.");
+            return;
+        }
+
+        if (SourceEvidence is null || DistanceValid is null || ActivityValid is null || PublicationValid is null
+            || DistanceReasons is not { } distanceReasons || ActivityReasons is not { } activityReasons
+            || PublicationReasons is not { } publicationReasons || SourceSetFingerprint is null)
+            throw new ArgumentException("V2 route-hour rows require explicit source and measure evidence.");
+
+        SourceEvidence.Validate(HourStartUtc, SourceSetFingerprint);
+        ValidateMeasureReasons(distanceReasons, nameof(DistanceReasons));
+        ValidateMeasureReasons(activityReasons, nameof(ActivityReasons));
+        ValidateMeasureReasons(publicationReasons, nameof(PublicationReasons));
+        SourceEvidenceValidation.ValidateFingerprint(SourceSetFingerprint, nameof(SourceSetFingerprint));
+        if (ActivitySupportFingerprint is not null)
+            SourceEvidenceValidation.ValidateFingerprint(ActivitySupportFingerprint, nameof(ActivitySupportFingerprint));
+        if (ActivityValid.Value && ActivitySupportFingerprint is null)
+            throw new ArgumentException("Valid activity requires a proven support fingerprint.");
+        if (!ActivityValid.Value && ActivitySupportFingerprint is not null)
+            throw new ArgumentException("Invalid activity cannot retain an unproven support fingerprint.");
+        if (!SourceEvidence.MembershipKnown && (DistanceValid.Value || ActivityValid.Value || PublicationValid.Value))
+            throw new ArgumentException("Unknown route membership cannot support valid v2 measures.");
+        if (!DistanceValid.Value && distanceReasons.Length == 0
+            || !ActivityValid.Value && activityReasons.Length == 0
+            || !PublicationValid.Value && publicationReasons.Length == 0)
+            throw new ArgumentException("Invalid v2 measures require explicit bounded reasons.");
+        if (CollectionStatus == RouteHourCoverageStatus.Complete
+            && (!DistanceValid.Value || !ActivityValid.Value || !PublicationValid.Value
+                || !SourceEvidence.MembershipKnown || SourceEvidence.ExpectedSourceKeys.Length == 0
+                || SourceEvidence.Sources.Any(source => source.FailedPollCount != 0 || source.DisabledPollCount != 0
+                    || !source.PositionedCoverageValid || source.RecoveredDuringHour || !source.StartBoundaryOk || !source.EndBoundaryOk)))
+            throw new ArgumentException("Complete v2 rows require intact measures and complete source support.");
+    }
+
+    static readonly ImmutableHashSet<string> AllowedMeasureReasons =
+    [
+        "boundary_unproven", "capture_failure", "catalog_changed", "gap_exceeded", "identity_limit_exceeded",
+        "invalid_measure_evidence", "invalid_source_positions", "population_incomplete", "processing_failure",
+        "publication_unavailable", "route_index_unavailable", "source_disabled", "source_failure",
+        "source_recovered", "unaligned_activity_samples", "unknown_source_provenance", "unsupported_definition",
+    ];
+
+    static void ValidateMeasureReasons(ImmutableArray<string> reasons, string parameterName)
+    {
+        if (reasons.IsDefault || reasons.Length > SourceEvidenceValidation.MaximumReasons
+            || reasons.Any(reason => !AllowedMeasureReasons.Contains(reason))
+            || reasons.Distinct(StringComparer.Ordinal).Count() != reasons.Length
+            || !reasons.SequenceEqual(reasons.Order(StringComparer.Ordinal)))
+            throw new ArgumentException("Measure reasons must be recognized, unique and ordinally sorted.", parameterName);
     }
 
     static readonly ImmutableHashSet<string> AllowedReasons = Enum.GetValues<RouteHourIncompleteReason>()

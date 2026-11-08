@@ -236,7 +236,7 @@ a follow-up only if the running app demands it.
 
 ## 7. Security & Config
 
-- **API key:** load `Marta:RailRealtime:ApiKey` (and the base URL) from configuration /
+- **API key:** load `TransitSources:atlanta:RailRealtime:ApiKey` (and the base URL) from configuration /
   environment / user-secrets. **Never commit the key.** Mirrors the feature-012 FR-020
   remediation (committed Azure key → env var).
 - **TLS:** endpoint is on port `18096` with HTTPS; use the standard
@@ -256,7 +256,7 @@ a follow-up only if the running app demands it.
 | `…/TransitDataWorker/RailRealtime/RailArrivalDto.cs` | **NEW** — JSON DTO mirroring the feed | Server |
 | `…/TransitDataWorker/Worker.cs` | fetch rail feed + merge entities into reconciliation tick | Server |
 | `…/TransitDataWorker/Program.cs` (or DI extension) | register adapter + named HttpClient + config binding | Server |
-| `appsettings*.json` | add `Marta:RailRealtime` base URL (key via secrets/env) | Server |
+| `appsettings*.json` | add `TransitSources:atlanta:RailRealtime` base URL (key via secrets/env) | Server |
 | GtfsStatic loader | **none** — rail already ingested | — |
 | Client (map / synth / SignalR) | **none** — animator + synth auto-handle any route key (OQ-3, OQ-4) | — |
 | Tone/voice palette data | **none** — `transit-synth.js` auto-assigns voices by hashing the route key (OQ-4) | — |

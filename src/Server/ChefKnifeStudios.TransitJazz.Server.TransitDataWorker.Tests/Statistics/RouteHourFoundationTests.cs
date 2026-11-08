@@ -28,6 +28,29 @@ public sealed class RouteHourFoundationTests
     }
 
     [Fact]
+    public void OptionsRetainTheDocumentedMaximumCatalogAndWriterBounds()
+    {
+        var options = new RouteHourHistoryOptions
+        {
+            MaxRoutesPerCityHour = 16_384,
+            MaxRowsPerCommand = 128,
+            MaxWriteAttempts = 3,
+        };
+
+        options.Validate(10, ["atlanta"]);
+
+        Assert.Equal(16_384, options.MaxRoutesPerCityHour);
+        Assert.Equal(16, options.QueueCapacity);
+        Assert.Equal(25_000, options.MaxTrackedVehiclesPerCity);
+        Assert.Equal(50_000, options.MaxVehicleRouteMembershipsPerCityHour);
+        Assert.Equal(128, options.MaxRowsPerCommand);
+        Assert.Equal(3, options.MaxWriteAttempts);
+
+        options.MaxRowsPerCommand = 129;
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.Validate(10, ["atlanta"]));
+    }
+
+    [Fact]
     public void FingerprintMatchesContractVectorAndIgnoresStaticIdInputOrder()
     {
         var points = ImmutableArray.Create(new RouteHourGeometryPoint(33.749, -84.388), new RouteHourGeometryPoint(33.75, -84.387));
@@ -76,6 +99,17 @@ public sealed class RouteHourFoundationTests
 
         var excessiveScale = RouteHourCaptureFixture.Row() with { DistanceMetersSum = 0.0000001m };
         Assert.Throws<ArgumentOutOfRangeException>(excessiveScale.Validate);
+    }
+
+    [Fact]
+    public void LegacyWorkerRowsKeepV2EvidenceAndMeasureValidityUnknown()
+    {
+        var legacy = RouteHourCaptureFixture.Row();
+
+        Assert.Null(legacy.SourceEvidence);
+        Assert.Null(legacy.DistanceValid);
+        Assert.Null(legacy.ActivityValid);
+        Assert.Null(legacy.PublicationValid);
     }
 
     [Fact]

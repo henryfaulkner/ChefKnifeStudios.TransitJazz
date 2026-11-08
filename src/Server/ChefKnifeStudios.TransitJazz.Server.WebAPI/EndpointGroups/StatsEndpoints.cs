@@ -5,6 +5,7 @@ using System.IO;
 using System.Text.Json;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
@@ -53,8 +54,20 @@ public static class StatsEndpoints
         }
 
         request.HttpContext.Response.Headers.CacheControl = "no-store";
+        EnsureContractVary(request.HttpContext.Response);
         if (!options.Enabled) return Finish(Problem("stats_disabled", StatusCodes.Status503ServiceUnavailable),
             StatusCodes.Status503ServiceUnavailable, "stats_disabled");
+
+        string contractVersion;
+        try
+        {
+            contractVersion = StatsOverlayPolicy.NormalizeContract(request.Headers);
+        }
+        catch (StatsOverlayRequestException exception)
+        {
+            return Finish(Problem(exception.Code, exception.StatusCode), exception.StatusCode, exception.Code);
+        }
+
         if (request.ContentLength is > 0 && request.ContentLength > options.MaximumRequestBytes)
         {
             requestBytes = request.ContentLength.Value;
@@ -97,7 +110,7 @@ public static class StatsEndpoints
         scope = query?.Scope switch { "city" => "city", "all" => "all", _ => "unknown" };
         try
         {
-            var response = await service.ReadAsync(query, cancellationToken);
+            var response = await service.ReadAsync(query, contractVersion, cancellationToken);
             return Finish(Results.Json(response, JsonSettings.DefaultOptions, statusCode: StatusCodes.Status200OK),
                 StatusCodes.Status200OK);
         }
@@ -121,4 +134,12 @@ public static class StatsEndpoints
         statusCode: statusCode,
         title: code,
         extensions: new Dictionary<string, object?> { ["code"] = code });
+
+    static void EnsureContractVary(HttpResponse response)
+    {
+        var headerName = StatsOverlayPolicy.ContractHeaderName;
+        if (!response.Headers.Vary.ToString().Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Contains(headerName, StringComparer.OrdinalIgnoreCase))
+            response.Headers.Append("Vary", headerName);
+    }
 }

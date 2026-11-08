@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
+using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Shared;
 using Microsoft.Extensions.Configuration;
 using Xunit;
@@ -66,6 +67,39 @@ public class CityConfigParityTests
             $"CityNames registry and Worker config disagree. Registry-only: [{string.Join(",", registry.Except(worker))}], Config-only: [{string.Join(",", worker.Except(registry))}]");
         Assert.True(registry.SetEquals(webApi),
             $"CityNames registry and WebAPI config disagree. Registry-only: [{string.Join(",", registry.Except(webApi))}], Config-only: [{string.Join(",", webApi.Except(registry))}]");
+    }
+
+    [Theory]
+    [InlineData("src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json")]
+    [InlineData("src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json")]
+    public void atlanta_rail_settings_bind_from_named_city_section(string appsettingsRelativePath)
+    {
+        var overrides = new Dictionary<string, string?>
+        {
+            ["Cities:0:RailRealtime:BaseUrl"] = "https://wrong-index.invalid/rail",
+            [$"{RailRealtimeOptions.SectionName}:ApiKey"] = "test-key",
+        };
+        var config = BuildConfiguration(appsettingsRelativePath, overrides);
+        var options = config.GetSection(RailRealtimeOptions.SectionName).Get<RailRealtimeOptions>()!;
+        var atlanta = config.GetSection("Cities").Get<List<CityConfig>>()!
+            .Single(city => city.Name == CityNames.Marta);
+
+        Assert.Equal("TransitSources:atlanta:RailRealtime", RailRealtimeOptions.SectionName);
+        Assert.Equal("https://developerservices.itsmarta.com/mcsmrail/itsmarta/railrealtimearrivals/developerservices/traindata",
+            options.BaseUrl);
+        Assert.Equal("test-key", options.ApiKey);
+        Assert.True(atlanta.RailRealtime?.Enabled);
+    }
+
+    [Theory]
+    [InlineData("src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.Development.json")]
+    [InlineData("src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.Development.json")]
+    public void local_atlanta_rail_api_key_is_present_and_empty(string appsettingsRelativePath)
+    {
+        var options = BuildConfiguration(appsettingsRelativePath, new Dictionary<string, string?>())
+            .GetSection(RailRealtimeOptions.SectionName).Get<RailRealtimeOptions>()!;
+
+        Assert.Equal(string.Empty, options.ApiKey);
     }
 
     [Fact]
@@ -146,12 +180,15 @@ public class CityConfigParityTests
 
     static List<CityConfig> BindCities(string relativePath, IDictionary<string, string?> overrides)
     {
-        var config = new ConfigurationBuilder()
+        var config = BuildConfiguration(relativePath, overrides);
+        return config.GetSection("Cities").Get<List<CityConfig>>()!;
+    }
+
+    static IConfigurationRoot BuildConfiguration(string relativePath, IDictionary<string, string?> overrides) =>
+        new ConfigurationBuilder()
             .AddJsonFile(Path.Combine(RepoRoot(), relativePath), optional: false)
             .AddInMemoryCollection(overrides)
             .Build();
-        return config.GetSection("Cities").Get<List<CityConfig>>()!;
-    }
 
     static void AssertOneSeattle(IReadOnlyList<CityConfig> cities)
     {

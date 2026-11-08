@@ -13,6 +13,52 @@ public sealed class StatsOverlayCacheTests
     static readonly DateTimeOffset Start = new(2026, 1, 2, 12, 2, 30, TimeSpan.Zero);
 
     [Fact]
+    public async Task ContractVariantsKeepSeparateRetainedSelectionSlots()
+    {
+        var query = new CountingQuery();
+        var service = new StatsOverlayService(query, Options("atlanta"), new MutableTimeProvider(Start));
+        var request = AllRequest();
+
+        var v1 = await service.ReadAsync(request, StatsOverlayVocabulary.ContractVersion, CancellationToken.None);
+        var v2 = await service.ReadAsync(request, StatsOverlayVocabulary.ContractVersionV2, CancellationToken.None);
+        var v1Warm = await service.ReadAsync(request, StatsOverlayVocabulary.ContractVersion, CancellationToken.None);
+        var v2Warm = await service.ReadAsync(request, StatsOverlayVocabulary.ContractVersionV2, CancellationToken.None);
+
+        Assert.Equal(StatsOverlayVocabulary.ContractVersion, v1.ContractVersion);
+        Assert.Equal(StatsOverlayVocabulary.ContractVersionV2, v2.ContractVersion);
+        Assert.Equal(v1.GeneratedAtUtc, v1Warm.GeneratedAtUtc);
+        Assert.Equal(v2.GeneratedAtUtc, v2Warm.GeneratedAtUtc);
+        Assert.Equal(2, query.Calls);
+        Assert.Equal(2, GetCacheCount(service));
+    }
+
+    [Fact]
+    public async Task ContractVariantsShareTheGlobalFourReadAdmissionLimit()
+    {
+        var query = new BlockingQuery(expectedStarts: 4);
+        var service = new StatsOverlayService(query, Options("atlanta"), new MutableTimeProvider(Start));
+        var fills = new[]
+        {
+            service.ReadAsync(AllRequest(), StatsOverlayVocabulary.ContractVersion, CancellationToken.None),
+            service.ReadAsync(AllRequest(), StatsOverlayVocabulary.ContractVersionV2, CancellationToken.None),
+            service.ReadAsync(CityRequest("atlanta", ["route-a"]), StatsOverlayVocabulary.ContractVersion, CancellationToken.None),
+            service.ReadAsync(CityRequest("atlanta", ["route-a"]), StatsOverlayVocabulary.ContractVersionV2, CancellationToken.None),
+        };
+
+        await query.AllStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(4, query.Calls);
+        var fifth = await Assert.ThrowsAsync<StatsOverlayRequestException>(() => service.ReadAsync(
+            CityRequest("atlanta", ["route-b"]), StatsOverlayVocabulary.ContractVersionV2, CancellationToken.None));
+        Assert.Equal("busy", fifth.Code);
+
+        query.Release.TrySetResult();
+        var responses = await Task.WhenAll(fills);
+        Assert.Equal(4, responses.Length);
+        Assert.Equal(2, responses.Count(response => response.ContractVersion == StatsOverlayVocabulary.ContractVersion));
+        Assert.Equal(2, responses.Count(response => response.ContractVersion == StatsOverlayVocabulary.ContractVersionV2));
+    }
+
+    [Fact]
     public async Task ManualClockControlsTaskDelayMonotonicallyAndCleansUpTimers()
     {
         var clock = new StatsOverlayTestTimeProvider(Start);

@@ -36,7 +36,7 @@ public sealed class StatsOverlayService(
     sealed record CacheEntry(string IdentityKey, StatsOverlayResponse Response, long EstimatedBytes,
         DateTimeOffset CreatedAt, DateTimeOffset ExpiresAtUtc, long CreatedAtTimestamp, TimeSpan Lifetime,
         bool IsFiltered, long LastAccessSequence);
-    sealed record SelectionIdentity(string Scope, string? CitySlug, string[] RouteJoinKeys);
+    sealed record SelectionIdentity(string ContractVersion, string Scope, string? CitySlug, string[] RouteJoinKeys);
     sealed record ConfiguredCityIdentity(string CitySlug, string DisplayNameKey, string TimeZoneId, int HealthyCadenceLimitSeconds);
     sealed record PlannedCityIdentity(string CitySlug, DateOnly LocalDate, string TimeZoneId, int HealthyCadenceLimitSeconds,
         DateTime LocalDayStartUtc, DateTime LocalDayEndUtc);
@@ -144,8 +144,14 @@ public sealed class StatsOverlayService(
         }
     }
 
-    public async Task<StatsOverlayResponse> ReadAsync(StatsOverlayRequest? request, CancellationToken cancellationToken)
+    public Task<StatsOverlayResponse> ReadAsync(StatsOverlayRequest? request, CancellationToken cancellationToken) =>
+        ReadAsync(request, StatsOverlayVocabulary.ContractVersion, cancellationToken);
+
+    public async Task<StatsOverlayResponse> ReadAsync(StatsOverlayRequest? request, string contractVersion,
+        CancellationToken cancellationToken)
     {
+        if (contractVersion is not (StatsOverlayVocabulary.ContractVersion or StatsOverlayVocabulary.ContractVersionV2))
+            throw new StatsOverlayRequestException("unsupported_stats_contract", 400);
         if (!options.Enabled) throw new StatsOverlayRequestException("stats_disabled", 503);
         try
         {
@@ -160,8 +166,8 @@ public sealed class StatsOverlayService(
         var asOf = timeProvider.GetUtcNow();
         var plan = StatsOverlayPolicy.Resolve(normalized, options, asOf);
         var generatedAtTimestamp = timeProvider.GetTimestamp();
-        var key = BuildCacheKey(normalized, plan, options);
-        var cacheScope = CacheScopeKey(normalized);
+        var key = BuildCacheKey(normalized, plan, options, contractVersion);
+        var cacheScope = CacheScopeKey(normalized, contractVersion);
         var selectionKind = RouteKeys(normalized).Length > 0 ? "filtered" : "unfiltered";
         Task<StatsOverlayResponse> fill;
         TaskCompletionSource<StatsOverlayResponse>? fillOwner = null;
@@ -198,7 +204,7 @@ public sealed class StatsOverlayService(
         }
 
         if (fillOwner is not null)
-            _ = CompleteFillAsync(fillOwner, normalized, plan, cacheScope, key, generatedAtTimestamp);
+            _ = CompleteFillAsync(fillOwner, normalized, plan, cacheScope, key, contractVersion, generatedAtTimestamp);
         return await fill.WaitAsync(cancellationToken);
     }
 
@@ -208,13 +214,14 @@ public sealed class StatsOverlayService(
         StatsSnapshotPlan plan,
         string cacheScope,
         string cacheKey,
+        string contractVersion,
         long generatedAtTimestamp)
     {
         StatsOverlayResponse? response = null;
         Exception? failure = null;
         try
         {
-            response = await FillSnapshotAsync(normalized, plan, cacheScope, cacheKey, generatedAtTimestamp);
+            response = await FillSnapshotAsync(normalized, plan, cacheScope, cacheKey, contractVersion, generatedAtTimestamp);
         }
         catch (Exception exception)
         {
@@ -246,6 +253,7 @@ public sealed class StatsOverlayService(
         StatsSnapshotPlan plan,
         string cacheScope,
         string cacheKey,
+        string contractVersion,
         long generatedAtTimestamp)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(options.ReadTimeoutSeconds), timeProvider);
@@ -304,6 +312,14 @@ public sealed class StatsOverlayService(
                     }
                 };
             }
+
+            response = response with
+            {
+                ContractVersion = contractVersion,
+                MetricDefinitionVersion = contractVersion == StatsOverlayVocabulary.ContractVersionV2
+                    ? StatsOverlayVocabulary.MetricDefinitionVersionV2
+                    : StatsOverlayVocabulary.MetricDefinitionVersion
+            };
 
             deadline.Token.ThrowIfCancellationRequested();
             int responseBytes;
@@ -560,11 +576,12 @@ public sealed class StatsOverlayService(
         DateTimeOffset now, long timestamp) =>
         now >= expiresAtUtc || timeProvider.GetElapsedTime(generatedAtTimestamp, timestamp) >= lifetime;
 
-    static string CacheScopeKey(StatsOverlayRequest selection) =>
-        JsonSerializer.Serialize(new SelectionIdentity(selection.Scope!, selection.CitySlug, RouteKeys(selection)),
+    static string CacheScopeKey(StatsOverlayRequest selection, string contractVersion) =>
+        JsonSerializer.Serialize(new SelectionIdentity(contractVersion, selection.Scope!, selection.CitySlug, RouteKeys(selection)),
             JsonSettings.DefaultOptions);
 
-    string BuildCacheKey(StatsOverlayRequest selection, StatsSnapshotPlan plan, StatsOverlayOptions options)
+    string BuildCacheKey(StatsOverlayRequest selection, StatsSnapshotPlan plan, StatsOverlayOptions options,
+        string contractVersion)
     {
         var schedule = StatsOverlayRefreshPolicy.Resolve(
             new DateTimeOffset(DateTime.SpecifyKind(plan.GeneratedAtUtc, DateTimeKind.Utc), TimeSpan.Zero),
@@ -582,8 +599,10 @@ public sealed class StatsOverlayService(
             options.IngestionGraceMinutes,
             options.MaximumCategories,
             options.ReportedVehiclesEnabled,
-            StatsOverlayVocabulary.ContractVersion,
-            StatsOverlayVocabulary.MetricDefinitionVersion,
+            contractVersion,
+            contractVersion == StatsOverlayVocabulary.ContractVersionV2
+                ? StatsOverlayVocabulary.MetricDefinitionVersionV2
+                : StatsOverlayVocabulary.MetricDefinitionVersion,
             options.Cities.OrderBy(city => city.CitySlug, StringComparer.Ordinal)
                 .Select(city => new ConfiguredCityIdentity(city.CitySlug, city.DisplayNameKey,
                     city.TimeZoneId, city.HealthyCadenceLimitSeconds)).ToArray(),

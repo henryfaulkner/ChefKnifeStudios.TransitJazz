@@ -5,6 +5,7 @@ using ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Text.Json;
 using Xunit;
 
 namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.Statistics;
@@ -40,6 +41,7 @@ public sealed class RouteHourStatisticsWriterTests
         await writer.StopAsync(CancellationToken.None);
 
         Assert.Equal(2, store.Attempts.Count);
+        Assert.Equal(["route-a", "route-b"], store.Attempts.SelectMany(rows => rows).Select(row => row.RouteJoinKey));
         Assert.All(store.Attempts, rows =>
         {
             Assert.Single(rows);
@@ -79,6 +81,62 @@ public sealed class RouteHourStatisticsWriterTests
         Assert.Equal(RouteHourStatisticsWriteOutcome.Unchanged, retryOutcome);
     }
 
+    [Fact]
+    public async Task WriterMapsAllVersionedSourceAndMeasureEvidenceIntoTheStoredRow()
+    {
+        var store = new RecordingStore((rows, _) => Task.FromResult(
+            new RouteHourStatisticsWriteReport(RouteHourStatisticsWriteOutcome.Inserted, rows.Count)));
+        var writer = new RouteHourStatisticsWriter(store, new RouteHourHistoryOptions { WriteAttemptTimeoutSeconds = 5 },
+            NullLogger<RouteHourStatisticsWriter>.Instance);
+        await writer.StartAsync(CancellationToken.None);
+        var batch = Batch("route-a");
+        var original = batch.Rows[0];
+        var hour = original.HourStartUtc;
+        var fingerprint = new string('b', 64);
+        var source = new SourceHourEvidenceSummary(
+            "marta-bus", 1, 0, 0, 0, hour.AddMinutes(5), hour.AddMinutes(5), 10,
+            true, true, true, false, []);
+        var evidence = new RouteHourSourceSummary
+        {
+            SourceSetFingerprint = fingerprint,
+            ExpectedSourceKeys = ["marta-bus"],
+            ContributingSourceKeys = ["marta-bus"],
+            MembershipKnown = true,
+            Sources = [source]
+        };
+        var versioned = original with
+        {
+            DefinitionVersion = RouteHourStatisticRow.SourceEvidenceDefinition,
+            SourceEvidence = evidence,
+            DistanceValid = true,
+            ActivityValid = true,
+            PublicationValid = false,
+            DistanceReasons = ["source_failure"],
+            ActivityReasons = [],
+            PublicationReasons = ["publication_unavailable"],
+            SourceSetFingerprint = fingerprint,
+            ActivitySupportFingerprint = new string('c', 64)
+        };
+        var versionedBatch = batch with { Rows = [versioned] };
+
+        Assert.True(writer.TryEnqueue(versionedBatch));
+        await writer.StopAsync(CancellationToken.None);
+
+        var stored = Assert.Single(Assert.Single(store.Attempts));
+        Assert.Equal(RouteHourStatisticRow.SourceEvidenceDefinition, stored.DefinitionVersion);
+        Assert.True(stored.DistanceValid);
+        Assert.True(stored.ActivityValid);
+        Assert.False(stored.PublicationValid);
+        Assert.Equal(["source_failure"], stored.DistanceReasons);
+        Assert.Equal(["publication_unavailable"], stored.PublicationReasons);
+        Assert.Equal(fingerprint, stored.SourceSetFingerprint);
+        Assert.Equal(new string('c', 64), stored.ActivitySupportFingerprint);
+        using var document = JsonDocument.Parse(stored.SourceEvidence!);
+        Assert.Equal("route-hour-source-evidence-v1", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("marta-bus", document.RootElement.GetProperty("expectedSourceKeys")[0].GetString());
+        Assert.Equal(fingerprint, document.RootElement.GetProperty("sourceSetFingerprint").GetString());
+    }
+
     static FinalizedRouteHourStatisticsBatch Batch(string routeKey)
     {
         var row = new RouteHourStatisticRow(
@@ -100,13 +158,7 @@ public sealed class RouteHourStatisticsWriterTests
             int maxRowsPerCommand = 128, int commandTimeoutSeconds = 5, int maxRoutesPerCityHour = 4096,
             CancellationToken cancellationToken = default)
         {
-            Attempts.Enqueue(rows.Select(row => new CityRouteHourStatistic
-            {
-                CitySlug = row.CitySlug,
-                RouteJoinKey = row.RouteJoinKey,
-                HourStartUtc = row.HourStartUtc,
-                CrossingsPublishedCount = row.CrossingsPublishedCount,
-            }).ToArray());
+            Attempts.Enqueue(rows.ToArray());
             return write(rows, cancellationToken);
         }
     }

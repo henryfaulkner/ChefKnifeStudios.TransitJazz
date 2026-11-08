@@ -40,11 +40,12 @@ builder.Services.AddHttpClient("GtfsStaticApi", client =>
     client.BaseAddress = new Uri(builder.Configuration["services:apiservice:https:0"]
         ?? builder.Configuration["WebApi:BaseUrl"]!);
 });
+var railRealtimeSection = builder.Configuration.GetSection(RailRealtimeOptions.SectionName);
 builder.Services.AddHttpClient("RailRealtimeApi", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Cities:0:RailRealtime:BaseUrl"]!);
+    client.BaseAddress = new Uri(railRealtimeSection["BaseUrl"]!);
 });
-builder.Services.Configure<RailRealtimeOptions>(builder.Configuration.GetSection("Cities:0:RailRealtime"));
+builder.Services.Configure<RailRealtimeOptions>(railRealtimeSection);
 builder.Services.AddSingleton<MartaCity>();
 builder.Services.AddSingleton<ITransitHubPublisher, SignalRHubPublisher>();
 
@@ -72,6 +73,7 @@ if (reportedVehicleConfiguration.Runtime.Mode != ReportedVehicleCaptureMode.Disa
 var martaConfig = cityConfigs.FirstOrDefault(c => string.Equals(c.Name, CityNames.Marta, StringComparison.OrdinalIgnoreCase));
 builder.Services.PostConfigure<RailRealtimeOptions>(options =>
 {
+    options.Enabled = martaConfig?.RailRealtime?.Enabled == true;
     options.ReportedVehicleCaptureEnabled = reportedVehicleConfiguration.Runtime.IsEnabledFor(CityNames.Marta);
     options.BusReportedVehicleSource = martaConfig?.ReportedVehicleSources.SingleOrDefault();
     options.RailReportedVehicleSource = martaConfig?.RailRealtime?.ReportedVehicleSource;

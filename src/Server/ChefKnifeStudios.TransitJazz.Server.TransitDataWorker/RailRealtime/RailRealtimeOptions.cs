@@ -1,9 +1,12 @@
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
+using ChefKnifeStudios.TransitJazz.Shared;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 
 public class RailRealtimeOptions
 {
+    public static string SectionName => $"TransitSources:{CityNames.Marta}:RailRealtime";
+
     public string BaseUrl { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
     public bool Enabled { get; set; } = true;

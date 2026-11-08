@@ -1,173 +1,90 @@
+using System.Collections.Immutable;
+using System.Reflection;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Cities;
-using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
+using ChefKnifeStudios.TransitJazz.Shared;
 using Xunit;
 
 namespace ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests.Statistics;
 
 public sealed class ReportedVehicleConfigurationTests
 {
-    [Theory]
-    [InlineData("Disabled", ReportedVehicleCaptureHost.WebApi, 0)]
-    [InlineData("DryRun", ReportedVehicleCaptureHost.WebApi, 2)]
-    [InlineData("Persistence", ReportedVehicleCaptureHost.WebApi, 2)]
-    [InlineData("Disabled", ReportedVehicleCaptureHost.StandaloneWorker, 0)]
-    [InlineData("DryRun", ReportedVehicleCaptureHost.StandaloneWorker, 2)]
-    public void ModeAppliesToEveryEligibleConfiguredCity(string mode, ReportedVehicleCaptureHost host, int expectedCities)
+    [Fact]
+    public void AtlantaInventoryMapsStaticBusAliasesAndAllFourRailLinesExplicitly()
     {
-        var cities = new[] { City("first"), City("second"), new CityConfig
-        {
-            Name = "unsupported", GtfsRtUrls = ["https://feed.example/unsupported"]
-        }};
-        var configuration = ReportedVehicleCaptureConfiguration.FromConfiguration(Configuration(mode), cities, host);
-        var sink = new RecordingSink();
-        var now = new DateTimeOffset(2026, 10, 1, 12, 0, 30, TimeSpan.Zero);
-        var capture = new ReportedVehicleCapture(configuration.Runtime, configuration.Catalog,
-            new ReportedVehicleBufferBudget(configuration.Options), sink, new FixedClock(now),
-            NullLogger<ReportedVehicleCapture>.Instance);
+        var catalog = Catalog([
+            Input("bus-route-a", "bus", "B1", ["bus-static-a"], ["B1", "bus-alias-a"]),
+            Input("bus-route-b", "bus", "B2", ["bus-static-b"], ["B2", "bus-alias-b"]),
+            Input("rail-blue", "rail", "BLUE", ["BLUE"], ["BLUE"]),
+            Input("rail-green", "rail", "GREEN", ["GREEN"], ["GREEN"]),
+            Input("rail-red", "rail", "RED", ["RED"], ["RED"]),
+            Input("rail-gold", "rail", "GOLD", ["GOLD"], ["GOLD"]),
+        ]);
 
-        // Submit both supported cities and unsolicited unsupported observations.
-        foreach (var city in cities)
-            capture.Observe(city.Name, [ReportedVehicleSourceObservation.Successful(
-                cities[0].ReportedVehicleSources[0].ToDefinition(), now, ["vehicle"])]);
-        capture.FlushPending();
+        var inventory = ResolveInventory(new CityConfig { Name = CityNames.Marta }, catalog);
 
-        Assert.Equal(expectedCities, configuration.Catalog.Cities.Count);
-        Assert.Equal(expectedCities, sink.Cities.Count);
-        foreach (var slug in new[] { "first", "second" })
-        {
-            Assert.Equal(expectedCities != 0, capture.IsEnabledFor(slug));
-            Assert.Equal(expectedCities != 0, sink.Cities.Contains(slug));
-        }
-        Assert.False(capture.IsEnabledFor("unsupported"));
-        Assert.False(capture.IsEnabledFor("not-configured"));
-        Assert.DoesNotContain("unsupported", sink.Cities);
+        Assert.Equal(new[] { "marta-bus", "marta-rail" }, StringArray(inventory, "ExpectedSourceKeys"));
+        Assert.True(Boolean(inventory, "MembershipKnown"));
+        var dependencies = Dependencies(inventory);
+        Assert.Equal("marta-bus", Assert.Single(dependencies, item => item.RouteJoinKey == "bus-route-a").SourceKeys.Single());
+        Assert.Equal("marta-bus", Assert.Single(dependencies, item => item.RouteJoinKey == "bus-route-b").SourceKeys.Single());
+        foreach (var route in new[] { "rail-blue", "rail-green", "rail-red", "rail-gold" })
+            Assert.Equal("marta-rail", Assert.Single(dependencies, item => item.RouteJoinKey == route).SourceKeys.Single());
+        Assert.True(catalog.TryResolve("bus-alias-a", out var busAlias));
+        Assert.Equal("bus-route-a", busAlias.RouteJoinKey);
+        Assert.True(catalog.TryResolve("BLUE", out var blueAlias));
+        Assert.Equal("rail-blue", blueAlias.RouteJoinKey);
     }
 
     [Fact]
-    public void MissingConfigurationDefaultsToDisabled()
+    public void UnknownOrAmbiguousAtlantaProvenanceCannotClaimKnownMembership()
     {
-        var configuration = ReportedVehicleCaptureConfiguration.FromConfiguration(
-            new ConfigurationBuilder().Build(), [City("first")], ReportedVehicleCaptureHost.WebApi);
-        Assert.Equal(ReportedVehicleCaptureMode.Disabled, configuration.Runtime.Mode);
-        Assert.Empty(configuration.Catalog.Cities);
-        Assert.False(configuration.Runtime.IsEnabledFor("first"));
-    }
+        var unknownLine = Catalog([Input("rail-other", "rail", "SILVER", ["SILVER"], ["SILVER"])]);
+        var unknown = ResolveInventory(new CityConfig { Name = CityNames.Marta }, unknownLine);
+        Assert.False(Boolean(unknown, "MembershipKnown"));
 
-    [Theory]
-    [InlineData("DryRun")]
-    [InlineData("Persistence")]
-    public void RegistryWithoutSourcePoliciesEnablesNoCities(string mode)
-    {
-        var configuration = ReportedVehicleCaptureConfiguration.FromConfiguration(Configuration(mode),
-            [new CityConfig { Name = "unsupported", GtfsRtUrls = ["https://feed.example/vehicles"] }],
-            ReportedVehicleCaptureHost.WebApi);
-        Assert.Empty(configuration.Catalog.Cities);
-        Assert.False(configuration.Runtime.IsEnabledFor("unsupported"));
-    }
-
-    [Theory]
-    [InlineData("Disabled", ReportedVehicleCaptureHost.WebApi, 0)]
-    [InlineData("Disabled", ReportedVehicleCaptureHost.StandaloneWorker, 0)]
-    [InlineData("DryRun", ReportedVehicleCaptureHost.WebApi, 1)]
-    [InlineData("DryRun", ReportedVehicleCaptureHost.StandaloneWorker, 1)]
-    public void SeattleWithoutSourcePoliciesStaysUnsupportedInEachHostMode(
-        string mode, ReportedVehicleCaptureHost host, int expectedSupportedCities)
-    {
-        var seattle = new CityConfig
-        {
-            Name = CityNames.Seattle,
-            GtfsRtUrls =
-            [
-                "https://s3.amazonaws.com/kcm-alerts-realtime-prod/vehiclepositions.pb",
-                "https://api.pugetsound.onebusaway.org/api/gtfs_realtime/vehicle-positions-for-agency/40.pb",
-            ],
-            SeattleSoundTransitApiKeyEnvVar = SeattleCity.SoundTransitApiKeySetting,
-        };
-        Assert.Empty(seattle.ReportedVehicleSources);
-
-        var configuration = ReportedVehicleCaptureConfiguration.FromConfiguration(Configuration(mode),
-            [City("atlanta"), seattle], host);
-
-        Assert.Equal(expectedSupportedCities, configuration.Catalog.Cities.Count);
-        Assert.Equal(mode, configuration.Runtime.Mode.ToString());
-        Assert.False(configuration.Runtime.IsEnabledFor(CityNames.Seattle));
-        Assert.Equal(mode == "DryRun", configuration.Runtime.IsEnabledFor("atlanta"));
+        var ambiguousAlias = Catalog([
+            Input("rail-red-a", "rail", "RED", ["RED-A"], ["RED"]),
+            Input("rail-red-b", "rail", "RED", ["RED-B"], ["RED"]),
+        ]);
+        var ambiguous = ResolveInventory(new CityConfig { Name = CityNames.Marta }, ambiguousAlias);
+        Assert.False(Boolean(ambiguous, "MembershipKnown"));
     }
 
     [Fact]
-    public void InvalidExplicitPolicyFailsStartupInsteadOfInventingACatalog()
+    public void AnotherCityDoesNotInferAtlantaSourceFromSharedCategoryNames()
     {
-        var city = City("first");
-        city.ReportedVehicleSources[0].IdentityNamespace = "";
-        Assert.Throws<ArgumentException>(() => ReportedVehicleCaptureConfiguration.FromConfiguration(
-            Configuration("DryRun"), [city], ReportedVehicleCaptureHost.WebApi));
+        var catalog = Catalog([Input("some-bus-route", "bus", "B1", ["bus-static"], ["B1"])]);
+
+        var inventory = ResolveInventory(new CityConfig { Name = "boston" }, catalog);
+
+        Assert.False(Boolean(inventory, "MembershipKnown"));
+        Assert.Empty(StringArray(inventory, "ExpectedSourceKeys"));
+        Assert.Empty(Dependencies(inventory));
     }
 
-    [Fact]
-    public void DisabledIgnoresInvalidSourcePoliciesAndKeepsCaptureOff()
+    static object ResolveInventory(CityConfig config, RouteHourCatalog catalog)
     {
-        var city = City("first");
-        city.ReportedVehicleSources[0].IdentityNamespace = "";
-        var configuration = ReportedVehicleCaptureConfiguration.FromConfiguration(
-            Configuration("Disabled"), [city], ReportedVehicleCaptureHost.WebApi);
-        Assert.Empty(configuration.Catalog.Cities);
-        Assert.False(configuration.Runtime.IsEnabledFor("first"));
+        var method = typeof(CityConfig).GetMethod("ResolveRouteHourSourceInventory", BindingFlags.Public | BindingFlags.Instance);
+        Assert.NotNull(method);
+        return method!.Invoke(config, [catalog])!;
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void MissingBusOrEnabledMartaRailPolicyRejectsPartialCatalog(bool martaRail)
-    {
-        var city = City(martaRail ? "atlanta" : "nymta");
-        if (martaRail)
-            city.RailRealtime = new CityConfig.RailRealtimeConfig { Enabled = true };
-        else
-            city.BusGtfsRtUrls = ["https://feed.example/buses"];
+    static bool Boolean(object target, string name) =>
+        (bool)(target.GetType().GetProperty(name)?.GetValue(target)
+            ?? throw new Xunit.Sdk.XunitException($"Missing {name} property."));
 
-        Assert.Throws<InvalidOperationException>(() => ReportedVehicleCaptureConfiguration.FromConfiguration(
-            Configuration("DryRun"), [city], ReportedVehicleCaptureHost.WebApi));
-    }
+    static string[] StringArray(object target, string name) =>
+        ((IEnumerable<string>)(target.GetType().GetProperty(name)?.GetValue(target)
+            ?? throw new Xunit.Sdk.XunitException($"Missing {name} property."))).ToArray();
 
-    [Fact]
-    public void GlobalCatalogStillEnforcesConfiguredCityCapacity()
-    {
-        var configuration = Configuration("DryRun", new KeyValuePair<string, string?>("ReportedVehicleHistory:MaxCities", "1"));
-        Assert.Throws<ArgumentException>(() => ReportedVehicleCaptureConfiguration.FromConfiguration(
-            configuration, [City("first"), City("second")], ReportedVehicleCaptureHost.WebApi));
-    }
+    static RouteSourceDependency[] Dependencies(object target) =>
+        ((IEnumerable<RouteSourceDependency>)(target.GetType().GetProperty("RouteDependencies")?.GetValue(target)
+            ?? throw new Xunit.Sdk.XunitException("Missing RouteDependencies property."))).ToArray();
 
-    static IConfiguration Configuration(string mode, params KeyValuePair<string, string?>[] limits) =>
-        new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["ReportedVehicleHistory:Mode"] = mode
-        }.Concat(limits)).Build();
+    static RouteHourCatalog Catalog(IEnumerable<RouteHourCatalogInput> inputs) => RouteHourCatalog.Create(inputs);
 
-    static CityConfig City(string slug) => new()
-    {
-        Name = slug, GtfsRtUrls = ["https://feed.example/vehicles"],
-        ReportedVehicleSources = [new ReportedVehicleSourceConfig
-        {
-            SourceKey = "feed", IdentityNamespace = "agency", IdentityKind = "descriptor"
-        }]
-    };
-
-    sealed class RecordingSink : IReportedVehicleStatisticsSink
-    {
-        public List<string> Cities { get; } = [];
-        public bool TryEnqueue(FinalizedReportedVehicleHourBatch batch, IDisposable reservation)
-        {
-            Cities.Add(batch.Header.CitySlug);
-            reservation.Dispose();
-            return true;
-        }
-    }
-
-    sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
+    static RouteHourCatalogInput Input(string key, string category, string shortName,
+        ImmutableArray<string> staticIds, ImmutableArray<string> aliases) => new(key, category, shortName,
+        staticIds, [new RouteHourGeometryPoint(33.7, -84.4), new RouteHourGeometryPoint(33.71, -84.39)], aliases);
 }

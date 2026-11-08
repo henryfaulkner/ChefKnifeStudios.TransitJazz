@@ -1,7 +1,11 @@
 using System.Net;
 using System.Text;
+using System.Collections.Concurrent;
 using Ardalis.Result;
 using ChefKnifeStudios.TransitJazz.Client.Core.Services;
+using ChefKnifeStudios.TransitJazz.Client.Core.Services.EndpointsServices;
+using ChefKnifeStudios.TransitJazz.Client.Shared.Components.Stats;
+using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Stats;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -16,7 +20,8 @@ public sealed class StatsTransportTests
         var content = new TrackingContent(MinimalStatsResponse);
         var service = CreateService(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
 
-        var response = await service.PostWithMetadataAsync<object, StatsOverlayResponse>("/stats", new { scope = "all" });
+        var response = await service.PostWithMetadataAsync<object, StatsOverlayResponse>("/stats", new { scope = "all" },
+            new Dictionary<string, string> { ["X-TransitJazz-Stats-Contract"] = StatsOverlayVocabulary.ContractVersionV2 });
 
         Assert.True(response.Result.IsSuccess);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -75,13 +80,76 @@ public sealed class StatsTransportTests
             return response;
         });
 
-        var result = await service.PostWithMetadataAsync<object, StatsOverlayResponse>("/stats", new { scope = "all" });
+        var result = await service.PostWithMetadataAsync<object, StatsOverlayResponse>("/stats", new { scope = "all" },
+            new Dictionary<string, string> { ["X-TransitJazz-Stats-Contract"] = StatsOverlayVocabulary.ContractVersionV2 });
 
         Assert.Equal(HttpStatusCode.TooManyRequests, result.StatusCode);
         Assert.Equal("rate_limited", result.ProblemCode);
         Assert.Equal(TimeSpan.FromSeconds(3), result.RetryAfter);
         Assert.False(result.Result.IsSuccess);
         Assert.DoesNotContain(result.Result.Errors, error => error.Contains("private database details", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ExplicitStatsContractHeaderIsRequestLocalForConcurrentCalls()
+    {
+        var observed = new ConcurrentDictionary<string, (string? Contract, string? Shared)>();
+        using var client = new HttpClient(new DelegateHandler((request, _) =>
+        {
+            observed[request.RequestUri!.AbsolutePath] = (
+                request.Headers.TryGetValues("X-TransitJazz-Stats-Contract", out var contract) ? contract.Single() : null,
+                request.Headers.TryGetValues("X-Shared-Context", out var shared) ? shared.Single() : null);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(MinimalStatsResponse, Encoding.UTF8, "application/json")
+            });
+        })) { BaseAddress = new Uri("https://unit.test") };
+        client.DefaultRequestHeaders.Add("X-Shared-Context", "unchanged");
+        var service = new HttpService(client, NullLogger<HttpService>.Instance);
+
+        await Task.WhenAll(
+            service.PostWithMetadataAsync<object, StatsOverlayResponse>("/stats-v2", new { },
+                new Dictionary<string, string> { ["X-TransitJazz-Stats-Contract"] = StatsOverlayVocabulary.ContractVersionV2 }),
+            service.PostWithMetadataAsync<object, StatsOverlayResponse>("/unrelated", new { }));
+
+        Assert.Equal(StatsOverlayVocabulary.ContractVersionV2, observed["/stats-v2"].Contract);
+        Assert.Null(observed["/unrelated"].Contract);
+        Assert.Equal("unchanged", observed["/stats-v2"].Shared);
+        Assert.Equal("unchanged", observed["/unrelated"].Shared);
+        Assert.DoesNotContain("X-TransitJazz-Stats-Contract", client.DefaultRequestHeaders.Select(header => header.Key));
+    }
+
+    [Fact]
+    public async Task StatsEndpointContractOverloadAddsOnlyTheRequestedVersion()
+    {
+        string? requested = null;
+        using var client = new HttpClient(new DelegateHandler((request, _) =>
+        {
+            requested = request.Headers.TryGetValues("X-TransitJazz-Stats-Contract", out var values) ? values.Single() : null;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(MinimalStatsResponse, Encoding.UTF8, "application/json")
+            });
+        })) { BaseAddress = new Uri("https://unit.test") };
+        var endpoints = new StatsEndpointsService(new HttpServiceFactory(_ => client, NullLoggerFactory.Instance));
+
+        var response = await endpoints.QueryAsync(new StatsOverlayRequest { Scope = "all" }, StatsOverlayVocabulary.ContractVersionV2);
+
+        Assert.True(response.Result.IsSuccess);
+        Assert.Equal(StatsOverlayVocabulary.ContractVersionV2, requested);
+    }
+
+    [Fact]
+    public async Task UnsupportedContractProblemCodeIsSafeAndLocalizedAsInvalidRequest()
+    {
+        var service = CreateService(_ => Problem(HttpStatusCode.BadRequest, "unsupported_stats_contract", "private implementation detail"));
+
+        var result = await service.PostWithMetadataAsync<object, StatsOverlayResponse>("/stats", new { },
+            new Dictionary<string, string> { ["X-TransitJazz-Stats-Contract"] = StatsOverlayVocabulary.ContractVersionV2 });
+
+        Assert.Equal("unsupported_stats_contract", result.ProblemCode);
+        Assert.Equal("StatsInvalidRequestError", StatsOverlayErrorResources.ResourceKey(result.ProblemCode));
+        Assert.DoesNotContain(result.Result.Errors, error => error.Contains("private implementation detail", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -159,7 +227,8 @@ public sealed class StatsTransportTests
         });
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(30));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            blocked.PostWithMetadataAsync<object, StatsOverlayResponse>("/stats", new { scope = "all" }, cancellation.Token));
+            blocked.PostWithMetadataAsync<object, StatsOverlayResponse>("/stats", new { scope = "all" },
+                new Dictionary<string, string> { ["X-TransitJazz-Stats-Contract"] = StatsOverlayVocabulary.ContractVersionV2 }, cancellation.Token));
 
         var ordinary = CreateService(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {

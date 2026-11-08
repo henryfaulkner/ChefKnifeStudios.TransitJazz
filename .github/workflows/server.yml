@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 064-atlanta-rail-statistics]
 
 env:
   REGISTRY: chefknife.azurecr.io

@@ -24,7 +24,33 @@ public sealed class RouteHourStatisticsDatabaseFixture : IDbContextFactory<AppDb
 
     public CityRouteHourStatisticsStore Store { get; }
 
-    public static async Task<RouteHourStatisticsDatabaseFixture> CreateAsync()
+    public static Task<RouteHourStatisticsDatabaseFixture> CreateAsync() => CreateAsync(targetMigration: null);
+
+    public static Task<RouteHourStatisticsDatabaseFixture> CreateBeforeSourceEvidenceAsync() =>
+        CreateAsync(ResolvePreFeatureMigration());
+
+    async Task UpgradeToLatestAsync()
+    {
+        await using var context = CreateDbContext();
+        await context.Database.MigrateAsync();
+    }
+
+    static string ResolvePreFeatureMigration()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql("Host=localhost;Database=transitjazz")
+            .Options;
+        using var context = new AppDbContext(options);
+        var migrations = context.Database.GetMigrations().ToArray();
+        var stop = migrations.SingleOrDefault(id => id.EndsWith("_CreateCityRouteHourStatistics", StringComparison.Ordinal))
+            ?? throw new InvalidOperationException("The pre-feature route-hour table migration was not discovered.");
+        if (!migrations.Any(id => id.EndsWith("_AddRouteHourSourceEvidence", StringComparison.Ordinal)
+                && string.CompareOrdinal(id, stop) > 0))
+            throw new InvalidOperationException("The source-evidence migration must follow the guarded legacy stop.");
+        return stop;
+    }
+
+    static async Task<RouteHourStatisticsDatabaseFixture> CreateAsync(string? targetMigration)
     {
         var connectionString = Environment.GetEnvironmentVariable(ConnectionEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -47,7 +73,7 @@ public sealed class RouteHourStatisticsDatabaseFixture : IDbContextFactory<AppDb
         try
         {
             await using var context = fixture.CreateDbContext();
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(targetMigration);
             return fixture;
         }
         catch
@@ -59,6 +85,8 @@ public sealed class RouteHourStatisticsDatabaseFixture : IDbContextFactory<AppDb
 
     public AppDbContext CreateDbContext() => new(_options);
     public Task<AppDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => Task.FromResult(CreateDbContext());
+
+    public Task ApplyLatestMigrationsAsync() => UpgradeToLatestAsync();
 
     public async ValueTask DisposeAsync()
     {

@@ -4,6 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <!-- Client.Shared is browser-targeted; journey tests exercise only its pure projection model. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.10" />
@@ -18,6 +20,7 @@
     <ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.Data\ChefKnifeStudios.TransitJazz.Server.Data.csproj" />
     <ProjectReference Include="..\ChefKnifeStudios.TransitJazz.Server.WebAPI\ChefKnifeStudios.TransitJazz.Server.WebAPI.csproj" />
     <ProjectReference Include="..\..\ChefKnifeStudios.TransitJazz.Shared\ChefKnifeStudios.TransitJazz.Shared.csproj" />
+    <ProjectReference Include="..\..\Client\ChefKnifeStudios.TransitJazz.Client.Shared\ChefKnifeStudios.TransitJazz.Client.Shared.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\..\..\specs\056-city-transit-type-insights\contracts\*.sql" Link="contracts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

@@ -8,6 +8,8 @@ public static class StatsOverlayVocabulary
 {
     public const string ContractVersion = "stats-overlay-v1";
     public const string MetricDefinitionVersion = "observed-city-route-hour-statistics-v1";
+    public const string ContractVersionV2 = "stats-overlay-v2";
+    public const string MetricDefinitionVersionV2 = "observed-city-route-hour-statistics-v2";
 
     public static readonly string[] CoverageStates = ["complete", "partial", "unavailable", "pending"];
     public static readonly string[] WindowReferences = ["today", "last24CompletedHours"];
@@ -16,10 +18,11 @@ public static class StatsOverlayVocabulary
         "missing_cohort", "partial_cohort", "no_data", "conflict", "unsupported_definition",
         "unsupported_cadence", "inconsistent_cohort", "unknown_route", "route_not_retained",
         "history_disabled", "not_retained", "boundary_excluded", "pending", "future",
-        "zero_denominator", "no_active_vehicles"
+        "zero_denominator", "no_active_vehicles", "source_failure", "source_disabled",
+        "source_recovered", "unknown_source_provenance", "invalid_measure_evidence", "unaligned_activity_samples"
     ];
     public static readonly string[] Warnings =
-    ["partial_coverage", "city_days_differ", "catalog_changed", "boundary_excluded", "historical_membership_unknown", "different_route_periods"];
+    ["partial_coverage", "city_days_differ", "catalog_changed", "boundary_excluded", "historical_membership_unknown", "different_route_periods", "definition_transition"];
 }
 
 public sealed record StatsOverlayResponse
@@ -125,6 +128,41 @@ public sealed record StatsCoverage
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public DateTime? LastContributingUtc { get; init; }
     public DateTime PendingThroughUtc { get; init; }
     public bool HistoricalMembershipUnknown { get; init; }
+    public int? ObservedRouteHours { get; init; }
+    public int? UnavailableRouteHours { get; init; }
+    public string? AssessmentMeasure { get; init; }
+    public IReadOnlyList<StatsSourceCoverage>? SourceCoverage { get; init; }
+    public IReadOnlyList<StatsMeasureAvailability>? MeasureAvailability { get; init; }
+    public IReadOnlyList<string>? DefinitionVersions { get; init; }
+    public string? DefinitionTransitionWarning { get; init; }
+}
+
+public sealed record StatsSourceCoverage
+{
+    public required string CitySlug { get; init; }
+    public required string SourceKey { get; init; }
+    public required string WindowReference { get; init; }
+    public required string State { get; init; }
+    public int ContributingHours { get; init; }
+    public int FullyCoveredHours { get; init; }
+    public required IReadOnlyList<StatsUtcHourPeriod> CoveredPeriods { get; init; }
+    public required IReadOnlyList<StatsUtcHourPeriod> UnavailablePeriods { get; init; }
+    public required IReadOnlyList<string> Reasons { get; init; }
+}
+
+public sealed record StatsUtcHourPeriod
+{
+    public DateTime StartUtc { get; init; }
+    public DateTime EndUtc { get; init; }
+}
+
+public sealed record StatsMeasureAvailability
+{
+    public required string MeasureKey { get; init; }
+    public required string State { get; init; }
+    public required IReadOnlyList<string> Reasons { get; init; }
+    public required IReadOnlyList<string> DefinitionVersions { get; init; }
+    public bool ObservedRatio { get; init; }
 }
 
 public sealed record StatsSelectedRouteCoverage(string CitySlug, string RouteJoinKey, int ExpectedHours, int AvailableHours, IReadOnlyList<string> Reasons);
@@ -145,7 +183,11 @@ public sealed record StatsCategoryShare(
     string CategoryKey,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] decimal? Kilometers,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] decimal? Percent,
-    string CoverageReference);
+    string CoverageReference)
+{
+    public StatsCoverage? Coverage { get; init; }
+    public string? DenominatorKind { get; init; }
+}
 
 public sealed record StatsRouteOption
 {
@@ -176,6 +218,15 @@ public sealed record StatsBubbleStatistic
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public decimal? MeanActiveVehicles { get; init; }
     public required StatsCoverage Coverage { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string? OmissionReason { get; init; }
+    public StatsBubbleMeasureAvailability? MeasureAvailability { get; init; }
+}
+
+public sealed record StatsBubbleMeasureAvailability
+{
+    public required IReadOnlyList<string> XReasons { get; init; }
+    public required IReadOnlyList<string> YReasons { get; init; }
+    public required IReadOnlyList<string> SizeReasons { get; init; }
+    public required IReadOnlyList<string> PopulationReasons { get; init; }
 }
 
 public sealed record StatsTimeline
@@ -210,4 +261,13 @@ public sealed record StatsTimelineBucket
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public int? ExpectedSelectedRoutes { get; init; }
     public required string CoverageState { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string? Reason { get; init; }
+    public IReadOnlyList<StatsBucketSourceCoverage>? SourceCoverage { get; init; }
+}
+
+public sealed record StatsBucketSourceCoverage
+{
+    public required string CitySlug { get; init; }
+    public required string SourceKey { get; init; }
+    public required string State { get; init; }
+    public required IReadOnlyList<string> Reasons { get; init; }
 }

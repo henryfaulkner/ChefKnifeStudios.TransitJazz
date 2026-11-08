@@ -292,6 +292,190 @@ public sealed class StatsSnapshotAcceptanceTests
         Assert.Empty(exclusions);
     }
 
+    [Fact]
+    public void ValidV2EvidenceIsAcceptedAndEveryNestedCollectionIsFrozen()
+    {
+        var selection = new StatsSelection("city", "toronto", []);
+        var periods = new List<StatsUtcHourPeriod> { new() { StartUtc = Generated.AddHours(-2), EndUtc = Generated.AddHours(-1) } };
+        var reasons = new List<string>();
+        var versions = new List<string> { StatsOverlayVocabulary.MetricDefinitionVersionV2 };
+        var v2 = ValidV2Response(selection, periods, reasons, versions);
+
+        var accepted = StatsSnapshotPolicy.Accept(StatsSnapshotState.Empty(selection), v2, Received, 100);
+
+        Assert.Equal(StatsSnapshotAcceptanceKind.Accepted, accepted.Kind);
+        var snapshot = accepted.State.Snapshot!;
+        periods.Clear();
+        reasons.Add("source_failure");
+        versions.Clear();
+        Assert.Single(snapshot.TodayDistance.Coverage.SourceCoverage![0].CoveredPeriods);
+        Assert.Empty(snapshot.TodayDistance.Coverage.SourceCoverage[0].Reasons);
+        Assert.Equal(StatsOverlayVocabulary.MetricDefinitionVersionV2,
+            Assert.Single(snapshot.TodayDistance.Coverage.MeasureAvailability![0].DefinitionVersions));
+        Assert.Throws<NotSupportedException>(() => ((IList<StatsUtcHourPeriod>)snapshot.TodayDistance.Coverage.SourceCoverage[0].CoveredPeriods).Clear());
+        Assert.Throws<NotSupportedException>(() => ((IList<string>)snapshot.TodayDistance.Coverage.SourceCoverage[0].Reasons).Clear());
+        Assert.Throws<NotSupportedException>(() => ((IList<string>)snapshot.TodayDistance.Coverage.MeasureAvailability![0].DefinitionVersions).Clear());
+        Assert.Throws<NotSupportedException>(() => ((IList<string>)snapshot.Bubbles[0].MeasureAvailability!.YReasons).Clear());
+        Assert.Throws<NotSupportedException>(() => ((IList<string>)snapshot.Timeline.Series[0].Buckets[0].SourceCoverage![0].Reasons).Clear());
+        Assert.Throws<NotSupportedException>(() => ((IList<StatsBucketSourceCoverage>)snapshot.Timeline.Series[0].Buckets[0].SourceCoverage!).Clear());
+    }
+
+    [Theory]
+    [InlineData("period")]
+    [InlineData("reason")]
+    [InlineData("count")]
+    [InlineData("definition")]
+    [InlineData("measure")]
+    [InlineData("contract")]
+    [InlineData("selection")]
+    public void MalformedV2NestedEvidenceOrIdentityIsRejected(string invalidity)
+    {
+        var selection = new StatsSelection("city", "toronto", []);
+        var valid = ValidV2Response(selection);
+        var source = Assert.Single(valid.TodayDistance.Coverage.SourceCoverage!);
+        var malformed = invalidity switch
+        {
+            "period" => valid with { TodayDistance = valid.TodayDistance with
+            {
+                Coverage = valid.TodayDistance.Coverage with
+                {
+                    SourceCoverage = [source with { CoveredPeriods = [new StatsUtcHourPeriod
+                    {
+                        StartUtc = Generated.AddMinutes(-90), EndUtc = Generated.AddMinutes(-30)
+                    }] }]
+                }
+            } },
+            "reason" => valid with { TodayDistance = valid.TodayDistance with
+            {
+                Coverage = valid.TodayDistance.Coverage with
+                {
+                    SourceCoverage = [source with { Reasons = ["raw database error"] }]
+                }
+            } },
+            "count" => valid with { TodayDistance = valid.TodayDistance with
+            {
+                Coverage = valid.TodayDistance.Coverage with { ObservedRouteHours = -1 }
+            } },
+            "definition" => valid with { TodayDistance = valid.TodayDistance with
+            {
+                Coverage = valid.TodayDistance.Coverage with
+                {
+                    DefinitionVersions = [new string('x', 129)]
+                }
+            } },
+            "measure" => valid with { Bubbles = [valid.Bubbles[0] with { MeasureAvailability = null }] },
+            "contract" => valid with { MetricDefinitionVersion = StatsOverlayVocabulary.MetricDefinitionVersion },
+            _ => valid with { Selection = selection with { RouteJoinKeys = ["other-route"] } }
+        };
+
+        var result = StatsSnapshotPolicy.Accept(StatsSnapshotState.Empty(selection), malformed, Received, 100);
+
+        Assert.Equal(StatsSnapshotAcceptanceKind.Rejected, result.Kind);
+        Assert.Null(result.State.Snapshot);
+    }
+
+    [Fact]
+    public void V2NestedEvidenceChangesSnapshotIdentityEvenWhenGenerationMetadataMatches()
+    {
+        var selection = new StatsSelection("city", "toronto", []);
+        var first = ValidV2Response(selection);
+        var state = StatsSnapshotPolicy.Accept(StatsSnapshotState.Empty(selection), first, Received, 100).State;
+        var source = Assert.Single(first.TodayDistance.Coverage.SourceCoverage!);
+        var changed = first with { TodayDistance = first.TodayDistance with
+        {
+            Coverage = first.TodayDistance.Coverage with
+            {
+                SourceCoverage = [source with { Reasons = ["source_disabled"] }]
+            }
+        } };
+
+        var result = StatsSnapshotPolicy.Accept(state, changed, Received.AddSeconds(1), 200);
+
+        Assert.Equal(StatsSnapshotAcceptanceKind.Accepted, result.Kind);
+        Assert.NotSame(state.Snapshot, result.State.Snapshot);
+        Assert.Equal("source_disabled", Assert.Single(result.State.Snapshot!.TodayDistance.Coverage.SourceCoverage![0].Reasons));
+    }
+
+    internal static StatsOverlayResponse ValidV2Response(
+        StatsSelection selection,
+        IReadOnlyList<StatsUtcHourPeriod>? periods = null,
+        IReadOnlyList<string>? reasons = null,
+        IReadOnlyList<string>? versions = null)
+    {
+        var legacy = ValidResponse(selection);
+        var start = legacy.CutoffUtc.AddHours(-1);
+        var coveredPeriods = periods ?? [new StatsUtcHourPeriod { StartUtc = start, EndUtc = legacy.CutoffUtc }];
+        var safeReasons = reasons ?? [];
+        var definitions = versions ?? [StatsOverlayVocabulary.MetricDefinitionVersionV2];
+        var source = new StatsSourceCoverage
+        {
+            CitySlug = legacy.Cities[0].CitySlug, SourceKey = "test-source", WindowReference = "today",
+            State = "complete", ContributingHours = 1, FullyCoveredHours = 1,
+            CoveredPeriods = coveredPeriods, UnavailablePeriods = [], Reasons = safeReasons
+        };
+        var availability = new StatsMeasureAvailability
+        {
+            MeasureKey = "distance", State = "complete", Reasons = safeReasons,
+            DefinitionVersions = definitions
+        };
+        StatsCoverage V2Coverage(StatsCoverage coverage, string windowReference = "today") => coverage with
+        {
+            ExpectedRouteHours = windowReference == "today" ? 1 : null,
+            AvailableRouteHours = 1,
+            ObservedRouteHours = 1,
+            UnavailableRouteHours = windowReference == "today" ? 0 : null,
+            HistoricalMembershipUnknown = windowReference != "today",
+            AssessmentMeasure = "distance",
+            SourceCoverage = [source with { WindowReference = windowReference }],
+            MeasureAvailability = [availability], DefinitionVersions = definitions
+        };
+        var v2City = legacy.Cities[0] with
+        {
+            TodayCoverage = V2Coverage(legacy.Cities[0].TodayCoverage),
+            Last24Coverage = V2Coverage(legacy.Cities[0].Last24Coverage, "last24CompletedHours")
+        };
+        var categoryCoverage = V2Coverage(legacy.TodayDistance.Coverage);
+        var bucketSourceReasons = new List<string>(safeReasons);
+        return legacy with
+        {
+            ContractVersion = StatsOverlayVocabulary.ContractVersionV2,
+            MetricDefinitionVersion = StatsOverlayVocabulary.MetricDefinitionVersionV2,
+            Cities = [v2City],
+            TodayDistance = legacy.TodayDistance with { Coverage = V2Coverage(legacy.TodayDistance.Coverage) },
+            Last24Distance = legacy.Last24Distance with { Coverage = V2Coverage(legacy.Last24Distance.Coverage, "last24CompletedHours") },
+            CategoryShares = [new StatsCategoryShare("bus", 1m, 100m, "today")
+            {
+                DenominatorKind = "availableDistance", Coverage = categoryCoverage
+            }],
+            Bubbles = [new StatsBubbleStatistic
+            {
+                EntityKey = "route:test", EntityKind = "route", CitySlug = legacy.Cities[0].CitySlug,
+                RouteJoinKey = "route:test", Label = "Test", CategoryKey = "bus", DistanceKilometers = 1m,
+                X = 1m, Y = 1m, Coverage = V2Coverage(legacy.TodayDistance.Coverage),
+                MeasureAvailability = new StatsBubbleMeasureAvailability
+                {
+                    XReasons = safeReasons, YReasons = safeReasons, SizeReasons = safeReasons, PopulationReasons = safeReasons
+                }
+            }],
+            Timeline = new StatsTimeline
+            {
+                SeriesKind = "single", Series = [new StatsTimelineSeries
+                {
+                    Key = "test", WindowReference = "today", Buckets = [new StatsTimelineBucket
+                    {
+                        StartUtc = start, EndUtc = legacy.CutoffUtc, LocalDate = DateOnly.FromDateTime(start),
+                        LocalEndLabel = "11:00", UtcOffset = "+00:00", ElapsedHours = 1,
+                        CoverageState = "complete", SourceCoverage = [new StatsBucketSourceCoverage
+                        {
+                            CitySlug = legacy.Cities[0].CitySlug, SourceKey = "test-source", State = "complete",
+                            Reasons = bucketSourceReasons
+                        }]
+                    }]
+                }]
+            }
+        };
+    }
+
     internal static StatsOverlayResponse ValidResponse(StatsSelection selection, DateTime? generated = null)
     {
         var generatedAt = generated ?? Generated;
