@@ -2,7 +2,7 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, 065-client-experience-observability]
 
 env:
   REGISTRY: chefknife.azurecr.io
