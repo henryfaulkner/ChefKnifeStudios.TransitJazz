@@ -1,0 +1,285 @@
+{
+  "id": null,
+  "uid": "transitjazz-client-experience",
+  "title": "TransitJazz Client Experience",
+  "description": "Receipt-time journey cohorts and committed visitor feedback. Recent cohorts are provisional and coverage is incomplete until all owner capture is enabled.",
+  "tags": ["transitjazz", "client-experience", "provisional"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "PostgreSQL",
+        "type": "datasource",
+        "query": "grafana-postgresql-datasource",
+        "current": { "text": "TransitJazz PostgreSQL", "value": "cg086lcj6z6yob" },
+        "options": [],
+        "refresh": 1
+      },
+      {
+        "name": "metrics_datasource",
+        "label": "Metrics",
+        "type": "datasource",
+        "query": "prometheus",
+        "options": [],
+        "refresh": 1
+      },
+      {
+        "name": "city",
+        "label": "City",
+        "type": "query",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+        "query": "SELECT DISTINCT city_slug FROM client_experience_attempts WHERE $__timeFilter(start_received_at_utc) ORDER BY city_slug",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 1,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "measurement_version",
+        "label": "Measurement version",
+        "type": "query",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+        "query": "SELECT DISTINCT measurement_version FROM client_experience_attempts ORDER BY measurement_version DESC",
+        "includeAll": false,
+        "multi": false,
+        "refresh": 1,
+        "current": { "text": "1", "value": "1" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Journey outcomes by start cohort",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT date_trunc('hour', start_received_at_utc) AS cohort_hour_utc, city_slug, COALESCE(journey, action, 'unknown') AS journey_or_action, COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome = 'succeeded') AS succeeded, COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome = 'failed') AS failed, COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome = 'deadline_exceeded') AS deadline_exceeded, COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome = 'unresolved') AS unresolved, COUNT(*) FILTER (WHERE outcome IN ('cancelled','superseded') AND NOT logical_conflict) AS excluded, COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome IN ('succeeded','failed','deadline_exceeded','unresolved')) AS eligible_n, CASE WHEN COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome IN ('succeeded','failed','deadline_exceeded','unresolved')) = 0 THEN NULL ELSE COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome = 'succeeded')::double precision / COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome IN ('succeeded','failed','deadline_exceeded','unresolved')) END AS success_share, COUNT(DISTINCT page_session_id) FILTER (WHERE eligible AND NOT logical_conflict) AS affected_sessions FROM client_experience_attempts WHERE $__timeFilter(start_received_at_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} GROUP BY 1,2,3 ORDER BY 1 DESC,2,3"
+      }],
+      "options": { "showHeader": true, "sortBy": [{ "displayName": "cohort_hour_utc", "desc": true }] }
+    },
+    {
+      "id": 2,
+      "title": "Successful foreground readiness (ms)",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT city_slug, COALESCE(journey, action, 'unknown') AS journey_or_action, COUNT(*) FILTER (WHERE outcome = 'succeeded' AND NOT logical_conflict) AS success_sample_n, percentile_cont(0.50) WITHIN GROUP (ORDER BY foreground_elapsed_ms) FILTER (WHERE outcome = 'succeeded' AND NOT logical_conflict) AS p50_foreground_ms, percentile_cont(0.95) WITHIN GROUP (ORDER BY foreground_elapsed_ms) FILTER (WHERE outcome = 'succeeded' AND NOT logical_conflict) AS p95_foreground_ms, percentile_cont(0.95) WITHIN GROUP (ORDER BY wall_elapsed_ms) FILTER (WHERE outcome = 'succeeded' AND NOT logical_conflict) AS p95_wall_ms FROM client_experience_attempts WHERE $__timeFilter(start_received_at_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} GROUP BY 1,2 ORDER BY 1,2"
+      }]
+    },
+    {
+      "id": 3,
+      "title": "Logical conflicts and unmatched results",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT 'logical_attempt_conflict'::text AS quality_code, COUNT(*) AS observations FROM client_experience_attempts WHERE $__timeFilter(start_received_at_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} AND logical_conflict UNION ALL SELECT quality_code, COUNT(*) FROM client_experience_attempt_quality WHERE $__timeFilter(received_at_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} GROUP BY quality_code UNION ALL SELECT quality_code, COUNT(*) FROM client_experience_window_quality WHERE $__timeFilter(received_at_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} GROUP BY quality_code"
+      }]
+    },
+    {
+      "id": 4,
+      "title": "Committed notification presentations",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT received_at_utc, city_slug, client_release, measurement_version, displayed_severity, summary_kind, presentation_id, capabilities_presented, issue_codes, explained_issue_codes FROM client_experience_presentations WHERE $__timeFilter(received_at_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} ORDER BY received_at_utc DESC"
+      }]
+    },
+    {
+      "id": 5,
+      "title": "Collection evidence",
+      "type": "text",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "options": {
+        "mode": "markdown",
+        "content": "Intake request, accepted/duplicate/rejected event, latency, client-loss, probe, and maintenance metrics are emitted by the WebAPI meter `TransitJazz.ClientExperience` and summarized in the metrics panels below. Synthetic rows are excluded from visitor cohorts. This dashboard does not infer healthy collection from an empty event table. Health panels use validated foreground windows and do not sum overlapping capabilities into one availability rate. Alert rules are not implemented; the browser check script exists but has not been provisioned."
+      }
+    },
+    {
+      "id": 6,
+      "title": "Accepted presentations with known episode links",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 26 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT p.received_at_utc, p.city_slug, p.presentation_id, p.displayed_severity, p.issue_codes, link.episode_id FROM client_experience_presentations p CROSS JOIN LATERAL jsonb_array_elements_text(p.linked_episode_ids) AS link(episode_id) WHERE $__timeFilter(p.received_at_utc) AND p.environment <> 'synthetic' AND p.city_slug IN (${city:sqlstring}) AND p.measurement_version = ${measurement_version} ORDER BY p.received_at_utc DESC"
+      }]
+    },
+    {
+      "id": 7,
+      "title": "Presentation data quality",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 26 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT received_at_utc, city_slug, quality_code, COUNT(*) AS observations, COUNT(DISTINCT page_session_id) AS affected_sessions FROM client_experience_presentation_quality WHERE $__timeFilter(received_at_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} GROUP BY 1,2,3 ORDER BY 1 DESC"
+      }]
+    },
+    {
+      "id": 8,
+      "title": "Observed capability state time (ms; capabilities overlap)",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT city_slug, capability, state, SUM(duration_ms) AS observed_ms, COUNT(DISTINCT page_session_id) AS observed_sessions FROM client_experience_window_states WHERE $__timeFilter(received_at_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} GROUP BY 1,2,3 ORDER BY 1,2,3"
+      }]
+    },
+    {
+      "id": 9,
+      "title": "Observed, gap, and excluded time by window (ms)",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 34 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT date_trunc('hour', received_at_utc) AS receipt_hour_utc, city_slug, COUNT(*) AS valid_windows, SUM(observed_ms) AS observed_ms, SUM(gap_ms) AS gap_ms, SUM(excluded_ms) AS excluded_ms, COUNT(DISTINCT page_session_id) AS affected_sessions FROM client_experience_validated_windows WHERE $__timeFilter(received_at_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} GROUP BY 1,2 ORDER BY 1 DESC,2"
+      }]
+    },
+    {
+      "id": 10,
+      "title": "Degraded episodes and same-scope verified recovery",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 42 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT city_slug, capability, episode_status, COUNT(*) AS episodes, COUNT(DISTINCT page_session_id) AS affected_sessions FROM client_experience_health_episodes WHERE $__timeFilter(opened_at_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} GROUP BY 1,2,3 ORDER BY 1,2,3"
+      }]
+    },
+    {
+      "id": 11,
+      "title": "Daily weighted journey outcomes (receipt day; provisional)",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 50 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT day_utc, city_slug, series_code AS journey, SUM(eligible_starts) AS eligible_starts, SUM(succeeded) AS succeeded, SUM(failed + deadline_exceeded) AS confirmed_bad, SUM(unresolved) AS unresolved, SUM(excluded) AS excluded, ROUND(SUM(succeeded)::numeric / NULLIF(SUM(eligible_starts), 0), 4) AS success_share, SUM(page_session_days) AS affected_session_days FROM client_experience_daily WHERE $__timeFilter(day_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} AND time_basis = 'receipt' AND series_kind = 'journey' GROUP BY 1,2,3 ORDER BY 1 DESC,2,3"
+      }]
+    },
+    {
+      "id": 12,
+      "title": "Daily capability state time (ms; capabilities overlap)",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 50 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT day_utc, city_slug, series_code AS capability, SUM(observed_ms) AS observed_ms, SUM(healthy_ms) AS healthy_ms, SUM(degraded_ms) AS degraded_ms, SUM(unavailable_ms) AS unavailable_ms, SUM(pending_ms) AS pending_ms, SUM(unknown_ms) AS unknown_ms, SUM(gap_ms) AS gap_ms, SUM(excluded_ms) AS excluded_ms, SUM(page_session_days) AS observed_session_days FROM client_experience_daily WHERE $__timeFilter(day_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} AND time_basis = 'receipt' AND series_kind = 'capability' GROUP BY 1,2,3 ORDER BY 1 DESC,2,3"
+      }]
+    },
+    {
+      "id": 13,
+      "title": "Daily mergeable successful foreground latency buckets (count)",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 58 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT day_utc, city_slug, series_code AS journey, SUM(latency_le_500_ms) AS le_500ms, SUM(latency_le_1000_ms) AS le_1000ms, SUM(latency_le_5000_ms) AS le_5000ms, SUM(latency_le_15000_ms) AS le_15000ms, SUM(latency_le_30000_ms) AS le_30000ms, SUM(latency_le_60000_ms) AS le_60000ms, SUM(latency_overflow) AS overflow, SUM(succeeded) AS successful_attempts FROM client_experience_daily WHERE $__timeFilter(day_utc) AND environment <> 'synthetic' AND city_slug IN (${city:sqlstring}) AND measurement_version = ${measurement_version} AND time_basis = 'receipt' AND series_kind = 'journey' GROUP BY 1,2,3 ORDER BY 1 DESC,2,3"
+      }]
+    },
+    {
+      "id": 14,
+      "title": "Aggregation watermark and cleanup lag",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 66 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT watermark_utc, last_success_utc, last_failure_utc, last_failure_code, lag_seconds, job_version FROM client_experience_maintenance WHERE id = 1"
+      }]
+    },
+    {
+      "id": 15,
+      "title": "Accepted event delay and clock skew (receipt time)",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 71 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT date_trunc('hour', received_at_utc) AS receipt_hour_utc, environment, city_slug, COUNT(*) AS accepted_events, COUNT(*) FILTER (WHERE clock_skewed) AS skewed_events, percentile_cont(0.50) WITHIN GROUP (ORDER BY GREATEST(0, EXTRACT(EPOCH FROM (received_at_utc - occurred_at_utc)) * 1000)) FILTER (WHERE NOT clock_skewed) AS p50_receipt_delay_ms, percentile_cont(0.95) WITHIN GROUP (ORDER BY GREATEST(0, EXTRACT(EPOCH FROM (received_at_utc - occurred_at_utc)) * 1000)) FILTER (WHERE NOT clock_skewed) AS p95_receipt_delay_ms FROM client_experience_events WHERE $__timeFilter(received_at_utc) AND environment <> 'synthetic' GROUP BY 1,2,3 ORDER BY 1 DESC,2,3"
+      }]
+    },
+    {
+      "id": 16,
+      "title": "Intake, duplicate/rejection and client-loss metrics",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 79 },
+      "description": "Metrics are collection-path evidence. Missing series is not healthy; verify the meter exporter and datasource before interpreting zero.",
+      "targets": [
+        { "expr": "sum by (outcome) (increase({__name__=\"client_experience_intake_requests_total\"}[$__rate_interval]))", "legendFormat": "Requests {{outcome}}" },
+        { "expr": "sum by (result) (increase({__name__=\"client_experience_intake_events_total\"}[$__rate_interval]))", "legendFormat": "Events {{result}}" },
+        { "expr": "sum by (reason) (increase({__name__=\"client_experience_client_loss_total\"}[$__rate_interval]))", "legendFormat": "Client loss {{reason}}" }
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Probe and maintenance outcomes",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 79 },
+      "description": "A successful scrape with no probe series is not a healthy storage result. Compare probe runs with the client-experience health endpoint and maintenance watermark.",
+      "targets": [
+        { "expr": "sum by (outcome) (increase({__name__=\"client_experience_probe_runs_total\"}[$__rate_interval]))", "legendFormat": "Probe {{outcome}}" },
+        { "expr": "sum by (outcome) (increase({__name__=\"client_experience_maintenance_runs_total\"}[$__rate_interval]))", "legendFormat": "Maintenance {{outcome}}" }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "Explicit action reliability by action (receipt cohort)",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 87 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT city_slug, action, COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome = 'succeeded') AS succeeded, COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome IN ('failed','deadline_exceeded')) AS confirmed_bad, COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome = 'unresolved') AS unresolved, COUNT(*) FILTER (WHERE outcome IN ('cancelled','superseded') AND NOT logical_conflict) AS excluded, COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome IN ('succeeded','failed','deadline_exceeded','unresolved')) AS eligible_n, ROUND(COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome = 'succeeded')::numeric / NULLIF(COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome IN ('succeeded','failed','deadline_exceeded','unresolved')), 0), 4) AS success_share, COUNT(DISTINCT page_session_id) FILTER (WHERE eligible AND NOT logical_conflict) AS affected_sessions FROM client_experience_attempts WHERE $__timeFilter(start_received_at_utc) AND environment <> 'synthetic' AND action IS NOT NULL AND measurement_version = ${measurement_version} GROUP BY 1,2 ORDER BY 1,2"
+      }]
+    },
+    {
+      "id": 19,
+      "title": "Daily accepted event volume and skew (receipt day)",
+      "type": "table",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 87 },
+      "targets": [{
+        "refId": "A",
+        "format": "table",
+        "rawSql": "SELECT day_utc, environment, city_slug, SUM(event_count) AS accepted_events, SUM(quality_count) AS skewed_events, SUM(page_session_days) AS observed_session_days FROM client_experience_daily WHERE $__timeFilter(day_utc) AND environment <> 'synthetic' AND measurement_version = ${measurement_version} AND time_basis = 'receipt' AND series_kind = 'collection' GROUP BY 1,2,3 ORDER BY 1 DESC,2,3"
+      }]
+    }
+  ]
+}

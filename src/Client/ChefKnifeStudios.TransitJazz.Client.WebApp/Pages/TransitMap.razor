@@ -6,6 +6,10 @@
 @inject IStringLocalizer<RouteFilterResources> Loc
 
 <div class="transit-map-container">
+    <span id="client-experience-readiness" hidden
+          data-routes-ready="@(_routesLoaded && _routeShapeCache.Count > 0 ? "true" : "false")"
+          data-map-ready="@(_mapReady && _routesRendered ? "true" : "false")"
+          data-live-joined="@(ApplicationViewModel.LiveDeliveryState.IsReady ? "true" : "false")"></span>
     @if (!_audioUnlockState.Current.IsUnlocked && _audioUnlockState.Current.Status != AudioUnlockStatus.Muted)
     {
         <AudioUnlockOverlay OnEnable="EnableAudioAsync"

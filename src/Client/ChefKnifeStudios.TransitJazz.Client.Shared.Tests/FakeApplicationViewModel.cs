@@ -36,6 +36,7 @@ public sealed class FakeApplicationViewModel : IApplicationViewModel
     public bool IsConnected => true;
     public LiveDeliveryState LiveDeliveryState => new(true, true, true, "testcity", 1, null);
     public NotificationScope NotificationScope => new(1, "testcity");
+    public System.Guid CityActivationId => System.Guid.Empty;
     public NotificationIssueCode? LiveIssueCode => null;
     public NotificationIssueCode? LiveProcessingIssueCode => null;
     public bool RoutesLoaded { get; private set; }

@@ -17,6 +17,9 @@ public class AppDbContext : DbContext
     public DbSet<CityRouteHourStatistic> CityRouteHourStatistics => Set<CityRouteHourStatistic>();
     public DbSet<CityReportedVehicleHour> CityReportedVehicleHours => Set<CityReportedVehicleHour>();
     public DbSet<CityReportedVehicleHourMembership> CityReportedVehicleHourMemberships => Set<CityReportedVehicleHourMembership>();
+    public DbSet<ClientExperienceEvent> ClientExperienceEvents => Set<ClientExperienceEvent>();
+    public DbSet<ClientExperienceDaily> ClientExperienceDaily => Set<ClientExperienceDaily>();
+    public DbSet<ClientExperienceMaintenance> ClientExperienceMaintenance => Set<ClientExperienceMaintenance>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

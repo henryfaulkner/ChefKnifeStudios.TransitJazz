@@ -13,8 +13,6 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.Services;
 public interface IToastService
 {
     void ShowSuccess(string message, string? title = null);
-    void ShowWarning(string message, string? title = null);
-    void ShowError(string message, string? title = null);
 }
 
 public sealed class ToastService :
@@ -39,12 +37,6 @@ public sealed class ToastService :
 
     public void ShowSuccess(string message, string? title = null)
         => Show(MatToastType.Success, title ?? _localizer["ToastSuccessTitle"], message);
-
-    public void ShowWarning(string message, string? title = null)
-        => Show(MatToastType.Warning, title ?? _localizer["ToastWarningTitle"], message);
-
-    public void ShowError(string message, string? title = null)
-        => Show(MatToastType.Danger, title ?? _localizer["ToastErrorTitle"], message);
 
     public ValueTask<bool> PresentAsync(long presentationId, NotificationSummary summary, CancellationToken cancellationToken)
     {

@@ -3,10 +3,14 @@
 @using ChefKnifeStudios.TransitJazz.Client.Shared.Services
 @using Microsoft.Extensions.Localization
 @using ChefKnifeStudios.TransitJazz.Client.Core.Services
+@using ChefKnifeStudios.TransitJazz.Client.Core.ClientExperience
+@using ChefKnifeStudios.TransitJazz.Client.Shared.ClientExperience
 @inject IApplicationViewModel ApplicationViewModel
 @inject IStringLocalizer<RouteFilterResources> Loc
 @inject NavigationManager NavigationManager
 @inject StatsSnapshotStore StatsSnapshotStore
+@inject ClientExperienceReporter ClientExperienceReporter
+@inject ClientExperienceCaptureProxy ClientExperienceCaptureProxy
 @implements IAsyncDisposable
 
 <Router AppAssembly="@typeof(App).Assembly">
@@ -27,9 +31,24 @@
     // Blazor DI scope (resolving these from the root provider in Program.cs throws,
     // because their graph reaches WASM scoped services). ApplicationViewModel initialization
     // remains idempotent.
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        _ = ApplicationViewModel.InitializeAsync();
+        await ClientExperienceReporter.InitializeAsync();
+        ClientExperienceCaptureProxy.SetTarget(ClientExperienceReporter);
+        var city = NavigationManager.ResolveCity().ToLowerInvariant();
+        var attemptId = ClientExperienceReporter.StartAttempt(city, "bootstrap_start", 60_000);
+        try
+        {
+            await ApplicationViewModel.InitializeAsync();
+            var ready = await ApplicationViewModel.RoutesLoadedTask;
+            ClientExperienceReporter.FinishAttempt(attemptId, city, "bootstrap_start",
+                ready ? "succeeded" : "failed", ready ? "owner_confirmed" : "owner_failed");
+        }
+        catch
+        {
+            ClientExperienceReporter.FinishAttempt(attemptId, city, "bootstrap_start", "failed", "owner_failed");
+            ClientExperienceReporter.CaptureRuntimeFailure(city, "application_initialization_fatal");
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -38,5 +57,10 @@
             await StatsSnapshotStore.StartAsync(NavigationManager.ResolveCity());
     }
 
-    public ValueTask DisposeAsync() => new(StatsSnapshotStore.StopAsync());
+    public async ValueTask DisposeAsync()
+    {
+        ClientExperienceCaptureProxy.SetTarget(null);
+        await StatsSnapshotStore.StopAsync();
+        await ClientExperienceReporter.DisposeAsync();
+    }
 }

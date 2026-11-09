@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Threading.RateLimiting;
 using System.Threading.Tasks;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.ClientExperience;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
@@ -34,8 +35,12 @@ public static class StatsRateLimitingExtensions
             options.OnRejected = async (context, cancellationToken) =>
             {
                 var response = context.HttpContext.Response;
-                StatsOverlayTelemetry.RecordEndpointRequest("unknown", "429", "rate_limited",
-                    TimeSpan.Zero, context.HttpContext.Request.ContentLength ?? 0);
+                var path = context.HttpContext.Request.Path;
+                if (path.StartsWithSegments("/stats"))
+                    StatsOverlayTelemetry.RecordEndpointRequest("unknown", "429", "rate_limited",
+                        TimeSpan.Zero, context.HttpContext.Request.ContentLength ?? 0);
+                else if (path.StartsWithSegments("/api/client-experience"))
+                    ClientExperienceTelemetry.RecordRateLimited();
                 response.Headers.CacheControl = "no-store";
                 var retrySeconds = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter)
                     ? Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds))

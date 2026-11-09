@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "skills": {
     "add-transit-city": { "targets": ["claude", "codex", "opencode"] },
+    "blast-radius": { "targets": ["claude", "codex", "opencode"] },
     "create-audio-overlay-paragraphs": { "targets": ["claude", "codex", "opencode"] },
     "create-neighborhood-blurb": { "targets": ["claude", "codex", "opencode"] },
     "discover-transit-city": { "targets": ["claude", "codex", "opencode"] },

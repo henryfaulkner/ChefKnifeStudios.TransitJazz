@@ -12,29 +12,10 @@ namespace ChefKnifeStudios.TransitJazz.Client.Shared.Tests;
 public sealed class ToastServiceTests
 {
     [Fact]
-    public void LegacyWarningAndErrorRequestsKeepTheirMatToastTypes()
+    public void DirectToastServiceSurfaceCannotBypassTheTypedWarningAndErrorCoordinator()
     {
-        var toaster = DispatchProxy.Create<IMatToaster, RecordingMatToaster>();
-        var recorder = (RecordingMatToaster)(object)toaster;
-        var service = new ToastService(toaster, new TestLocalizer());
-
-        service.ShowWarning("warning body", "warning title");
-        service.ShowError("error body", "error title");
-
-        Assert.Collection(
-            recorder.AddRequests,
-            warning =>
-            {
-                Assert.Equal("warning body", warning.Message);
-                Assert.Equal("warning title", warning.Title);
-                Assert.Equal(MatToastType.Warning, warning.Type);
-            },
-            error =>
-            {
-                Assert.Equal("error body", error.Message);
-                Assert.Equal("error title", error.Title);
-                Assert.Equal(MatToastType.Danger, error.Type);
-            });
+        Assert.DoesNotContain(typeof(IToastService).GetMethods(), method => method.Name is "ShowWarning" or "ShowError");
+        Assert.DoesNotContain(typeof(ToastService).GetMethods(), method => method.Name is "ShowWarning" or "ShowError");
     }
 
     [Fact]

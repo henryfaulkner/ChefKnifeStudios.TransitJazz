@@ -1,5 +1,7 @@
 using ChefKnifeStudios.TransitJazz.Client.Core.Services;
+using ChefKnifeStudios.TransitJazz.Client.Core.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Client.Core.Services.EndpointsServices;
+using ChefKnifeStudios.TransitJazz.Shared.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
@@ -34,6 +36,7 @@ public interface IApplicationViewModel : IViewModel
     RouteLoadOutcome RouteLoadOutcome { get; }
     LiveDeliveryState LiveDeliveryState { get; }
     NotificationScope NotificationScope { get; }
+    Guid CityActivationId { get; }
     NotificationIssueCode? LiveIssueCode { get; }
     NotificationIssueCode? LiveProcessingIssueCode { get; }
 
@@ -86,6 +89,7 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
     readonly IGtfsEndpointsService _gtfsEndpointsService;
     readonly ILogger<ApplicationViewModel> _logger;
     readonly NavigationManager _navigationManager;
+    readonly IClientExperienceCapture? _clientExperienceCapture;
 
     readonly Dictionary<string, RouteShapeFeature> _routeShapes = new(StringComparer.Ordinal);
     readonly SemaphoreSlim _initGate = new(1, 1);
@@ -94,6 +98,8 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
     bool _hasConfirmedLiveReadiness;
     long _liveProcessingGeneration;
     NotificationScope _notificationScope;
+    Guid _cityActivationId;
+    Guid _routeEpisodeId;
 
     public event SignalRNotificationHandler? NotificationReceived;
 
@@ -122,17 +128,20 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
         IGtfsEndpointsService gtfsEndpointsService,
         ILogger<ApplicationViewModel> logger,
         NavigationManager navigationManager,
-        NotificationCoordinator? notificationCoordinator = null)
+        NotificationCoordinator? notificationCoordinator = null,
+        IClientExperienceCapture? clientExperienceCapture = null)
     {
         _signalRNotificationService = signalRNotificationService;
         _gtfsEndpointsService = gtfsEndpointsService;
         _logger = logger;
         _navigationManager = navigationManager;
         _notificationCoordinator = notificationCoordinator;
+        _clientExperienceCapture = clientExperienceCapture;
     }
 
     public IReadOnlyDictionary<string, RouteShapeFeature> RouteShapes => _routeShapes;
     public NotificationScope NotificationScope => _notificationScope;
+    public Guid CityActivationId => _cityActivationId;
 
     public Task<bool> RoutesLoadedTask => _routesLoadedTcs.Task;
 
@@ -147,7 +156,10 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
 
             var city = _navigationManager.ResolveCity();
             _notificationScope = new NotificationScope(1, city.ToLowerInvariant());
+            _cityActivationId = Guid.NewGuid();
+            _routeEpisodeId = Guid.NewGuid();
             _notificationCoordinator?.SetScope(_notificationScope);
+            CaptureRoutePending();
 
             // The hub connection and the route-shape fetch are independent — run them in
             // PARALLEL so RoutesLoaded (what the route filters render from) no longer waits
@@ -448,7 +460,69 @@ public partial class ApplicationViewModel : BaseViewModel, IApplicationViewModel
             // it instead of fetching shapes itself, and a faulted/never-completing task there
             // would leave the map without routes forever.
             _routesLoadedTcs.TrySetResult(RouteLoadOutcome.IsUsable);
+            CaptureRouteReadiness();
         }
+    }
+
+    void CaptureRouteReadiness()
+    {
+        if (_clientExperienceCapture is null) return;
+        try
+        {
+            var healthy = RouteLoadOutcome.IsUsable;
+            _clientExperienceCapture.TryCapture(new ClientExperienceEvent
+            {
+                SchemaVersion = ClientExperienceCatalog.SchemaVersion,
+                MeasurementVersion = ClientExperienceCatalog.MeasurementVersion,
+                EventKind = "capability_changed",
+                EventId = Guid.NewGuid(),
+                PageSessionId = Guid.Empty,
+                CityActivationId = _cityActivationId == Guid.Empty ? null : _cityActivationId,
+                Sequence = 0,
+                OccurredAtUtc = DateTimeOffset.UtcNow,
+                PageElapsedMs = 0,
+                CitySlug = _navigationManager.ResolveCity().ToLowerInvariant(),
+                ClientRelease = "unknown",
+                Capability = "routes",
+                PreviousState = "pending",
+                CurrentState = healthy ? "healthy" : "unavailable",
+                EpisodeId = _routeEpisodeId,
+                OwnerGeneration = Math.Max(0, _notificationScope.PageGeneration),
+                InitialSnapshot = false,
+                Reason = healthy ? "owner_confirmed" : "owner_failed"
+            });
+        }
+        catch { /* Reporting must not change route loading behavior. */ }
+    }
+
+    void CaptureRoutePending()
+    {
+        if (_clientExperienceCapture is null) return;
+        try
+        {
+            _clientExperienceCapture.TryCapture(new ClientExperienceEvent
+            {
+                SchemaVersion = ClientExperienceCatalog.SchemaVersion,
+                MeasurementVersion = ClientExperienceCatalog.MeasurementVersion,
+                EventKind = "capability_changed",
+                EventId = Guid.NewGuid(),
+                PageSessionId = Guid.Empty,
+                CityActivationId = _cityActivationId,
+                Sequence = 0,
+                OccurredAtUtc = DateTimeOffset.UtcNow,
+                PageElapsedMs = 0,
+                CitySlug = _notificationScope.CitySlug,
+                ClientRelease = "unknown",
+                Capability = "routes",
+                PreviousState = "unknown",
+                CurrentState = "pending",
+                EpisodeId = _routeEpisodeId,
+                OwnerGeneration = Math.Max(0, _notificationScope.PageGeneration),
+                InitialSnapshot = false,
+                Reason = "unknown"
+            });
+        }
+        catch { /* Reporting must not change route loading behavior. */ }
     }
 
     void SetRouteFailure(RouteLoadFailureKind failureKind, NotificationIssueCode issueCode)

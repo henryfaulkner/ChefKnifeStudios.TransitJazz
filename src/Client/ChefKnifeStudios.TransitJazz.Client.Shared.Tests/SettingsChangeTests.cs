@@ -1,12 +1,33 @@
 using ChefKnifeStudios.TransitJazz.Client.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications;
+using ChefKnifeStudios.TransitJazz.Client.Core.ClientExperience;
 using Xunit;
 
 namespace ChefKnifeStudios.TransitJazz.Client.Shared.Tests;
 
 public sealed class SettingsChangeTests
 {
+    [Fact]
+    public async Task ExplicitSettingsEffectAndPersistenceShareActionIdWithoutCapturingValue()
+    {
+        var settings = new TestSettingsService();
+        var capture = new RecordingAttempts();
+        var controller = new SettingsChangeController(settings, experienceAttempts: capture);
+
+        var outcome = await controller.ChangeAsync(
+            nameof(Settings.IsDarkModeEnabled), true,
+            (_, _) => Task.FromResult(SettingsEffectResult.Success));
+
+        Assert.Equal(SettingsChangeStatus.Applied, outcome.Status);
+        Assert.Equal(["settings_effect", "settings_persistence"], capture.Started.Select(x => x.Journey));
+        Assert.Equal(capture.Started[0].ParentActionId, capture.Started[1].ParentActionId);
+        Assert.All(capture.Started, attempt => Assert.Equal("display_setting", attempt.Action));
+        Assert.All(capture.Started, attempt => Assert.Equal(15_000, attempt.DeadlineForegroundMs));
+        Assert.Equal(["succeeded", "succeeded"], capture.Finished.Select(x => x.Outcome));
+        Assert.DoesNotContain("true", capture.Started.SelectMany(x => new[] { x.Journey, x.Action }));
+    }
+
     [Fact]
     public async Task AppliedEffectWithSaveFailureKeepsSessionValueAndReportsSaveOnly()
     {
@@ -179,5 +200,25 @@ public sealed class SettingsChangeTests
             typeof(Settings).GetProperty(propertyName)?.GetValue(_settings) is T value ? value : default;
         public void SetSettingValue<T>(string propertyName, T value) =>
             typeof(Settings).GetProperty(propertyName)?.SetValue(_settings, value);
+    }
+
+    sealed class RecordingAttempts : IClientExperienceAttemptCapture
+    {
+        public List<StartedAttempt> Started { get; } = [];
+        public List<FinishedAttempt> Finished { get; } = [];
+
+        public Guid StartAttempt(string citySlug, string journey, long deadlineForegroundMs, Guid? cityActivationId = null,
+            Guid? parentActionId = null, string? action = null)
+        {
+            var id = Guid.NewGuid();
+            Started.Add(new(id, citySlug, journey, deadlineForegroundMs, parentActionId, action));
+            return id;
+        }
+
+        public void FinishAttempt(Guid attemptId, string citySlug, string journey, string outcome, string reason, Guid? cityActivationId = null)
+            => Finished.Add(new(attemptId, outcome));
+
+        public sealed record StartedAttempt(Guid Id, string CitySlug, string Journey, long DeadlineForegroundMs, Guid? ParentActionId, string? Action);
+        public sealed record FinishedAttempt(Guid Id, string Outcome);
     }
 }

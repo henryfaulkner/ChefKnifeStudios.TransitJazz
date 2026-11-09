@@ -1,4 +1,6 @@
 using ChefKnifeStudios.TransitJazz.Client.Core.Services;
+using ChefKnifeStudios.TransitJazz.Client.Core.ClientExperience;
+using ChefKnifeStudios.TransitJazz.Shared.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
@@ -59,6 +61,28 @@ public sealed class LiveDeliveryReadinessTests
 
         Assert.True(service.DeliveryState.IsReady);
         Assert.Null(service.DeliveryState.FailureReason);
+    }
+
+    [Fact]
+    public async Task LiveCaptureWaitsForCurrentCityJoinAfterTransportConnects()
+    {
+        var connection = new FakeLiveDeliveryConnection(LiveFailureStage.None) { HoldJoin = true };
+        var capture = new RecordingExperienceCapture();
+        var service = CreateService(connection, experienceCapture: capture);
+        var initialization = service.InitAsync();
+
+        await connection.JoinEntered.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(service.DeliveryState.TransportConnected);
+        Assert.False(service.DeliveryState.CityJoined);
+        Assert.Contains(capture.Events, item => item.EventKind == "capability_changed" && item.CurrentState == "pending");
+        Assert.DoesNotContain(capture.Events, item => item.EventKind == "capability_changed" && item.CurrentState == "healthy");
+
+        connection.ReleaseJoin();
+        await initialization.WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.Contains(capture.Events, item => item.EventKind == "capability_changed" && item.CurrentState == "healthy");
+        Assert.Equal("live_start", Assert.Single(capture.StartedJourneys));
+        Assert.Equal("succeeded", Assert.Single(capture.FinishedOutcomes));
     }
 
     [Fact]
@@ -208,13 +232,15 @@ public sealed class LiveDeliveryReadinessTests
     static SignalRNotificationService CreateService(
         FakeLiveDeliveryConnection connection,
         TimeProvider? timeProvider = null,
-        string? baseUri = "https://transit.example.test")
-        => CreateService([connection], timeProvider, baseUri);
+        string? baseUri = "https://transit.example.test",
+        IClientExperienceCapture? experienceCapture = null)
+        => CreateService([connection], timeProvider, baseUri, experienceCapture);
 
     static SignalRNotificationService CreateService(
         FakeLiveDeliveryConnection[] connections,
         TimeProvider? timeProvider = null,
-        string? baseUri = "https://transit.example.test")
+        string? baseUri = "https://transit.example.test",
+        IClientExperienceCapture? experienceCapture = null)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -229,7 +255,24 @@ public sealed class LiveDeliveryReadinessTests
             navigation,
             NullLogger<SignalRNotificationService>.Instance,
             new FakeLiveDeliveryConnectionFactory(connections),
-            timeProvider ?? TimeProvider.System);
+            timeProvider ?? TimeProvider.System,
+            experienceCapture,
+            experienceCapture as IClientExperienceAttemptCapture);
+    }
+
+    sealed class RecordingExperienceCapture : IClientExperienceCapture, IClientExperienceAttemptCapture
+    {
+        public List<ClientExperienceEvent> Events { get; } = [];
+        public List<string> StartedJourneys { get; } = [];
+        public List<string> FinishedOutcomes { get; } = [];
+        public void TryCapture(ClientExperienceEvent observation) => Events.Add(observation);
+        public Guid StartAttempt(string citySlug, string journey, long deadlineForegroundMs, Guid? cityActivationId = null, Guid? parentActionId = null, string? action = null)
+        {
+            StartedJourneys.Add(journey);
+            return Guid.NewGuid();
+        }
+        public void FinishAttempt(Guid attemptId, string citySlug, string journey, string outcome, string reason, Guid? cityActivationId = null)
+            => FinishedOutcomes.Add(outcome);
     }
 
     sealed class StubNavigationManager : NavigationManager

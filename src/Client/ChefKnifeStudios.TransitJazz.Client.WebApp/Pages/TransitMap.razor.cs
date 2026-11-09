@@ -1,5 +1,6 @@
 using ChefKnifeStudios.TransitJazz.Client.Core.Services;
 using ChefKnifeStudios.TransitJazz.Client.Core.Services.EndpointsServices;
+using ChefKnifeStudios.TransitJazz.Client.Core.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Components;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Constants;
 using ChefKnifeStudios.TransitJazz.Client.Shared.EventArgs;
@@ -10,8 +11,10 @@ using ChefKnifeStudios.TransitJazz.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services.JsInterop;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications;
+using ChefKnifeStudios.TransitJazz.Client.Shared.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Client.Shared.ViewModels;
 using ChefKnifeStudios.TransitJazz.Shared;
+using ChefKnifeStudios.TransitJazz.Shared.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
 using ChefKnifeStudios.TransitJazz.Shared.Geospatial;
 using ChefKnifeStudios.TransitJazz.Shared.GtfsData;
@@ -49,6 +52,9 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     [Inject] IPageVisibilityJsInterop PageVisibility { get; set; } = null!;
     [Inject] NavigationManager NavigationManager { get; set; } = null!;
     [Inject] IJSRuntime JS { get; set; } = null!;
+    [Inject] IClientExperienceCapture ClientExperienceCapture { get; set; } = null!;
+    [Inject] IClientExperienceAttemptCapture ClientExperienceAttempts { get; set; } = null!;
+    [Inject] ClientExperienceReporter ClientExperienceReporter { get; set; } = null!;
 
     const float MinWidth = 1100;
     const bool ConditionalAudioSettingsNotificationsEnabled = false;
@@ -72,6 +78,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     bool _audioPlaybackUnavailable;
     SettingsChangeOutcome? _audioSettingOutcome;
     readonly AudioUnlockAttemptState _audioUnlockState = new();
+    Guid _audioEpisodeId = Guid.NewGuid();
+    string _audioCapabilityState = "not_requested";
     bool _checkpointsVisible = false;
     bool _crossingTrailVisible = true;
 
@@ -86,6 +94,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     readonly Dictionary<string, RouteShapeFeature> _routeShapeCache = new(StringComparer.Ordinal);
     bool _routesLoaded;
     bool _routesRendered;
+    bool _disposed;
 
     // routeJoinKey → consecutive batches with no live vehicle. A route's audio Sampler is
     // disposed once it's been absent this many batches in a row (~tolerates brief feed
@@ -123,6 +132,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
 
         var settings = SettingsService.GetSettings();
         _audioEnabled = settings.IsAudioEnabled;
+        CaptureAudioCapability(_audioEnabled ? "pending" : "not_requested", _audioEnabled ? "unknown" : "not_requested");
         _checkpointsVisible = settings.AreCheckpointsVisible;
         _crossingTrailVisible = settings.IsCrossingTrailVisible;
         _ = TransitSynth.SetAudioEnabledAsync(_audioEnabled);
@@ -134,8 +144,10 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         _attentionGate = new AttentionGate((IDeliveryControl)NotificationService);
 
         RouteFilterViewModel.PropertyChanged += OnRouteFilterPropertyChanged;
+        ApplicationViewModel.PropertyChanged += OnApplicationViewModelPropertyChanged;
         EventNotificationService.EventReceivedAsync += HandleSettingsEventReceivedAsync;
         TransitSynth.AudioCapabilityHealthChanged += OnAudioCapabilityHealthChanged;
+        ClientExperienceReporter.VisibilityChanged += OnExperienceVisibilityChanged;
 
         // Subscribe FIRST so the immediate initial fire reaches us, then register.
         _viewportSub = ViewportSize.AddViewportSizeChangeCallback(OnViewportChanged);
@@ -192,6 +204,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             await _map.SetVehiclesVisibleAsync(settings.IsBusesVisible);
             // Seed the dispatcher's live mute flag from the persisted setting (default is true).
             await _map.SetCrossingAudioEnabledAsync(settings.IsAudioEnabled);
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -248,8 +261,18 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     // without further interaction.
     async Task<bool> EnableAudioAsync()
     {
+        var previousStatus = _audioUnlockState.Current.Status;
+        if (previousStatus == AudioUnlockStatus.Enabling) return false;
+        var journey = previousStatus is AudioUnlockStatus.Locked or AudioUnlockStatus.Failed
+            ? "audio_unlock"
+            : "audio_resume";
         var attemptId = _audioUnlockState.BeginAttempt();
+        var city = ApplicationViewModel.NotificationScope.CitySlug;
+        var activationId = ApplicationViewModel.CityActivationId;
+        var experienceAttemptId = SafeStartAudioAttempt(city, journey, activationId);
+        CaptureAudioCapability("pending", "owner_confirmed");
         var outcome = AudioUnlockStatus.Failed;
+        var accepted = false;
         try
         {
             outcome = await TransitSynth.UnlockAsync();
@@ -260,7 +283,27 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
         finally
         {
-            _audioUnlockState.CompleteAttempt(attemptId, outcome);
+            accepted = _audioUnlockState.CompleteAttempt(attemptId, outcome);
+        }
+
+        if (accepted)
+        {
+            var succeeded = outcome == AudioUnlockStatus.Running;
+            SafeFinishAudioAttempt(experienceAttemptId, city, journey,
+                succeeded ? "succeeded" : "failed",
+                outcome == AudioUnlockStatus.Suspended ? "suspended" : succeeded ? "owner_confirmed" : "owner_failed",
+                activationId);
+            if (!succeeded)
+                CaptureAudioCapability("unavailable", outcome == AudioUnlockStatus.Suspended ? "suspended" : "owner_failed");
+        }
+        else if (experienceAttemptId != Guid.Empty)
+        {
+            var current = _audioUnlockState.Current;
+            var cancelled = current.AttemptId == attemptId && current.Status == AudioUnlockStatus.Muted;
+            SafeFinishAudioAttempt(experienceAttemptId, city, journey,
+                cancelled ? "cancelled" : "superseded",
+                cancelled ? "user_cancelled" : "stale_generation",
+                activationId);
         }
 
         if (outcome == AudioUnlockStatus.Running && _audioEnabled)
@@ -277,6 +320,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 && _audioUnlockState.Current.Status == AudioUnlockStatus.Running)
             {
                 _audioPlaybackUnavailable = failed;
+                CaptureAudioCapability(failed ? "degraded" : "healthy", failed ? "owner_failed" : "owner_confirmed");
 
                 if (playbackSupported && !failed)
                     await TransitSynth.BeginAudioCapabilityHealthAsync(attemptId, audioRequested: true, audioUnlocked: true);
@@ -289,6 +333,56 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             && !_audioPlaybackUnavailable;
     }
 
+    Guid SafeStartAudioAttempt(string city, string journey, Guid activationId, string? action = null)
+    {
+        try { return ClientExperienceAttempts.StartAttempt(city, journey, 15_000, activationId, action: action); }
+        catch { return Guid.Empty; }
+    }
+
+    void SafeFinishAudioAttempt(Guid attemptId, string city, string journey, string outcome, string reason, Guid activationId)
+    {
+        if (attemptId == Guid.Empty) return;
+        try { ClientExperienceAttempts.FinishAttempt(attemptId, city, journey, outcome, reason, activationId); }
+        catch { }
+    }
+
+    void CaptureAudioCapability(string current, string reason)
+    {
+        if (string.Equals(_audioCapabilityState, current, StringComparison.Ordinal)) return;
+        var previous = _audioCapabilityState;
+        if (current == "pending" && previous == "not_requested")
+            _audioEpisodeId = Guid.NewGuid();
+        try
+        {
+            ClientExperienceCapture.TryCapture(new ClientExperienceEvent
+            {
+                SchemaVersion = ClientExperienceCatalog.SchemaVersion,
+                MeasurementVersion = ClientExperienceCatalog.MeasurementVersion,
+                EventKind = "capability_changed",
+                EventId = Guid.NewGuid(),
+                PageSessionId = Guid.Empty,
+                CityActivationId = ApplicationViewModel.CityActivationId,
+                Sequence = 0,
+                OccurredAtUtc = DateTimeOffset.UtcNow,
+                PageElapsedMs = 0,
+                CitySlug = ApplicationViewModel.NotificationScope.CitySlug,
+                ClientRelease = "unknown",
+                Capability = "audio",
+                PreviousState = previous,
+                CurrentState = current,
+                EpisodeId = _audioEpisodeId,
+                OwnerGeneration = Math.Max(0, _audioUnlockState.Current.AttemptId),
+                InitialSnapshot = false,
+                Reason = reason,
+                AudioRequested = current != "not_requested"
+            });
+            _audioCapabilityState = current;
+            if (current == "healthy" && (previous is "degraded" or "unavailable"))
+                _audioEpisodeId = Guid.NewGuid();
+        }
+        catch { /* Telemetry failure never changes audio behavior. */ }
+    }
+
     void OnAudioCapabilityHealthChanged(AudioCapabilityHealthTransition transition) =>
         _ = InvokeAsync(() => ObserveAudioCapabilityHealthAsync(transition));
 
@@ -296,6 +390,18 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
     {
         var current = _audioUnlockState.Current;
         var audioUnlocked = _audioEnabled && current.Status == AudioUnlockStatus.Running;
+        if (transition.Kind != AudioCapabilityHealthTransitionKind.None)
+        {
+            var state = transition.Kind switch
+            {
+                AudioCapabilityHealthTransitionKind.Warning => "degraded",
+                AudioCapabilityHealthTransitionKind.Error => "unavailable",
+                AudioCapabilityHealthTransitionKind.Recovered => "healthy",
+                _ => _audioCapabilityState
+            };
+            var reason = transition.Kind == AudioCapabilityHealthTransitionKind.Recovered ? "recovered" : "owner_failed";
+            CaptureAudioCapability(state, reason);
+        }
         return CapabilityNotificationOwner.ObserveRequiredVoiceHealthAsync(
             transition,
             ApplicationViewModel.NotificationScope,
@@ -320,6 +426,7 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         }
 
         if (!_audioUnlockState.ContinueWithoutAudio(attemptId)) return;
+        CaptureAudioCapability("not_requested", "user_cancelled");
         EventNotificationService.PostEvent(this, new SettingsCommittedEventArgs
         {
             PropertyName = nameof(Settings.IsAudioEnabled),
@@ -376,6 +483,9 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                 }
                 else
                 {
+                    var stopCity = ApplicationViewModel.NotificationScope.CitySlug;
+                    var activationId = ApplicationViewModel.CityActivationId;
+                    var stopAttemptId = SafeStartAudioAttempt(stopCity, "audio_stop", activationId, "audio_stop");
                     var outcome = await AudioSettingOutcomes.MuteAsync(
                         disableScheduledNotes: () => _map is null
                             ? Task.FromResult(true)
@@ -385,10 +495,15 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                         verifyStopped: () => TransitSynth.VerifyAudioSilencedAsync());
                     EventNotificationService.PostEvent(this, new AudioStopOutcomeChangedEventArgs { Outcome = outcome });
                     applied = outcome.Status is AudioStopStatus.Stopped or AudioStopStatus.MasterMuted;
+                    SafeFinishAudioAttempt(stopAttemptId, stopCity, "audio_stop",
+                        applied ? "succeeded" : "failed",
+                        outcome.Status == AudioStopStatus.StillPlaying ? "still_playing" : applied ? "owner_confirmed" : "owner_failed",
+                        activationId);
 
                     if (applied)
                     {
                         _audioEnabled = false;
+                        CaptureAudioCapability("not_requested", "muted");
                         await TransitSynth.StopAudioCapabilityHealthAsync();
                         if (_attentionGate is not null)
                             await _attentionGate.OnAudioChangedAsync(_pageHidden, false);
@@ -399,6 +514,8 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
                         // disabled as a safety measure; do not re-enable a source after a failed
                         // stop. Only StillPlaying is eligible for the tab-close instruction.
                         _audioEnabled = previous;
+                        if (outcome.Status == AudioStopStatus.StillPlaying)
+                            CaptureAudioCapability("degraded", "still_playing");
                     }
                 }
             });
@@ -508,11 +625,81 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
             _ = _attentionGate.OnVisibilityChangedAsync(hidden, _audioEnabled);
     }
 
+    void OnExperienceVisibilityChanged(bool visible)
+    {
+        if (visible && !_disposed)
+            _ = InvokeAsync(ReassessExperienceOwnersAsync);
+    }
+
+    async Task ReassessExperienceOwnersAsync()
+    {
+        var city = ApplicationViewModel.NotificationScope.CitySlug;
+        var activationId = ApplicationViewModel.CityActivationId;
+        var routeState = ApplicationViewModel.RouteLoadOutcome.Status switch
+        {
+            RouteLoadStatus.Usable => "healthy",
+            RouteLoadStatus.Unavailable => "unavailable",
+            RouteLoadStatus.Pending => "pending",
+            _ => "unknown"
+        };
+        ClientExperienceReporter.ReassessCapability(city, activationId, "routes", routeState,
+            Math.Max(0, ApplicationViewModel.NotificationScope.PageGeneration));
+
+        if (_map is not null)
+        {
+            var mapState = _map.Readiness.Status switch
+            {
+                MapReadinessStatus.Ready => "healthy",
+                MapReadinessStatus.Unavailable => "unavailable",
+                _ => "pending"
+            };
+            ClientExperienceReporter.ReassessCapability(city, activationId, "map", mapState,
+                Math.Max(0, _map.Readiness.InstanceGeneration));
+        }
+
+        var live = ApplicationViewModel.LiveDeliveryState;
+        var liveState = !live.DeliveryDesired ? "not_requested"
+            : live.IsReady ? "healthy"
+            : ApplicationViewModel.LiveIssueCode is NotificationIssueCode.LiveInterrupted or NotificationIssueCode.LiveProcessingFailed
+                ? "degraded"
+                : live.FailureReason is not null ? "unavailable" : "pending";
+        ClientExperienceReporter.ReassessCapability(city, activationId, "live_delivery", liveState,
+            Math.Max(0, live.ConnectionGeneration));
+
+        var audioState = "not_requested";
+        if (_audioEnabled)
+        {
+            var unlock = _audioUnlockState.Current.Status;
+            audioState = unlock switch
+            {
+                AudioUnlockStatus.Running => _audioCapabilityState is "healthy" or "degraded" or "unavailable"
+                    ? _audioCapabilityState : "healthy",
+                AudioUnlockStatus.Suspended or AudioUnlockStatus.Failed => "unavailable",
+                _ => "pending"
+            };
+            if (unlock == AudioUnlockStatus.Running)
+            {
+                try
+                {
+                    if (!await TransitSynth.IsUnlockedAsync()) audioState = "unavailable";
+                    else if (!await TransitSynth.IsPlaybackSupportedAsync()) audioState = "degraded";
+                }
+                catch { audioState = "unknown"; }
+            }
+        }
+        ClientExperienceReporter.ReassessCapability(city, activationId, "audio", audioState,
+            Math.Max(0, _audioUnlockState.Current.AttemptId));
+    }
+
     public async ValueTask DisposeAsync()
     {
+        if (_disposed) return;
+        _disposed = true;
+        ClientExperienceReporter.VisibilityChanged -= OnExperienceVisibilityChanged;
         await TransitSynth.StopAudioCapabilityHealthAsync();
         TransitSynth.AudioCapabilityHealthChanged -= OnAudioCapabilityHealthChanged;
         RouteFilterViewModel.PropertyChanged -= OnRouteFilterPropertyChanged;
+        ApplicationViewModel.PropertyChanged -= OnApplicationViewModelPropertyChanged;
         EventNotificationService.EventReceivedAsync -= HandleSettingsEventReceivedAsync;
         if (_batchHandler != null)
             NotificationService.NotificationReceived -= _batchHandler;
@@ -532,6 +719,13 @@ public partial class TransitMap : ComponentBase, IAsyncDisposable
         if (!_mapReady || _map is null) return;
 
         ApplyMapFocus();
+    }
+
+    void OnApplicationViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(IApplicationViewModel.LiveDeliveryState)
+            or nameof(IApplicationViewModel.RoutesLoaded))
+            _ = InvokeAsync(StateHasChanged);
     }
 
     void ApplyMapFocus()

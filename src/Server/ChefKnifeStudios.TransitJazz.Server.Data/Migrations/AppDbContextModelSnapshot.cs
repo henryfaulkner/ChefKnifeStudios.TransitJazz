@@ -725,6 +725,356 @@ namespace ChefKnifeStudios.TransitJazz.Server.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.ClientExperienceDaily", b =>
+                {
+                    b.Property<DateOnly>("DayUtc")
+                        .HasColumnType("date")
+                        .HasColumnName("day_utc");
+
+                    b.Property<string>("Environment")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("environment");
+
+                    b.Property<string>("CitySlug")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("city_slug");
+
+                    b.Property<string>("ClientRelease")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("client_release");
+
+                    b.Property<int>("MeasurementVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("measurement_version");
+
+                    b.Property<string>("TimeBasis")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("time_basis");
+
+                    b.Property<string>("SeriesKind")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("series_kind");
+
+                    b.Property<string>("SeriesCode")
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)")
+                        .HasColumnName("series_code");
+
+                    b.Property<long>("DeadlineExceeded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("deadline_exceeded");
+
+                    b.Property<long>("DegradedMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("degraded_ms");
+
+                    b.Property<long>("EligibleStarts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("eligible_starts");
+
+                    b.Property<long>("EventCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("event_count");
+
+                    b.Property<long>("Excluded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("excluded");
+
+                    b.Property<long>("ExcludedMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("excluded_ms");
+
+                    b.Property<long>("Failed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("failed");
+
+                    b.Property<long>("GapMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("gap_ms");
+
+                    b.Property<long>("HealthyMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("healthy_ms");
+
+                    b.Property<long>("LatencyLe1000Ms")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("latency_le_1000_ms");
+
+                    b.Property<long>("LatencyLe15000Ms")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("latency_le_15000_ms");
+
+                    b.Property<long>("LatencyLe30000Ms")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("latency_le_30000_ms");
+
+                    b.Property<long>("LatencyLe5000Ms")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("latency_le_5000_ms");
+
+                    b.Property<long>("LatencyLe500Ms")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("latency_le_500_ms");
+
+                    b.Property<long>("LatencyLe60000Ms")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("latency_le_60000_ms");
+
+                    b.Property<long>("LatencyOverflow")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("latency_overflow");
+
+                    b.Property<long>("ObservedMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("observed_ms");
+
+                    b.Property<long>("PageSessionDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("page_session_days");
+
+                    b.Property<long>("PendingMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("pending_ms");
+
+                    b.Property<long>("Presentations")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("presentations");
+
+                    b.Property<long>("QualityCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("quality_count");
+
+                    b.Property<long>("Succeeded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("succeeded");
+
+                    b.Property<long>("UnavailableMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("unavailable_ms");
+
+                    b.Property<long>("UnknownMs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("unknown_ms");
+
+                    b.Property<long>("Unresolved")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("unresolved");
+
+                    b.HasKey("DayUtc", "Environment", "CitySlug", "ClientRelease", "MeasurementVersion", "TimeBasis", "SeriesKind", "SeriesCode");
+
+                    b.HasIndex("Environment", "CitySlug", "SeriesKind", "DayUtc")
+                        .HasDatabaseName("ix_client_experience_daily_env_city_series_day");
+
+                    b.ToTable("client_experience_daily", (string)null);
+                });
+
+            modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.ClientExperienceEvent", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<Guid?>("AttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("attempt_id");
+
+                    b.Property<string>("Capability")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("capability");
+
+                    b.Property<Guid?>("CityActivationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("city_activation_id");
+
+                    b.Property<string>("CitySlug")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("city_slug");
+
+                    b.Property<string>("ClientRelease")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("client_release");
+
+                    b.Property<bool>("ClockSkewed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("clock_skewed");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("environment");
+
+                    b.Property<Guid?>("EpisodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("episode_id");
+
+                    b.Property<string>("EventKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("event_kind");
+
+                    b.Property<string>("Journey")
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)")
+                        .HasColumnName("journey");
+
+                    b.Property<int>("MeasurementVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("measurement_version");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("outcome");
+
+                    b.Property<long>("PageElapsedMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("page_elapsed_ms");
+
+                    b.Property<Guid>("PageSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("page_session_id");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<DateTimeOffset>("ReceivedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at_utc");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("schema_version");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sequence");
+
+                    b.HasKey("EventId");
+
+                    b.HasIndex("ReceivedAtUtc")
+                        .HasDatabaseName("ix_client_experience_events_received_at");
+
+                    b.HasIndex("PageSessionId", "CityActivationId", "AttemptId")
+                        .HasDatabaseName("ix_client_experience_events_scope_attempt");
+
+                    b.HasIndex("Environment", "CitySlug", "EventKind", "ReceivedAtUtc")
+                        .HasDatabaseName("ix_client_experience_events_env_city_kind_received");
+
+                    b.ToTable("client_experience_events", (string)null);
+                });
+
+            modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.ClientExperienceMaintenance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("JobVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("job_version");
+
+                    b.Property<long>("LagSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("lag_seconds");
+
+                    b.Property<string>("LastFailureCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("last_failure_code");
+
+                    b.Property<DateTimeOffset?>("LastFailureUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_failure_utc");
+
+                    b.Property<DateTimeOffset?>("LastSuccessUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_success_utc");
+
+                    b.Property<DateTimeOffset?>("WatermarkUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("watermark_utc");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("client_experience_maintenance", (string)null);
+                });
+
             modelBuilder.Entity("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityReportedVehicleHourMembership", b =>
                 {
                     b.HasOne("ChefKnifeStudios.TransitJazz.Server.Data.Models.CityReportedVehicleHour", "Hour")
