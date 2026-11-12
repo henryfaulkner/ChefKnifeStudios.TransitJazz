@@ -1,0 +1,1479 @@
+{
+    "apiVersion":  1,
+    "groups":  [
+                   {
+                       "folder":  "TransitJazz",
+                       "name":  "transitjazz-client-experience-health",
+                       "orgId":  1,
+                       "rules":  [
+                                     {
+                                         "for":  "3m",
+                                         "labels":  {
+                                                        "severity":  "warning",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "missing_series_evals_to_resolve":  6,
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "cg086lcj6z6yob",
+                                                          "model":  {
+                                                                        "editorMode":  "code",
+                                                                        "intervalMs":  1000,
+                                                                        "rawSql":  "WITH parameters AS (\n    SELECT now() AS evaluated_at,\n           now() - interval \u002717 minutes\u0027 AS cohort_start,\n           now() - interval \u00272 minutes\u0027 AS cohort_end\n), configured_cities(city_slug) AS (\n    VALUES (\u0027atlanta\u0027), (\u0027washington-dc\u0027), (\u0027boston\u0027), (\u0027new-york-city\u0027),\n           (\u0027toronto\u0027), (\u0027philadelphia\u0027), (\u0027denver\u0027), (\u0027seattle\u0027), (\u0027unknown\u0027)\n), configured_journeys(journey) AS (\n    VALUES (\u0027bootstrap_start\u0027), (\u0027city_map_start\u0027), (\u0027live_start\u0027), (\u0027live_resume\u0027),\n           (\u0027audio_unlock\u0027), (\u0027audio_resume\u0027), (\u0027settings_effect\u0027), (\u0027settings_persistence\u0027),\n           (\u0027audio_stop\u0027), (\u0027city_navigation\u0027)\n), configured_environments(environment) AS (\n    SELECT DISTINCT environment\n    FROM client_experience_events\n    WHERE environment \u003c\u003e \u0027synthetic\u0027\n    UNION SELECT \u0027Production\u0027\n), starts AS (\n    SELECT e.environment, e.city_slug, e.page_session_id, e.city_activation_id,\n           e.measurement_version, e.attempt_id,\n           MIN(e.received_at_utc) AS received_at_utc,\n           COUNT(*) AS event_count,\n           BOOL_OR(e.clock_skewed OR e.received_at_utc \u003c e.occurred_at_utc\n               OR e.received_at_utc - e.occurred_at_utc \u003e interval \u00272 minutes\u0027) AS stale_start,\n           MIN(COALESCE(e.payload -\u003e\u003e \u0027journey\u0027, e.payload -\u003e\u003e \u0027action\u0027)) AS series_code\n    FROM client_experience_events e\n    CROSS JOIN parameters p\n    WHERE e.event_kind = \u0027attempt_started\u0027\n      AND e.attempt_id IS NOT NULL\n      AND e.environment \u003c\u003e \u0027synthetic\u0027\n      AND e.received_at_utc BETWEEN p.cohort_start AND p.cohort_end\n    GROUP BY e.environment, e.city_slug, e.page_session_id, e.city_activation_id,\n             e.measurement_version, e.attempt_id\n), finishes AS (\n    SELECT e.environment, e.page_session_id, e.city_activation_id, e.measurement_version, e.attempt_id,\n           COUNT(*) AS event_count,\n           BOOL_OR(e.clock_skewed OR e.received_at_utc \u003c e.occurred_at_utc\n               OR e.received_at_utc - e.occurred_at_utc \u003e interval \u00272 minutes\u0027) AS stale_result\n    FROM client_experience_events e\n    JOIN starts s\n      ON s.environment = e.environment\n     AND s.page_session_id = e.page_session_id\n     AND s.city_activation_id IS NOT DISTINCT FROM e.city_activation_id\n     AND s.measurement_version = e.measurement_version\n     AND s.attempt_id = e.attempt_id\n    WHERE e.event_kind = \u0027attempt_finished\u0027\n      AND e.attempt_id IS NOT NULL\n      AND e.environment \u003c\u003e \u0027synthetic\u0027\n    GROUP BY e.environment, e.page_session_id, e.city_activation_id, e.measurement_version, e.attempt_id\n), attempts AS (\n    SELECT s.environment, s.city_slug, s.page_session_id, s.series_code,\n           a.eligible, a.logical_conflict, s.stale_start, s.event_count AS start_event_count,\n           CASE WHEN COALESCE(f.stale_result, false) THEN \u0027unresolved\u0027 ELSE a.outcome END AS effective_outcome\n    FROM starts s\n    JOIN client_experience_attempts a\n      ON a.environment = s.environment\n     AND a.page_session_id = s.page_session_id\n     AND a.city_activation_id IS NOT DISTINCT FROM s.city_activation_id\n     AND a.measurement_version = s.measurement_version\n     AND a.attempt_id = s.attempt_id\n    LEFT JOIN finishes f\n      ON f.environment = s.environment\n     AND f.page_session_id = s.page_session_id\n     AND f.city_activation_id IS NOT DISTINCT FROM s.city_activation_id\n     AND f.measurement_version = s.measurement_version\n     AND f.attempt_id = s.attempt_id\n), totals AS (\n    SELECT environment, city_slug, series_code,\n           COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND NOT stale_start AND start_event_count = 1\n               AND effective_outcome IN (\u0027succeeded\u0027,\u0027failed\u0027,\u0027deadline_exceeded\u0027,\u0027unresolved\u0027)) AS eligible_starts,\n           COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND NOT stale_start AND start_event_count = 1\n               AND effective_outcome IN (\u0027failed\u0027,\u0027deadline_exceeded\u0027)) AS bad_starts,\n           COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND NOT stale_start AND start_event_count = 1\n               AND effective_outcome = \u0027unresolved\u0027) AS unresolved_starts,\n           COUNT(DISTINCT page_session_id) FILTER (WHERE eligible AND NOT logical_conflict AND NOT stale_start AND start_event_count = 1\n               AND effective_outcome IN (\u0027succeeded\u0027,\u0027failed\u0027,\u0027deadline_exceeded\u0027,\u0027unresolved\u0027)) AS affected_sessions\n    FROM attempts\n    GROUP BY environment, city_slug, series_code\n), fixed_series AS (\n    SELECT e.environment, c.city_slug, j.journey,\n           COALESCE(t.eligible_starts, 0) AS eligible_starts,\n           COALESCE(t.bad_starts, 0) AS bad_starts,\n           COALESCE(t.unresolved_starts, 0) AS unresolved_starts,\n           COALESCE(t.affected_sessions, 0) AS affected_sessions\n    FROM configured_environments e\n    CROSS JOIN configured_cities c\n    CROSS JOIN configured_journeys j\n    LEFT JOIN totals t ON t.environment = e.environment AND t.city_slug = c.city_slug AND t.series_code = j.journey\n)\nSELECT p.evaluated_at AS \"time\", s.environment, s.city_slug, s.journey,\n       CASE WHEN s.eligible_starts \u003e= 20\n                  AND s.affected_sessions \u003e= 3\n                  AND s.unresolved_starts::numeric / NULLIF(s.eligible_starts, 0) \u003c= 0.10\n            THEN CASE WHEN s.bad_starts::numeric / NULLIF(s.eligible_starts, 0) \u003e= 0.10\n                      THEN 1::double precision ELSE 0::double precision END\n            ELSE NULL::double precision END AS value\nFROM fixed_series s\nCROSS JOIN parameters p\nORDER BY 1, 2, 3, 4;\n",
+                                                                        "format":  "time_series",
+                                                                        "datasource":  {
+                                                                                           "type":  "grafana-postgresql-datasource",
+                                                                                           "uid":  "cg086lcj6z6yob"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "sql":  {
+                                                                                    "limit":  50,
+                                                                                    "columns":  [
+
+                                                                                                ],
+                                                                                    "groupBy":  [
+
+                                                                                                ]
+                                                                                },
+                                                                        "rawQuery":  true,
+                                                                        "maxDataPoints":  43200
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                0
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "uid":  "ce_journey_failure_high",
+                                         "dashboardUid":  "transitjazz-client-experience",
+                                         "title":  "Client journey failures elevated",
+                                         "noDataState":  "Alerting",
+                                         "panelId":  1,
+                                         "isPaused":  false,
+                                         "execErrState":  "Alerting",
+                                         "condition":  "C",
+                                         "annotations":  {
+                                                             "summary":  "Confirmed journey failures reached 10% with adequate fresh traffic.",
+                                                             "description":  "The query enforces N \u003e= 20, three affected sessions, a 15-minute receipt-time cohort ending two minutes ago, and unresolved share \u003c= 10%."
+                                                         },
+                                         "keepFiringFor":  "2m"
+                                     },
+                                     {
+                                         "for":  "3m",
+                                         "labels":  {
+                                                        "severity":  "advisory",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "missing_series_evals_to_resolve":  6,
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "cg086lcj6z6yob",
+                                                          "model":  {
+                                                                        "editorMode":  "code",
+                                                                        "intervalMs":  1000,
+                                                                        "rawSql":  "WITH parameters AS (\n    SELECT now() AS evaluated_at,\n           now() - interval \u002717 minutes\u0027 AS cohort_start,\n           now() - interval \u00272 minutes\u0027 AS cohort_end\n), configured_cities(city_slug) AS (\n    VALUES (\u0027atlanta\u0027), (\u0027washington-dc\u0027), (\u0027boston\u0027), (\u0027new-york-city\u0027),\n           (\u0027toronto\u0027), (\u0027philadelphia\u0027), (\u0027denver\u0027), (\u0027seattle\u0027), (\u0027unknown\u0027)\n), configured_journeys(journey) AS (\n    VALUES (\u0027bootstrap_start\u0027), (\u0027city_map_start\u0027), (\u0027live_start\u0027), (\u0027live_resume\u0027),\n           (\u0027audio_unlock\u0027), (\u0027audio_resume\u0027), (\u0027settings_effect\u0027), (\u0027settings_persistence\u0027),\n           (\u0027audio_stop\u0027), (\u0027city_navigation\u0027)\n), configured_environments(environment) AS (\n    SELECT DISTINCT environment FROM client_experience_events WHERE environment \u003c\u003e \u0027synthetic\u0027\n    UNION SELECT \u0027Production\u0027\n), attempts AS (\n    SELECT a.environment, a.city_slug, COALESCE(a.journey, a.action) AS journey,\n           a.page_session_id, a.eligible, a.logical_conflict, a.outcome\n    FROM client_experience_attempts a\n    CROSS JOIN parameters p\n    WHERE a.environment \u003c\u003e \u0027synthetic\u0027\n      AND a.start_received_at_utc BETWEEN p.cohort_start AND p.cohort_end\n), totals AS (\n    SELECT environment, city_slug, journey,\n           COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict\n               AND outcome IN (\u0027succeeded\u0027,\u0027failed\u0027,\u0027deadline_exceeded\u0027,\u0027unresolved\u0027)) AS eligible_starts,\n           COUNT(*) FILTER (WHERE eligible AND NOT logical_conflict AND outcome = \u0027unresolved\u0027) AS unresolved_starts,\n           COUNT(DISTINCT page_session_id) FILTER (WHERE eligible AND NOT logical_conflict\n               AND outcome IN (\u0027succeeded\u0027,\u0027failed\u0027,\u0027deadline_exceeded\u0027,\u0027unresolved\u0027)) AS affected_sessions\n    FROM attempts\n    GROUP BY environment, city_slug, journey\n), fixed_series AS (\n    SELECT e.environment, c.city_slug, j.journey,\n           COALESCE(t.eligible_starts, 0) AS eligible_starts,\n           COALESCE(t.unresolved_starts, 0) AS unresolved_starts,\n           COALESCE(t.affected_sessions, 0) AS affected_sessions\n    FROM configured_environments e\n    CROSS JOIN configured_cities c\n    CROSS JOIN configured_journeys j\n    LEFT JOIN totals t ON t.environment = e.environment AND t.city_slug = c.city_slug AND t.journey = j.journey\n)\nSELECT p.evaluated_at AS \"time\", s.environment, s.city_slug, s.journey,\n       CASE WHEN s.eligible_starts \u003e= 20 AND s.affected_sessions \u003e= 3\n                  AND s.unresolved_starts::numeric / NULLIF(s.eligible_starts, 0) \u003e 0.10\n            THEN 1::double precision ELSE 0::double precision END AS value\nFROM fixed_series s\nCROSS JOIN parameters p\nORDER BY 1, 2, 3, 4;\n",
+                                                                        "format":  "time_series",
+                                                                        "datasource":  {
+                                                                                           "type":  "grafana-postgresql-datasource",
+                                                                                           "uid":  "cg086lcj6z6yob"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "sql":  {
+                                                                                    "limit":  50,
+                                                                                    "columns":  [
+
+                                                                                                ],
+                                                                                    "groupBy":  [
+
+                                                                                                ]
+                                                                                },
+                                                                        "rawQuery":  true,
+                                                                        "maxDataPoints":  43200
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                0
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "uid":  "ce_journey_coverage_advisory",
+                                         "dashboardUid":  "transitjazz-client-experience",
+                                         "title":  "Client journey coverage low",
+                                         "noDataState":  "Alerting",
+                                         "panelId":  1,
+                                         "isPaused":  false,
+                                         "execErrState":  "Alerting",
+                                         "condition":  "C",
+                                         "annotations":  {
+                                                             "summary":  "Unresolved journey starts exceed 10% of an adequately sized cohort.",
+                                                             "description":  "This advisory suppresses the journey-health conclusion until result coverage recovers."
+                                                         },
+                                         "keepFiringFor":  "2m"
+                                     },
+                                     {
+                                         "for":  "3m",
+                                         "labels":  {
+                                                        "severity":  "warning",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "missing_series_evals_to_resolve":  6,
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "cg086lcj6z6yob",
+                                                          "model":  {
+                                                                        "editorMode":  "code",
+                                                                        "intervalMs":  1000,
+                                                                        "rawSql":  "WITH parameters AS (\n    SELECT now() AS evaluated_at,\n           now() - interval \u002710 minutes\u0027 AS window_start,\n           now() AS window_end\n), configured_cities(city_slug) AS (\n    VALUES (\u0027atlanta\u0027), (\u0027washington-dc\u0027), (\u0027boston\u0027), (\u0027new-york-city\u0027),\n           (\u0027toronto\u0027), (\u0027philadelphia\u0027), (\u0027denver\u0027), (\u0027seattle\u0027), (\u0027unknown\u0027)\n), configured_capabilities(capability) AS (\n    VALUES (\u0027routes\u0027), (\u0027map\u0027), (\u0027live_delivery\u0027), (\u0027audio\u0027)\n), configured_environments(environment) AS (\n    SELECT DISTINCT environment FROM client_experience_events WHERE environment \u003c\u003e \u0027synthetic\u0027\n    UNION SELECT \u0027Production\u0027\n), windows AS (\n    SELECT w.event_id, w.environment, w.city_slug, w.page_session_id,\n           w.observed_ms, w.gap_ms, w.state_durations,\n           e.occurred_at_utc - ((e.page_elapsed_ms - w.window_start_ms) * interval \u00271 millisecond\u0027) AS interval_start_utc,\n           e.occurred_at_utc - ((e.page_elapsed_ms - w.window_end_ms) * interval \u00271 millisecond\u0027) AS interval_end_utc\n    FROM client_experience_validated_windows w\n    JOIN client_experience_events e ON e.event_id = w.event_id\n    CROSS JOIN parameters p\n    WHERE NOT w.clock_skewed\n      AND e.received_at_utc \u003e= e.occurred_at_utc\n      AND e.received_at_utc - e.occurred_at_utc \u003c= interval \u00272 minutes\u0027\n      AND e.received_at_utc \u003e= p.window_start - interval \u00272 minutes\u0027\n      AND e.page_elapsed_ms \u003e= w.window_end_ms\n      AND e.occurred_at_utc - ((e.page_elapsed_ms - w.window_start_ms) * interval \u00271 millisecond\u0027) \u003e= p.window_start\n      AND e.occurred_at_utc - ((e.page_elapsed_ms - w.window_end_ms) * interval \u00271 millisecond\u0027) \u003c= p.window_end\n), per_capability AS (\n    SELECT w.event_id, w.environment, w.city_slug, w.page_session_id, w.observed_ms, w.gap_ms,\n           state.value -\u003e\u003e \u0027capability\u0027 AS capability,\n           SUM(NULLIF(state.value -\u003e\u003e \u0027durationMs\u0027, \u0027\u0027)::bigint)\n               FILTER (WHERE state.value -\u003e\u003e \u0027state\u0027 IN (\u0027degraded\u0027,\u0027unavailable\u0027)) AS degraded_ms,\n           SUM(NULLIF(state.value -\u003e\u003e \u0027durationMs\u0027, \u0027\u0027)::bigint)\n               FILTER (WHERE state.value -\u003e\u003e \u0027state\u0027 = \u0027unknown\u0027) AS unknown_ms\n    FROM windows w\n    CROSS JOIN LATERAL jsonb_array_elements(w.state_durations) state(value)\n    GROUP BY w.event_id, w.environment, w.city_slug, w.page_session_id, w.observed_ms, w.gap_ms,\n             state.value -\u003e\u003e \u0027capability\u0027\n), totals AS (\n    SELECT environment, city_slug, capability,\n           SUM(observed_ms) AS observed_ms,\n           SUM(COALESCE(degraded_ms, 0)) AS degraded_ms,\n           SUM(COALESCE(unknown_ms, 0)) AS unknown_ms,\n           SUM(gap_ms) AS gap_ms,\n           COUNT(DISTINCT page_session_id) AS affected_sessions\n    FROM per_capability\n    GROUP BY environment, city_slug, capability\n), fixed_series AS (\n    SELECT e.environment, c.city_slug, cap.capability,\n           COALESCE(t.observed_ms, 0) AS observed_ms,\n           COALESCE(t.degraded_ms, 0) AS degraded_ms,\n           COALESCE(t.unknown_ms, 0) AS unknown_ms,\n           COALESCE(t.gap_ms, 0) AS gap_ms,\n           COALESCE(t.affected_sessions, 0) AS affected_sessions\n    FROM configured_environments e\n    CROSS JOIN configured_cities c\n    CROSS JOIN configured_capabilities cap\n    LEFT JOIN totals t ON t.environment = e.environment AND t.city_slug = c.city_slug AND t.capability = cap.capability\n)\nSELECT p.evaluated_at AS \"time\", s.environment, s.city_slug, s.capability AS metric,\n       CASE WHEN s.observed_ms \u003e= 600000 AND s.affected_sessions \u003e= 3\n                  AND (s.unknown_ms + s.gap_ms)::numeric / NULLIF(s.observed_ms + s.gap_ms, 0) \u003c= 0.10\n            THEN CASE WHEN s.degraded_ms::numeric / NULLIF(s.observed_ms, 0) \u003e= 0.10\n                      THEN 1::double precision ELSE 0::double precision END\n            ELSE NULL::double precision END AS value\nFROM fixed_series s\nCROSS JOIN parameters p\nORDER BY 1, 2, 3, 4;\n",
+                                                                        "format":  "time_series",
+                                                                        "datasource":  {
+                                                                                           "type":  "grafana-postgresql-datasource",
+                                                                                           "uid":  "cg086lcj6z6yob"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "sql":  {
+                                                                                    "limit":  50,
+                                                                                    "columns":  [
+
+                                                                                                ],
+                                                                                    "groupBy":  [
+
+                                                                                                ]
+                                                                                },
+                                                                        "rawQuery":  true,
+                                                                        "maxDataPoints":  43200
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                0
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "uid":  "ce_capability_degradation_high",
+                                         "dashboardUid":  "transitjazz-client-experience",
+                                         "title":  "Client capability degradation elevated",
+                                         "noDataState":  "Alerting",
+                                         "panelId":  1,
+                                         "isPaused":  false,
+                                         "execErrState":  "Alerting",
+                                         "condition":  "C",
+                                         "annotations":  {
+                                                             "summary":  "Degraded or unavailable capability time reached 10% with adequate observation.",
+                                                             "description":  "The query requires ten observed session-minutes, three sessions, fully bounded recent windows, and unknown plus gap coverage at or below 10%."
+                                                         },
+                                         "keepFiringFor":  "2m"
+                                     },
+                                     {
+                                         "for":  "3m",
+                                         "labels":  {
+                                                        "severity":  "advisory",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "missing_series_evals_to_resolve":  6,
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "cg086lcj6z6yob",
+                                                          "model":  {
+                                                                        "editorMode":  "code",
+                                                                        "intervalMs":  1000,
+                                                                        "rawSql":  "WITH parameters AS (\n    SELECT now() AS evaluated_at,\n           now() - interval \u002710 minutes\u0027 AS window_start,\n           now() AS window_end\n), configured_cities(city_slug) AS (\n    VALUES (\u0027atlanta\u0027), (\u0027washington-dc\u0027), (\u0027boston\u0027), (\u0027new-york-city\u0027),\n           (\u0027toronto\u0027), (\u0027philadelphia\u0027), (\u0027denver\u0027), (\u0027seattle\u0027), (\u0027unknown\u0027)\n), configured_capabilities(capability) AS (\n    VALUES (\u0027routes\u0027), (\u0027map\u0027), (\u0027live_delivery\u0027), (\u0027audio\u0027)\n), configured_environments(environment) AS (\n    SELECT DISTINCT environment FROM client_experience_events WHERE environment \u003c\u003e \u0027synthetic\u0027\n    UNION SELECT \u0027Production\u0027\n), windows AS (\n    SELECT w.event_id, w.environment, w.city_slug, w.page_session_id,\n           w.observed_ms, w.gap_ms, w.state_durations,\n           e.occurred_at_utc - ((e.page_elapsed_ms - w.window_start_ms) * interval \u00271 millisecond\u0027) AS interval_start_utc,\n           e.occurred_at_utc - ((e.page_elapsed_ms - w.window_end_ms) * interval \u00271 millisecond\u0027) AS interval_end_utc\n    FROM client_experience_validated_windows w\n    JOIN client_experience_events e ON e.event_id = w.event_id\n    CROSS JOIN parameters p\n    WHERE NOT w.clock_skewed\n      AND e.received_at_utc \u003e= e.occurred_at_utc\n      AND e.received_at_utc - e.occurred_at_utc \u003c= interval \u00272 minutes\u0027\n      AND e.received_at_utc \u003e= p.window_start - interval \u00272 minutes\u0027\n      AND e.page_elapsed_ms \u003e= w.window_end_ms\n      AND e.occurred_at_utc - ((e.page_elapsed_ms - w.window_start_ms) * interval \u00271 millisecond\u0027) \u003e= p.window_start\n      AND e.occurred_at_utc - ((e.page_elapsed_ms - w.window_end_ms) * interval \u00271 millisecond\u0027) \u003c= p.window_end\n), per_capability AS (\n    SELECT w.event_id, w.environment, w.city_slug, w.page_session_id, w.observed_ms, w.gap_ms,\n           state.value -\u003e\u003e \u0027capability\u0027 AS capability,\n           SUM(NULLIF(state.value -\u003e\u003e \u0027durationMs\u0027, \u0027\u0027)::bigint)\n               FILTER (WHERE state.value -\u003e\u003e \u0027state\u0027 = \u0027unknown\u0027) AS unknown_ms\n    FROM windows w\n    CROSS JOIN LATERAL jsonb_array_elements(w.state_durations) state(value)\n    GROUP BY w.event_id, w.environment, w.city_slug, w.page_session_id, w.observed_ms, w.gap_ms,\n             state.value -\u003e\u003e \u0027capability\u0027\n), totals AS (\n    SELECT environment, city_slug, capability,\n           SUM(observed_ms) AS observed_ms,\n           SUM(COALESCE(unknown_ms, 0)) AS unknown_ms,\n           SUM(gap_ms) AS gap_ms,\n           COUNT(DISTINCT page_session_id) AS affected_sessions\n    FROM per_capability\n    GROUP BY environment, city_slug, capability\n), fixed_series AS (\n    SELECT e.environment, c.city_slug, cap.capability,\n           COALESCE(t.observed_ms, 0) AS observed_ms,\n           COALESCE(t.unknown_ms, 0) AS unknown_ms,\n           COALESCE(t.gap_ms, 0) AS gap_ms,\n           COALESCE(t.affected_sessions, 0) AS affected_sessions\n    FROM configured_environments e\n    CROSS JOIN configured_cities c\n    CROSS JOIN configured_capabilities cap\n    LEFT JOIN totals t ON t.environment = e.environment AND t.city_slug = c.city_slug AND t.capability = cap.capability\n)\nSELECT p.evaluated_at AS \"time\", s.environment, s.city_slug, s.capability AS metric,\n       CASE WHEN s.observed_ms \u003e= 600000 AND s.affected_sessions \u003e= 3\n                  AND (s.unknown_ms + s.gap_ms)::numeric / NULLIF(s.observed_ms + s.gap_ms, 0) \u003e 0.10\n            THEN 1::double precision ELSE 0::double precision END AS value\nFROM fixed_series s\nCROSS JOIN parameters p\nORDER BY 1, 2, 3, 4;\n",
+                                                                        "format":  "time_series",
+                                                                        "datasource":  {
+                                                                                           "type":  "grafana-postgresql-datasource",
+                                                                                           "uid":  "cg086lcj6z6yob"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "sql":  {
+                                                                                    "limit":  50,
+                                                                                    "columns":  [
+
+                                                                                                ],
+                                                                                    "groupBy":  [
+
+                                                                                                ]
+                                                                                },
+                                                                        "rawQuery":  true,
+                                                                        "maxDataPoints":  43200
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                0
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "uid":  "ce_capability_coverage_advisory",
+                                         "dashboardUid":  "transitjazz-client-experience",
+                                         "title":  "Client capability coverage low",
+                                         "noDataState":  "Alerting",
+                                         "panelId":  1,
+                                         "isPaused":  false,
+                                         "execErrState":  "Alerting",
+                                         "condition":  "C",
+                                         "annotations":  {
+                                                             "summary":  "Unknown plus gap time exceeds 10% of an adequately observed capability window.",
+                                                             "description":  "This advisory suppresses the capability-health conclusion until coverage recovers."
+                                                         },
+                                         "keepFiringFor":  "2m"
+                                     },
+                                     {
+                                         "for":  "0s",
+                                         "labels":  {
+                                                        "severity":  "critical",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "missing_series_evals_to_resolve":  6,
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "cg086lcj6z6yob",
+                                                          "model":  {
+                                                                        "editorMode":  "code",
+                                                                        "intervalMs":  1000,
+                                                                        "rawSql":  "WITH parameters AS (\n    SELECT now() AS evaluated_at,\n           now() - interval \u00272 minutes\u0027 AS fresh_after\n), configured_cities(city_slug) AS (\n    VALUES (\u0027atlanta\u0027), (\u0027washington-dc\u0027), (\u0027boston\u0027), (\u0027new-york-city\u0027),\n           (\u0027toronto\u0027), (\u0027philadelphia\u0027), (\u0027denver\u0027), (\u0027seattle\u0027), (\u0027unknown\u0027)\n), configured_environments(environment) AS (\n    SELECT DISTINCT environment FROM client_experience_events WHERE environment \u003c\u003e \u0027synthetic\u0027\n    UNION SELECT \u0027Production\u0027\n), stop_failures AS (\n    SELECT e.environment, e.city_slug, COUNT(*) AS failure_count\n    FROM client_experience_events e\n    CROSS JOIN parameters p\n    WHERE e.event_kind = \u0027attempt_finished\u0027\n      AND e.environment \u003c\u003e \u0027synthetic\u0027\n      AND e.payload -\u003e\u003e \u0027journey\u0027 = \u0027audio_stop\u0027\n      AND e.payload -\u003e\u003e \u0027outcome\u0027 = \u0027failed\u0027\n      AND e.payload -\u003e\u003e \u0027reason\u0027 = \u0027still_playing\u0027\n      AND NOT e.clock_skewed\n      AND e.occurred_at_utc \u003e= p.fresh_after\n      AND e.received_at_utc \u003e= p.fresh_after\n      AND e.received_at_utc \u003e= e.occurred_at_utc\n      AND e.received_at_utc - e.occurred_at_utc \u003c= interval \u00272 minutes\u0027\n      AND EXISTS (\n          SELECT 1 FROM client_experience_events started\n          WHERE started.event_kind = \u0027attempt_started\u0027\n            AND started.environment = e.environment\n            AND started.page_session_id = e.page_session_id\n            AND started.city_activation_id IS NOT DISTINCT FROM e.city_activation_id\n            AND started.measurement_version = e.measurement_version\n            AND started.attempt_id = e.attempt_id\n            AND started.payload -\u003e\u003e \u0027journey\u0027 = \u0027audio_stop\u0027\n      )\n    GROUP BY e.environment, e.city_slug\n)\nSELECT p.evaluated_at AS \"time\", env.environment, city.city_slug, \u0027still_playing\u0027::text AS metric,\n       CASE WHEN COALESCE(f.failure_count, 0) \u003e 0 THEN 1::double precision ELSE 0::double precision END AS value\nFROM configured_environments env\nCROSS JOIN configured_cities city\nCROSS JOIN parameters p\nLEFT JOIN stop_failures f ON f.environment = env.environment AND f.city_slug = city.city_slug\nORDER BY 1, 2, 3, 4;\n",
+                                                                        "format":  "time_series",
+                                                                        "datasource":  {
+                                                                                           "type":  "grafana-postgresql-datasource",
+                                                                                           "uid":  "cg086lcj6z6yob"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "sql":  {
+                                                                                    "limit":  50,
+                                                                                    "columns":  [
+
+                                                                                                ],
+                                                                                    "groupBy":  [
+
+                                                                                                ]
+                                                                                },
+                                                                        "rawQuery":  true,
+                                                                        "maxDataPoints":  43200
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                0
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "uid":  "ce_audio_stop_still_playing",
+                                         "dashboardUid":  "transitjazz-client-experience",
+                                         "title":  "Audio stop remains active",
+                                         "noDataState":  "Alerting",
+                                         "panelId":  1,
+                                         "isPaused":  false,
+                                         "execErrState":  "Alerting",
+                                         "condition":  "C",
+                                         "annotations":  {
+                                                             "summary":  "A fresh confirmed audio-stop result reports still_playing.",
+                                                             "description":  "The rule requires a matching stop attempt and trustworthy event delivery within two minutes; presentation and traffic volume do not gate it."
+                                                         },
+                                         "keepFiringFor":  "2m"
+                                     },
+                                     {
+                                         "for":  "0s",
+                                         "labels":  {
+                                                        "severity":  "advisory",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "missing_series_evals_to_resolve":  6,
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "cg086lcj6z6yob",
+                                                          "model":  {
+                                                                        "editorMode":  "code",
+                                                                        "intervalMs":  1000,
+                                                                        "rawSql":  "WITH parameters AS (\n    SELECT now() AS evaluated_at,\n           now() - interval \u00275 minutes\u0027 AS errors_start,\n           now() - interval \u002710 minutes\u0027 AS warnings_start\n), configured_cities(city_slug) AS (\n    VALUES (\u0027atlanta\u0027), (\u0027washington-dc\u0027), (\u0027boston\u0027), (\u0027new-york-city\u0027),\n           (\u0027toronto\u0027), (\u0027philadelphia\u0027), (\u0027denver\u0027), (\u0027seattle\u0027), (\u0027unknown\u0027)\n), configured_environments(environment) AS (\n    SELECT DISTINCT environment FROM client_experience_events WHERE environment \u003c\u003e \u0027synthetic\u0027\n    UNION SELECT \u0027Production\u0027\n), presentations AS (\n    SELECT environment, city_slug, page_session_id, displayed_severity, received_at_utc\n    FROM client_experience_presentations\n    WHERE environment \u003c\u003e \u0027synthetic\u0027\n), errors AS (\n    SELECT p.environment, p.city_slug, COUNT(*) AS presentation_count,\n           COUNT(DISTINCT p.page_session_id) AS affected_sessions\n    FROM presentations p CROSS JOIN parameters t\n    WHERE p.displayed_severity = \u0027error\u0027 AND p.received_at_utc \u003e= t.errors_start\n    GROUP BY p.environment, p.city_slug\n), warnings AS (\n    SELECT p.environment, p.city_slug, COUNT(*) AS presentation_count,\n           COUNT(DISTINCT p.page_session_id) AS affected_sessions\n    FROM presentations p CROSS JOIN parameters t\n    WHERE p.displayed_severity = \u0027warning\u0027 AND p.received_at_utc \u003e= t.warnings_start\n    GROUP BY p.environment, p.city_slug\n), fixed_series AS (\n    SELECT e.environment, c.city_slug, \u0027error\u0027::text AS severity,\n           COALESCE(a.presentation_count, 0) AS presentation_count,\n           COALESCE(a.affected_sessions, 0) AS affected_sessions,\n           10::bigint AS count_threshold, 3::bigint AS session_threshold\n    FROM configured_environments e CROSS JOIN configured_cities c\n    LEFT JOIN errors a ON a.environment = e.environment AND a.city_slug = c.city_slug\n    UNION ALL\n    SELECT e.environment, c.city_slug, \u0027warning\u0027::text AS severity,\n           COALESCE(a.presentation_count, 0) AS presentation_count,\n           COALESCE(a.affected_sessions, 0) AS affected_sessions,\n           30::bigint AS count_threshold, 5::bigint AS session_threshold\n    FROM configured_environments e CROSS JOIN configured_cities c\n    LEFT JOIN warnings a ON a.environment = e.environment AND a.city_slug = c.city_slug\n)\nSELECT p.evaluated_at AS \"time\", s.environment, s.city_slug, s.severity AS metric,\n       CASE WHEN s.presentation_count \u003e= s.count_threshold AND s.affected_sessions \u003e= s.session_threshold\n            THEN 1::double precision ELSE 0::double precision END AS value\nFROM fixed_series s\nCROSS JOIN parameters p\nORDER BY 1, 2, 3, 4;\n",
+                                                                        "format":  "time_series",
+                                                                        "datasource":  {
+                                                                                           "type":  "grafana-postgresql-datasource",
+                                                                                           "uid":  "cg086lcj6z6yob"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "sql":  {
+                                                                                    "limit":  50,
+                                                                                    "columns":  [
+
+                                                                                                ],
+                                                                                    "groupBy":  [
+
+                                                                                                ]
+                                                                                },
+                                                                        "rawQuery":  true,
+                                                                        "maxDataPoints":  43200
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                0
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "uid":  "ce_toast_volume_advisory",
+                                         "dashboardUid":  "transitjazz-client-experience",
+                                         "title":  "Client toast volume elevated",
+                                         "noDataState":  "Alerting",
+                                         "panelId":  1,
+                                         "isPaused":  false,
+                                         "execErrState":  "Alerting",
+                                         "condition":  "C",
+                                         "annotations":  {
+                                                             "summary":  "Committed warning or error presentations exceeded the diagnostic volume threshold.",
+                                                             "description":  "Diagnostic only: 10 errors across three sessions in five minutes, or 30 warnings across five sessions in ten minutes."
+                                                         },
+                                         "keepFiringFor":  "2m"
+                                     }
+                                 ],
+                       "interval":  "1m"
+                   },
+                   {
+                       "folder":  "TransitJazz",
+                       "name":  "transitjazz-client-experience-maintenance",
+                       "orgId":  1,
+                       "rules":  [
+                                     {
+                                         "for":  "10m",
+                                         "labels":  {
+                                                        "severity":  "warning",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "missing_series_evals_to_resolve":  6,
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "cg086lcj6z6yob",
+                                                          "model":  {
+                                                                        "editorMode":  "code",
+                                                                        "intervalMs":  1000,
+                                                                        "rawSql":  "SELECT now() AS \"time\", \u0027global\u0027::text AS metric,\n       CASE WHEN m.id IS NULL\n                  OR m.watermark_utc IS NULL\n                  OR m.watermark_utc \u003c now() - interval \u00272 hours\u0027\n            THEN 1::double precision ELSE 0::double precision END AS value\nFROM (VALUES (1)) AS expected(id)\nLEFT JOIN client_experience_maintenance m ON m.id = expected.id\nORDER BY 1, 2;\n",
+                                                                        "format":  "time_series",
+                                                                        "datasource":  {
+                                                                                           "type":  "grafana-postgresql-datasource",
+                                                                                           "uid":  "cg086lcj6z6yob"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "sql":  {
+                                                                                    "limit":  50,
+                                                                                    "columns":  [
+
+                                                                                                ],
+                                                                                    "groupBy":  [
+
+                                                                                                ]
+                                                                                },
+                                                                        "rawQuery":  true,
+                                                                        "maxDataPoints":  43200
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                0
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "uid":  "ce_trend_maintenance_stalled",
+                                         "dashboardUid":  "transitjazz-client-experience",
+                                         "title":  "Client trend maintenance stalled",
+                                         "noDataState":  "Alerting",
+                                         "panelId":  1,
+                                         "isPaused":  false,
+                                         "execErrState":  "Alerting",
+                                         "condition":  "C",
+                                         "annotations":  {
+                                                             "summary":  "The client-experience aggregation watermark is missing or more than two hours behind.",
+                                                             "description":  "Repeated cleanup failures are reported by the separate maintenance failure counter rule."
+                                                         },
+                                         "keepFiringFor":  "2m"
+                                     }
+                                 ],
+                       "interval":  "5m"
+                   },
+                   {
+                       "folder":  "TransitJazz",
+                       "name":  "transitjazz-client-experience-collection",
+                       "orgId":  1,
+                       "rules":  [
+                                     {
+                                         "execErrState":  "Alerting",
+                                         "annotations":  {
+                                                             "summary":  "Five or more client-experience persistence failures occurred in five minutes.",
+                                                             "description":  "Check API database connectivity, schema readiness, and transaction errors; this counter excludes client-side loss."
+                                                         },
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "__SET_METRICS_DATASOURCE_UID__",
+                                                          "model":  {
+                                                                        "datasource":  {
+                                                                                           "type":  "prometheus",
+                                                                                           "uid":  "__SET_METRICS_DATASOURCE_UID__"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "maxDataPoints":  43200,
+                                                                        "instant":  true,
+                                                                        "intervalMs":  1000,
+                                                                        "expr":  "sum(increase({__name__=\"client_experience_intake_requests_total\",outcome=\"persistence_unavailable\"}[5m])) or vector(0)",
+                                                                        "range":  false,
+                                                                        "editorMode":  "code"
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                4
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "missing_series_evals_to_resolve":  6,
+                                         "keepFiringFor":  "2m",
+                                         "isPaused":  false,
+                                         "labels":  {
+                                                        "severity":  "critical",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "noDataState":  "Alerting",
+                                         "condition":  "C",
+                                         "title":  "Client experience persistence failures",
+                                         "uid":  "ce_ingestion_persistence_failures",
+                                         "for":  "2m"
+                                     },
+                                     {
+                                         "execErrState":  "Alerting",
+                                         "annotations":  {
+                                                             "summary":  "The intake database probe reported unavailable storage or timed out.",
+                                                             "description":  "Check the health-probe endpoint and database/schema status. Query execution errors use Grafana Error state."
+                                                         },
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "__SET_METRICS_DATASOURCE_UID__",
+                                                          "model":  {
+                                                                        "datasource":  {
+                                                                                           "type":  "prometheus",
+                                                                                           "uid":  "__SET_METRICS_DATASOURCE_UID__"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "maxDataPoints":  43200,
+                                                                        "instant":  true,
+                                                                        "intervalMs":  1000,
+                                                                        "expr":  "sum(increase({__name__=\"client_experience_probe_runs_total\",outcome=~\"unavailable|timeout\"}[2m])) or vector(0)",
+                                                                        "range":  false,
+                                                                        "editorMode":  "code"
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                0
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "missing_series_evals_to_resolve":  6,
+                                         "keepFiringFor":  "2m",
+                                         "isPaused":  false,
+                                         "labels":  {
+                                                        "severity":  "critical",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "noDataState":  "Alerting",
+                                         "condition":  "C",
+                                         "title":  "Client experience database probe unavailable",
+                                         "uid":  "ce_database_probe_unavailable",
+                                         "for":  "2m"
+                                     },
+                                     {
+                                         "execErrState":  "Alerting",
+                                         "annotations":  {
+                                                             "summary":  "No database-probe metric samples were scraped in ten minutes.",
+                                                             "description":  "Verify that the health endpoint is being called and the OpenTelemetry metrics pipeline exports the probe meter."
+                                                         },
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "__SET_METRICS_DATASOURCE_UID__",
+                                                          "model":  {
+                                                                        "datasource":  {
+                                                                                           "type":  "prometheus",
+                                                                                           "uid":  "__SET_METRICS_DATASOURCE_UID__"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "maxDataPoints":  43200,
+                                                                        "instant":  true,
+                                                                        "intervalMs":  1000,
+                                                                        "expr":  "count(count_over_time({__name__=\"client_experience_probe_runs_total\"}[10m])) or vector(0)",
+                                                                        "range":  false,
+                                                                        "editorMode":  "code"
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                1
+                                                                                                                            ],
+                                                                                                                 "type":  "lt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "missing_series_evals_to_resolve":  6,
+                                         "keepFiringFor":  "2m",
+                                         "isPaused":  false,
+                                         "labels":  {
+                                                        "severity":  "critical",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "noDataState":  "Alerting",
+                                         "condition":  "C",
+                                         "title":  "Client experience database probe series missing",
+                                         "uid":  "ce_database_probe_missing",
+                                         "for":  "2m"
+                                     },
+                                     {
+                                         "execErrState":  "Alerting",
+                                         "annotations":  {
+                                                             "summary":  "At least two client-experience maintenance runs failed in thirty minutes.",
+                                                             "description":  "Review aggregation and retention health; a single run failure does not trigger this alert."
+                                                         },
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "__SET_METRICS_DATASOURCE_UID__",
+                                                          "model":  {
+                                                                        "datasource":  {
+                                                                                           "type":  "prometheus",
+                                                                                           "uid":  "__SET_METRICS_DATASOURCE_UID__"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "maxDataPoints":  43200,
+                                                                        "instant":  true,
+                                                                        "intervalMs":  1000,
+                                                                        "expr":  "sum(increase({__name__=\"client_experience_maintenance_runs_total\",outcome=\"failed\"}[30m])) or vector(0)",
+                                                                        "range":  false,
+                                                                        "editorMode":  "code"
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                1
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "missing_series_evals_to_resolve":  6,
+                                         "keepFiringFor":  "2m",
+                                         "isPaused":  false,
+                                         "labels":  {
+                                                        "severity":  "warning",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "noDataState":  "Alerting",
+                                         "condition":  "C",
+                                         "title":  "Client trend maintenance repeatedly failing",
+                                         "uid":  "ce_maintenance_repeated_failures",
+                                         "for":  "10m"
+                                     }
+                                 ],
+                       "interval":  "1m"
+                   },
+                   {
+                       "folder":  "TransitJazz",
+                       "name":  "transitjazz-client-experience-synthetic",
+                       "orgId":  1,
+                       "rules":  [
+                                     {
+                                         "execErrState":  "Alerting",
+                                         "annotations":  {
+                                                             "summary":  "The scheduled browser check failed app readiness on consecutive runs.",
+                                                             "description":  "The five-minute Grafana browser check reports shell/map/live readiness separately from runner failures."
+                                                         },
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "__SET_METRICS_DATASOURCE_UID__",
+                                                          "model":  {
+                                                                        "datasource":  {
+                                                                                           "type":  "prometheus",
+                                                                                           "uid":  "__SET_METRICS_DATASOURCE_UID__"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "maxDataPoints":  43200,
+                                                                        "instant":  true,
+                                                                        "intervalMs":  1000,
+                                                                        "expr":  "min(min_over_time({__name__=\"transitjazz_synthetic_app_readiness_failure\"}[6m]))",
+                                                                        "range":  false,
+                                                                        "editorMode":  "code"
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                0
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "missing_series_evals_to_resolve":  6,
+                                         "keepFiringFor":  "2m",
+                                         "isPaused":  false,
+                                         "labels":  {
+                                                        "severity":  "critical",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "noDataState":  "Alerting",
+                                         "condition":  "C",
+                                         "title":  "TransitJazz browser readiness failed twice",
+                                         "uid":  "ce_synthetic_app_readiness_failure",
+                                         "for":  "0s"
+                                     },
+                                     {
+                                         "execErrState":  "Alerting",
+                                         "annotations":  {
+                                                             "summary":  "The scheduled browser-check runner or browser setup failed.",
+                                                             "description":  "Investigate runner configuration, browser startup, and probe execution; this is separate from application readiness."
+                                                         },
+                                         "data":  [
+                                                      {
+                                                          "datasourceUid":  "__SET_METRICS_DATASOURCE_UID__",
+                                                          "model":  {
+                                                                        "datasource":  {
+                                                                                           "type":  "prometheus",
+                                                                                           "uid":  "__SET_METRICS_DATASOURCE_UID__"
+                                                                                       },
+                                                                        "refId":  "A",
+                                                                        "maxDataPoints":  43200,
+                                                                        "instant":  true,
+                                                                        "intervalMs":  1000,
+                                                                        "expr":  "max(max_over_time({__name__=\"transitjazz_synthetic_runner_failure\"}[10m]))",
+                                                                        "range":  false,
+                                                                        "editorMode":  "code"
+                                                                    },
+                                                          "relativeTimeRange":  {
+                                                                                    "to":  0,
+                                                                                    "from":  900
+                                                                                },
+                                                          "refId":  "A",
+                                                          "queryType":  ""
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "B",
+                                                                        "reducer":  "last",
+                                                                        "expression":  "A",
+                                                                        "type":  "reduce",
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "settings":  {
+                                                                                         "mode":  "dropNN"
+                                                                                     },
+                                                                        "maxDataPoints":  43200,
+                                                                        "conditions":  [
+
+                                                                                       ]
+                                                                    },
+                                                          "refId":  "B"
+                                                      },
+                                                      {
+                                                          "datasourceUid":  "__expr__",
+                                                          "model":  {
+                                                                        "intervalMs":  1000,
+                                                                        "refId":  "C",
+                                                                        "maxDataPoints":  43200,
+                                                                        "datasource":  {
+                                                                                           "type":  "__expr__",
+                                                                                           "uid":  "__expr__"
+                                                                                       },
+                                                                        "conditions":  [
+                                                                                           {
+                                                                                               "evaluator":  {
+                                                                                                                 "params":  [
+                                                                                                                                0
+                                                                                                                            ],
+                                                                                                                 "type":  "gt"
+                                                                                                             },
+                                                                                               "operator":  {
+                                                                                                                "type":  "and"
+                                                                                                            },
+                                                                                               "query":  {
+                                                                                                             "params":  [
+                                                                                                                            "B"
+                                                                                                                        ]
+                                                                                                         },
+                                                                                               "reducer":  {
+                                                                                                               "params":  [
+
+                                                                                                                          ],
+                                                                                                               "type":  "last"
+                                                                                                           },
+                                                                                               "type":  "query"
+                                                                                           }
+                                                                                       ],
+                                                                        "type":  "threshold",
+                                                                        "expression":  "B"
+                                                                    },
+                                                          "refId":  "C"
+                                                      }
+                                                  ],
+                                         "missing_series_evals_to_resolve":  6,
+                                         "keepFiringFor":  "2m",
+                                         "isPaused":  false,
+                                         "labels":  {
+                                                        "severity":  "warning",
+                                                        "alert_group":  "client_experience"
+                                                    },
+                                         "noDataState":  "Alerting",
+                                         "condition":  "C",
+                                         "title":  "TransitJazz browser check runner failed",
+                                         "uid":  "ce_synthetic_runner_failure",
+                                         "for":  "0s"
+                                     }
+                                 ],
+                       "interval":  "5m"
+                   }
+               ]
+}
