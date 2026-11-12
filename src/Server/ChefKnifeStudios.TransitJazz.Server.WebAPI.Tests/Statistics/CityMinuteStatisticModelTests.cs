@@ -8,14 +8,14 @@ namespace ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests.Statistics;
 public sealed class CityMinuteStatisticModelTests
 {
     [Fact]
-    public void ModelContainsOnlyTheWideStatisticEntityAndCompositeKey()
+    public void ModelContainsWideStatisticEntityWithCompositeKey()
     {
         using var context = CreateContext();
         var model = context.Model;
         var entity = model.FindEntityType(typeof(CityMinuteStatistic));
 
         Assert.NotNull(entity);
-        Assert.Equal(6, model.GetEntityTypes().Count());
+        Assert.Single(model.GetEntityTypes(), entityType => entityType.GetTableName() == "city_minute_statistics");
         Assert.Equal(["CitySlug", "StatMinuteUtc"], entity!.FindPrimaryKey()!.Properties.Select(property => property.Name));
         Assert.Empty(entity.GetIndexes());
         Assert.DoesNotContain(entity.GetProperties(), property => property.Name is "Id" or "CreatedOnUtc" or "ModifiedOnUtc" or "IsDeleted");

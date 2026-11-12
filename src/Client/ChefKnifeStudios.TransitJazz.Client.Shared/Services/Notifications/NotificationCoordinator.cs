@@ -101,6 +101,7 @@ public sealed class NotificationCoordinator : IAsyncDisposable
     }
 
     public event Action<long, NotificationSummary>? PresentationCommitted;
+    public event Action<NotificationPresentationSnapshot>? PresentationSnapshotCommitted;
     public event Action<long>? PresentationRemoved;
 
     public int ActiveIncidentCount
@@ -744,6 +745,7 @@ public sealed class NotificationCoordinator : IAsyncDisposable
             }
 
             bool stale;
+            NotificationPresentationSnapshot? committedSnapshot = null;
             lock (_stateLock)
             {
                 stale = _disposed || _modalBlocked || !_visible || attempt.IsCancellationRequested ||
@@ -777,6 +779,25 @@ public sealed class NotificationCoordinator : IAsyncDisposable
                             _escalatedCapabilities.Remove(capability);
                         }
                     }
+
+                    if (_policy.CurrentScope is NotificationScope acceptedScope)
+                    {
+                        var capabilities = summary.Capabilities.ToArray();
+                        var issueCodes = summary.IssueCodes.ToArray();
+                        var explainedIssueCodes = summary.ExplainedIssueCodes.ToArray();
+                        var resourceKeys = new[]
+                            {
+                                summary.SeverityKey, summary.ImpactKey, summary.ActionKey, summary.CloseKey,
+                                summary.OfflineQualifierKey
+                            }
+                            .Where(key => !string.IsNullOrWhiteSpace(key))
+                            .Select(key => key!)
+                            .Concat(capabilities.Select(NotificationPolicy.GetCapabilityResourceKey))
+                            .ToArray();
+                        committedSnapshot = new NotificationPresentationSnapshot(
+                            Guid.NewGuid(), acceptedScope.CitySlug, _timeProvider.GetUtcNow(), summary.Severity, summary.Kind,
+                            capabilities, issueCodes, explainedIssueCodes, resourceKeys);
+                    }
                 }
 
                 ScheduleNextDeadlineLocked();
@@ -789,6 +810,8 @@ public sealed class NotificationCoordinator : IAsyncDisposable
             else
             {
                 NotifyPresentationCommitted(attemptedPresentationId, summary);
+                if (committedSnapshot is not null)
+                    NotifyPresentationSnapshotCommitted(committedSnapshot);
             }
         }
         finally
@@ -1022,6 +1045,19 @@ public sealed class NotificationCoordinator : IAsyncDisposable
             catch (Exception exception)
             {
                 _logger?.LogError(exception, "Notification presentation listener failed for {PresentationId}.", presentationId);
+            }
+        }
+    }
+
+    void NotifyPresentationSnapshotCommitted(NotificationPresentationSnapshot snapshot)
+    {
+        if (PresentationSnapshotCommitted is not { } handlers) return;
+        foreach (Action<NotificationPresentationSnapshot> handler in handlers.GetInvocationList())
+        {
+            try { handler(snapshot); }
+            catch (Exception exception)
+            {
+                _logger?.LogError(exception, "Notification presentation snapshot listener failed for {PresentationId}.", snapshot.PresentationId);
             }
         }
     }

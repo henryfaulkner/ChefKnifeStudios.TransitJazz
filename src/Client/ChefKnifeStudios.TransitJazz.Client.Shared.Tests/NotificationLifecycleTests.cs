@@ -164,7 +164,9 @@ public sealed class NotificationLifecycleTests
         var firstHost = new FailingPresenter();
         var coordinator = new NotificationCoordinator(clock, firstHost);
         var committed = new List<long>();
+        var snapshots = new List<NotificationPresentationSnapshot>();
         coordinator.PresentationCommitted += (id, _) => committed.Add(id);
+        coordinator.PresentationSnapshotCommitted += snapshots.Add;
         coordinator.Report(new NotificationIssue(NotificationIssueCode.RouteLoadFailed));
         clock.Advance(TimeSpan.FromSeconds(2));
 
@@ -178,6 +180,7 @@ public sealed class NotificationLifecycleTests
         Assert.Equal(1, replacementHost.Attempts);
         Assert.Equal(1, coordinator.ActiveIncidentCount);
         Assert.Empty(committed);
+        Assert.Empty(snapshots);
     }
 
     [Fact]
@@ -201,6 +204,27 @@ public sealed class NotificationLifecycleTests
 
         Assert.Equal([commit.Id], removed);
         Assert.Null(harness.Coordinator.CurrentPresentationId);
+    }
+
+    [Fact]
+    public async Task AcceptedPresentationEmitsCityTimeAndCopiedFixedSummarySnapshot()
+    {
+        var harness = CreateCoordinator();
+        harness.Coordinator.SetScope(new NotificationScope(1, "atlanta"));
+        var snapshots = new List<NotificationPresentationSnapshot>();
+        harness.Coordinator.PresentationSnapshotCommitted += snapshots.Add;
+        harness.Coordinator.Report(new NotificationIssue(NotificationIssueCode.RouteLoadFailed, new NotificationScope(1, "atlanta")));
+        harness.Clock.Advance(TimeSpan.FromSeconds(2));
+
+        await harness.Coordinator.EvaluateAsync();
+
+        var snapshot = Assert.Single(snapshots);
+        Assert.NotEqual(Guid.Empty, snapshot.PresentationId);
+        Assert.Equal("atlanta", snapshot.CitySlug);
+        Assert.Equal(harness.Clock.GetUtcNow(), snapshot.AcceptedAtUtc);
+        Assert.Contains(NotificationIssueCode.RouteLoadFailed, snapshot.IssueCodes);
+        Assert.NotSame(harness.Coordinator.CurrentPresentation!.IssueCodes, snapshot.IssueCodes);
+        Assert.Contains("ToastRoutesFailure", snapshot.ResourceKeys);
     }
 
     [Fact]

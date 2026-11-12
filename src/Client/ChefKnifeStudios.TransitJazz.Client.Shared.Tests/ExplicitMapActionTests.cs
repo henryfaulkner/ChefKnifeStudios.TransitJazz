@@ -1,4 +1,5 @@
 using ChefKnifeStudios.TransitJazz.Client.Core.Services;
+using ChefKnifeStudios.TransitJazz.Client.Core.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications;
@@ -57,16 +58,26 @@ public sealed class ExplicitMapActionTests
         await using var coordinator = new NotificationCoordinator(clock, conditionalDeliveryMappingsEnabled: true);
         var presenter = new RecordingPresenter();
         coordinator.SetPresenter(presenter);
+        var experience = new RecordingAttempts();
+        var cityActivationId = Guid.NewGuid();
         var navigation = new StubNavigationManager("https://app.example.test/#atlanta");
         var controller = new CityNavigationController(
-            new FakeJsRuntime(new InvalidOperationException("interop failed")), navigation, coordinator);
+            new FakeJsRuntime(new InvalidOperationException("interop failed")), navigation, coordinator, experience);
 
-        var outcome = await controller.NavigateToCityAsync("boston", new NotificationScope(1, "atlanta"));
+        var outcome = await controller.NavigateToCityAsync("boston", new NotificationScope(1, "atlanta"), cityActivationId);
 
         Assert.False(outcome.NavigationStarted);
         Assert.True(outcome.OldPageUsable);
         Assert.Equal("boston", outcome.FailedCity);
         Assert.Equal("boston", controller.FailedCity);
+        var started = Assert.Single(experience.Started);
+        Assert.Equal("atlanta", started.CitySlug);
+        Assert.Equal("city_navigation", started.Journey);
+        Assert.Equal("city_navigation", started.Action);
+        Assert.Equal(cityActivationId, started.CityActivationId);
+        Assert.Equal(started.Id, Assert.Single(experience.Finished).Id);
+        Assert.Equal("failed", experience.Finished[0].Outcome);
+        Assert.Equal("owner_failed", experience.Finished[0].Reason);
         clock.Advance(TimeSpan.FromSeconds(2));
         await coordinator.EvaluateAsync();
         Assert.Equal(
@@ -113,6 +124,23 @@ public sealed class ExplicitMapActionTests
             if (failure is not null) throw failure;
             return ValueTask.FromResult(default(TValue)!);
         }
+    }
+
+    sealed class RecordingAttempts : IClientExperienceAttemptCapture
+    {
+        public List<StartedAttempt> Started { get; } = [];
+        public List<FinishedAttempt> Finished { get; } = [];
+        public Guid StartAttempt(string citySlug, string journey, long deadlineForegroundMs, Guid? cityActivationId = null,
+            Guid? parentActionId = null, string? action = null)
+        {
+            var id = Guid.NewGuid();
+            Started.Add(new(id, citySlug, journey, cityActivationId, action));
+            return id;
+        }
+        public void FinishAttempt(Guid attemptId, string citySlug, string journey, string outcome, string reason, Guid? cityActivationId = null)
+            => Finished.Add(new(attemptId, outcome, reason));
+        public sealed record StartedAttempt(Guid Id, string CitySlug, string Journey, Guid? CityActivationId, string? Action);
+        public sealed record FinishedAttempt(Guid Id, string Outcome, string Reason);
     }
 
     sealed class StubNavigationManager : NavigationManager

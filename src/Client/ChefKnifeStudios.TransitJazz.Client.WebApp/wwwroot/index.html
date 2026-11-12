@@ -16,6 +16,9 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
     <link rel="manifest" href="/favicon/site.webmanifest">
     <base href="/" />
+    <meta name="client-experience-enabled" content="false" />
+    <meta name="client-experience-api-base-url" content="" />
+    <meta name="client-release" content="unknown" />
     <script defer src="https://cloud.umami.is/script.js" data-website-id="8cc342c0-8f60-4509-807b-3ccab751c695" data-auto-track="false"></script>
     <script>
         try {
@@ -31,6 +34,10 @@
         } catch (e) {
             document.documentElement.setAttribute("data-theme", "light");
         }
+    </script>
+    <script type="module">
+        import { startClientExperienceBootstrap } from "_content/ChefKnifeStudios.TransitJazz.Client.Shared/js/client-experience.js";
+        startClientExperienceBootstrap().catch(() => {});
     </script>
 </head>
 <body>

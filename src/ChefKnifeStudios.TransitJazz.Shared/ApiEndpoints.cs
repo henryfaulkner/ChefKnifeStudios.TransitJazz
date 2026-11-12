@@ -24,4 +24,10 @@ public static class ApiEndpoints
     {
         public const string Query = "/stats/overlay/query";
     }
+
+    public static class ClientExperience
+    {
+        public const string Batch = "/api/client-experience/batch";
+        public const string SyntheticBatch = "/api/client-experience/synthetic/batch";
+    }
 }

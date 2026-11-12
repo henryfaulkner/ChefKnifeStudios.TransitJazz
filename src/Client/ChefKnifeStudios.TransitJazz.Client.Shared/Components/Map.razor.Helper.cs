@@ -15,6 +15,25 @@ public partial class Map : ComponentBase
     {
         _readinessGeneration = _readiness.BeginInstance();
         _capabilityOutcome.BeginInstance();
+        _mapEpisodeId = Guid.NewGuid();
+        _mapReadinessReported = false;
+        try
+        {
+            _mapAttemptId = ClientExperienceReporter.StartAttempt(
+                ApplicationViewModel.NotificationScope.CitySlug, "city_map_start", 60_000,
+                ApplicationViewModel.CityActivationId);
+            ClientExperienceCapture.TryCapture(CreateExperienceEvent("capability_changed") with
+            {
+                Capability = "map",
+                PreviousState = "unknown",
+                CurrentState = "pending",
+                EpisodeId = _mapEpisodeId,
+                OwnerGeneration = Math.Max(0, _readinessGeneration),
+                InitialSnapshot = false,
+                Reason = "unknown"
+            });
+        }
+        catch { /* Capture stays passive during map startup. */ }
         ScheduleReadinessTimer();
 
         try

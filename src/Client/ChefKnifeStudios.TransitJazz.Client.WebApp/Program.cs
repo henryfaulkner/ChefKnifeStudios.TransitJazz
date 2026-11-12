@@ -1,5 +1,7 @@
 using Blazored.LocalStorage;
 using ChefKnifeStudios.TransitJazz.Client.Core;
+using ChefKnifeStudios.TransitJazz.Client.Core.ClientExperience;
+using ChefKnifeStudios.TransitJazz.Client.Shared.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Data;
 using ChefKnifeStudios.TransitJazz.Client.Core.Services;
 using ChefKnifeStudios.TransitJazz.Client.Core.Services.EndpointsServices;
@@ -60,6 +62,10 @@ builder.Services.AddSingleton<IFeatureFlagService>(_ => new FeatureFlagService(f
 
 builder.Services.AddSingleton<IEventNotificationService, EventNotificationService>();
 builder.Services.AddSingleton<ISignalRNotificationService, SignalRNotificationService>();
+builder.Services.AddSingleton<ClientExperienceCaptureProxy>();
+builder.Services.AddSingleton<IClientExperienceCapture>(sp => sp.GetRequiredService<ClientExperienceCaptureProxy>());
+builder.Services.AddSingleton<IClientExperienceAttemptCapture>(sp => sp.GetRequiredService<ClientExperienceCaptureProxy>());
+builder.Services.AddScoped<ClientExperienceReporter>();
 
 builder.Services.AddSingleton<IGtfsEndpointsService, GtfsEndpointsService>();
 builder.Services.AddSingleton<ITransitEndpointsService, TransitEndpointsService>();

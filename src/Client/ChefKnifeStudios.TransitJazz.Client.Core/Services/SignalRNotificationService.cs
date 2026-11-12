@@ -1,6 +1,8 @@
 #nullable enable
 using ChefKnifeStudios.TransitJazz.Client.Core.Enums;
+using ChefKnifeStudios.TransitJazz.Client.Core.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Shared;
+using ChefKnifeStudios.TransitJazz.Shared.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Shared.Events;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
@@ -100,6 +102,8 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
     readonly ILogger<SignalRNotificationService> _logger;
     readonly ILiveDeliveryConnectionFactory _connectionFactory;
     readonly TimeProvider _timeProvider;
+    readonly IClientExperienceCapture? _clientExperienceCapture;
+    readonly IClientExperienceAttemptCapture? _attemptCapture;
     readonly object _stateLock = new();
 
     ILiveDeliveryConnection? _connection;
@@ -110,6 +114,8 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
     volatile bool _desiredDelivery = true;
     long _connectionGeneration;
     bool _disposed;
+    Guid _liveEpisodeId;
+    string? _lastLiveExperienceState;
 
     public SignalRNotificationService(
         IConfiguration configuration,
@@ -117,7 +123,9 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
         NavigationManager navigationManager,
         ILogger<SignalRNotificationService> logger,
         ILiveDeliveryConnectionFactory? connectionFactory = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IClientExperienceCapture? clientExperienceCapture = null,
+        IClientExperienceAttemptCapture? attemptCapture = null)
     {
         _configuration = configuration;
         _hostEnvironment = hostEnvironment;
@@ -125,6 +133,8 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
         _logger = logger;
         _connectionFactory = connectionFactory ?? new SignalRLiveDeliveryConnectionFactory();
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _clientExperienceCapture = clientExperienceCapture;
+        _attemptCapture = attemptCapture ?? clientExperienceCapture as IClientExperienceAttemptCapture;
     }
 
     public event SignalRNotificationHandler? NotificationReceived;
@@ -163,6 +173,9 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
         await ReplaceConnectionAsync();
         _city = _navigationManager.ResolveCity();
         var generation = Interlocked.Increment(ref _connectionGeneration);
+        var attemptId = _desiredDelivery
+            ? _attemptCapture?.StartAttempt(_city.ToLowerInvariant(), "live_start", 30_000) ?? Guid.Empty
+            : Guid.Empty;
 
         var setting = _configuration.GetSection("AppSettings:ExternalApis")
             .GetChildren()
@@ -170,12 +183,14 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
         var baseUrl = setting?.GetValue<string>("BaseUri");
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
+            FinishLiveAttempt(attemptId, "live_start", "failed", "owner_failed");
             Publish(new(false, _desiredDelivery, false, _city, generation, LiveDeliveryFailureReason.MissingConfiguration));
             return;
         }
 
         if (!TryCreateHubUri(baseUrl, out var hubUri))
         {
+            FinishLiveAttempt(attemptId, "live_start", "failed", "owner_failed");
             Publish(new(false, _desiredDelivery, false, _city, generation, LiveDeliveryFailureReason.InvalidConfiguration));
             return;
         }
@@ -191,18 +206,18 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.Cancelled);
+            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.Cancelled, attemptId, "live_start");
             return;
         }
         catch (TimeoutException)
         {
-            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.OperationTimedOut);
+            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.OperationTimedOut, attemptId, "live_start");
             return;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "SignalR connection start failed for city {City}", _city);
-            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.StartFailed);
+            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.StartFailed, attemptId, "live_start");
             return;
         }
 
@@ -213,14 +228,14 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
 
         if (connection.State != HubConnectionState.Connected)
         {
-            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.StartFailed);
+            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.StartFailed, attemptId, "live_start");
             return;
         }
 
         Publish(new(true, _desiredDelivery, false, _city, generation, null));
         if (_desiredDelivery)
         {
-            await JoinCityAsync(connection, generation, ct, resume: false);
+            await JoinCityAsync(connection, generation, ct, resume: false, attemptId);
         }
     }
 
@@ -264,14 +279,16 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
             return;
         }
 
-        await JoinCityAsync(connection, state.ConnectionGeneration, CancellationToken.None, resume: true);
+        var attemptId = _attemptCapture?.StartAttempt(state.City.ToLowerInvariant(), "live_resume", 30_000) ?? Guid.Empty;
+        await JoinCityAsync(connection, state.ConnectionGeneration, CancellationToken.None, resume: true, attemptId);
     }
 
     async Task JoinCityAsync(
         ILiveDeliveryConnection connection,
         long generation,
         CancellationToken cancellationToken,
-        bool resume)
+        bool resume,
+        Guid attemptId = default)
     {
         var state = DeliveryState;
         try
@@ -280,25 +297,26 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.Cancelled);
+            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.Cancelled, attemptId, resume ? "live_resume" : "live_start");
             return;
         }
         catch (TimeoutException)
         {
-            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.OperationTimedOut);
+            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.OperationTimedOut, attemptId, resume ? "live_resume" : "live_start");
             return;
         }
         catch (HubException ex) when (ex.Message.Contains("Method does not exist", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogError(ex, "SignalR city join rejected by the server protocol for city {City}", state.City);
-            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.ProtocolRejected);
+            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.ProtocolRejected, attemptId, resume ? "live_resume" : "live_start");
             return;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "SignalR city join failed for city {City}", state.City);
             FailIfCurrent(connection, generation,
-                resume ? LiveDeliveryFailureReason.ResumeFailed : LiveDeliveryFailureReason.CityJoinFailed);
+                resume ? LiveDeliveryFailureReason.ResumeFailed : LiveDeliveryFailureReason.CityJoinFailed,
+                attemptId, resume ? "live_resume" : "live_start");
             return;
         }
 
@@ -320,6 +338,7 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
 
             if (IsCurrent(connection, generation))
             {
+                FinishLiveAttempt(attemptId, resume ? "live_resume" : "live_start", "cancelled", "user_cancelled");
                 Publish(new(connection.State == HubConnectionState.Connected, false, false, state.City, generation, null));
             }
 
@@ -328,11 +347,12 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
 
         if (connection.State == HubConnectionState.Connected)
         {
+            FinishLiveAttempt(attemptId, resume ? "live_resume" : "live_start", "succeeded", "owner_confirmed");
             Publish(new(true, true, true, state.City, generation, null));
         }
         else
         {
-            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.ConnectionClosed);
+            FailIfCurrent(connection, generation, LiveDeliveryFailureReason.ConnectionClosed, attemptId, resume ? "live_resume" : "live_start");
         }
     }
 
@@ -404,12 +424,23 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
         }
     }
 
-    void FailIfCurrent(ILiveDeliveryConnection connection, long generation, LiveDeliveryFailureReason reason)
+    void FailIfCurrent(ILiveDeliveryConnection connection, long generation, LiveDeliveryFailureReason reason,
+        Guid attemptId = default, string journey = "live_start")
     {
         if (IsCurrent(connection, generation))
         {
+            FinishLiveAttempt(attemptId, journey,
+                reason == LiveDeliveryFailureReason.Cancelled ? "cancelled" : "failed",
+                reason == LiveDeliveryFailureReason.Cancelled ? "user_cancelled" : "owner_failed");
             Publish(new(connection.State == HubConnectionState.Connected, _desiredDelivery, false, _city, generation, reason));
         }
+    }
+
+    void FinishLiveAttempt(Guid attemptId, string journey, string outcome, string reason)
+    {
+        if (attemptId == Guid.Empty) return;
+        try { _attemptCapture?.FinishAttempt(attemptId, _city.ToLowerInvariant(), journey, outcome, reason); }
+        catch { /* Capture is passive and cannot affect live delivery. */ }
     }
 
     bool IsCurrent(ILiveDeliveryConnection connection, long generation)
@@ -419,12 +450,70 @@ public sealed class SignalRNotificationService : ISignalRNotificationService, ID
 
     void Publish(LiveDeliveryState state)
     {
+        LiveDeliveryState previous;
+        string currentExperienceState;
+        Guid episodeId;
+        bool reportExperience;
         lock (_stateLock)
         {
+            previous = _deliveryState;
             _deliveryState = state;
+            currentExperienceState = !state.DeliveryDesired ? "not_requested"
+                : state.IsReady ? "healthy"
+                : state.FailureReason is not null ? previous.IsReady ? "degraded" : "unavailable"
+                : "pending";
+            var scopeChanged = previous.ConnectionGeneration != state.ConnectionGeneration
+                || !string.Equals(previous.City, state.City, StringComparison.OrdinalIgnoreCase);
+            if (scopeChanged || _liveEpisodeId == Guid.Empty)
+                _liveEpisodeId = Guid.NewGuid();
+            episodeId = _liveEpisodeId;
+            reportExperience = scopeChanged || !string.Equals(_lastLiveExperienceState, currentExperienceState, StringComparison.Ordinal);
+            _lastLiveExperienceState = currentExperienceState;
         }
 
+        if (reportExperience) CaptureLiveExperienceState(previous, state, currentExperienceState, episodeId);
         DeliveryStateChanged?.Invoke(state);
+    }
+
+    void CaptureLiveExperienceState(LiveDeliveryState previous, LiveDeliveryState current, string currentState, Guid episodeId)
+    {
+        if (_clientExperienceCapture is null || current.ConnectionGeneration <= 0) return;
+        var previousState = !previous.DeliveryDesired ? "not_requested"
+            : previous.IsReady ? "healthy"
+            : previous.FailureReason is not null ? "unavailable"
+            : "pending";
+        var reason = currentState switch
+        {
+            "healthy" => "owner_confirmed",
+            "unavailable" or "degraded" => "owner_failed",
+            "not_requested" => "not_requested",
+            _ => "unknown"
+        };
+        try
+        {
+            _clientExperienceCapture.TryCapture(new ClientExperienceEvent
+            {
+                SchemaVersion = ClientExperienceCatalog.SchemaVersion,
+                MeasurementVersion = ClientExperienceCatalog.MeasurementVersion,
+                EventKind = "capability_changed",
+                EventId = Guid.NewGuid(),
+                PageSessionId = Guid.Empty,
+                CityActivationId = null,
+                Sequence = 0,
+                OccurredAtUtc = DateTimeOffset.UtcNow,
+                PageElapsedMs = 0,
+                CitySlug = string.IsNullOrWhiteSpace(current.City) ? "unknown" : current.City.ToLowerInvariant(),
+                ClientRelease = "unknown",
+                Capability = "live_delivery",
+                PreviousState = previousState,
+                CurrentState = currentState,
+                EpisodeId = episodeId,
+                OwnerGeneration = Math.Max(0, current.ConnectionGeneration),
+                InitialSnapshot = false,
+                Reason = reason
+            });
+        }
+        catch { /* Telemetry never participates in connection or join acceptance. */ }
     }
 
     bool TryCreateHubUri(string baseUrl, out Uri hubUri)

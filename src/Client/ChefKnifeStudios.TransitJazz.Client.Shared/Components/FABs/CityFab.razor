@@ -51,7 +51,7 @@
 
     async Task NavigateToCityAsync(string city)
     {
-        await CityNavigationController.NavigateToCityAsync(city, ApplicationViewModel.NotificationScope);
+        await CityNavigationController.NavigateToCityAsync(city, ApplicationViewModel.NotificationScope, ApplicationViewModel.CityActivationId);
         await InvokeAsync(StateHasChanged);
     }
 

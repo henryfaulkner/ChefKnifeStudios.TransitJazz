@@ -90,3 +90,15 @@ public sealed record NotificationSummary(
     public IReadOnlyList<NotificationIssueCode> ExplainedIssueCodes { get; init; } = Array.Empty<NotificationIssueCode>();
     public IReadOnlyList<string> CapabilityKeys => Capabilities.Select(NotificationPolicy.GetCapabilityResourceKey).ToArray();
 }
+
+/// <summary>Immutable accepted-presentation metadata captured while coordinator state is locked.</summary>
+public sealed record NotificationPresentationSnapshot(
+    Guid PresentationId,
+    string CitySlug,
+    DateTimeOffset AcceptedAtUtc,
+    NotificationSeverity Severity,
+    NotificationSummaryKind Kind,
+    IReadOnlyList<NotificationCapability> Capabilities,
+    IReadOnlyList<NotificationIssueCode> IssueCodes,
+    IReadOnlyList<NotificationIssueCode> ExplainedIssueCodes,
+    IReadOnlyList<string> ResourceKeys);

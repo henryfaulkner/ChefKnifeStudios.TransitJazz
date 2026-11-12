@@ -6,6 +6,7 @@ using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Statistics;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.EndpointGroups;
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Health;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.GtfsStatic;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Interfaces;
@@ -15,6 +16,7 @@ using ChefKnifeStudios.TransitJazz.Shared;
 using ChefKnifeStudios.TransitJazz.Shared.Services;
 using ChefKnifeStudios.TransitJazz.Server.Data;
 using ChefKnifeStudios.TransitJazz.Server.Data.Statistics;
+using ChefKnifeStudios.TransitJazz.Server.Data.ClientExperience;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Statistics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -25,6 +27,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OpenTelemetry;
 using OpenTelemetry.Exporter;
@@ -55,10 +58,17 @@ metricsOptions.Validate(workerOptions.CycleIntervalSeconds, builder.Environment.
 if (metricsOptions.LocalPrometheusEnabled && !builder.Environment.IsDevelopment())
     throw new OptionsValidationException(MetricsOptions.SectionName, typeof(MetricsOptions), ["LocalPrometheusEnabled is development-only."]);
 var statsOverlayOptions = builder.Configuration.GetSection(StatsOverlayOptions.SectionName).Get<StatsOverlayOptions>() ?? new StatsOverlayOptions();
+var clientExperienceOptions = builder.Configuration.GetSection(ClientExperienceOptions.SectionName).Get<ClientExperienceOptions>() ?? new ClientExperienceOptions();
+clientExperienceOptions.AllowedCitySlugs = builder.Configuration.GetSection("Cities").GetChildren()
+    .Select(city => city["Name"]).Where(name => !string.IsNullOrWhiteSpace(name)).Cast<string>()
+    .Select(name => name.ToLowerInvariant()).Distinct(StringComparer.Ordinal).ToArray();
+var transitJazzConnectionString = builder.Configuration.GetConnectionString("TransitJazzDB");
+clientExperienceOptions.Validate(transitJazzConnectionString);
 
 builder.Services.AddSingleton(workerOptions);
 builder.Services.AddSingleton(metricsOptions);
 builder.Services.AddSingleton(statsOverlayOptions);
+builder.Services.AddSingleton(clientExperienceOptions);
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddMetrics();
 
@@ -75,6 +85,7 @@ builder.Services.AddOpenTelemetry()
     {
         metrics.AddMeter(WorkerMetricsReporter.MeterName);
         metrics.AddMeter(StatsOverlayTelemetry.MeterName);
+        metrics.AddMeter(ClientExperienceTelemetry.MeterName);
         if (metricsOptions.Enabled && metricsOptions.LocalPrometheusEnabled)
         {
             metrics.AddPrometheusHttpListener(options =>
@@ -121,6 +132,7 @@ builder.Services.AddSingleton<StatsOverlayService>(sp => new StatsOverlayService
     sp.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping));
 
 builder.Services.AddStatsOverlayRateLimiting();
+builder.Services.AddClientExperienceRateLimiting(clientExperienceOptions);
 
 // Response compression (research D3): first-ever registration in src/Server. The
 // GetAllRouteShapes/GetAllRoutes catalog responses are megabytes of coordinate-dense JSON on
@@ -219,10 +231,20 @@ var routeHourRuntime = historicalStatisticsOptions.CreateRouteHourRuntimeOptions
 builder.Services.AddSingleton(historicalStatisticsOptions);
 builder.Services.AddSingleton<IOptions<HistoricalStatisticsOptions>>(Options.Create(historicalStatisticsOptions));
 
-var transitJazzConnectionString = builder.Configuration.GetConnectionString("TransitJazzDB");
 if (!string.IsNullOrWhiteSpace(transitJazzConnectionString))
 {
     builder.Services.RegisterDataServices(transitJazzConnectionString);
+    builder.Services.AddSingleton<IClientExperienceEventStore, ClientExperienceEventStore>();
+    if (clientExperienceOptions.MaintenanceEnabled)
+    {
+        builder.Services.AddSingleton(sp => new ClientExperienceDailyAggregator(
+            sp.GetRequiredService<IDbContextFactory<AppDbContext>>(),
+            sp.GetRequiredService<TimeProvider>(),
+            clientExperienceOptions.RawRetentionDays,
+            clientExperienceOptions.DailyRetentionMonths,
+            clientExperienceOptions.MaximumCleanupRowsPerRun));
+        builder.Services.AddHostedService<ClientExperienceMaintenanceService>();
+    }
     builder.Services.AddHttpClient<IHistoricalStatisticsSource, GrafanaPrometheusStatisticsSource>();
     builder.Services.AddSingleton<ICityMinuteStatisticsStore, CityMinuteStatisticsStore>();
     builder.Services.AddHostedService<HistoricalStatisticsCollector>();
@@ -387,6 +409,8 @@ builder.Services.AddSingleton<Worker>();
 builder.Services.AddSingleton<IRouteIndexReadiness>(sp => sp.GetRequiredService<Worker>());
 builder.Services.AddHealthChecks()
     .AddCheck<RouteIndexHealthCheck>("route-index", tags: ["ready"]);
+if (clientExperienceOptions.Enabled)
+    builder.Services.AddHealthChecks().AddCheck<ClientExperienceHealthProbe>("client-experience-storage", tags: ["client-experience"]);
 
 // Registered before Worker so StopAsync force-flushes the final worker-cycle measurement.
 builder.Services.AddHostedService<WorkerMetricsLifecycleService>();
@@ -425,6 +449,10 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = registration => registration.Tags.Contains("ready"),
 }).AllowAnonymous();
+app.MapHealthChecks("/health/client-experience", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("client-experience"),
+}).AllowAnonymous();
 
 app.MapHub<TransitHub>("/hubs/transit").AllowAnonymous();
 app.MapHub<WorkerTransitHub>("/hubs/worker-transit")
@@ -433,6 +461,7 @@ app.MapHub<WorkerTransitHub>("/hubs/worker-transit")
 app.MapTestEndpoints()
     .MapGtfsEndpoints()
     .MapTransitEndpoints()
-    .MapStatsEndpoints();
+    .MapStatsEndpoints()
+    .MapClientExperienceEndpoints();
 
 app.Run();

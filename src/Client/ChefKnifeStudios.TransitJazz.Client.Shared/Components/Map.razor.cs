@@ -2,6 +2,9 @@ using ChefKnifeStudios.TransitJazz.Client.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications;
 using ChefKnifeStudios.TransitJazz.Client.Shared.ViewModels;
+using ChefKnifeStudios.TransitJazz.Client.Core.ClientExperience;
+using ChefKnifeStudios.TransitJazz.Client.Shared.ClientExperience;
+using ChefKnifeStudios.TransitJazz.Shared.ClientExperience;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -25,6 +28,8 @@ public partial class Map : ComponentBase, IAsyncDisposable
     [Inject] public NavigationManager NavigationManager { get; set; } = null!;
     [Inject] public CoreCapabilityNotificationOwner CapabilityNotificationOwner { get; set; } = null!;
     [Inject] public IApplicationViewModel ApplicationViewModel { get; set; } = null!;
+    [Inject] public IClientExperienceCapture ClientExperienceCapture { get; set; } = null!;
+    [Inject] public ClientExperienceReporter ClientExperienceReporter { get; set; } = null!;
 
     readonly MapReadinessState _readiness = new(TimeProvider.System);
     readonly MapCapabilityOutcomeState _capabilityOutcome = new(TimeProvider.System);
@@ -33,6 +38,9 @@ public partial class Map : ComponentBase, IAsyncDisposable
     long _readinessGeneration;
     long _renderOperationGeneration;
     bool _disposed;
+    Guid _mapAttemptId;
+    Guid _mapEpisodeId;
+    bool _mapReadinessReported;
 
     public MapReadinessOutcome Readiness => _readiness.Current;
     public bool ShowDelayedLoading => _readiness.IsDelayedLoading;
@@ -84,6 +92,8 @@ public partial class Map : ComponentBase, IAsyncDisposable
     void ReportReadinessOutcome()
     {
         var outcome = Readiness;
+        if (outcome.Status != MapReadinessStatus.Pending)
+            CaptureMapOutcome(outcome);
         if (outcome.Status != MapReadinessStatus.Unavailable) return;
 
         var scope = ApplicationViewModel.NotificationScope;
@@ -91,6 +101,45 @@ public partial class Map : ComponentBase, IAsyncDisposable
             || ApplicationViewModel.LiveIssueCode is not null;
         CapabilityNotificationOwner.ObserveMapReadiness(outcome, scope, rootExplainsFailure);
     }
+
+    void CaptureMapOutcome(MapReadinessOutcome outcome)
+    {
+        if (_mapReadinessReported || _mapAttemptId == Guid.Empty) return;
+        _mapReadinessReported = true;
+        try
+        {
+            var ready = outcome.IsReady;
+            ClientExperienceReporter.FinishAttempt(_mapAttemptId, ApplicationViewModel.NotificationScope.CitySlug,
+                "city_map_start", ready ? "succeeded" : "failed", ready ? "owner_confirmed" : "owner_failed",
+                ApplicationViewModel.CityActivationId);
+            ClientExperienceCapture.TryCapture(CreateExperienceEvent("capability_changed") with
+            {
+                Capability = "map",
+                PreviousState = "pending",
+                CurrentState = ready ? "healthy" : "unavailable",
+                EpisodeId = _mapEpisodeId,
+                OwnerGeneration = Math.Max(0, outcome.InstanceGeneration),
+                InitialSnapshot = false,
+                Reason = ready ? "owner_confirmed" : "owner_failed"
+            });
+        }
+        catch { /* Observation failures never affect map readiness or rendering. */ }
+    }
+
+    ClientExperienceEvent CreateExperienceEvent(string kind) => new()
+    {
+        SchemaVersion = ClientExperienceCatalog.SchemaVersion,
+        MeasurementVersion = ClientExperienceCatalog.MeasurementVersion,
+        EventKind = kind,
+        EventId = Guid.NewGuid(),
+        PageSessionId = Guid.Empty,
+                CityActivationId = ApplicationViewModel.CityActivationId,
+        Sequence = 0,
+        OccurredAtUtc = DateTimeOffset.UtcNow,
+        PageElapsedMs = 0,
+        CitySlug = ApplicationViewModel.NotificationScope.CitySlug,
+        ClientRelease = "unknown"
+    };
 
     [JSInvokable("notifyMapVisibilityAsync")]
     public Task NotifyMapVisibilityAsync(long generation, bool visible)

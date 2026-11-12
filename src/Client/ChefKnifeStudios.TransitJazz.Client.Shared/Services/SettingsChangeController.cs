@@ -5,6 +5,10 @@ using System.Threading.Tasks;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Audio;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Models;
 using ChefKnifeStudios.TransitJazz.Client.Shared.Services.Notifications;
+using ChefKnifeStudios.TransitJazz.Client.Core.ClientExperience;
+using ChefKnifeStudios.TransitJazz.Client.Core.Services;
+using ChefKnifeStudios.TransitJazz.Shared;
+using Microsoft.AspNetCore.Components;
 
 namespace ChefKnifeStudios.TransitJazz.Client.Shared.Services;
 
@@ -38,14 +42,22 @@ public sealed class SettingsChangeController
 {
     readonly ISettingsService _settingsService;
     readonly Func<Settings, CancellationToken, Task>? _persist;
+    readonly IClientExperienceAttemptCapture? _experienceAttempts;
+    readonly NavigationManager? _navigationManager;
     readonly object _gate = new();
     readonly Dictionary<string, long> _revisions = new(StringComparer.Ordinal);
     readonly HashSet<string> _pendingSaves = new(StringComparer.Ordinal);
 
-    public SettingsChangeController(ISettingsService settings, Func<Settings, CancellationToken, Task>? persist = null)
+    public SettingsChangeController(
+        ISettingsService settings,
+        Func<Settings, CancellationToken, Task>? persist = null,
+        IClientExperienceAttemptCapture? experienceAttempts = null,
+        NavigationManager? navigationManager = null)
     {
         _settingsService = settings ?? throw new ArgumentNullException(nameof(settings));
         _persist = persist;
+        _experienceAttempts = experienceAttempts;
+        _navigationManager = navigationManager;
     }
 
     public bool HasPendingSave(string propertyName)
@@ -105,6 +117,12 @@ public sealed class SettingsChangeController
             throw new ArgumentException($"Unknown settings property: {propertyName}", nameof(propertyName));
 
         var priorValue = ReadValue<T>(property, settings);
+        var action = GetExperienceAction(propertyName);
+        var citySlug = ResolveCitySlug();
+        var actionId = Guid.NewGuid();
+        var effectAttemptId = action is null
+            ? Guid.Empty
+            : SafeStart(actionId, citySlug, "settings_effect", action);
         long revision;
         lock (_gate)
         {
@@ -123,6 +141,11 @@ public sealed class SettingsChangeController
             // An exception may follow a partial external effect; attempt verified compensation.
             applied = SettingsEffectResult.PartialFailure;
         }
+
+        if (effectAttemptId != Guid.Empty)
+            SafeFinish(effectAttemptId, citySlug, "settings_effect",
+                !IsCurrent(propertyName, revision) ? "superseded" : applied.Succeeded ? "succeeded" : "failed",
+                !IsCurrent(propertyName, revision) ? "superseded" : applied.Succeeded ? "owner_confirmed" : "owner_failed");
 
         if (!IsCurrent(propertyName, revision))
         {
@@ -155,6 +178,9 @@ public sealed class SettingsChangeController
             property.SetValue(settings, requestedValue);
         }
 
+        var persistenceAttemptId = effectAttemptId == Guid.Empty || action is null
+            ? Guid.Empty
+            : SafeStart(actionId, citySlug, "settings_persistence", action);
         try
         {
             if (_persist is null)
@@ -168,23 +194,72 @@ public sealed class SettingsChangeController
         }
         catch
         {
+            SettingsChangeOutcome saveFailureOutcome;
             lock (_gate)
             {
                 if (!IsCurrentLocked(propertyName, revision))
-                    return Outcome(propertyName, revision, SettingsChangeStatus.Superseded, property, _settingsService.GetSettings(), false);
-                _pendingSaves.Add(propertyName);
-                return Outcome(propertyName, revision, SettingsChangeStatus.AppliedSessionOnly, property, settings, false);
+                    saveFailureOutcome = Outcome(propertyName, revision, SettingsChangeStatus.Superseded, property, _settingsService.GetSettings(), false);
+                else
+                {
+                    _pendingSaves.Add(propertyName);
+                    saveFailureOutcome = Outcome(propertyName, revision, SettingsChangeStatus.AppliedSessionOnly, property, settings, false);
+                }
             }
+
+            if (persistenceAttemptId != Guid.Empty)
+                SafeFinish(persistenceAttemptId, citySlug, "settings_persistence",
+                    saveFailureOutcome.Status == SettingsChangeStatus.AppliedSessionOnly ? "failed" : "superseded",
+                    saveFailureOutcome.Status == SettingsChangeStatus.AppliedSessionOnly ? "save_failed" : "superseded");
+            return saveFailureOutcome;
         }
 
+        SettingsChangeOutcome persistedOutcome;
         lock (_gate)
         {
             if (!IsCurrentLocked(propertyName, revision))
-                return Outcome(propertyName, revision, SettingsChangeStatus.Superseded, property, _settingsService.GetSettings(), false);
-            _pendingSaves.Remove(propertyName);
-            return Outcome(propertyName, revision, SettingsChangeStatus.Applied, property, settings, true);
+                persistedOutcome = Outcome(propertyName, revision, SettingsChangeStatus.Superseded, property, _settingsService.GetSettings(), false);
+            else
+            {
+                _pendingSaves.Remove(propertyName);
+                persistedOutcome = Outcome(propertyName, revision, SettingsChangeStatus.Applied, property, settings, true);
+            }
         }
+
+        if (persistenceAttemptId != Guid.Empty)
+            SafeFinish(persistenceAttemptId, citySlug, "settings_persistence",
+                persistedOutcome.Status == SettingsChangeStatus.Applied ? "succeeded" : "superseded",
+                persistedOutcome.Status == SettingsChangeStatus.Applied ? "owner_confirmed" : "superseded");
+        return persistedOutcome;
     }
+
+    Guid SafeStart(Guid actionId, string citySlug, string journey, string action)
+    {
+        try { return _experienceAttempts?.StartAttempt(citySlug, journey, 15_000, parentActionId: actionId, action: action) ?? Guid.Empty; }
+        catch { return Guid.Empty; }
+    }
+
+    void SafeFinish(Guid attemptId, string citySlug, string journey, string outcome, string reason)
+    {
+        try { _experienceAttempts?.FinishAttempt(attemptId, citySlug, journey, outcome, reason); }
+        catch { }
+    }
+
+    string ResolveCitySlug()
+    {
+        try { return (_navigationManager?.ResolveCity() ?? "unknown").ToLowerInvariant(); }
+        catch { return "unknown"; }
+    }
+
+    static string? GetExperienceAction(string propertyName) => propertyName switch
+    {
+        nameof(Settings.IsAudioEnabled) => "audio_setting",
+        nameof(Settings.AreCheckpointsVisible) or nameof(Settings.IsCrossingTrailVisible)
+            or nameof(Settings.IsBusesVisible) or nameof(Settings.AreAllCheckpointsVisible)
+            or nameof(Settings.IsDarkModeEnabled) => "display_setting",
+        nameof(Settings.IsStreetMapEnabled) => "map_style",
+        nameof(Settings.BackfillTexture) => "audio_texture",
+        _ => null
+    };
 
     async Task<bool> CompensateAsync<T>(
         Func<T, CancellationToken, Task<SettingsEffectResult>>? compensate,
