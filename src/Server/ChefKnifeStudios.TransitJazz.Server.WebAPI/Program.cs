@@ -7,6 +7,7 @@ using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.RailRealtime;
 using ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Subway;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.EndpointGroups;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Health;
+using ChefKnifeStudios.TransitJazz.Server.WebAPI.Hosting;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.GtfsStatic;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Interfaces;
 using ChefKnifeStudios.TransitJazz.Server.WebAPI.Repositories;
@@ -138,16 +139,7 @@ builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
     options.Level = CompressionLevel.Fastest;
 });
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("Default", policy =>
-    {
-        policy.WithOrigins("https://localhost:7150", "https://localhost:5186", "https://localhost:7333", "https://localhost:52832", "http://localhost:52833")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
-});
+builder.Services.AddServerHosting(builder.Configuration);
 
 builder.Services.AddSignalR(options =>
     {
@@ -402,6 +394,7 @@ app.Services.GetRequiredService<ILoggerFactory>()
         !string.IsNullOrWhiteSpace(historicalStatisticsOptions.SourceEndpoint),
         !string.IsNullOrWhiteSpace(historicalStatisticsOptions.ReaderAuthorization));
 
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 
 app.UseResponseCompression();

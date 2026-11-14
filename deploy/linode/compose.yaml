@@ -1,0 +1,36 @@
+name: transitjazz-app
+services:
+  server:
+    image: ${SERVER_IMAGE:?Set an immutable server image}
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - path: /etc/transitjazz/app.env
+        format: raw
+    mem_limit: 512m
+    cpus: 0.25
+    stop_grace_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  proxy:
+    image: ${CADDY_IMAGE:?Set a reviewed Caddy image digest}
+    network_mode: host
+    restart: unless-stopped
+    mem_limit: 256m
+    volumes:
+      - /opt/transitjazz/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  caddy_data:
+  caddy_config:

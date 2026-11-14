@@ -19,6 +19,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test server and worker
+        run: |
+          dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests -c Release
+          dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests -c Release
+
       - name: Log in to ACR
         uses: docker/login-action@v3
         with:
@@ -75,6 +84,8 @@ jobs:
           docker push ${{ env.REGISTRY }}/${{ env.MIGRATION_IMAGE_NAME }}:${{ github.sha }}
 
   deploy:
+    # Migration preparation: publish images without restarting the Azure worker.
+    if: ${{ false }}
     # Approve server-dev only after applying and verifying migrations from an
     # address allowed by PostgreSQL. Historical writes stay disabled until the
     # separate collector release gates approve them.
@@ -132,3 +143,51 @@ jobs:
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
           docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  deploy-linode:
+    # Enable after manual deployment, rollback and SSH environment setup succeed.
+    if: ${{ false }}
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: server-linode
+    timeout-minutes: 45
+    concurrency:
+      group: transitjazz-production-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Resolve published image digest
+        id: image
+        env:
+          RELEASE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+        run: |
+          set -euo pipefail
+          ref="$REGISTRY/$IMAGE_NAME:$RELEASE_TAG"
+          docker pull "$ref"
+          full=$(docker image inspect "$ref" --format '{{index .RepoDigests 0}}')
+          digest="${full##*@}"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Linode
+        env:
+          DEPLOY_KEY: ${{ secrets.LINODE_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.LINODE_KNOWN_HOSTS }}
+          LINODE_HOST: ${{ vars.LINODE_HOST }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/transitjazz_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          trap 'rm -f ~/.ssh/transitjazz_deploy' EXIT
+          ssh -i ~/.ssh/transitjazz_deploy \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
+            "tj-deploy@$LINODE_HOST" "deploy $DIGEST"

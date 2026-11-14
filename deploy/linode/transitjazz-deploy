@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $# -eq 1 && "$1" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 64
+cd /opt/transitjazz
+exec 9>/run/lock/transitjazz-deploy.lock
+flock -n 9 || { echo 'Another deployment is running'; exit 75; }
+image="chefknife.azurecr.io/chefknifestudios.martajazz.server.webapi@$1"
+compose() { docker compose --env-file release.env "$@"; }
+ready() {
+  local deadline=$((SECONDS + 900))
+  while ((SECONDS < deadline)); do
+    if curl --fail --silent --max-time 5 http://127.0.0.1:8080/health/ready >/dev/null; then
+      return 0
+    fi
+    sleep 10
+  done
+  return 1
+}
+docker pull "$image"
+test -s /etc/transitjazz/known-good.env
+test -s /etc/transitjazz/known-good.app.env
+test "$(grep -c '^SERVER_IMAGE=' release.env)" -eq 1
+# Keep the reviewed proxy reference; replace only the server reference.
+awk -v image="$image" '/^SERVER_IMAGE=/ { print "SERVER_IMAGE=" image; next } { print }' \
+  release.env > release.env.next
+docker compose --env-file release.env.next config --quiet
+compose stop server
+mv release.env.next release.env
+if compose up -d --no-deps --force-recreate server && ready; then
+  install -m 0600 /etc/transitjazz/known-good.env /etc/transitjazz/previous-good.env
+  install -m 0600 /etc/transitjazz/known-good.app.env /etc/transitjazz/previous-good.app.env
+  install -m 0600 release.env /etc/transitjazz/known-good.env
+  install -m 0600 /etc/transitjazz/app.env /etc/transitjazz/known-good.app.env
+  echo 'Candidate ready; complete browser and capture checks.'
+  exit 0
+fi
+echo 'Candidate failed; restoring last ready image and runtime configuration.'
+compose stop server
+install -m 0600 /etc/transitjazz/known-good.env release.env
+install -m 0600 /etc/transitjazz/known-good.app.env /etc/transitjazz/app.env
+if compose up -d --no-deps --force-recreate server && ready; then
+  echo 'Previous version restored; requested release failed.'
+else
+  echo 'Rollback is unhealthy; inspect local logs and use the recovery runbook.'
+fi
+exit 1

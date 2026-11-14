@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+command=${SSH_ORIGINAL_COMMAND:-}
+[[ "$command" =~ ^deploy\ (sha256:[a-f0-9]{64})$ ]] || exit 64
+exec sudo -n /usr/local/sbin/transitjazz-deploy "${BASH_REMATCH[1]}"
