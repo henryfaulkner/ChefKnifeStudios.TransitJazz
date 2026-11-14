@@ -12,7 +12,7 @@ See [mj-api-query-guide.md](mj-api-query-guide.md) for how to call the API.
 
 | Environment | Base URL |
 |---|---|
-| Production (default) | `https://marta-jazz-dev-ca-server.jollytree-dd5ca774.eastus2.azurecontainerapps.io` |
+| Production (default) | `https://api.transitjazz.com` |
 | Local dev | `https://localhost:5001` |
 
 ---

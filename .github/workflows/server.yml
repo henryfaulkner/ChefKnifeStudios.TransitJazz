@@ -2,14 +2,13 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, migration/linode-server-hosting]
+  workflow_dispatch:
 
 env:
   REGISTRY: chefknife.azurecr.io
   IMAGE_NAME: chefknifestudios.martajazz.server.webapi
   MIGRATION_IMAGE_NAME: chefknifestudios.martajazz.server.data
-  CONTAINER_APP_NAME: marta-jazz-dev-ca-server
-  RESOURCE_GROUP: marta-jazz-dev-rg
 
 jobs:
   build-and-push:
@@ -18,6 +17,15 @@ jobs:
       image-tag: ${{ steps.set-tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test server and worker
+        run: |
+          dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI.Tests -c Release
+          dotnet test src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker.Tests -c Release
 
       - name: Log in to ACR
         uses: docker/login-action@v3
@@ -59,8 +67,6 @@ jobs:
           test "$(jq -r '.CityCategoryInsights.DisabledCities | length' src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json)" = "0"
           test "$(jq -r '.CityCategoryInsights.Enabled' src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json)" = "false"
           test "$(jq -r '.CityCategoryInsights.DisabledCities | length' src/Server/ChefKnifeStudios.TransitJazz.Server.TransitDataWorker/appsettings.json)" = "0"
-          test "$(jq -r '.parameters.enableCityCategoryInsights.defaultValue' bicep/main.json)" = "false"
-          test "$(jq -r '.parameters.cityCategoryInsightsDisabledCities.defaultValue | length' bicep/main.json)" = "0"
           grep -q 'name: "city_category_minute_statistics"' src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261001204629_CreateCityCategoryStatistics.cs
           grep -q 'name: "city_category_hour_statistics"' src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261001204629_CreateCityCategoryStatistics.cs
           ! grep -Eiq 'migrationBuilder\.Sql|city_minute_statistics|gtfs|route' src/Server/ChefKnifeStudios.TransitJazz.Server.Data/Migrations/20261001204629_CreateCityCategoryStatistics.cs
@@ -74,61 +80,49 @@ jobs:
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.REGISTRY }}/${{ env.MIGRATION_IMAGE_NAME }}:${{ github.sha }}
 
-  deploy:
-    # Approve server-dev only after applying and verifying migrations from an
-    # address allowed by PostgreSQL. Historical writes stay disabled until the
-    # separate collector release gates approve them.
+  deploy-linode:
     needs: build-and-push
     runs-on: ubuntu-latest
-    environment: server-dev
+    environment: server-linode
+    timeout-minutes: 45
+    concurrency:
+      group: transitjazz-production-deploy
+      cancel-in-progress: false
     steps:
-      - name: Log in to ACR
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Update Container App
-        uses: azure/cli@v2
-        with:
-          azcliversion: latest
-          inlineScript: |
-            az containerapp update --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
-
-      - name: Verify ready server image
-        # Azure accepts the update before the new revision is ready. A concurrent
-        # configuration update can also restore the previous image.
+      - name: Resolve published image digest
+        id: image
+        env:
+          RELEASE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
         run: |
           set -euo pipefail
-          expected="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}"
-          for attempt in {1..60}; do
-            state=$(az containerapp show --name "${{ env.CONTAINER_APP_NAME }}" --resource-group "${{ env.RESOURCE_GROUP }}" \
-              --query '{image:properties.template.containers[0].image,latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName}' --output json)
-            if [ "$(jq -r '.image' <<< "$state")" != "$expected" ]; then
-              echo "::error::The Container App image changed during deployment. Check concurrent configuration updates."
-              exit 1
-            fi
-            ready=$(jq -r '.ready // empty' <<< "$state")
-            if [ -n "$ready" ] && [ "$ready" = "$(jq -r '.latest' <<< "$state")" ]; then
-              serving=$(az containerapp revision show --name "${{ env.CONTAINER_APP_NAME }}" --resource-group "${{ env.RESOURCE_GROUP }}" \
-                --revision "$ready" --query properties.template.containers[0].image --output tsv)
-              if [ "$serving" = "$expected" ]; then
-                exit 0
-              fi
-            fi
-            sleep 10
-          done
-          echo "::error::The requested server image did not become the ready revision within 10 minutes."
-          exit 1
+          ref="$REGISTRY/$IMAGE_NAME:$RELEASE_TAG"
+          docker pull "$ref"
+          full=$(docker image inspect "$ref" --format '{{index .RepoDigests 0}}')
+          digest="${full##*@}"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
-      - name: Promote verified server image
+      - name: Deploy to Linode
+        env:
+          DEPLOY_KEY: ${{ secrets.LINODE_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.LINODE_KNOWN_HOSTS }}
+          LINODE_HOST: ${{ vars.LINODE_HOST }}
+          DIGEST: ${{ steps.image.outputs.digest }}
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/transitjazz_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          trap 'rm -f ~/.ssh/transitjazz_deploy' EXIT
+          ssh -T -i ~/.ssh/transitjazz_deploy \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
+            "tj-deploy@$LINODE_HOST" "deploy $DIGEST"

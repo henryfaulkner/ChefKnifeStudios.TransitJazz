@@ -9,12 +9,13 @@ description: Call the MartaJazz REST API to fetch GTFS route/shape data and chec
 
 | Environment | Base URL |
 |---|---|
-| Production (default) | `https://marta-jazz-dev-ca-server.jollytree-dd5ca774.eastus2.azurecontainerapps.io` |
+| Production (default) | `https://api.transitjazz.com` |
 | Local dev | `https://localhost:5001` |
 
 ## Endpoints
 
 ### Health / Debug
+- `GET /health/ready` ? production route-index readiness; 200 once loaded
 - `GET /gtfs/debug/keys` — returns all ordered GTFS key strings (use to verify data is loaded)
 - `GET /scalar` — Scalar API reference UI (browser only)
 - `GET /openapi/v1.json` — raw OpenAPI spec
@@ -30,13 +31,13 @@ description: Call the MartaJazz REST API to fetch GTFS route/shape data and chec
 
 ```powershell
 # Check API is up and data is loaded
-(Invoke-WebRequest -Uri "https://marta-jazz-dev-ca-server.jollytree-dd5ca774.eastus2.azurecontainerapps.io/gtfs/debug/keys" -UseBasicParsing).Content
+(Invoke-WebRequest -Uri "https://api.transitjazz.com/gtfs/debug/keys" -UseBasicParsing).Content
 
 # Fetch all route shapes
-(Invoke-WebRequest -Uri "https://marta-jazz-dev-ca-server.jollytree-dd5ca774.eastus2.azurecontainerapps.io/gtfs/routes/shapes" -UseBasicParsing).Content
+(Invoke-WebRequest -Uri "https://api.transitjazz.com/gtfs/routes/shapes" -UseBasicParsing).Content
 
 # Fetch a single route shape
-(Invoke-WebRequest -Uri "https://marta-jazz-dev-ca-server.jollytree-dd5ca774.eastus2.azurecontainerapps.io/gtfs/routes/110/shape" -UseBasicParsing).Content
+(Invoke-WebRequest -Uri "https://api.transitjazz.com/gtfs/routes/110/shape" -UseBasicParsing).Content
 ```
 
 > Use `curl -k` with `-k` only on localhost (self-signed cert). For local dev swap the base URL to `https://localhost:5001`.

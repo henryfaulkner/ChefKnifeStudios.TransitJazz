@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 
@@ -14,6 +16,9 @@ public static class TestEndpoints
 {
     public static IEndpointRouteBuilder MapTestEndpoints(this IEndpointRouteBuilder builder)
     {
+        if (!builder.ServiceProvider.GetRequiredService<IHostEnvironment>().IsDevelopment())
+            return builder;
+
         builder.MapGet(ApiEndpoints.Test.SignalR, async (IHubContext<TransitHub> hub) =>
         {
             var batch = new List<EventEnvelope>

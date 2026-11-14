@@ -1,0 +1,9 @@
+api.transitjazz.com {
+	@internal path /hubs/worker-transit /hubs/worker-transit/* /test/*
+	respond @internal 404
+	reverse_proxy 127.0.0.1:8080 {
+		health_uri /health/ready
+		health_interval 10s
+		health_timeout 5s
+	}
+}

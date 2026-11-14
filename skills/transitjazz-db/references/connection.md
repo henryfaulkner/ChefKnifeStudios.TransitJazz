@@ -9,8 +9,7 @@ Paths are relative to the repository root.
 | `src/Server/ChefKnifeStudios.TransitJazz.Server.Data/ServiceCollectionExtensions.cs` | Registers an EF context factory with Npgsql. Requires the connection named `TransitJazzDB`. |
 | `src/Server/ChefKnifeStudios.TransitJazz.Server.Data/AppDbContextFactory.cs` | EF design-time configuration reads the working directory's development/release appsettings file first, then `ConnectionStrings__TransitJazzDB`. This precedence is specific to the factory. |
 | `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/Program.cs` | Reads `ConnectionStrings:TransitJazzDB` through normal ASP.NET configuration. Enabled historical or category collection requires database registration. |
-| `bicep/modules/containerApp.bicep` | Injects `ConnectionStrings__TransitJazzDB` from the Container App secret alias `transitjazz-db`, backed by the supplied `transitJazzDbSecretUri` and managed identity. |
-| `bicep/main.dev.bicepparam`, `bicep/main.prod.bicepparam` | Committed database secret URI defaults are empty. A deployment may override them. |
+| `deploy/linode/compose.yaml` | Loads the root-only `/etc/transitjazz/app.env` runtime file, including `ConnectionStrings__TransitJazzDB`. Key Vault remains the canonical secret store; values are delivered to the VM. |
 | `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.json` | `ConnectionStrings.TransitJazzDB` is empty in the committed default. |
 | `src/Server/ChefKnifeStudios.TransitJazz.Server.WebAPI/appsettings.Development.json` | A legacy entry named `PokerAttackDB` specifies database `transitjazz` on port 5432. The current application does not read that key. Select it explicitly only when this is the intended development target. |
 | `docker-compose.yml` | Defines the WebAPI service; does not provision a PostgreSQL service. Do not assume a local database container exists. |
@@ -50,16 +49,18 @@ Every invocation runs the supplied SQL in one read-only Repeatable Read transact
 
 ## Deployed connection discovery
 
-If the caller selects the deployed server and no connection is already configured, read the configured secret reference using existing Azure access. The workflow currently names resource group `marta-jazz-dev-rg` and Container App `marta-jazz-dev-ca-server` in `.github/workflows/server.yml`; these are discovery hints, not a claim about current deployment state.
+Production runs on Linode. Its effective connection is in the protected
+`/etc/transitjazz/app.env` file loaded by Compose; use existing authorized SSH
+access and keep the selected value in memory. Do not print the file, dump the
+container environment, or shell-source the raw env file. For workstation
+queries against the loopback database path, use an SSH tunnel and the existing
+query helper, preserving the configured TLS policy and authentication.
 
-```powershell
-# Returns only reference metadata; do not use `az containerapp secret list`.
-az containerapp show --resource-group marta-jazz-dev-rg --name marta-jazz-dev-ca-server `
-    --query "properties.configuration.secrets[?name=='transitjazz-db'].{name:name,keyVaultUrl:keyVaultUrl}" `
-    --output json
-```
+Alternatively, use the selected canonical Key Vault secret URI from the owner's
+current secret mapping. Do not discover the production connection through the
+retired Azure Container App or the removed Bicep parameters.
 
-Use the returned Key Vault URL, including its version when present. If existing identity has secret-read access, capture the required value directly into a temporary process variable and restore it after querying:
+If existing identity has secret-read access, capture the required value directly into a temporary process variable and restore it after querying:
 
 ```powershell
 $dbPreviousConnection = $env:ConnectionStrings__TransitJazzDB
@@ -74,7 +75,7 @@ try {
 }
 ```
 
-`$dbSecretUri` must come from the selected deployment's reference. Access to the Container App does not imply permission to read Key Vault secrets. If access is missing, report the failing layer and the required existing connection/access; do not change RBAC, secrets, firewall rules, or deployment configuration to complete a query.
+`$dbSecretUri` must identify the selected current secret. Azure or SSH access does not imply permission to read Key Vault secrets. If access is missing, report the failing layer and the required existing connection/access; do not change RBAC, secrets, firewall rules, or deployment configuration to complete a query.
 
 ## Troubleshooting
 
