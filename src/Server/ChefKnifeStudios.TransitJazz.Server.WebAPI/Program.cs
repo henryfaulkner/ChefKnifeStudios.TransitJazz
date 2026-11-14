@@ -367,8 +367,6 @@ builder.Services.AddSingleton<ITriggerPointGenerator, TriggerPointGenerator>();
 
 // Structured logging pipeline
 builder.Services.Configure<StructuredLoggingOptions>(builder.Configuration.GetSection(StructuredLoggingOptions.SectionName));
-builder.Services.PostConfigure<StructuredLoggingOptions>(options =>
-    options.DeploymentRevision ??= Environment.GetEnvironmentVariable("CONTAINER_APP_REVISION"));
 builder.Services.AddSingleton(sp =>
 {
     var options = sp.GetRequiredService<IOptions<StructuredLoggingOptions>>().Value;

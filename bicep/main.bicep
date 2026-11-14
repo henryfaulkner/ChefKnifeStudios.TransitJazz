@@ -25,15 +25,6 @@ param location string = 'eastus2'
 @description('Custom apex domain for the site (e.g., martajazz.com).')
 param apexDomain string = 'martajazz.com'
 
-@description('Existing Container Registry name (shared across environments).')
-param containerRegistryName string = 'chefknife'
-
-@description('Resource group of the existing Container Registry.')
-param containerRegistryResourceGroup string = 'general'
-
-@description('Container image tag to deploy for the server container app.')
-param serverImageTag string = 'latest'
-
 @description('GitHub repository URL for the Static Web App source.')
 param repositoryUrl string = 'https://github.com/henryfaulkner/ChefKnifeStudios.TransitJazz'
 
@@ -43,63 +34,6 @@ param repositoryToken string
 
 @description('Bind custom domains to the SWA. Set false on first deploy (DNS zone must exist first); set true on subsequent deploys.')
 param bindCustomDomains bool = false
-
-@description('Enable outbound worker metrics. Keep false until release evidence is complete.')
-param enableWorkerMetrics bool = false
-
-@description('Grafana Cloud OTLP metrics endpoint, ending /v1/metrics.')
-param grafanaOtlpMetricsEndpoint string = ''
-
-@description('Key Vault URI for the TransitJazzWorkerMetricsPublisherToken secret.')
-param grafanaPublisherSecretUri string = ''
-
-@description('Key Vault URI for the TransitJazzTerraformProvisionerToken secret.')
-param grafanaProvisioningSecretUri string = ''
-
-@description('Key Vault URI for the TransitJazz TransitJazzDB connection-string secret.')
-param transitJazzDbSecretUri string = ''
-
-@description('Grafana Cloud Prometheus range-query endpoint for historical statistics.')
-param grafanaMetricsReaderEndpoint string = ''
-
-@description('Key Vault URI for the dedicated Grafana metrics:read authorization secret.')
-param grafanaMetricsReaderSecretUri string = ''
-
-@description('Enable the historical statistics collector after release gates pass.')
-param enableHistoricalStatistics bool = false
-
-@description('Enable city/category capture for all configured cities except explicit exclusions after schema and pilot release gates pass. Defaults to disabled.')
-param enableCityCategoryInsights bool = false
-
-@description('Configured city names to exclude when city/category insights are enabled.')
-param cityCategoryInsightsDisabledCities array = []
-
-@description('Default maximum observation gap in seconds for city/category coverage.')
-param cityCategoryInsightsMaxObservationGapSeconds int = 30
-
-@description('Optional per-city maximum observation gap overrides keyed by configured city name.')
-param cityCategoryInsightsCityMaxObservationGapSeconds object = {}
-
-@description('Bounded aggregate envelope queue capacity.')
-param cityCategoryInsightsQueueCapacity int = 256
-
-@description('Maximum persisted aggregate rows per writer transaction.')
-param cityCategoryInsightsMaxBatchRows int = 128
-
-@description('Database command timeout in seconds for category aggregate writes.')
-param cityCategoryInsightsCommandTimeoutSeconds int = 5
-
-@description('Total bounded attempts for transient category aggregate writes.')
-param cityCategoryInsightsMaxWriteAttempts int = 3
-
-@description('Maximum category aggregate writer shutdown drain in seconds.')
-param cityCategoryInsightsShutdownDrainSeconds int = 15
-
-@description('Run the historical statistics collector without database writes.')
-param historicalStatisticsDryRun bool = true
-
-@description('Object ID for the intended workspace-scoped Log Analytics Reader. Leave empty until approved.')
-param logAnalyticsReaderPrincipalId string = ''
 
 // -----------------------------------------------------------------------------
 // Variables
@@ -190,33 +124,9 @@ module wwwCname 'modules/dnsWwwCname.bicep' = {
 }
 
 // -----------------------------------------------------------------------------
-// User-assigned Managed Identity (server)
+// Key Vault
 // -----------------------------------------------------------------------------
 
-module serverIdentity 'modules/managedIdentity.bicep' = {
-  name: 'server-mi-deploy'
-  scope: rg
-  params: {
-    name: '${namePrefix}-ca-server-mi'
-    location: location
-    tags: tags
-  }
-}
-
-// -----------------------------------------------------------------------------
-// AcrPull role assignment on the existing ACR for the server MI
-// -----------------------------------------------------------------------------
-
-module acrRoleAssignment 'modules/acrRoleAssignment.bicep' = {
-  name: 'acr-role-deploy'
-  scope: resourceGroup(containerRegistryResourceGroup)
-  params: {
-    containerRegistryName: containerRegistryName
-    principalId: serverIdentity.outputs.principalId
-  }
-}
-
-// -----------------------------------------------------------------------------
 module observabilityKeyVault 'modules/keyVault.bicep' = {
   name: 'observability-kv-deploy'
   scope: rg
@@ -228,177 +138,9 @@ module observabilityKeyVault 'modules/keyVault.bicep' = {
 }
 
 // -----------------------------------------------------------------------------
-// Log Analytics workspace used by Azure Monitor diagnostic settings.
-// -----------------------------------------------------------------------------
-
-module logAnalytics 'modules/logAnalytics.bicep' = {
-  name: 'log-analytics-deploy'
-  scope: rg
-  params: {
-    name: '${namePrefix}-law'
-    location: location
-    tags: tags
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Container Apps Environment
-// -----------------------------------------------------------------------------
-
-module cae 'modules/containerAppsEnvironment.bicep' = {
-  name: 'cae-deploy'
-  scope: rg
-  params: {
-    name: '${namePrefix}-cae'
-    location: location
-    tags: tags
-  }
-}
-
-module logRouting 'modules/logAnalyticsDiagnosticSettings.bicep' = {
-  name: 'log-routing-deploy'
-  scope: rg
-  params: {
-    environmentName: '${namePrefix}-cae'
-    workspaceId: logAnalytics.outputs.id
-  }
-  dependsOn: [
-    cae
-  ]
-}
-
-module logTablePolicies 'modules/logAnalyticsTablePolicies.bicep' = {
-  name: 'log-table-policies-deploy'
-  scope: rg
-  params: {
-    workspaceName: '${namePrefix}-law'
-  }
-  dependsOn: [
-    logRouting
-  ]
-}
-
-module logReaderRole 'modules/workspaceRoleAssignment.bicep' = if (!empty(logAnalyticsReaderPrincipalId)) {
-  name: 'log-reader-role-deploy'
-  scope: rg
-  params: {
-    workspaceName: '${namePrefix}-law'
-    principalId: logAnalyticsReaderPrincipalId
-  }
-  dependsOn: [
-    logAnalytics
-  ]
-}
-
-// -----------------------------------------------------------------------------
-// Container App — server (API + SignalR Hub + Worker)
-// -----------------------------------------------------------------------------
-
-module serverApp 'modules/containerApp.bicep' = {
-  name: 'server-ca-deploy'
-  scope: rg
-  params: {
-    name: '${namePrefix}-ca-server'
-    location: location
-    tags: tags
-    environmentId: cae.outputs.id
-    managedIdentityId: serverIdentity.outputs.id
-    containerRegistryLoginServer: '${containerRegistryName}.azurecr.io'
-    image: '${containerRegistryName}.azurecr.io/chefknifestudios.martajazz.server.webapi:latest'
-    cpu: '0.5'
-    memory: '1Gi'
-    minReplicas: 1
-    maxReplicas: 1
-    targetPort: 8080 // confirmed: Dockerfile EXPOSE 8080
-    corsAllowedOrigins: [
-      'https://${apexDomain}'
-      'https://www.${apexDomain}'
-    ]
-    envVars: [
-      {
-        name: 'ASPNETCORE_URLS'
-        value: 'http://+:8080'
-      }
-      {
-        name: 'WebApi__BaseUrl'
-        value: 'http://localhost:8080'
-      }
-      // Let DefaultAzureCredential select the user-assigned MI (the app has only
-      // this one, but setting AZURE_CLIENT_ID makes credential resolution explicit).
-      {
-        name: 'AZURE_CLIENT_ID'
-        value: serverIdentity.outputs.clientId
-      }
-      {
-        name: 'Metrics__Enabled'
-        value: string(enableWorkerMetrics)
-      }
-      {
-        name: 'Metrics__ExportIntervalMilliseconds'
-        value: '10000'
-      }
-      {
-        name: 'Metrics__OtlpMetricsEndpoint'
-        value: grafanaOtlpMetricsEndpoint
-      }
-      {
-        name: 'Metrics__ServiceName'
-        value: 'transitjazz-transit-worker'
-      }
-      {
-        name: 'Metrics__Environment'
-        value: environment
-      }
-      {
-        name: 'Metrics__LocalPrometheusEnabled'
-        value: 'false'
-      }
-      {
-        name: 'Metrics__OtlpAuthorization'
-        // This is an ACA alias. It is deliberately short because Container App
-        // secret names are limited to 20 characters; its Key Vault URI below
-        // identifies the full production secret name.
-        secretRef: 'grafana-metrics'
-      }
-    ]
-    secretRefs: [
-      {
-        name: 'grafana-metrics'
-        keyVaultUrl: grafanaPublisherSecretUri
-        identity: serverIdentity.outputs.id
-      }
-      {
-        name: 'grafana-provision'
-        keyVaultUrl: grafanaProvisioningSecretUri
-        identity: serverIdentity.outputs.id
-      }
-    ]
-    transitJazzDbSecretUri: transitJazzDbSecretUri
-    grafanaMetricsReaderEndpoint: grafanaMetricsReaderEndpoint
-    grafanaMetricsReaderSecretUri: grafanaMetricsReaderSecretUri
-    enableHistoricalStatistics: enableHistoricalStatistics
-    enableCityCategoryInsights: enableCityCategoryInsights
-    cityCategoryInsightsDisabledCities: cityCategoryInsightsDisabledCities
-    cityCategoryInsightsMaxObservationGapSeconds: cityCategoryInsightsMaxObservationGapSeconds
-    cityCategoryInsightsCityMaxObservationGapSeconds: cityCategoryInsightsCityMaxObservationGapSeconds
-    cityCategoryInsightsQueueCapacity: cityCategoryInsightsQueueCapacity
-    cityCategoryInsightsMaxBatchRows: cityCategoryInsightsMaxBatchRows
-    cityCategoryInsightsCommandTimeoutSeconds: cityCategoryInsightsCommandTimeoutSeconds
-    cityCategoryInsightsMaxWriteAttempts: cityCategoryInsightsMaxWriteAttempts
-    cityCategoryInsightsShutdownDrainSeconds: cityCategoryInsightsShutdownDrainSeconds
-    historicalStatisticsDryRun: historicalStatisticsDryRun
-  }
-  dependsOn: [
-    acrRoleAssignment
-  ]
-}
-
-// -----------------------------------------------------------------------------
 // Outputs
 // -----------------------------------------------------------------------------
 
 output resourceGroupName string = rg.name
 output staticWebAppDefaultHostname string = swa.outputs.defaultHostname
 output dnsZoneNameServers array = dnsZone.outputs.nameServers
-output serverContainerAppFqdn string = serverApp.outputs.fqdn
-output serverManagedIdentityPrincipalId string = serverIdentity.outputs.principalId

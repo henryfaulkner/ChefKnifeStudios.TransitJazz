@@ -30,7 +30,7 @@ def parse_args():
         "~/Downloads/Official_Neighborhoods_with_Current_Demographic_Data_(2024).geojson"
     )
     default_api = (
-        "https://marta-jazz-dev-ca-server.jollytree-dd5ca774.eastus2.azurecontainerapps.io"
+        "https://api.transitjazz.com"
     )
     default_out_dir = os.path.dirname(os.path.abspath(__file__))
 

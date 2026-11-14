@@ -24,7 +24,7 @@ tells you *what GTFS data the server currently has*. The two are complementary:
 ## How to call the API (PowerShell — always use `-UseBasicParsing`)
 
 ```powershell
-$base = "https://marta-jazz-dev-ca-server.jollytree-dd5ca774.eastus2.azurecontainerapps.io"
+$base = "https://api.transitjazz.com"
 
 # Health check
 (Invoke-WebRequest -Uri "$base/gtfs/debug/keys" -UseBasicParsing).Content
