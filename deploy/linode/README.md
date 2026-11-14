@@ -4,6 +4,11 @@ Use the [operator guide](../../docs/LINODE_MIGRATION_STEP_BY_STEP.md) for backup
 
 The server starts with 512 MiB and a 0.25 CPU quota, matching the working Azure allocation. The proxy has a 256 MiB limit. Confirm combined host usage before production cutover; neither limit reserves resources for PostgreSQL.
 
+For Azure Server Metrics' replacement, use the built-in Linux Server dashboards described in
+[Linode host metrics](metrics/README.md). Standard Linux collection is active; native overview
+queries return CPU, memory, disk and network data. The owner confirmed the native overview
+displays live metrics.
+
 ## Installation after host inspection and backup verification
 
 1. Place `compose.yaml` and `Caddyfile` in `/opt/transitjazz`, root-owned. If an existing proxy owns ports 80/443, adapt its virtual host instead of starting this proxy.

@@ -1,10 +1,10 @@
 # Linode migration status
 
-**Last verified:** 2026-11-14, approximately 13:19 UTC.
+**Last verified:** 2026-11-14, approximately 14:43 UTC.
 
-The Linode API works at **https://api.transitjazz.com** and production capture was activated at **2026-11-14T13:06:22Z**. The owner stopped Azure; a subsequent CLI check confirmed `runningStatus=Stopped` and zero replicas. Linode is the sole running production statistics writer. Both published browser applications still point to Azure and require their endpoint release. The migration is not yet complete.
+The Linode API works at **https://api.transitjazz.com** and production capture was activated at **2026-11-14T13:06:22Z**. The owner stopped Azure; a subsequent CLI check confirmed `runningStatus=Stopped` and zero replicas. Linode is the sole running production statistics writer. Both published browser applications now point their API and SignalR settings to Linode. MartaJazz's legacy frontend still needs a protocol upgrade, and browser acceptance remains incomplete. The migration is not yet complete.
 
-Local API/worker validation passed 572 tests, with 78 API tests skipped. Server Release build and client Release publish succeeded. The client publish artifact contains the new hostname for both API and SignalR; both live sites were separately verified to still use Azure. Existing dependency advisories remain outside this hosting change.
+Local API/worker validation passed 572 tests, with 78 API tests skipped. Server Release build and client Release publish succeeded. Both live sites' configurations now contain the new hostname for API and SignalR, including compressed responses. Existing dependency advisories remain outside this hosting change.
 
 ## Verified host and pilot
 
@@ -59,11 +59,78 @@ Recent bounded log inspection found no Error/Critical entries in the inspected 1
 - Off-host backup files are encrypted using Windows CurrentUser DPAPI, with decrypted checksums verified. `RECOVERY.md` beside them explains decryption and its dependency on this Windows profile/DPAPI keys. Plaintext workstation copies were removed; protected VM originals remain.
 - This snapshot is not recurring off-host backup automation. Full role/configuration disaster recovery has not been rehearsed.
 
+## Published client endpoint change — 2026-11-14
+
+- Used the supported SWA CLI production deployment with existing deployment tokens held only in process memory. Neither application deployment changed the running API container or capture settings.
+- TransitJazz reused the production `blazor-client` artifact from successful Actions run `43327159822` (source `28f3b4ab69b43d37070618fd4960272ea4774c91`). Its original appsettings matched the live configuration. Updated both endpoint entries and regenerated their gzip/Brotli sidecars before uploading to `transit-jazz-dev-swa`.
+- MartaJazz's original artifact had expired. Rebuilt its last successful deployed source `0704b32aa2e04d219628284b8a157c59970a0db5` in an isolated temporary worktree, with only the two source endpoint values changed. Release publish passed with the installed .NET 10.0.13 tooling; uploaded to `marta-jazz-dev-swa`.
+- Both SWA deployments succeeded. Verified HTML 200 and both BaseUri values at `transitjazz.com`, `www.transitjazz.com`, `martajazz.com`, and `www.martajazz.com`, requesting identity, gzip and Brotli responses. Linode readiness returned 200.
+- Independent SignalR clients using each site's Origin passed CORS negotiation, WebSocket handshake, `JoinCityV2("atlanta")`, and receipt of two distinct live batches. These checks exercise the current protocol; they do not prove the legacy MartaJazz frontend uses it.
+- The MartaJazz source still has the old `JoinCity` method and `marta` / `wmata` city names. The current server intentionally exposes `JoinCityV2` as a wire-version gate. Repointing this old application does not upgrade its protocol; do not bypass the gate by changing only its method name. Upgrade that frontend before claiming full MartaJazz browser recovery.
+- Browser automation was attempted but its navigation/control calls failed before opening the site. Visual rendering, audio gesture, Stats, city switching and browser reconnect acceptance remain unverified. The inherited workflow-generated SWA configuration also uses the unsupported top-level `headers` property; the CLI reported that validation warning while deployment succeeded, and responses have no `Blazor-Environment` header. Correct it to `globalHeaders` in a later configuration change.
+- The migration branch already contains the new client URLs. `main` and `deploy/marta-jazz` were not changed by these manual releases: include the endpoint changes before their next automated deployments to prevent reversion. The temporary MartaJazz source edit and deployment files are under `C:\Users\hfaul\AppData\Local\Temp\transitjazz-client-cutover-zobrute9`.
+
+## Built-in Linode server metrics — 2026-11-14
+
+The owner installed native Grafana Alloy through Linux Server onboarding and verified its
+Grafana connection. The service is active and ready; remote-write diagnostics reported zero
+failed samples and no pending samples. Grafana queries confirmed host CPU and scrape metrics
+under `job="integrations/unix"`, `instance="expense-tracker-vm"`.
+
+The owner selected Grafana's built-in Linux dashboards only. The temporary custom Linode
+dashboard was deleted and its repository JSON removed. Standard metrics-only integration
+configuration is documented in [the host metrics setup](../deploy/linode/metrics/README.md).
+The owner installed and reloaded it after validation. At 14:19-14:20 UTC, Grafana reported
+`up=1` and 201 native host series under `integrations/node_exporter`. The native overview's saved
+CPU, memory, disk-capacity and network queries all returned data over a 15-minute range at
+one-minute resolution. Alloy was ready with zero failed writes and no pending samples.
+The owner confirmed the native overview's CPU and memory panels display live metrics.
+Log collection, remote configuration and integration alerts were disabled during onboarding.
+Grafana CLI OAuth access has been restored.
+
+## Continuous capture and hosting cleanup ? 2026-11-14
+
+The owner accepted the migration and requested removal of the obsolete Azure
+server hosting code after the following checks:
+
+- At 14:32 UTC, the registry API container had run continuously since 13:15:36 UTC
+  (over 76 minutes), with zero automatic restarts or OOM kills. All production
+  capture and metrics flags remained enabled; app memory was about 272.5 MiB / 512 MiB.
+- Read-only Repeatable Read queries against Linode `transitjazz.public` verified
+  `[13:31, 14:31) UTC`: all eight cities and all 17 observed city/category pairs
+  had 60/60 Complete, nonconflicting backing minutes (1,020 category-minute rows).
+  This proves a rolling hour of category capture. It does not finalize the
+  aligned 14:00?15:00 UTC category, route or reported-vehicle cohorts. The
+  interrupted 13:00 UTC cohorts are Partial/conflicted and remain excluded.
+- The existing dashboard-minute discrepancy pattern continues and is separate
+  from category coverage; its rows must not be relabeled as reconciled data.
+- Queried the saved [Linux node overview](https://gallantpuffin3113.grafana.net/d/nodes)
+  against `grafanacloud-prom`, `job="integrations/node_exporter"`,
+  `instance="expense-tracker-vm"`, for 14:24?14:39 UTC at one-minute resolution.
+  Panels 11 (CPU), 15 (memory), 13 (load) and 2 (host uptime) each returned 16 points.
+  CPU ranged 2.65?5.47%, memory 42.59?45.25%, and one-minute load peaked at 0.30.
+  Saved expressions were used with all environment/site/cluster filters, the
+  discovered job/instance, and a four-minute rate interval. This short host
+  observation does not establish an hour of historical host telemetry.
+- Removed the Container Apps app/environment, server identity/ACR role and
+  server-only Log Analytics modules from source and regenerated `bicep/main.json`.
+  Removed their deployment parameters, outputs and obsolete CI parameter checks.
+  The retained Azure resource definitions compare equal to the previous compiled
+  template. Existing Azure resources were not deployed, deleted or reconfigured.
+- Removed unused Azure Identity/Blob packages and ACA revision fallbacks. Runtime
+  self-call defaults now use loopback; API tooling and skill references use the
+  stable Linode hostname. Historical Azure log-query tools and migration evidence
+  remain usable during the rollback/retention window.
+- Validation: 333 API tests passed (78 skipped), 239 worker tests passed; restored
+  dependency graphs contain neither removed SDK. Bicep and both parameter files
+  compile, the ARM template excludes the retired server resources, Actionlint
+  passes, and managed skill copies were synchronized. Cleanup remains uncommitted.
+
 ## Remaining cutover work
 
-1. Publish the client endpoint change to both `main` and `deploy/marta-jazz` using the owner's branch workflow. Both public `appsettings.json` files still point to the stopped Azure server as of 13:10 UTC. Check browser routes, audio gesture, Stats, switching and reconnect on both brands after publication.
+1. Include the endpoint change in both release branches before their next automated client deployment. Upgrade MartaJazz's legacy frontend to the current protocol. Check browser routes, audio gesture, Stats, switching and reconnect on both brands; HTTP/configuration and current-protocol SignalR checks have passed.
 2. Exercise failed-readiness rollback during a suitable release window. Successful CI deployment, known-good snapshots, lock rejection and failed-pull preservation are verified. Leave Azure stopped. Correct the explicit structured-log revision label during the next planned deployment.
-3. Restore Grafana CLI access, investigate the historical dashboard discrepancy pattern, and verify the next uninterrupted full capture hour after the final release. The current 13:00 UTC hour is interrupted; if no further deployment occurs, inspect 14:00–15:00 UTC after it finalizes. A further image deployment resets in-memory observations again.
+3. Investigate the historical dashboard discrepancy pattern and verify the next uninterrupted full capture hour after the final release. The current 13:00 UTC hour is interrupted; if no further deployment occurs, inspect 14:00–15:00 UTC after it finalizes. A further image deployment resets in-memory observations again. Grafana CLI access is restored and the built-in host overview is displaying live metrics.
 4. Observe combined resource use and feed-refresh behavior. Test whole-host reboot recovery during a maintenance window, accounting for the other databases.
 5. Establish recurring off-host backups/retention and external freshness monitoring. Preserve Azure's rollback image/configuration during the guide's observation window, then retire only the obsolete app resources.
 
