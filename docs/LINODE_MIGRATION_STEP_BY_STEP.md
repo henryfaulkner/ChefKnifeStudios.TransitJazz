@@ -581,7 +581,7 @@ If a terminal/job dies during a change, inspect the running image, `release.env`
 
 ## 20. Connect GitHub Actions to that deployment command
 
-Keep the existing build-and-push job and its SHA-tag output. Replace the disabled **ACA deploy job** with a Linode job after manual deployment/rollback works. Use `server-linode` as a GitHub environment and limit it to your release branch.
+Keep the existing build-and-push job and its SHA-tag output. The prepared workflow removes the **ACA deploy job**, enables the Linode job, and triggers on `main`, `migration/linode-server-hosting`, and manual dispatch. The `server-linode` GitHub environment is configured and limited to those two branches. Publish the workflow edits to activate these changes; successful ACR deployment and failed-readiness rollback remain release acceptance checks. The following setup details also document how to recover or recreate that access.
 
 On the VM create a dedicated unprivileged `tj-deploy` account with key-only authentication and no Docker-group membership. Allow only the root-owned deploy script through a sudoers entry, validated with `visudo`:
 
@@ -689,4 +689,4 @@ Once satisfied:
 - [ ] CI builds/publishes the image; manual or automated CD deploys only to Linode.
 - [ ] No destructive app cleanup can remove PostgreSQL volumes; DB recovery remains separate from app rollback.
 
-**Execution status:** the 2 GB host, tested off-host snapshot, Docker installation and public pilot are verified in [migration status](LINODE_MIGRATION_STATUS.md). The owner added the authoritative Name.com API record. Linode production capture remains disabled; Azure remains active. Local server/workflow/client changes await owner review/commit/publication. No production schema, PostgreSQL configuration or firewall change was made, and no Git commit was created.
+**Execution status, 2026-11-14:** the owner stopped Azure, and its zero-replica stopped state was verified. Linode production capture and metrics settings were activated at 13:06:22 UTC; readiness and category writes for all eight cities passed. Pull-only ACR access, the restricted CI SSH account/environment, and known-good snapshots are configured. The local workflow adds the migration branch, enables Linode CD and removes ACA CD; publication and the first ACR deployment remain pending. Both public clients still publish the Azure endpoint and need their release. Historical overlap discrepancies, Grafana CLI reauthentication, an uninterrupted full capture hour, failed-readiness rollback and reboot recovery remain open. See [migration status](LINODE_MIGRATION_STATUS.md). No production schema, PostgreSQL configuration or firewall change was made. The owner explicitly authorized a one-time exception to AGENTS.md for this migration commit and push.

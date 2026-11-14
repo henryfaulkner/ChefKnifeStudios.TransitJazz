@@ -13,7 +13,7 @@ The server starts with 512 MiB and a 0.25 CPU quota, matching the working Azure 
 5. After the manual release, recovery and capture checks pass, initialize the known-good files and install `transitjazz-deploy` at `/usr/local/sbin/transitjazz-deploy`, root-owned mode 0755. Its readiness check does not prove every city or browser works.
 6. Install `transitjazz-ssh-deploy` at `/usr/local/bin/transitjazz-ssh-deploy`, root-owned mode 0755, only when setting up the restricted `tj-deploy` account described in step 20. Restrict its SSH public key command and sudo permission exactly as documented there.
 
-Both server deployment jobs are disabled in the prepared workflow. The build job remains enabled and runs API/worker tests before publishing. After manual validation, configure the `server-linode` GitHub environment (`LINODE_HOST`, `LINODE_DEPLOY_KEY`, `LINODE_KNOWN_HOSTS`), restrict its release branch, and enable only `deploy-linode`. A repository edit has no effect on GitHub until the owner commits and publishes it.
+The prepared workflow builds on `main` and `migration/linode-server-hosting`, supports manual dispatch, and enables only `deploy-linode`; the ACA deployment job has been removed. The build job runs API/worker tests before publishing SHA-tagged API and migration images. Deployment resolves the API's immutable digest and invokes the restricted SSH command. The `server-linode` environment and its `LINODE_HOST`, `LINODE_DEPLOY_KEY`, and `LINODE_KNOWN_HOSTS` settings are configured, with deployment restricted to those two branches. A repository edit has no effect on GitHub until the owner commits and publishes it.
 
 ## Recorded Azure rollback target — 2026-11-12
 
@@ -25,7 +25,7 @@ Both server deployment jobs are disabled in the prepared workflow. The build job
 - Allocation: 0.25 CPU / 0.5 GiB; minimum and maximum replicas both one.
 - Both configured Static Web App hostnames were verified against Azure.
 
-**Live pilot verified:** see [migration status](../../docs/LINODE_MIGRATION_STATUS.md) for executed host/backup/network checks and remaining release gates. Root key-based SSH now works. Docker and these files are installed, PostgreSQL remains in place, and the pilot serves all eight cities through HTTPS with production capture disabled. Azure remains the production writer. Client endpoint changes are prepared locally; owner review/commit/publication remains necessary. Whole-host reboot, production capture, recurring backups and CI release/rollback checks remain pending.
+**Production capture activated, 2026-11-14T13:06:22Z:** see [migration status](../../docs/LINODE_MIGRATION_STATUS.md) for evidence and remaining release gates. Azure is stopped; the existing Linode pilot image now runs production capture and metrics settings. Category writes are verified for all eight cities. Both public clients still need their endpoint release. Pull-only ACR access, restricted CI SSH, known-good files, malformed-command rejection, lock rejection and failed-pull preservation are verified. Successful ACR image deployment, failed-readiness rollback, uninterrupted full-hour capture, whole-host reboot and recurring backups remain pending. Historical overlap discrepancies around the transition require observation.
 
 ## Local preparation validation — 2026-11-12
 

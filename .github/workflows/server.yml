@@ -2,14 +2,13 @@ name: Server CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, migration/linode-server-hosting]
+  workflow_dispatch:
 
 env:
   REGISTRY: chefknife.azurecr.io
   IMAGE_NAME: chefknifestudios.martajazz.server.webapi
   MIGRATION_IMAGE_NAME: chefknifestudios.martajazz.server.data
-  CONTAINER_APP_NAME: marta-jazz-dev-ca-server
-  RESOURCE_GROUP: marta-jazz-dev-rg
 
 jobs:
   build-and-push:
@@ -83,70 +82,7 @@ jobs:
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.REGISTRY }}/${{ env.MIGRATION_IMAGE_NAME }}:${{ github.sha }}
 
-  deploy:
-    # Migration preparation: publish images without restarting the Azure worker.
-    if: ${{ false }}
-    # Approve server-dev only after applying and verifying migrations from an
-    # address allowed by PostgreSQL. Historical writes stay disabled until the
-    # separate collector release gates approve them.
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    environment: server-dev
-    steps:
-      - name: Log in to ACR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Update Container App
-        uses: azure/cli@v2
-        with:
-          azcliversion: latest
-          inlineScript: |
-            az containerapp update --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
-
-      - name: Verify ready server image
-        # Azure accepts the update before the new revision is ready. A concurrent
-        # configuration update can also restore the previous image.
-        run: |
-          set -euo pipefail
-          expected="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}"
-          for attempt in {1..60}; do
-            state=$(az containerapp show --name "${{ env.CONTAINER_APP_NAME }}" --resource-group "${{ env.RESOURCE_GROUP }}" \
-              --query '{image:properties.template.containers[0].image,latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName}' --output json)
-            if [ "$(jq -r '.image' <<< "$state")" != "$expected" ]; then
-              echo "::error::The Container App image changed during deployment. Check concurrent configuration updates."
-              exit 1
-            fi
-            ready=$(jq -r '.ready // empty' <<< "$state")
-            if [ -n "$ready" ] && [ "$ready" = "$(jq -r '.latest' <<< "$state")" ]; then
-              serving=$(az containerapp revision show --name "${{ env.CONTAINER_APP_NAME }}" --resource-group "${{ env.RESOURCE_GROUP }}" \
-                --revision "$ready" --query properties.template.containers[0].image --output tsv)
-              if [ "$serving" = "$expected" ]; then
-                exit 0
-              fi
-            fi
-            sleep 10
-          done
-          echo "::error::The requested server image did not become the ready revision within 10 minutes."
-          exit 1
-
-      - name: Promote verified server image
-        run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-
   deploy-linode:
-    # Enable after manual deployment, rollback and SSH environment setup succeed.
-    if: ${{ false }}
     needs: build-and-push
     runs-on: ubuntu-latest
     environment: server-linode
@@ -187,7 +123,8 @@ jobs:
           printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/transitjazz_deploy
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           trap 'rm -f ~/.ssh/transitjazz_deploy' EXIT
-          ssh -i ~/.ssh/transitjazz_deploy \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+          ssh -T -i ~/.ssh/transitjazz_deploy \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             "tj-deploy@$LINODE_HOST" "deploy $DIGEST"
